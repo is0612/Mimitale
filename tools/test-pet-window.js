@@ -920,31 +920,34 @@ section('「空闲小动作」开关：设置页 → 主进程 → 宠物窗口�
 }
 
 // ---------------------------------------------------------------------------
-section('散步：不会只往左右走（纵向那一趟不该被取消）');
+section('散步：只能左右走（不许斜着 / 纵向移动）');
 
 {
   const walkSrc = read('main/pet-walk.js');
+  const code = stripComments(walkSrc);
 
-  // ⚠️ 这条是「散步只往左右走」那个 bug 的核心：判据只看横向 dx 时，
-  //    纵向目标被压扁 + clamp 之后很容易落成「几乎正上/正下方」，被整趟取消。
+  // ⚠️ 2026-10-12 用户要求「不要斜着移动，只能左右移动」。
+  //    曾经是「全圆随机角度」→ 收敛成 ±55° 斜角 → 现在收到纯水平。
+  //    这条断言钉死「纵向不许再掺进来」，别因为「斜一点点好看」改回去。
+  ok(!/Math\.sin\(/.test(code), '挑目标点不再用 sin（没有纵向分量）');
+  ok(!/Math\.PI\s*\*\s*\d+\s*\/\s*180/.test(code), '不再按角度求点（角度那套已删）');
   ok(
-    !/Math\.abs\(dx\)\s*<\s*\d+\s*\)\s*\{\s*stopTrip/.test(stripComments(walkSrc)),
-    '不再用「只看 |dx|」取消一趟（那会专门毙掉纵向目标）'
+    /target\s*=\s*\{\s*x,\s*y:\s*bounds\.y\s*\}/.test(code),
+    '目标 y 锁死当前纵向位置（连 clamp 都不做，免得又飘起来）'
   );
   ok(
-    /Math\.hypot\(dx,\s*dy\)/.test(walkSrc),
-    '改成按实际路程 hypot(dx, dy) 判「这一趟值不值得走」'
+    !/dy\s*=/.test(code),
+    '代码里不存在 dy —— 有 dy 就说明纵向又回来了'
   );
 
-  // 角度限制在离水平线 ±55°：既保留上下溜达，又不会出现「几乎垂直 → 原地挪」
-  ok(/Math\.PI\s*\*\s*55\s*\/\s*180/.test(walkSrc), '目标角度限制在 ±55°（不再全圆随机）');
-  ok(/Math\.random\(\)\s*<\s*0\.5\s*\?\s*-1\s*:\s*1/.test(walkSrc), '左右方向各半，不再偏向一侧');
-
-  // 朝向只由横向分量定；|dx| 太小时不发 facing（渲染层保持原朝向）
+  // 只左右走后，判据自然是横向位移；朝向也恒由横向分量定，不需要「近乎垂直」的兜底
+  ok(/Math\.abs\(dx\)\s*<\s*\d+/.test(code), '按横向位移 dx 判「这一趟值不值得走」');
+  ok(/Math\.random\(\)\s*<\s*0\.5\s*\?\s*-1\s*:\s*1/.test(code), '左右方向各半，不偏向一侧');
   ok(
-    /facing\s*=\s*Math\.abs\(dx\)\s*<\s*\d+\s*\?\s*null/.test(walkSrc),
-    '纵向行走时不乱翻朝向（|dx| 小于阈值就不发 facing）'
+    /sendToPet\('pet:walk',\s*\{\s*walking:\s*true,\s*facing\s*\}\)/.test(code),
+    '每趟都发 facing（没有「dx 太小就不发」那套兜底了）'
   );
+  ok(!/facing\s*={2,3}\s*null/.test(code), '不再有「朝向可能为 null」的分支');
 }
 
 // ---------------------------------------------------------------------------
