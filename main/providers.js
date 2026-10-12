@@ -186,6 +186,11 @@ const DEFAULT_SETTINGS = {
   embeddingModel: '',
   // --- 对话窗口外观（只影响显示，不进提示词）---
   chatFontSize: 14,     // 消息正文字号（px）
+  // 界面字号（2026-10-12 深夜加）：三档，样式表里换成一个 --ui-size 系数
+  // （small 0.9 / medium 1 / large 1.15），全站字号 token 都乘它。
+  uiSize: 'medium',
+  // 界面字体（2026-10-12 深夜加）：key 对应 renderer 那边 UI_FONTS 里的一套字体栈。
+  uiFont: 'default',
   chatBoldColor: '',    // **加粗** 用什么颜色，空 = 跟随主题
   chatBackground: '',   // 消息区背景图（dataURL），空 = 没有
   // 消息区的左右内边距（px）。**两个独立的值，不是「一个宽度」** ——
@@ -417,6 +422,14 @@ function normalizeSettings(saved) {
   // 只收 #rgb / #rrggbb / #rrggbbaa，别的（比如 'red'）一律当没设过 ——
   // 免得有人往里塞 `red; background:url(...)` 这种东西
   s.chatBoldColor = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(boldColor) ? boldColor : '';
+
+  // 界面字号 / 字体（2026-10-12 深夜）：**白名单**，不认识就退回默认。
+  // 这两个值会被写进 `--ui-size` / `--font-ui`，是 CSS 变量 ——
+  // 不能把用户手改 config.json 时塞进来的任意字符串直接透到样式里。
+  // ⚠️ 白名单要和 renderer/js/views/appearance.js 的 UI_SCALES / UI_FONTS 保持一致；
+  //    那边也有兜底（认不出会用默认值），这里是「落盘前先洗干净」。
+  s.uiSize = ['small', 'medium', 'large'].includes(raw.uiSize) ? raw.uiSize : DEFAULT_SETTINGS.uiSize;
+  s.uiFont = ['default', 'noto', 'simhei', 'serif'].includes(raw.uiFont) ? raw.uiFont : DEFAULT_SETTINGS.uiFont;
 
   const bg = typeof raw.chatBackground === 'string' ? raw.chatBackground : '';
   s.chatBackground =

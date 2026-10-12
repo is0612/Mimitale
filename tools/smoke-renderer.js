@@ -222,6 +222,10 @@ async function openAppearanceSection() {
   await waitFor('切到外观那一组', () => shown('#sec-appearance'));
 }
 async function leaveAppearanceSection() {
+  // ⚠️ 离开之前先把分组**复位到第 1 组**：currentSectionId 是「本次运行内记得住」
+  // （不落盘），而后面「设置页」那个场景断言「默认停在第 1 组」——
+  // 不复位的话它会停在「外观」，那两条断言就假红了（2026-10-12 深夜踩过）。
+  click('.settings-nav-item[data-target="sec-models"]');
   click('#btn-back-settings');
   await waitFor('离开设置页', () => !shown('#view-settings'));
 }
@@ -1326,7 +1330,8 @@ await scenario('属性：从角色卡种到状态面板', async () => {
     const topAv = byId('topbar-avatar');
     check('顶栏头像 34×34（放大后）', r(topAv) === 34 && h(topAv) === 34, `${r(topAv)}×${h(topAv)}`);
     check('顶栏头像是方角 r=4（不是圆）', c(topAv, 'borderTopLeftRadius') === '4px', c(topAv, 'borderTopLeftRadius'));
-    check('顶栏元信息 11px（稿子 2:89）', c(byId('convo-meta'), 'fontSize') === '11px', c(byId('convo-meta'), 'fontSize'));
+    // 2026-10-12 深夜全站字号 token 化：原来的 11px 并进了最小档 --fs-xs（12px）。
+    check('顶栏元信息 12px（最小档 --fs-xs）', c(byId('convo-meta'), 'fontSize') === '12px', c(byId('convo-meta'), 'fontSize'));
     check(
       '数值胶囊是方角（不是 999px 胶囊）',
       c(byId('convo-pill'), 'borderTopLeftRadius') !== '999px',
@@ -1338,7 +1343,9 @@ await scenario('属性：从角色卡种到状态面板', async () => {
     const more = byId('btn-more');
     check(
       '「⋯」是 32×32 的方框按钮（放大后）',
-      r(more) === 32 && h(more) === 32 && c(more, 'borderTopWidth') === '1px',
+      // ⚠️ 边框不写 `=== '1px'`：本机显示缩放 125% 时 Chromium 会把 1px 按物理像素
+      //    取整成 0.8px（dpr=1.25 实测），那不是样式变了，是环境 —— 用 > 0.5 判定「有描边」。
+      r(more) === 32 && h(more) === 32 && parseFloat(c(more, 'borderTopWidth')) > 0.5,
       `${r(more)}×${h(more)} border=${c(more, 'borderTopWidth')}`
     );
 
@@ -3056,9 +3063,16 @@ await scenario('侧栏：入口网格与收起', async () => {
     //    拿节点数据一对就露馅了。这条断言就是那次误判的守卫。
     check(
       '底部入口是纯 ghost（无底、无边框，稿子 2:47）',
+      // 边框宽度用 > 0.5 判定：125% 显示缩放下 Chromium 会把 1px 取整成 0.8px（实测），
+      // 那不是样式变了。颜色仍然必须是透明的 —— 那才是「纯 ghost」的本体。
       foot.every((b) => {
         const cs = getComputedStyle(b);
-        return cs.backgroundColor === 'rgba(0, 0, 0, 0)' && cs.borderTopWidth === '1px' && cs.borderTopStyle === 'solid' && cs.borderTopColor === 'rgba(0, 0, 0, 0)';
+        return (
+          cs.backgroundColor === 'rgba(0, 0, 0, 0)' &&
+          parseFloat(cs.borderTopWidth) > 0.5 &&
+          cs.borderTopStyle === 'solid' &&
+          cs.borderTopColor === 'rgba(0, 0, 0, 0)'
+        );
       }),
       foot.map((b) => `${getComputedStyle(b).backgroundColor}/${getComputedStyle(b).borderTopColor}`).join(' ')
     );

@@ -1180,6 +1180,38 @@
 
           <hr class="appearance-divider" />
 
+          <!-- 界面字号 / 字体：2026-10-12 深夜加的（星宝：「规划项目字体大小，用 var，
+               这样可以整体改字号」+「弄一个小 / 中 / 大就好，毕竟只是系统的字号」）。
+               ⚠️ 它和下面那个「正文字号」是**两件事**：
+                  · 界面字号 → 改 --ui-size 一个变量，**整个界面**等比缩放（标题/按钮/列表）；
+                  · 正文字号 → 只管聊天消息区的字号（--chat-font-size）。
+               三档的系数写在 views/appearance.js 的 UI_SCALES 里（0.9 / 1 / 1.15）。 -->
+          <div class="field field-stack">
+            <span class="field-label">界面字号</span>
+            <div id="appearance-uiscale" class="seg-group" role="radiogroup" aria-label="界面字号">
+              <button class="seg-btn" type="button" data-uiscale="small" role="radio" aria-checked="false">小</button>
+              <button class="seg-btn" type="button" data-uiscale="medium" role="radio" aria-checked="false">中</button>
+              <button class="seg-btn" type="button" data-uiscale="large" role="radio" aria-checked="false">大</button>
+            </div>
+            <span class="field-help">
+              整个界面的字号一起放大缩小（标题、按钮、列表、弹窗都跟着）。
+              下面那个「正文字号」只管聊天内容 —— 想单独放大聊天字就往那边调。
+            </span>
+          </div>
+
+          <label class="field">
+            <span class="field-label">字体</span>
+            <select id="appearance-font" aria-label="界面字体">
+              <option value="default">系统默认（微软雅黑）</option>
+              <option value="noto">思源黑体 / Noto Sans SC</option>
+              <option value="simhei">黑体 SimHei</option>
+              <option value="serif">宋体系（阅读向）</option>
+            </select>
+            <span class="field-help">
+              整个界面的字体。这几套都是**本机确认装了的** —— 没装的会自动回退到微软雅黑，不会变成方框。
+            </span>
+          </label>
+
           <label class="field field-stack">
             <span class="field-label">正文字号</span>
             <div class="appearance-row">

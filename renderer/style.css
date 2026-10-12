@@ -78,6 +78,28 @@
   --art-edge: 0 0 1px rgba(0, 0, 0, 0.35);
   --radius: 4px;
   --radius-sm: 3px;
+
+  /* ==================================================================
+     字体（2026-10-12 深夜统一走 token）
+
+     ⚠️ 以后写字号**只用下面这五档**，别再写死 px —— 理由见 CHANGELOG 第九批：
+       · 全站原本有 **19 种**字号，最小 8px，还带 9.5 / 10.5 / 11.5 / 12.5 /
+         13.5 / 16.5 一堆小数 → 一律压到五档，且**全部 ≥12、全部偶数**（星宝的规矩）。
+       · 档位差 2px 才拉得开层次；13 / 15 / 17 那种单数在缩放时会算出 .5 的小数。
+
+     整体缩放靠 --ui-size 一个数：设置 → 外观 →「界面字号」小 / 中 / 大
+     就是 0.9 / 1 / 1.15（默认中 = 下面写的基准值）。JS 只往 <html> 上写这一个变量。
+     ================================================================== */
+  --ui-size: 1;
+  --fs-xs: calc(12px * var(--ui-size));   /* 最小那档：说明、时间、标签、角标 */
+  --fs-sm: calc(14px * var(--ui-size));   /* 界面主体：按钮、列表、表单、正文 */
+  --fs-md: calc(16px * var(--ui-size));   /* 小标题、强调行 */
+  --fs-lg: calc(18px * var(--ui-size));   /* 页面标题 */
+  --fs-xl: calc(22px * var(--ui-size));   /* 大标题 / 数字展示 */
+
+  /* 界面字体。设置 → 外观 →「字体」改的就是它（本机实测存在的四套，见那个下拉）。
+     ⚠️ 原来这行字体栈写死在 body 上，还带着 macOS 的 "PingFang SC"（Windows 上不存在）。 */
+  --font-ui: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
 }
 
 /* ==========================================================================
@@ -373,9 +395,12 @@ html, body {
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
-  font-size: 14px;
-  line-height: 1.65;
+  /* 字体栈 2026-10-12 深夜改成 token：设置 → 外观 →「字体」改的就是它。
+     ⚠️ 原来这里带着 macOS 的 "PingFang SC" —— Windows 上不存在，白占一格。 */
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  /* 正文行距统一 1.6（原来是 1.65 这个孤例，别处还散着 1.55 / 1.85 / 1.9 / 1.45）。 */
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -438,7 +463,7 @@ body {
 }
 
 .brand-name {
-  font-size: 16px;
+  font-size: var(--fs-md);
   font-weight: 700;
   letter-spacing: 0.5px;
   background: var(--brand-grad);
@@ -452,7 +477,7 @@ body {
    .brand-theme 那套样式随之删掉 —— 别在这里重加图标按钮。 */
 
 .sidebar-label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   /* 和设计稿的 .rail-cap 对齐：贴在上面那颗按钮下面，下面留一点给列表 */
   padding: 2px 8px 8px;
@@ -480,7 +505,7 @@ body {
   border-radius: var(--radius);
   cursor: pointer;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   /* 只过渡底色和阴影：原来还带 translateX(2px) 的位移，
      一排条目跟着鼠标左右晃，看着不安静 */
   transition: background 0.15s, box-shadow 0.15s;
@@ -534,7 +559,7 @@ body {
    （头像 + 名字 + 时间），没人再产出这两层。 */
 
 .convo-title {
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -548,7 +573,7 @@ body {
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  font-size: 15px;
+  font-size: var(--fs-md);
   line-height: 1;
   padding: 2px 4px;
   border-radius: var(--radius);
@@ -597,7 +622,7 @@ body {
   height: 36px;
   padding: 0 9px;
   gap: 7px;
-  font-size: 14px;
+  font-size: var(--fs-sm);
   justify-content: flex-start;
   white-space: nowrap;
   overflow: hidden;
@@ -621,7 +646,7 @@ body {
   padding: 0 10px;
   gap: 6px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 
@@ -639,8 +664,8 @@ body {
      还是圆的，跟稿子的方角对不上（星宝一眼就看到了）。 */
   border-radius: var(--radius);
   padding: 10px 16px;
-  font-size: 13px;
-  line-height: 1.2;
+  font-size: var(--fs-sm);
+  line-height: 1.3;
   font-family: inherit;
   font-weight: 400;
   cursor: pointer;
@@ -650,7 +675,7 @@ body {
 }
 
 .btn-block { width: 100%; }
-.btn-sm { padding: 6px 11px; font-size: 12px; }
+.btn-sm { padding: 6px 11px; font-size: var(--fs-xs); }
 
 /* 主按钮：一层主色底 + 淡阴影，不描边（描边正是「鼓」的来源之一） */
 .btn-primary {
@@ -766,7 +791,7 @@ body {
   place-items: center;
   overflow: hidden;
   color: var(--on-accent);
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -807,7 +832,7 @@ body {
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 400;
   line-height: 1.6;
   white-space: nowrap;
@@ -815,7 +840,7 @@ body {
 
 .topbar h1 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -825,7 +850,7 @@ body {
 /* 元信息行：设计稿 2:89 是 fs=11（原来是 12 —— 顶栏收到 48 之后要跟着降一档） */
 .meta {
   margin: 2px 0 0;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -869,10 +894,11 @@ body {
   top: -6px;
   right: -6px;
   margin-left: 0;
-  min-width: 15px;
+  min-width: 16px;
   padding: 0 3px;
-  font-size: 9.5px;
-  line-height: 15px;
+  font-size: var(--fs-xs);
+  /* 行高改成**相对值**：字会跟着 --ui-size 缩放，写死 15px 在「大」档会把字挤扁。 */
+  line-height: 1.35;
   vertical-align: 0;
   box-shadow: 0 0 0 2px var(--bg-side);
   pointer-events: none;
@@ -905,8 +931,8 @@ body {
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -939,7 +965,7 @@ body {
   color: var(--text);
   font-family: inherit;
   /* 12 → 13：顶栏那几颗图标 26 → 32 之后，这颗实心白块上的字小一号会显得别扭。 */
-  font-size: 13px;
+  font-size: var(--fs-sm);
   /* 顶栏那一行里只有它是「实心的白块」，稍微加粗一点才压得住 */
   font-weight: 500;
   cursor: pointer;
@@ -990,7 +1016,7 @@ body {
    靠「小一号 + 拉开字距 + 淡色」分层，和状态卡的分组标题是同一招 */
 .model-menu-group {
   padding: 10px 10px 4px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.06em;
   color: var(--text-faint);
   white-space: nowrap;
@@ -1000,7 +1026,7 @@ body {
 .model-menu-group:first-child { padding-top: 4px; }
 
 /* 「（还没有模型）」这种占位：是提示不是选项，别让它看起来能点 */
-.model-menu-empty { padding: 7px 10px; font-size: 13px; color: var(--text-faint); }
+.model-menu-empty { padding: 7px 10px; font-size: var(--fs-sm); color: var(--text-faint); }
 
 /* 选择器写成 .model-menu .model-menu-item —— 比通用按钮规则更具体，
    免得按按钮的样子被压回去（.menu-item 那边同理）。 */
@@ -1015,8 +1041,8 @@ body {
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -1084,7 +1110,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   user-select: none;
 }
@@ -1119,7 +1145,7 @@ body {
   align-items: center;
   gap: 8px;
   min-height: 18px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text);
 }
@@ -1130,7 +1156,7 @@ body {
 /* 时间：等宽字体 + 表格数字，同一列上下对得齐；比角色名暗一档 */
 .msg-time {
   font-family: Consolas, "Courier New", monospace;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
@@ -1146,7 +1172,7 @@ body {
   background: var(--bg-input);
   color: var(--text-faint);
   font-family: Consolas, "Courier New", monospace;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 400;
 }
 
@@ -1168,7 +1194,7 @@ body {
      行高 1.75：设计稿正文是 13px / 23px，正好对上，
      而且字号调到 22px 时行高会跟着放大，不会挤成一片。 */
   font-size: var(--chat-font-size, 13px);
-  line-height: 1.75;
+  line-height: 1.6;
 }
 
 /* 自己的消息靠右：头像换到右边（row-reverse）、**消息头也整体靠右**、正文右对齐。
@@ -1215,7 +1241,7 @@ body {
   color: var(--danger-text);
   white-space: pre-wrap;
   font-family: Consolas, "Courier New", monospace;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
 }
 
 /* markdown 排版。里面的尺寸都用 em —— 跟着「对话窗口」里的字号设置一起缩，
@@ -1261,7 +1287,7 @@ body {
   margin-top: 8px;
   padding-top: 6px;
   border-top: 1px dashed var(--border);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -1270,7 +1296,7 @@ body {
   margin-top: 8px;
   padding-top: 6px;
   border-top: 1px dashed var(--border);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--accent);
   opacity: 0.85;
 }
@@ -1321,14 +1347,14 @@ body {
 .checkpoint-info { flex: 1 1 auto; min-width: 0; }
 
 .checkpoint-name {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
 
 .checkpoint-time {
   margin-top: 2px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -1346,7 +1372,7 @@ body {
 .variant-nav .variant-btn,
 .variant-nav .variant-count {
   font-family: Consolas, "Courier New", monospace;
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 .variant-btn {
@@ -1356,8 +1382,9 @@ body {
   background: var(--bg-card);
   color: var(--text-dim);
   font-family: inherit;
-  font-size: 12px;
-  line-height: 16px;
+  font-size: var(--fs-xs);
+  /* 相对行高（原来写死 16px）：字跟着 --ui-size 走，固定值在大档会挤。 */
+  line-height: 1.35;
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s;
 }
@@ -1370,7 +1397,7 @@ body {
 .variant-count {
   min-width: 28px;
   text-align: center;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
   user-select: none;
@@ -1435,7 +1462,7 @@ body {
   background: transparent;
   padding: 0;
   font-size: 1em; /* 跟 pre 里的字号走 */
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 .bubble table {
@@ -1478,7 +1505,7 @@ body {
   border: 1px solid var(--border);
   background: var(--bg-card);
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-family: inherit;
   font-weight: 400;
   padding: 3px 9px;
@@ -1540,7 +1567,7 @@ body {
   background: none;
   border: none;
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--fs-sm);
   color: var(--text);
   padding: 6px 10px;
   border-radius: var(--radius-sm);
@@ -1552,7 +1579,7 @@ body {
 .msg-option-btn .opt-arrow {
   flex: 0 0 auto;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 /* 数字序号：输入框里按 1~9 也能选，序号印在箭头前，跟键盘对上 */
@@ -1564,7 +1591,7 @@ body {
   min-width: 20px;
   height: 20px;
   padding: 0 4px;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   line-height: 1;
   color: var(--accent);
@@ -1574,7 +1601,7 @@ body {
 
 .msg-option-btn .opt-text {
   white-space: normal;
-  line-height: 1.5;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
@@ -1591,7 +1618,7 @@ body {
   background: none;
   border: none;
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   padding: 2px 4px;
   border-radius: var(--radius);
@@ -1617,14 +1644,14 @@ body {
 
 .reasoning summary {
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   user-select: none;
 }
 
 .reasoning .reasoning-text {
   margin-top: 6px;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   white-space: pre-wrap;
 }
@@ -1646,11 +1673,11 @@ body {
   vertical-align: text-bottom;
 }
 
-.waiting { color: var(--text-faint); font-size: 13px; }
+.waiting { color: var(--text-faint); font-size: var(--fs-sm); }
 .waiting::after {
   content: "● ● ●";
   margin-left: 6px;
-  font-size: 8px;
+  font-size: var(--fs-xs);
   letter-spacing: 2px;
   vertical-align: middle;
   animation: pulse 1.3s ease-in-out infinite;
@@ -1668,9 +1695,9 @@ body {
   max-width: 460px;
 }
 
-.empty h2 { color: var(--text); font-size: 17px; margin: 0 0 8px; }
-.empty p { margin: 0 0 6px; font-size: 13px; color: var(--text-dim); }
-.empty .hint { font-size: 12px; color: var(--text-faint); }
+.empty h2 { color: var(--text); font-size: var(--fs-lg); margin: 0 0 8px; }
+.empty p { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--text-dim); }
+.empty .hint { font-size: var(--fs-xs); color: var(--text-faint); }
 
 /* ------------------------------ 输入区 ------------------------------ */
 
@@ -1715,14 +1742,14 @@ body {
 /* ⛔ `.suggest-head` 删于 2026-10-12 晚：那层包装 div 早从 index.html 拿掉了
    （建议条压成了一行），JS 只认 #suggest-strip / #suggest-list。 */
 
-.suggest-title { font-size: 11.5px; color: var(--text-faint); }
+.suggest-title { font-size: var(--fs-xs); color: var(--text-faint); }
 
 .suggest-close {
   border: none;
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1;
   padding: 3px 5px;
   border-radius: var(--radius-sm);
@@ -1743,7 +1770,7 @@ body {
   background: var(--bg-card);
   color: var(--text);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   line-height: 1.6;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
@@ -1789,7 +1816,7 @@ body {
   background: transparent;
   color: var(--text);
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--fs-sm);
   line-height: 1.6;
   resize: none;
   outline: none;
@@ -1817,7 +1844,7 @@ body {
   margin: 6px auto 0;
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -1880,7 +1907,7 @@ body {
 .ai-gen-status {
   min-height: 18px;
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.6;
   color: var(--text-faint);
 }
@@ -1930,14 +1957,14 @@ body {
 
 .modal-head h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--fs-md);
   font-weight: 600;
   letter-spacing: 0.3px;
 }
 
 .modal-sub {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -1978,7 +2005,7 @@ body {
 }
 
 .foot-hint {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -2006,13 +2033,13 @@ body {
 
 .confirm-body h3 {
   margin: 0 0 8px;
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 
 .confirm-body p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.6;
   color: var(--text-dim);
   overflow-wrap: break-word;
@@ -2061,17 +2088,17 @@ body {
 .section-icon svg { width: 16px; height: 16px; }
 
 .section-title {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
   letter-spacing: 0.3px;
-  line-height: 1.4;
+  line-height: 1.6;
 }
 
 .section-desc {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
-  line-height: 1.4;
+  line-height: 1.6;
   margin-top: 1px;
 }
 
@@ -2112,7 +2139,7 @@ body {
   background: var(--bg-card);
   color: var(--text-dim);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 400;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -2161,8 +2188,8 @@ body {
 .persona-row-info .field-label { padding-top: 0; }
 
 .persona-row-info .field-help {
-  font-size: 11.5px;
-  line-height: 1.45;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-faint);
   word-break: break-word;
 }
@@ -2178,8 +2205,8 @@ body {
 }
 
 .persona-template-hint {
-  font-size: 11.5px;
-  line-height: 1.45;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-faint);
   flex: 1 1 220px;
   min-width: 0;
@@ -2229,7 +2256,7 @@ body {
   color: var(--text-faint);
 }
 
-.char-empty-title { font-size: 14px; color: var(--text-dim); }
+.char-empty-title { font-size: var(--fs-sm); color: var(--text-dim); }
 
 /* ------------------------------ 角色列表页 ------------------------------ */
 
@@ -2248,14 +2275,14 @@ body {
 
 .page-title {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--fs-lg);
   font-weight: 700;
   color: var(--text);
 }
 
 .page-sub {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -2342,12 +2369,12 @@ body {
 
 .settings-nav-text { display: flex; flex-direction: column; min-width: 0; }
 
-.settings-nav-title { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.settings-nav-title { font-size: var(--fs-sm); font-weight: 600; line-height: 1.6; }
 
 .settings-nav-desc {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
-  line-height: 1.4;
+  line-height: 1.6;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2415,8 +2442,8 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-.settings-content > .panel-section > .section-head .section-title { font-size: 15px; }
-.settings-content > .panel-section > .section-head .section-desc { font-size: 12px; }
+.settings-content > .panel-section > .section-head .section-title { font-size: var(--fs-md); }
+.settings-content > .panel-section > .section-head .section-desc { font-size: var(--fs-xs); }
 
 /* 一次只显示当前那一组（切换逻辑在 views/settings.js 的 showSettingsSection） */
 .settings-content > .panel-section.hidden { display: none; }
@@ -2539,7 +2566,7 @@ body {
   border-radius: var(--radius);
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 14px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   line-height: 1;
 }
@@ -2547,7 +2574,7 @@ body {
 .provider-card-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
 
 .provider-card-name {
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -2556,7 +2583,7 @@ body {
 }
 
 .provider-card-meta {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2591,7 +2618,7 @@ body {
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   line-height: 1.6;
   white-space: nowrap;
@@ -2616,12 +2643,12 @@ body {
 }
 
 .page-empty { padding: 60px 20px; text-align: center; }
-.page-empty-title { font-size: 14px; color: var(--text-dim); }
+.page-empty-title { font-size: var(--fs-sm); color: var(--text-dim); }
 
 .page-empty-hint {
   margin: 10px 0 0;
-  font-size: 12px;
-  line-height: 1.9;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-faint);
 }
 
@@ -2669,7 +2696,7 @@ body {
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--fs-md);
   line-height: 1;
   padding: 2px 5px;
   border-radius: var(--radius);
@@ -2752,7 +2779,7 @@ body {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.86);
   color: var(--text-dim);
-  font-size: 15px;
+  font-size: var(--fs-md);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
 }
 
@@ -2763,7 +2790,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -2774,7 +2801,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .char-card-actions { display: flex; gap: 8px; width: 100%; margin-top: 2px; }
@@ -2800,7 +2827,7 @@ body {
   align-items: center;
   gap: 8px;
   margin-top: 8px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -2931,7 +2958,7 @@ body {
 
 .char-form .field-count {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums; /* 字数在跳的时候别让整行文字跟着抖 */
 }
@@ -2979,11 +3006,11 @@ body {
   border-bottom: 1px solid var(--border-soft);
 }
 
-.char-expand-title { font-size: 13px; font-weight: 500; color: var(--text); }
+.char-expand-title { font-size: var(--fs-sm); font-weight: 500; color: var(--text); }
 
 .char-expand-meta {
   flex: 1 1 auto;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -2999,8 +3026,8 @@ body {
   border: none;
   border-radius: 0;
   resize: none;               /* 高度由卡片定，不需要把手 */
-  font-size: 13.5px;
-  line-height: 1.7;           /* 长文在里面写，行距放松一点 */
+  font-size: var(--fs-sm);
+  line-height: 1.6;           /* 长文在里面写，行距放松一点 */
   box-shadow: none;
 }
 
@@ -3021,8 +3048,8 @@ body {
 
 /* 脚部那条说明不在 .field 里，通用的 .field > .field-help 管不到它，得自带样式 */
 .char-expand-foot .field-help {
-  font-size: 11.5px;
-  line-height: 1.55;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-faint);
 }
 
@@ -3056,8 +3083,8 @@ body {
 }
 
 .crop-heading { display: flex; flex-direction: column; gap: 3px; }
-.crop-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
-.crop-hint { font-size: 11.5px; color: var(--text-faint); }
+.crop-title { font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+.crop-hint { font-size: var(--fs-xs); color: var(--text-faint); }
 
 /* 视口：图片永远铺满这块，不留空白边 —— 拖到边界就停住，不会拖出一个空角 */
 .crop-view {
@@ -3080,7 +3107,7 @@ body {
   gap: 8px;
 }
 
-.crop-zoom-label { font-size: 11px; color: var(--text-faint); }
+.crop-zoom-label { font-size: var(--fs-xs); color: var(--text-faint); }
 
 /* 滑块：和设置页那套同款拇指，但轨道不走 --range-fill（裁剪这边不追进度比例） */
 .crop-zoom {
@@ -3126,7 +3153,7 @@ body {
   gap: 12px;
 }
 
-.crop-foot .field-help { font-size: 11.5px; color: var(--text-faint); }
+.crop-foot .field-help { font-size: var(--fs-xs); color: var(--text-faint); }
 .crop-foot-btns { display: flex; gap: 8px; }
 
 .crop-foot-btns .btn { flex: 0 0 auto; }
@@ -3160,7 +3187,7 @@ body {
 
 .attr-template-hint,
 .field-template-hint {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
 }
 
@@ -3184,7 +3211,7 @@ body {
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1;
   padding: 5px 9px;
   border-radius: 999px;
@@ -3209,7 +3236,7 @@ body {
 /* 组名后面的字段数：小一号、退到后面去 —— 它是旁注，不该和组名抢
    同一级注意力；但它又是判断「有没有填漏」的依据，所以也不能省。 */
 .attr-tab-count {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   line-height: 1;
   padding: 2px 5px;
   border-radius: 999px;
@@ -3238,7 +3265,7 @@ body {
   width: 86px;
   min-height: 26px;
   padding: 3px 10px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   border-radius: 999px;
   border: 1px dashed var(--border-hover);
   background: transparent;
@@ -3273,7 +3300,7 @@ body {
   background: var(--bg-input);
   color: var(--text-dim);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--fs-sm);
   line-height: 1;
   padding: 2px 10px;
   border-radius: 999px;
@@ -3307,7 +3334,7 @@ body {
 
 .attr-group-edit-label {
   flex: 0 0 auto;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -3318,7 +3345,7 @@ body {
   min-width: 0;
   min-height: 28px;
   padding: 4px 9px;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   border-radius: var(--radius-sm);
 }
 
@@ -3340,7 +3367,7 @@ body {
    也找不到「从哪开始填」。 */
 .attr-empty {
   padding: 12px 4px 14px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   text-align: center;
 }
@@ -3364,7 +3391,7 @@ body {
 .attr-name {
   flex: 0 0 auto;
   width: var(--attr-name-w, 76px);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3377,7 +3404,7 @@ body {
   min-width: 0;
   min-height: 28px;
   padding: 4px 9px;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   border-radius: var(--radius-sm);
 }
 
@@ -3387,7 +3414,7 @@ body {
   width: 64px;
   min-height: 28px;
   padding: 2px 5px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   border-radius: var(--radius-sm);
   color: var(--text-dim);
 }
@@ -3400,7 +3427,7 @@ body {
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   line-height: 1;
   padding: 7px 8px;
   border-radius: var(--radius-sm);
@@ -3442,7 +3469,7 @@ body {
 .attr-range-label,
 .attr-range-sep {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -3451,7 +3478,7 @@ body {
   width: 64px;
   min-height: 26px;
   padding: 3px 7px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   border-radius: var(--radius-sm);
 }
 
@@ -3461,7 +3488,7 @@ body {
   min-width: 0;
   min-height: 26px;
   padding: 3px 8px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   border-radius: var(--radius-sm);
 }
 
@@ -3478,7 +3505,7 @@ body {
   width: auto;
   min-height: 26px;
   padding: 3px 8px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   border-radius: var(--radius-sm);
 }
 
@@ -3510,7 +3537,7 @@ body {
   min-width: 0;
   min-height: 30px;
   padding: 5px 10px;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   border-radius: var(--radius-sm);
 }
 
@@ -3531,7 +3558,7 @@ body {
 #c-attr-paste textarea {
   width: 100%;
   min-height: 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-family: inherit;
   resize: vertical;
 }
@@ -3564,7 +3591,7 @@ body {
 
 .char-expr-entry .field-label { flex: 0 0 auto; padding-top: 0; }
 .char-expr-entry .field-help { flex: 1 1 auto; min-width: 0; }
-.char-expr-entry .btn-sm { flex: 0 0 auto; padding: 4px 10px; font-size: 11px; }
+.char-expr-entry .btn-sm { flex: 0 0 auto; padding: 4px 10px; font-size: var(--fs-xs); }
 
 /* 文字区：角色名 / 标签 / 长文本 / 属性，纯文本，不需要额外框线 */
 .char-text-section { display: flex; flex-direction: column; }
@@ -3595,7 +3622,7 @@ body {
   row-gap: 6px;
 }
 
-.char-media-label { font-size: 11px; color: var(--text-faint); }
+.char-media-label { font-size: var(--fs-xs); color: var(--text-faint); }
 
 /* 两个上传框共用的底子：点一下弹文件框，悬停时盖一层「换…」提示 */
 .char-avatar,
@@ -3677,7 +3704,7 @@ body {
   justify-content: center;
   background: rgba(0, 0, 0, 0.45);
   color: var(--on-accent);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   opacity: 0;
   transition: opacity 0.15s;
   pointer-events: none;
@@ -3694,7 +3721,7 @@ body {
 
 .char-avatar img,
 .char-portrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.char-avatar-empty { font-size: 12px; color: var(--text-faint); }
+.char-avatar-empty { font-size: var(--fs-xs); color: var(--text-faint); }
 
 /* 立绘容器的描边——透明底素材压在底色上，轮廓得勾出来（见 .art-edge 那段）。
    ⚠️ 必须在下面 .char-portrait 的 width/height 之后写：.art-edge 和 .char-portrait
@@ -3706,7 +3733,7 @@ body {
 .char-portrait.art-edge:focus-visible { box-shadow: var(--art-edge), var(--focus-ring); }
 
 /* 有图时才显示「清除」 */
-.char-avatar-col .btn-sm { padding: 4px 10px; font-size: 11px; }
+.char-avatar-col .btn-sm { padding: 4px 10px; font-size: var(--fs-xs); }
 
 /* ------------------------------ 表情图弹窗 ------------------------------ */
 
@@ -3724,11 +3751,11 @@ body {
 
 .char-expr-head .field-label { flex: 0 0 auto; padding-top: 0; }
 .char-expr-head .field-help { flex: 1 1 auto; min-width: 0; }
-.char-expr-head .btn-sm { flex: 0 0 auto; padding: 4px 10px; font-size: 11px; }
+.char-expr-head .btn-sm { flex: 0 0 auto; padding: 4px 10px; font-size: var(--fs-xs); }
 
 .char-expr-list { display: flex; flex-direction: column; gap: 8px; }
 
-.char-expr-empty { font-size: 12px; color: var(--text-faint); }
+.char-expr-empty { font-size: var(--fs-xs); color: var(--text-faint); }
 
 .char-expr-row {
   display: flex;
@@ -3759,7 +3786,7 @@ body {
    所以再补一门 --art-edge（背景色在图片下面，不受影响）。 */
 .char-expr-thumb:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .char-expr-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.char-expr-thumb .char-avatar-empty { font-size: 11px; }
+.char-expr-thumb .char-avatar-empty { font-size: var(--fs-xs); }
 
 .char-expr-fields {
   flex: 1 1 auto;
@@ -3775,7 +3802,7 @@ body {
   width: 100%;
   min-height: 26px;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .char-expr-del {
@@ -3787,7 +3814,7 @@ body {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-faint);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1;
   cursor: pointer;
 }
@@ -3805,7 +3832,7 @@ body {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1;
   cursor: pointer;
 }
@@ -3837,7 +3864,7 @@ body {
 .char-advanced > summary,
 .wb-advanced > summary {
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   list-style: none;
   user-select: none;
@@ -3871,7 +3898,7 @@ body {
   border-radius: var(--radius-sm);
   background: var(--code-bg);
   font-family: Consolas, "Courier New", monospace;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--code-text);
 }
 
@@ -3899,16 +3926,16 @@ body {
 /* 标签顶部留白，让它和输入框里的文字在同一水平线上 */
 .field-label {
   padding-top: 11px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text);
-  line-height: 1.4;
+  line-height: 1.6;
 }
 
 /* 说明文字跨到右侧控件那一列，左边缘和输入框对齐 */
 .field > .field-help {
   grid-column: 2;
-  font-size: 11.5px;
-  line-height: 1.55;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-faint);
 }
 
@@ -3973,8 +4000,8 @@ select {
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: inherit;
-  font-size: 13.5px;
-  line-height: 1.5;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   /* 左右各留 14px，文字不再贴边 */
   padding: 11px 14px;
   outline: none;
@@ -4016,7 +4043,7 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
 textarea {
   min-height: 104px;
   resize: vertical;
-  line-height: 1.65;
+  line-height: 1.6;
   padding: 10px 14px;
 }
 
@@ -4043,8 +4070,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -4102,15 +4129,15 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
    开关挪到右边之后，文字块自己吃掉剩余宽度（flex:1），说明才不会被压成挤牙膏。 */
 .check-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; gap: 3px; }
 .check-title {
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-dim);
-  line-height: 1.5;
+  line-height: 1.6;
   transition: color 0.15s;
 }
 .check:hover .check-title,
 .check:has(input:checked) .check-title { color: var(--text); }
-.check-desc { font-size: 12px; color: var(--text-faint); line-height: 1.55; }
+.check-desc { font-size: var(--fs-xs); color: var(--text-faint); line-height: 1.6; }
 /* 说明里的 <b> 是重点（「每续一次会多花一次钱」这种），别让它跟正文一样淡 */
 .check-desc b { color: var(--text-dim); font-weight: 600; }
 
@@ -4128,7 +4155,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text);
   padding: 10px 18px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   max-width: 70vw;
   z-index: 100;
   box-shadow: var(--shadow-lg);
@@ -4251,7 +4278,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 没有角色时给一句引导，不用另开一个空状态元素 */
 .wb-char-list:empty::after {
   content: '还没有角色。点「从角色库加入」复制一个进来，或直接新建。';
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -4277,7 +4304,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   align-items: center;
   justify-content: center;
   background: var(--accent-soft);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
 }
 
@@ -4289,7 +4316,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text);
 }
 
@@ -4298,7 +4325,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border: 0;
   background: none;
   padding: 2px 5px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1.3;
   color: var(--text-faint);
   cursor: pointer;
@@ -4314,7 +4341,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   cursor: pointer;
   user-select: none;
@@ -4370,7 +4397,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   align-items: center;
   justify-content: center;
   background: var(--accent-soft);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
 }
 
@@ -4382,14 +4409,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 
 .wb-picker-empty {
   padding: 16px;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -4453,8 +4480,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .wb-entry-head .field-label { padding-top: 0; }
 
 .wb-entries-title { display: flex; flex-direction: column; gap: 4px; }
-.wb-entries-title input { min-height: 34px; font-size: 13px; padding: 7px 11px; }
-.wb-count { font-size: 11px; color: var(--text-faint); }
+.wb-entries-title input { min-height: 34px; font-size: var(--fs-sm); padding: 7px 11px; }
+.wb-count { font-size: var(--fs-xs); color: var(--text-faint); }
 
 .wb-entries-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -4490,7 +4517,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: var(--radius-sm);
   background: none;
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1;
   opacity: 0.45;
   cursor: pointer;
@@ -4502,7 +4529,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .wb-entry-del:hover { color: var(--danger); background: var(--danger-bg); }
 
 .wb-entry-title {
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--text);
   display: flex;
   align-items: center;
@@ -4521,7 +4548,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 常驻条目给个标记，一眼能认出来 */
 .wb-badge {
   flex: 0 0 auto;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   padding: 1px 5px;
   border-radius: 999px;
   background: var(--accent-soft);
@@ -4530,7 +4557,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .wb-entry-keys {
   margin-top: 3px;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4543,7 +4570,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   justify-content: center;
   text-align: center;
   padding: 30px 18px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   min-height: 160px;
 }
@@ -4559,7 +4586,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 弹窗里标签列窄一点，给输入框留够宽度 */
 .wb-form .field { grid-template-columns: 118px minmax(0, 1fr); column-gap: 12px; }
 .wb-form .field.field-stack { grid-template-columns: minmax(0, 1fr); }
-.wb-form .field-label { font-size: 12.5px; }
+.wb-form .field-label { font-size: var(--fs-sm); }
 /* 书名那一行在 268px 的窄栏里，152px 的标签列会把输入框挤到只剩几十像素 */
 .wb-entries-title .field { grid-template-columns: minmax(0, 1fr); }
 
@@ -4584,8 +4611,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .wb-form-foot-hint {
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-faint);
   text-align: right;
 }
@@ -4593,7 +4620,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 底部「有未保存的改动」：保存前一直亮着，保存完自己消失 */
 .wb-dirty,
 .pr-dirty {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--accent);
   background: var(--accent-soft);
   padding: 3px 9px;
@@ -4624,7 +4651,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .preset-sampling > summary {
   cursor: pointer;
   padding: 11px 0;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
   user-select: none;
@@ -4700,7 +4727,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .preset-pick-name {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4712,7 +4739,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   flex: none;
   padding: 1px 6px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 550;
   color: var(--accent);
   background: var(--accent-soft-strong);
@@ -4721,8 +4748,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 状态说明：「跟随全局」还是「这一场单独配置」—— 用户得知道自己处在哪一档 */
 .preset-pick-state {
   padding: 5px 9px 1px;
-  font-size: 11.5px;
-  line-height: 1.5;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-faint);
 }
 
@@ -4732,14 +4759,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 绑着但已被删/停用的条目：只是提示，不是错误，用警示黄而不是红 */
 .preset-pick-gone {
   padding: 5px 9px 1px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
 .preset-pick-empty {
   margin: 0;
   padding: 10px 9px;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--text-faint);
 }
 
@@ -4794,7 +4821,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
    字号 / 字距 / 颜色跟设计稿的 .cast-cap 一致，数字用主色挑出来。 */
 .panel-title {
   flex: 0 0 auto;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.12em;
   color: var(--text-faint);
   white-space: nowrap;
@@ -4804,7 +4831,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .panel-title b {
   font-weight: 600;
   color: var(--accent);
-  font-size: 11px;
+  font-size: var(--fs-xs);
 }
 
 /* 「全部展开 / 全部收起」。批量开关**不是**另一种模式 ——
@@ -4816,7 +4843,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: none;
   color: var(--text-faint);
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   cursor: pointer;
 }
 
@@ -4849,7 +4876,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border: 0;
   border-radius: var(--radius);
   color: var(--on-accent);
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
   line-height: 1;
   display: inline-flex;
@@ -4945,7 +4972,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.55);
   color: var(--on-accent);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1.6;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4961,7 +4988,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   height: 30px;
   border-radius: 50%;
   color: var(--on-accent);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   display: inline-flex;
   align-items: center;
@@ -4974,7 +5001,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .sc-title {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -4997,16 +5024,16 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   font: inherit;
 }
 
-.sc-edit { font-size: 11px; padding: 3px 7px; }
+.sc-edit { font-size: var(--fs-xs); padding: 3px 7px; }
 .sc-edit:hover { background: var(--accent-soft); color: var(--accent); }
 
 /* 展开 / 收起：和「编辑」一样是**纯文字**（设计稿的 .cc-tog 没有底色）。
    原来给了一层主色浅底，是为了在收起的卡上一眼看出能点 —— 但一排卡片头上
    挂三块浅色小方块，正是「不够扁平」的来源；改成 hover 变主色，够用了。 */
-.sc-toggle { font-size: 11px; padding: 3px 4px; }
+.sc-toggle { font-size: var(--fs-xs); padding: 3px 4px; }
 .sc-toggle:hover { color: var(--accent); }
 
-.sc-close { width: 20px; height: 20px; font-size: 12px; line-height: 1; }
+.sc-close { width: 20px; height: 20px; font-size: var(--fs-xs); line-height: 1; }
 .sc-close:hover { background: var(--danger-bg); color: var(--danger); }
 
 .sc-body {
@@ -5021,13 +5048,13 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   gap: 0;
 }
 
-.sc-empty { font-size: 11.5px; color: var(--text-faint); padding: 2px 0 4px; }
+.sc-empty { font-size: var(--fs-xs); color: var(--text-faint); padding: 2px 0 4px; }
 
 /* 卡片里的分组小标题（设计稿的 .s-cap）：**没有底色、没有下划线**，
    只靠"小一号 + 拉开字距 + 淡色"把自己和字段行分开。
    原来是主色字 + 一条下划线，一条卡片里几个分组就几条线，最显脏的就是它。 */
 .sc-group-title {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--accent);
   letter-spacing: 0.12em;
@@ -5048,14 +5075,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   margin-bottom: 6px;
 }
 
-.sc-name { flex: 0 0 auto; font-size: 12.5px; color: var(--text-dim); }
+.sc-name { flex: 0 0 auto; font-size: var(--fs-sm); color: var(--text-dim); }
 
 /* 值用 600 + 等宽数字（设计稿的 .s-row b）：一列数字上下能对齐，
    而且和左边的字段名拉开层次，不用靠颜色硬撑。 */
 .sc-value {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--text);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
@@ -5094,7 +5121,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   width: auto;
   min-height: 26px;
   padding: 3px 7px;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
@@ -5117,7 +5144,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text-faint);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1;
 }
 
@@ -5128,7 +5155,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .sc-add-btn {
   flex: 0 0 auto;
   padding: 5px 11px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   /* 不描边：主色浅底已经够说明「这颗能点」（卡片里其它按钮全是纯文字） */
   border: 0;
   border-radius: var(--radius-sm);
@@ -5145,7 +5172,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1;
   padding: 3px 4px;
   border-radius: var(--radius-sm);
@@ -5196,7 +5223,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: 999px;
   background: var(--bg-card);
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-family: inherit;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
@@ -5255,7 +5282,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: 999px;
   background: transparent;
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-family: inherit;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -5380,7 +5407,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   flex: 0 0 auto;
   min-width: 46px;
   text-align: right;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -5393,7 +5420,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 「大小」那个百分比标签：跟在 label 文字后面，小而弱 */
 .field-badge {
   margin-left: 6px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
@@ -5455,7 +5482,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .requests-empty {
   margin: 8px 0 0;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   line-height: 1.6;
   color: var(--text-faint);
 }
@@ -5491,7 +5518,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .requests-item-time {
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -5501,7 +5528,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--accent);
 }
 
@@ -5512,8 +5539,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   white-space: nowrap;
 }
 
-.requests-item-preview { font-size: 12.5px; line-height: 1.45; color: var(--text); }
-.requests-item-stats { font-size: 11px; color: var(--text-faint); }
+.requests-item-preview { font-size: var(--fs-sm); line-height: 1.6; color: var(--text); }
+.requests-item-stats { font-size: var(--fs-xs); color: var(--text-faint); }
 
 .requests-detail {
   display: flex;
@@ -5534,7 +5561,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -5550,8 +5577,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: var(--pre-bg);
   color: var(--text-dim);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11.5px;
-  line-height: 1.55;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -5562,13 +5589,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .memory-badge {
   display: inline-block;
   margin-left: 5px;
-  min-width: 15px;
+  min-width: 16px;
   padding: 0 4px;
   border-radius: 999px;
   background: var(--accent);
   color: var(--on-accent);
-  font-size: 10.5px;
-  line-height: 15px;
+  font-size: var(--fs-xs);
+  /* 相对行高（原来写死 15px），理由同顶栏那颗角标。 */
+  line-height: 1.35;
   text-align: center;
   vertical-align: 1px;
 }
@@ -5585,7 +5613,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: var(--bg-side);
 }
 
-.memory-stat { font-size: 12px; color: var(--text-dim); }
+.memory-stat { font-size: var(--fs-xs); color: var(--text-dim); }
 
 .memory-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
 
@@ -5596,14 +5624,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border: 1px dashed var(--border);
   border-radius: var(--radius);
   text-align: center;
-  font-size: 12px;
-  line-height: 1.7;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-faint);
 }
 
 /* 摘要卡片：head 和 actions 是同一张卡的两行 */
-.memory-card .memory-card-title { font-size: 13px; font-weight: 600; color: var(--text); }
-.memory-card .memory-card-meta { font-size: 11px; color: var(--text-faint); }
+.memory-card .memory-card-title { font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+.memory-card .memory-card-meta { font-size: var(--fs-xs); color: var(--text-faint); }
 
 .modal-body .memory-card {
   padding: 11px 13px;
@@ -5628,8 +5656,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   padding: 9px 11px;
   border-radius: var(--radius-sm);
   background: var(--bg-side);
-  font-size: 12.5px;
-  line-height: 1.75;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   color: var(--text-dim);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -5641,8 +5669,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   width: 100%;
   min-height: 170px;
   box-sizing: border-box;
-  font-size: 12.5px;
-  line-height: 1.7;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   resize: vertical;
 }
 
@@ -5694,11 +5722,11 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   color: var(--text);
 }
 
-.cwb-row-count { flex: 0 0 auto; font-size: 11px; color: var(--text-faint); }
+.cwb-row-count { flex: 0 0 auto; font-size: var(--fs-xs); color: var(--text-faint); }
 
 .cwb-row-del {
   flex: 0 0 auto;
@@ -5706,7 +5734,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1;
   padding: 3px 5px;
   border-radius: var(--radius-sm);
@@ -5749,7 +5777,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-bottom: 1px solid var(--border-soft);
 }
 
-.cwb-picker-title { font-size: 13px; color: var(--text); }
+.cwb-picker-title { font-size: var(--fs-sm); color: var(--text); }
 
 .cwb-picker-list {
   flex: 1 1 auto;
@@ -5773,7 +5801,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: var(--bg-card);
   color: var(--text);
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -5788,7 +5816,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   white-space: nowrap;
 }
 
-.cwb-picker-meta { flex: 0 0 auto; font-size: 11px; color: var(--text-faint); }
+.cwb-picker-meta { flex: 0 0 auto; font-size: var(--fs-xs); color: var(--text-faint); }
 
 /* ============================================================================
    看大图浮层（renderer/js/ui/lightbox.js）
@@ -5849,7 +5877,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -5880,12 +5908,12 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .lightbox-pct {
   min-width: 46px;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text-faint);
 }
 
-.lightbox-hint { font-size: 11px; color: var(--text-faint); }
+.lightbox-hint { font-size: var(--fs-xs); color: var(--text-faint); }
 
 @media (prefers-reduced-motion: reduce) {
   .modal, .modal-card, .brand-dot, .waiting::after,
@@ -5906,8 +5934,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .help-doc {
   max-width: 780px;
   margin: 0 auto;
-  font-size: 13.5px;
-  line-height: 1.95;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   color: var(--text-dim);
 }
 
@@ -5923,8 +5951,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: var(--accent-soft);
   border-left: 3px solid var(--accent);
   color: var(--text);
-  font-size: 14px;
-  line-height: 1.9;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
 }
 .help-doc .help-lead b { color: var(--accent); }
 
@@ -5940,7 +5968,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .help-doc .help-toc-title {
   display: block;
   margin-bottom: 8px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--text-faint);
@@ -5953,7 +5981,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   padding: 0;
   list-style: none;
 }
-.help-doc .help-toc li { font-size: 12.5px; }
+.help-doc .help-toc li { font-size: var(--fs-sm); }
 .help-doc .help-toc a { color: var(--accent); text-decoration: none; }
 .help-doc .help-toc a:hover { text-decoration: underline; }
 
@@ -5965,7 +5993,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   align-items: center;
   gap: 10px;
   margin: 0 0 14px;
-  font-size: 16.5px;
+  font-size: var(--fs-md);
   font-weight: 700;
   color: var(--text);
 }
@@ -5980,13 +6008,13 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: var(--radius-sm);
   background: var(--accent-soft-strong);
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .help-doc .help-h3 {
   margin: 20px 0 10px;
-  font-size: 14px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -6004,10 +6032,10 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border: 1px solid var(--border);
   background: var(--bg-card);
 }
-.help-doc .help-box > p { margin: 0; font-size: 13px; line-height: 1.85; }
+.help-doc .help-box > p { margin: 0; font-size: var(--fs-sm); line-height: 1.6; }
 .help-doc .help-box-head {
   margin: 0 0 8px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-faint);
@@ -6021,7 +6049,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .help-doc .help-plain, .help-doc .help-sec > .help-box { margin: 14px 0 16px; }
 
 /* 关键词那一行比正文淡一档，用三层类压过 `.help-box > p` 的 margin:0 */
-.help-doc .help-box .help-keys { margin: 0 0 8px; font-size: 12px; color: var(--text-faint); }
+.help-doc .help-box .help-keys { margin: 0 0 8px; font-size: var(--fs-xs); color: var(--text-faint); }
 .help-doc .help-box .help-keys b { margin-right: 6px; }
 
 /* 编号步骤清单（自己画序号，所以不要浏览器的 list-style） */
@@ -6043,7 +6071,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: 50%;
   background: var(--accent-soft-strong);
   color: var(--accent);
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -6079,7 +6107,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: 0;
   background: none;
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 700;
 }
 
@@ -6091,7 +6119,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: var(--radius-sm);
   background: var(--bg-side);
   border: 1px solid var(--border);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 .help-doc .help-tags > li:last-child { margin-bottom: 0; }
 .help-doc .help-tag {
@@ -6101,7 +6129,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: var(--radius-sm);
   background: var(--accent-soft-strong);
   color: var(--accent);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   vertical-align: middle;
 }
@@ -6114,18 +6142,18 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: var(--accent-wash);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 /* 问答式笔记（05 节 Marek 那段） */
 .help-doc .help-qa { margin: 0; }
-.help-doc .help-qa dt { margin-top: 10px; font-size: 12.5px; font-weight: 600; color: var(--text-faint); }
+.help-doc .help-qa dt { margin-top: 10px; font-size: var(--fs-sm); font-weight: 600; color: var(--text-faint); }
 .help-doc .help-qa dt:first-child { margin-top: 0; }
 .help-doc .help-qa dd {
   margin: 4px 0 0;
   padding-left: 12px;
   border-left: 2px solid var(--border);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 /* 长度尺度条：绿到红的那条渐变 + 一个「甜区」框 */
@@ -6153,7 +6181,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   justify-content: space-between;
   gap: 8px;
   margin-top: 8px;
-  font-size: 11.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 .help-doc .help-scale-sweet { color: var(--accent); font-weight: 600; }
@@ -6168,11 +6196,11 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 .help-doc .help-trouble-sym {
   margin-bottom: 8px;
-  font-size: 13.5px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
-.help-doc .help-trouble-item p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.85; }
+.help-doc .help-trouble-item p { margin: 0 0 6px; font-size: var(--fs-sm); line-height: 1.6; }
 .help-doc .help-trouble-item p:last-child { margin-bottom: 0; }
 .help-doc .help-why,
 .help-doc .help-fix {
@@ -6181,7 +6209,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   margin-right: 6px;
   padding: 1px 6px;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   text-align: center;
 }
@@ -6193,8 +6221,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   margin-top: 30px;
   padding-top: 16px;
   border-top: 1px solid var(--border);
-  font-size: 11.5px;
-  line-height: 1.9;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-faint);
 }
 .help-doc .help-credit p { margin: 0 0 6px; }
@@ -6235,7 +6263,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   padding: 7px 13px;
   margin-bottom: 0;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 /* 这里用**原生勾选框**的样子（不是上面那把开关）—— 开关是「一行一个」的用法，
@@ -6285,7 +6313,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   transform: rotate(45deg) scale(1);
 }
 
-.check.check-inline .check-title { font-size: 13px; font-weight: 500; }
+.check.check-inline .check-title { font-size: var(--fs-sm); font-weight: 500; }
 
 /* 配置读不出来（比如刚删了文件）时的兜底外观：别让一个空区块看着像坏了 */
 .pet-missing .field,
@@ -6303,8 +6331,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
-  font-size: 13px;
-  line-height: 1.75;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text-dim);
@@ -6330,8 +6358,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   padding: 8px 10px;
   border-radius: var(--radius-sm);
   background: var(--pre-bg);
-  font-size: 12px;
-  line-height: 1.7;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
   color: var(--text-dim);
 }
 
@@ -6360,7 +6388,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .pet-memory-meta {
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -6374,7 +6402,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-faint);
-  font-size: 14px;
+  font-size: var(--fs-sm);
   line-height: 1;
   cursor: pointer;
   transition: background .12s, color .12s;
@@ -6391,8 +6419,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .pet-memory-text {
-  font-size: 12.5px;
-  line-height: 1.65;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   color: var(--text);
   word-break: break-word;
 }
@@ -6462,7 +6490,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: none;
   color: var(--text-faint);
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
@@ -6485,7 +6513,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .cast-head-count {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--text-faint);
 }
@@ -6506,7 +6534,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: var(--radius-sm);
   background: none;
   color: var(--text-faint);
-  font-size: 14px;
+  font-size: var(--fs-sm);
   line-height: 1;
   cursor: pointer;
 }
@@ -6567,7 +6595,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   justify-content: center;
   border-radius: var(--radius);
   overflow: hidden;
-  font-size: 14px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--on-accent);
 }
@@ -6591,12 +6619,12 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .cast-card-name {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text);
 }
 
 .cast-card-role {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -6614,14 +6642,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .cast-field-name {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
 .cast-field-value {
   flex: 0 0 auto;
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   text-align: right;
 }
@@ -6653,13 +6681,13 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .cast-foot-text {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
 .cast-foot-hit {
   margin-left: auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--ok-text);
 }
 
@@ -6705,7 +6733,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .brand-version {
   flex: 0 0 auto;
   font-family: Consolas, "Courier New", monospace;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   user-select: none;
 }
@@ -6764,7 +6792,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--accent);
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-family: Consolas, "Courier New", monospace;
   white-space: nowrap;
   pointer-events: none;
@@ -6847,7 +6875,7 @@ body.pad-dragging {
 
 .msg-date-text {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -6917,7 +6945,7 @@ body.pad-dragging {
   border-radius: var(--radius-sm);
   background: none;
   color: var(--text-faint);
-  font-size: 14px;
+  font-size: var(--fs-sm);
   line-height: 1;
   cursor: pointer;
 }
@@ -6977,7 +7005,7 @@ body.pad-dragging {
   width: 24px;
   height: 24px;
   margin: 0 auto;
-  font-size: 15px;
+  font-size: var(--fs-md);
 }
 
 .sidebar.collapsed .sidebar-foot {
@@ -7028,7 +7056,7 @@ body.pad-dragging {
   height: 32px;
   border-radius: var(--radius);
   overflow: hidden;
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--on-accent);
 }
@@ -7074,7 +7102,7 @@ body.pad-dragging {
 
 .brand-name {
   margin-right: auto;
-  font-size: 17px;
+  font-size: var(--fs-lg);
   font-weight: 500;
   letter-spacing: 0.04em;
   /* ⚠️ 原来这行字是渐变填充（background-clip: text + text-fill-color: transparent）。
@@ -7098,7 +7126,7 @@ body.pad-dragging {
   min-height: 60px;
   padding: 6px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .convo-title {
@@ -7107,7 +7135,7 @@ body.pad-dragging {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .convo-item.active::before {
@@ -7126,7 +7154,7 @@ body.pad-dragging {
 /* 右端那个时间：今天给时刻、昨天给「昨天」、一周内给星期几、更早给日期 */
 .convo-time {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   user-select: none;
@@ -7187,7 +7215,7 @@ body.pad-dragging {
 
 .suggest-title {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -7228,12 +7256,12 @@ body.pad-dragging {
 
 .gen-preset-line {
   margin: 0 0 2px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
 .gen-preset {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
 }
 
@@ -7246,7 +7274,7 @@ body.pad-dragging {
   align-items: center;
   gap: 8px;
   margin-top: 2px;
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   letter-spacing: 0.12em;
   color: var(--text-faint);
 }
@@ -7267,7 +7295,7 @@ body.pad-dragging {
 .gen-label {
   flex: 0 0 auto;
   width: 48px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
@@ -7284,7 +7312,7 @@ body.pad-dragging {
   min-width: 44px;
   text-align: right;
   font-family: Consolas, "Courier New", monospace;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -7295,7 +7323,7 @@ body.pad-dragging {
 
 .gen-hint {
   margin: 0 0 8px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   line-height: 1.6;
   color: var(--text-faint);
 }

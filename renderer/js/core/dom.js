@@ -105,6 +105,11 @@ export const el = {
   appearanceAccents: $('appearance-accents'),
   // 「明暗」两态：容器里是两个 [data-mode] 按钮，同上
   appearanceModes: $('appearance-modes'),
+  // 「界面字号」三档（小 / 中 / 大）：容器里是三个 [data-uiscale] 按钮，
+  // 选中态由 views/appearance.js 的 renderAppearanceForm 刷（2026-10-12 深夜新增）
+  appearanceUiScale: $('appearance-uiscale'),
+  // 「字体」：一个原生 <select>（4 套本机确认存在的字体栈）
+  appearanceFont: $('appearance-font'),
   appearanceFontSize: $('appearance-fontsize'),
   appearanceFontSizeValue: $('appearance-fontsize-value'),
   // 对话区宽度：⛔ 顶栏那颗按钮 + 它的弹层（#pad-pop / 两根滑块）2026-10-12 晚**去掉了**

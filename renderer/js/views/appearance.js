@@ -29,6 +29,30 @@ import { setAccent, setTheme } from '../ui/theme.js';
 const CHAT_FONT_MIN = 12;
 const CHAT_FONT_MAX = 22;
 const CHAT_FONT_DEFAULT = 14;
+
+// ---------------------------------------------------------------------------
+//  界面字号（2026-10-12 深夜新增）：三档 → 一个 --ui-size 系数
+//
+//  为什么是「一个系数 × 一组 token」而不是「三张字号表」：
+//  样式表里所有字号只认 --fs-xs/sm/md/lg/xl 五个 token，而这五个 token 本身就写成
+//  `calc(基准px * var(--ui-size))`（见 style.css 的 :root）。所以这里只写一个数，
+//  整站（标题 / 按钮 / 列表 / 弹窗）等比缩放，层次一格不乱。
+//
+//  ⚠️ 「小」档会让最小的那个 token 落到 10.8px —— 那是用户自己选的紧凑档；
+//     默认的「中」严格 ≥12px（星宝的规矩：不小于 12、不要小数、用双数）。
+// ---------------------------------------------------------------------------
+export const UI_SCALES = { small: 0.9, medium: 1, large: 1.15 };
+const UI_SCALE_DEFAULT = 'medium';
+
+// 界面字体：这几套都是**本机实测装了的**（见 CHANGELOG 第九批的探测结果）。
+// 每条都带满回退 —— 就算真选到没装的那套，也只是回退到雅黑，不会出现方框。
+export const UI_FONTS = {
+  default: '"Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif',
+  noto: '"Noto Sans SC", "Source Han Sans CN", "Microsoft YaHei", sans-serif',
+  simhei: '"SimHei", "Microsoft YaHei", sans-serif',
+  serif: '"Noto Serif SC", "SimSun", "Songti SC", serif'
+};
+const UI_FONT_DEFAULT = 'default';
 // 对话宽度的左右内缩。20 = 设计稿的消息流内边距；360 是上限，
 // 再大消息区就窄得没法读了（1440 的窗口两侧各 360 只剩 470）。
 // ⚠️ 2026-10-12 起这两个常量是 **export** 的：宽度那套 UI（顶栏弹层 + 两侧抓手）
@@ -63,6 +87,11 @@ export function applyChatAppearance() {
   const size = Number(s.chatFontSize);
   const px = Number.isFinite(size) && size >= CHAT_FONT_MIN && size <= CHAT_FONT_MAX ? size : CHAT_FONT_DEFAULT;
   root.style.setProperty('--chat-font-size', `${px}px`);
+
+  // 界面字号 / 字体：这两样是**整个界面**的，和上面那些只管聊天区的分开走。
+  // 值不认识就回落默认 —— 手改过 config.json 也拉得回来（主进程那边还会再洗一遍）。
+  root.style.setProperty('--ui-size', String(UI_SCALES[s.uiSize] || UI_SCALES[UI_SCALE_DEFAULT]));
+  root.style.setProperty('--font-ui', UI_FONTS[s.uiFont] || UI_FONTS[UI_FONT_DEFAULT]);
 
   if (s.chatBoldColor) root.style.setProperty('--chat-bold-color', s.chatBoldColor);
   else root.style.removeProperty('--chat-bold-color');
@@ -110,6 +139,15 @@ export function renderAppearanceForm() {
 
   // ⚠️ 对话宽度**不在这里**了 —— 2026-10-12 搬到顶栏那颗按钮弹出来的面板里
   //    （views/chatPad.js）。「外观」只管长什么样，宽度管的是版面。
+  // 界面字号（三档单选）+ 字体（下拉）—— 2026-10-12 深夜新增的那两样
+  const uiSize = UI_SCALES[s.uiSize] ? s.uiSize : UI_SCALE_DEFAULT;
+  if (el.appearanceUiScale) {
+    for (const btn of el.appearanceUiScale.querySelectorAll('[data-uiscale]')) {
+      btn.setAttribute('aria-checked', String(btn.dataset.uiscale === uiSize));
+    }
+  }
+  if (el.appearanceFont) el.appearanceFont.value = UI_FONTS[s.uiFont] ? s.uiFont : UI_FONT_DEFAULT;
+
   el.appearanceBoldColorText.value = s.chatBoldColor || '';
   el.appearanceBoldColor.value = s.chatBoldColor || currentAccentHex();
 
@@ -236,6 +274,21 @@ export function initAppearance() {
       setTheme(btn.dataset.mode);
       // 明暗也一样：暗色下的主色是另一组值
       renderAppearanceForm();
+    });
+  }
+
+  // 界面字号：三档单选，点一下 = 落盘 + 立刻生效（改的是 --ui-size 一个变量）
+  if (el.appearanceUiScale) {
+    el.appearanceUiScale.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-uiscale]');
+      if (!btn) return;
+      persistAppearance({ uiSize: btn.dataset.uiscale });
+    });
+  }
+  // 字体：原生 <select>，change 就落盘（没有拖动过程，不用像滑块那样分 input/change）
+  if (el.appearanceFont) {
+    el.appearanceFont.addEventListener('change', () => {
+      persistAppearance({ uiFont: el.appearanceFont.value });
     });
   }
 
