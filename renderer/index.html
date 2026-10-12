@@ -717,32 +717,32 @@
             </span>
             <span class="section-heading">
               <span class="section-title">模型服务</span>
-              <span class="section-desc">可以添加多个服务商，随时切换</span>
+              <span class="section-desc">可以添加多个模型提供商，随时切换</span>
             </span>
             <span class="section-stat" id="stat-models" aria-live="polite"></span>
           </div>
 
-          <!-- 服务商卡片（2026-10-10 从一排胶囊标签换成卡片，见 style.css 的
+          <!-- 模型提供商卡片（2026-10-10 从一排胶囊标签换成卡片，见 style.css 的
                .provider-card）。id 仍叫 provider-tabs：settings.js 的 renderProviderTabs
                按它取容器，改名得连逻辑一起动，不值得。
                role 也不再是 tablist —— 卡片里带了状态文字和选中圈，
                语义上更接近一组单选（radio），不是纯标签页。 -->
-          <div id="provider-tabs" class="provider-cards" role="radiogroup" aria-label="服务商"></div>
+          <div id="provider-tabs" class="provider-cards" role="radiogroup" aria-label="模型提供商"></div>
 
           <div class="provider-add">
-            <button id="btn-add-provider" class="btn btn-ghost btn-sm" type="button" aria-expanded="false">＋ 添加服务商</button>
+            <button id="btn-add-provider" class="btn btn-ghost btn-sm" type="button" aria-expanded="false">＋ 第三方模型提供商</button>
           </div>
           <div id="provider-presets" class="provider-presets hidden"></div>
 
           <label class="field">
             <span class="field-label">名称</span>
-            <input id="p-name" type="text" spellcheck="false" placeholder="例如 DeepSeek" aria-label="服务商名称" />
+            <input id="p-name" type="text" spellcheck="false" placeholder="例如 DeepSeek" aria-label="模型提供商名称" />
           </label>
 
           <label class="field">
             <span class="field-label">接口地址</span>
             <input id="p-baseurl" type="text" spellcheck="false" placeholder="https://api.deepseek.com" aria-label="接口地址" />
-            <span class="field-help">DeepSeek 填 https://api.deepseek.com；OpenAI 填 https://api.openai.com/v1。</span>
+            <span class="field-help">如 DeepSeek 填 https://api.deepseek.com —— 从上面的「第三方模型提供商」里选一个会自动填好。</span>
           </label>
 
           <label class="field">
@@ -761,8 +761,8 @@
           </div>
 
           <div class="provider-actions">
-            <button id="btn-del-provider" class="btn btn-danger btn-sm" type="button">删除这个服务商</button>
-            <button id="btn-test" class="btn btn-ghost btn-sm" type="button">测试当前服务商</button>
+            <button id="btn-del-provider" class="btn btn-danger btn-sm" type="button">删除这个模型提供商</button>
+            <button id="btn-test" class="btn btn-ghost btn-sm" type="button">测试当前模型提供商</button>
           </div>
 
           <!-- 默认人设：没绑定角色卡、也没进世界的对话里「AI 是谁」，按模型各存一份。
@@ -798,7 +798,7 @@
             <label class="field">
               <span class="field-label">回复上限</span>
               <input id="s-maxtokens" type="number" min="64" max="32000" step="64" />
-              <span class="field-help">越大回复越长，也越费钱。推理模型的「思考」也算在这份额度里；若调大后仍反复被截断，多半是服务商按模型自己的上限截断，换个模型比继续调大更管用。</span>
+              <span class="field-help">越大回复越长，也越费钱。推理模型的「思考」也算在这份额度里；若调大后仍反复被截断，多半是模型提供商按模型自己的上限截断，换个模型比继续调大更管用。</span>
             </label>
           </div>
         </section>
@@ -899,16 +899,16 @@
           </div>
 
           <label class="field">
-            <span class="field-label">生图服务商</span>
-            <select id="s-image-provider" aria-label="生图服务商"></select>
+            <span class="field-label">生图模型提供商</span>
+            <select id="s-image-provider" aria-label="生图模型提供商"></select>
           </label>
 
           <label class="field">
             <span class="field-label">生图模型</span>
             <select id="s-image-model" aria-label="生图模型"></select>
             <span class="field-help">
-              列表跟着上面选的<b>生图服务商</b>走，用的是那个服务商的「可用模型」。<br />
-              里面没有你要的画图模型，就去上面「服务商」那一节把它加进模型列表（或点「拉取可用模型」）。
+              列表跟着上面选的<b>生图模型提供商</b>走，用的是那个模型提供商的「可用模型」。<br />
+              里面没有你要的画图模型，就去上面「模型提供商」那一节把它加进模型列表（或点「拉取可用模型」）。
             </span>
           </label>
 
@@ -925,7 +925,7 @@
             <b>生图和聊天是两个模型</b>，通常在<b>不同的端点</b>上（聊天走
             <code>/chat/completions</code>，生图走 <code>/images/generations</code>），
             所以这里单独配一组。<br />
-            服务商可以和聊天用同一个（同地址同 Key，只是换个模型），也可以另外加一个。<br />
+            模型提供商可以和聊天用同一个（同地址同 Key，只是换个模型），也可以另外加一个。<br />
             目前只支持<b>同步返回图片</b>的接口（OpenAI 那套）；通义万相那种「先提交任务再轮询」的还不支持。<br />
             配好之后，鼠标悬停在 AI 的回复上会多一个<b>「配图」</b>。
           </span>
@@ -959,15 +959,15 @@
           </label>
 
           <label class="field">
-            <span class="field-label">向量服务商</span>
-            <select id="s-embedding-provider" aria-label="向量服务商"></select>
+            <span class="field-label">向量模型提供商</span>
+            <select id="s-embedding-provider" aria-label="向量模型提供商"></select>
           </label>
 
           <label class="field">
             <span class="field-label">向量模型</span>
             <select id="s-embedding-model" aria-label="向量模型"></select>
             <span class="field-help">
-              同样是跟着上面选的向量服务商走。常见的有 <code>text-embedding-3-small</code>、
+              同样是跟着上面选的向量模型提供商走。常见的有 <code>text-embedding-3-small</code>、
               <code>BAAI/bge-m3</code> 这类。
             </span>
           </label>

@@ -100,7 +100,7 @@ export function initSettings(opts = {}) {
       el.s.imageModel,
       el.s.imageProvider.value,
       '',
-      '（先在左边选一个服务商）',
+      '（先在左边选一个提供商）',
       false,
       imageCatalogModels(el.s.imageProvider.value)
     );
@@ -115,10 +115,10 @@ export function initSettings(opts = {}) {
   });
 
   el.s.embeddingProvider.addEventListener('change', () => {
-    fillModelSelect(el.s.embeddingModel, el.s.embeddingProvider.value, '', '（先在上面选一个服务商）', false);
+    fillModelSelect(el.s.embeddingModel, el.s.embeddingProvider.value, '', '（先在上面选一个提供商）', false);
   });
 
-  // 「＋ 添加服务商」展开预设列表
+  // 「第三方模型提供商」展开预设列表
   el.btnAddProvider.addEventListener('click', () => {
     const hidden = el.providerPresets.classList.toggle('hidden');
     el.btnAddProvider.setAttribute('aria-expanded', hidden ? 'false' : 'true');
@@ -329,7 +329,7 @@ function fillPersonaModelOptions(want) {
       if (model === want) hasWant = true;
       models.push(model);
     }
-    if (models.length) groups.push({ name: provider.name || '未命名服务商', models });
+    if (models.length) groups.push({ name: provider.name || '未命名提供商', models });
   }
 
   clear(select);
@@ -569,7 +569,7 @@ function fillSettingsForm(settings) {
     el.s.imageModel,
     el.s.imageProvider.value,
     settings.imageModel,
-    '（先在左边选一个服务商）',
+    '（先在左边选一个提供商）',
     true,
     imageCatalogModels(el.s.imageProvider.value)
   );
@@ -588,7 +588,7 @@ function fillSettingsForm(settings) {
   el.s.embeddingProvider.value = providers().some((p) => p.id === settings.embeddingProviderId)
     ? settings.embeddingProviderId
     : '';
-  fillModelSelect(el.s.embeddingModel, el.s.embeddingProvider.value, settings.embeddingModel, '（先在上面选一个服务商）');
+  fillModelSelect(el.s.embeddingModel, el.s.embeddingProvider.value, settings.embeddingModel, '（先在上面选一个提供商）');
 
 }
 
@@ -602,7 +602,7 @@ function parseModels(text) {
 function stashProviderForm() {
   const p = providerById(editingProviderId);
   if (!p) return;
-  p.name = el.p.name.value.trim() || p.name || '未命名服务商';
+  p.name = el.p.name.value.trim() || p.name || '未命名提供商';
   p.baseUrl = el.p.baseUrl.value.trim() || p.baseUrl;
   p.apiKey = el.p.apiKey.value.trim();
   p.models = parseModels(el.p.models.value);
@@ -707,7 +707,7 @@ function renderSectionStats() {
   };
 
   const list = providers();
-  set(el.statModels, `${list.length} 家服务商`);
+  set(el.statModels, `${list.length} 家提供商`);
 
   const behavior = el.viewSettings.querySelectorAll('#sec-behavior input[type="checkbox"]:checked');
   const behaviorTotal = el.viewSettings.querySelectorAll('#sec-behavior input[type="checkbox"]');
@@ -739,7 +739,7 @@ function addProvider(preset) {
 
   const provider = {
     id: `p${Date.now().toString(36)}${Math.floor(Math.random() * 900 + 100)}`,
-    name: preset.name || '新服务商',
+    name: preset.name || '新提供商',
     baseUrl: preset.baseUrl || '',
     apiKey: '',
     models: [...(preset.models || [])],
@@ -773,11 +773,11 @@ async function removeProvider() {
   if (!provider) return;
 
   if (providers().length <= 1) {
-    showToast('至少要保留一个服务商', 'error');
+    showToast('至少要保留一个提供商', 'error');
     return;
   }
   const ok = await confirmDialog({
-    title: '删除服务商',
+    title: '删除模型提供商',
     message: `删除「${provider.name}」？它的 API Key 和模型列表会一起删掉。`,
     confirmText: '删除',
     danger: true
@@ -1020,7 +1020,7 @@ async function testConnection() {
     showToast((err && err.message) || '连接失败', 'error');
   } finally {
     el.btnTest.disabled = false;
-    el.btnTest.textContent = '测试当前服务商';
+    el.btnTest.textContent = '测试当前提供商';
   }
 }
 
@@ -1046,11 +1046,11 @@ async function fetchModels() {
       el.s.imageModel,
       el.s.imageProvider.value,
       el.s.imageModel.value,
-      '（先在左边选一个服务商）',
+      '（先在左边选一个提供商）',
       true,
       imageCatalogModels(el.s.imageProvider.value)
     );
-    fillModelSelect(el.s.embeddingModel, el.s.embeddingProvider.value, el.s.embeddingModel.value, '（先在上面选一个服务商）');
+    fillModelSelect(el.s.embeddingModel, el.s.embeddingProvider.value, el.s.embeddingModel.value, '（先在上面选一个提供商）');
 
     showToast(
       models.length > capped.length

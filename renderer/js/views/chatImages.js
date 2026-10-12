@@ -193,7 +193,7 @@ export async function illustrateMessage(index) {
     } else {
       // 云生图：走独立生图服务商
       if (!settings.imageProviderId) {
-        showToast('还没有配置生图，请到「设置 → 生图」里选一个服务商', 'error');
+        showToast('还没有配置生图，请到「设置 → 生图」里选一个提供商', 'error');
         actions.openSettings();
         return;
       }

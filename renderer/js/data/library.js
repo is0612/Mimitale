@@ -101,8 +101,8 @@ export function convoWorldbookIds(convo) {
 /**
  * 用户自建的「预设」：叠在对话上的一层指令。
  *
- * 注意别和 state.presets 搞混 —— 那是「添加服务商」时一键填充的内置模板
- * （DeepSeek / OpenAI / Kimi…），完全是另一回事。
+ * 注意别和 state.presets 搞混 —— 那是「第三方模型提供商」点开时一键填充的内置模板
+ * （DeepSeek / 通义 / Kimi…），完全是另一回事。
  */
 export function dialoguePresets() {
   return asArray(state.dialoguePresets);

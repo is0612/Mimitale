@@ -138,7 +138,7 @@ function renderModelSelect() {
     select.appendChild(h('option', { value: `${item.providerId}\u0000${item.model}`, text: item.label }));
   }
   if (!select.options.length) {
-    select.appendChild(h('option', { value: '', text: '（先去上面配置服务商）' }));
+    select.appendChild(h('option', { value: '', text: '（先去上面配置提供商）' }));
   }
   select.value = `${pet.providerId || ''}\u0000${pet.model || ''}`;
   if (!select.value || select.selectedIndex < 0) select.selectedIndex = 0;

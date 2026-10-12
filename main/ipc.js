@@ -300,7 +300,7 @@ function registerIpc() {
 
   ipcMain.handle('settings:test', async (_event, payload) => {
     const provider = providerFromPayload(payload);
-    if (!provider) throw new Error('还没有配置任何服务商。');
+    if (!provider) throw new Error('还没有配置任何模型提供商。');
 
     // 本机桥接走 /health，不要求 API Key
     if (isBridgeProvider(provider)) {
@@ -337,7 +337,7 @@ function registerIpc() {
 
   ipcMain.handle('models:list', async (_event, payload) => {
     const provider = providerFromPayload(payload);
-    if (!provider) throw new Error('还没有配置任何服务商。');
+    if (!provider) throw new Error('还没有配置任何模型提供商。');
 
     // 本机桥接没有 /models 接口，从 /health 拿当前文字模型名
     if (isBridgeProvider(provider)) {
@@ -711,7 +711,7 @@ function registerIpc() {
     // 界面指定了服务商，但磁盘上没有 —— 说明还没保存，宁可报错也不要发错服务商
     const requestedId = String(request.providerId || '').trim();
     if (requestedId && !settings.providers.some((p) => p.id === requestedId)) {
-      return { ok: false, requestId, error: '这个服务商还没有保存，请到设置里点一下「保存」。' };
+      return { ok: false, requestId, error: '这个提供商还没有保存，请到设置里点一下「保存」。' };
     }
 
     const endpoint = endpointFor(settings, request.providerId, request.model);
@@ -956,7 +956,7 @@ function registerIpc() {
 
     const endpoint = endpointFor(settings, request.providerId, request.model);
     if (!endpoint) {
-      return { ok: false, error: '还没有配置生图服务商，请到「设置 → 生图」里选一个。' };
+      return { ok: false, error: '还没有配置生图提供商，请到「设置 → 生图」里选一个。' };
     }
     if (!endpoint.apiKey) {
       return { ok: false, error: `还没有填写「${endpoint.providerName}」的 API Key。` };
@@ -1031,7 +1031,7 @@ function registerIpc() {
     const provider = resolveProvider(settings, request.providerId);
     const endpoint = endpointFor(settings, request.providerId, request.model);
     if (!endpoint || !isBridgeProvider(provider)) {
-      return { ok: false, error: '生图服务商不是本机桥接，无法用本地模型配图。' };
+      return { ok: false, error: '生图提供商不是本机桥接，无法用本地模型配图。' };
     }
 
     const text = String(request.text || '').trim();
@@ -1059,7 +1059,7 @@ function registerIpc() {
     const request = payload || {};
     const settings = loadSettings();
     const endpoint = endpointFor(settings, request.providerId, request.model);
-    if (!endpoint) return { ok: false, error: '还没有配置生图服务商。' };
+    if (!endpoint) return { ok: false, error: '还没有配置生图提供商。' };
     try {
       const result = await bridgeDrawProgress(endpoint.baseUrl);
       return { ok: true, ...result };

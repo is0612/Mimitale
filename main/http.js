@@ -229,7 +229,7 @@ function describeHttpError(status, text) {
   const raw = String(text || '').trim();
   const snippet = raw.length > 1500 ? `${raw.slice(0, 1500)}…` : raw;
 
-  if (status === 400) return `400 请求被拒绝：多半是参数不被该服务商接受（比如 max_tokens 超范围、模型名不对）。\n${snippet}`;
+  if (status === 400) return `400 请求被拒绝：多半是参数不被该模型提供商接受（比如 max_tokens 超范围、模型名不对）。\n${snippet}`;
   if (status === 401) return `401 未授权：API Key 不对或已失效。\n${snippet}`;
   if (status === 402) return `402 余额不足：账户需要充值。\n${snippet}`;
   if (status === 403) return `403 拒绝访问：Key 没有该模型的权限，或请求被网关拦截。\n${snippet}`;

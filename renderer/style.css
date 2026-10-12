@@ -1921,7 +1921,7 @@ body {
 
 .provider-add { margin-bottom: 12px; }
 
-/* 「＋ 添加服务商」展开的预设列表 */
+/* 「第三方模型提供商」展开的预设列表 */
 .provider-presets {
   display: flex;
   flex-wrap: wrap;
@@ -2408,7 +2408,7 @@ body {
   box-shadow: inset 0 0 0 4px var(--bg-card);
 }
 
-/* 「添加服务商」那一行：按钮 + 展开的预设，摆在卡片网格下面 */
+/* 「第三方模型提供商」那一行：按钮 + 展开的预设，摆在卡片网格下面 */
 .provider-add { display: flex; gap: 8px; margin-bottom: 10px; }
 
 /* 分组头部补一句统计（设计稿里是「已连接 4 家」这种），交给 JS 填。

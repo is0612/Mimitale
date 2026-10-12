@@ -34,7 +34,20 @@ function takeSettingsNotices() {
   return out;
 }
 
-// 内置的常见服务商预设：「添加服务商」时一键填充
+// 内置的模型提供商预设：「第三方模型提供商」按钮点开时一键填充。
+//
+// ⚠️ 这里**只放国内平台** —— 2026-10-12 撤掉了 OpenAI 等境外平台，
+//    并把一开始铺开的 12 家**收敛到 6 家**（星宝：「太多了」）。
+//    预设是给「刚上手、想赶紧填个 Key 就能聊」的人看的 —— 选择越多越挑不动。
+//
+// baseUrl 一律是各家公开的 **OpenAI 兼容端点**，别换成 SDK 文档里的原生协议地址
+// （比如混元是 api.hunyuan.cloud.tencent.com/v1，不是腾讯云签名那套
+// hunyuan.tencentcloudapi.com）。
+//
+// models 只是「点进去有几个名字可选」的起点，**不保证是最新的** ——
+// DeepSeek / Kimi / MiniMax 这几家支持 GET /models，进设置点一次
+// 「拉取可用模型」就是真实清单；智谱不提供这个接口，另有内置兜底，见
+// renderer/js/views/settingsCatalog.js 的 MODEL_CATALOG。
 const PROVIDER_PRESETS = [
   {
     key: 'deepseek',
@@ -43,23 +56,38 @@ const PROVIDER_PRESETS = [
     models: ['deepseek-chat', 'deepseek-reasoner']
   },
   {
-    key: 'openai',
-    name: 'OpenAI',
-    baseUrl: 'https://api.openai.com/v1',
-    models: ['gpt-4o-mini', 'gpt-4o']
-  },
-  {
     key: 'qwen',
     name: '通义千问',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    models: ['qwen-plus', 'qwen-turbo']
+    models: ['qwen-plus', 'qwen-max', 'qwen-turbo']
   },
   {
     key: 'kimi',
-    name: 'Kimi（Moonshot）',
+    name: 'Kimi（月之暗面）',
     baseUrl: 'https://api.moonshot.cn/v1',
-    models: ['moonshot-v1-8k', 'moonshot-v1-32k']
+    models: ['kimi-k2.6', 'kimi-k2-thinking', 'moonshot-v1-8k']
   },
+  {
+    key: 'zhipu',
+    name: '智谱 GLM',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    models: ['glm-4.6', 'glm-4.7-flash', 'glm-4-flash']
+  },
+  {
+    key: 'hunyuan',
+    name: '腾讯混元',
+    baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1',
+    models: ['hunyuan-turbos-latest', 'hunyuan-lite']
+  },
+  {
+    key: 'minimax',
+    name: 'MiniMax',
+    baseUrl: 'https://api.minimaxi.com/v1',
+    models: ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed']
+  },
+  // 没列在这儿、但同样是 OpenAI 兼容的平台（豆包 / 硅基流动 / 百度文心 /
+  // 阶跃星辰 / 讯飞星火 / 零一万物 …），以及境外平台，都走最下面的
+  // 「自定义模型API」自己填地址 —— 填进去就能用，不必非挤进预设。
   {
     key: 'tavern-bridge',
     name: '本地 AI 桥接',
@@ -71,7 +99,7 @@ const PROVIDER_PRESETS = [
   },
   {
     key: 'custom',
-    name: '自定义服务商',
+    name: '自定义模型API',
     baseUrl: '',
     models: []
   }
@@ -196,7 +224,7 @@ function normalizeProvider(raw, fallbackId) {
 
   return {
     id: p.id || fallbackId || newProviderId(),
-    name: String(p.name || '').trim() || '未命名服务商',
+    name: String(p.name || '').trim() || '未命名提供商',
     baseUrl: String(p.baseUrl || '').trim() || DEFAULT_BASE_URL,
     apiKey: typeof p.apiKey === 'string' ? p.apiKey.trim() : '',
     models: [...new Set(models.map((m) => String(m || '').trim()).filter(Boolean))],
@@ -265,7 +293,7 @@ function normalizeSettings(saved) {
     );
     const legacyModels = [raw.model].filter(Boolean);
     // 自定义地址匹配不到预设时，别硬套「DeepSeek」这个名字
-    const fallbackName = raw.baseUrl ? '自定义服务商' : DEFAULT_SETTINGS.providers[0].name;
+    const fallbackName = raw.baseUrl ? '自定义模型API' : DEFAULT_SETTINGS.providers[0].name;
 
     s.providers = [
       normalizeProvider(

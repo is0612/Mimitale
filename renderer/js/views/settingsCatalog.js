@@ -28,6 +28,12 @@ import { providerById } from '../data/providers.js';
  *
  * 按接口地址里的域名匹配，而不是按服务商名字 —— 名字用户可以随便改。
  *
+ * ⚠️ 这份清单和 main/providers.js 的 PROVIDER_PRESETS **是两件事**：
+ *    · PRESETS 是「第三方模型提供商」点开时一键填充的**起步值**（可以随便改）；
+ *    · 这里是拉取失败时兜底填进去的**内置目录**（本质是「这家有哪些模型」的知识）。
+ *    两边都只收国内平台：2026-10-12 撤掉了 OpenAI，并一起收敛到同一批 6 家
+ *    （对不上时以 PRESETS 为准）。
+ *
  * imageModels 是「生图」那一组能用的模型。文本模型不能拿来生图，
  * 选错了接口会报 404 —— 这个坑很容易踩，所以单独列出来。
  */
@@ -40,10 +46,19 @@ const MODEL_CATALOG = [
     imageModels: ['wanx2.1-t2i-turbo', 'wanx2.1-t2i-plus', 'wanx-v1']
   },
   {
+    // ⚠️ 智谱没有 GET /models（网关直接 406），所以它**只能**靠这份目录填模型。
+    //    改了模型名一定要同步这里，否则用户点「拉取」永远拿不到东西。
+    match: /bigmodel\.cn/i,
+    name: '智谱 GLM',
+    note: '智谱不提供模型列表接口（会返回 406），这里的清单是内置的',
+    models: ['glm-4.6', 'glm-4.7-flash', 'glm-4-flash'],
+    imageModels: ['glm-image', 'cogview-3-flash']
+  },
+  {
     match: /moonshot\.cn/i,
     name: 'Kimi',
     note: 'Moonshot 支持模型列表；若拉取失败可从下面挑',
-    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+    models: ['kimi-k2.6', 'kimi-k2-thinking', 'moonshot-v1-8k', 'moonshot-v1-32k'],
     imageModels: []
   },
   {
@@ -55,12 +70,22 @@ const MODEL_CATALOG = [
     imageModels: []
   },
   {
-    match: /openai\.com/i,
-    name: 'OpenAI',
-    note: 'OpenAI 支持模型列表；若拉取失败可从下面挑',
-    models: ['gpt-4o-mini', 'gpt-4o'],
-    imageModels: ['gpt-image-1', 'dall-e-3']
+    match: /hunyuan\.cloud\.tencent\.com/i,
+    name: '腾讯混元',
+    note: '混元支持模型列表；向量检索可以试试 hunyuan-embedding',
+    models: ['hunyuan-turbos-latest', 'hunyuan-lite', 'hunyuan-t1-latest'],
+    imageModels: []
+  },
+  {
+    match: /minimax/i,
+    name: 'MiniMax',
+    note: 'MiniMax 支持模型列表；若拉取失败可从下面挑',
+    models: ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M2.5'],
+    imageModels: []
   }
+  // 没列进来的国内平台（豆包 / 硅基流动 / 百度千帆 / 阶跃星辰 / 讯飞星火 /
+  // 零一万物）都支持 GET /models，点一次「拉取可用模型」就是真实清单，
+  // 不需要内置兜底 —— 所以这里只留「拉不动」的（智谱）和预设里那几家。
 ];
 
 export function catalogForBaseUrl(baseUrl) {
@@ -200,7 +225,7 @@ export function preferImageModel(provider) {
   }
 
   showToast(
-    `这家服务商的生图模型是 ${imageModels.join(' / ')}，` +
+    `这家提供商的生图模型是 ${imageModels.join(' / ')}，` +
       `已从「${current || '文本模型'}」切到「${target}」——` +
       '文本模型不能用来生图，选错会报 404',
     'ok'
