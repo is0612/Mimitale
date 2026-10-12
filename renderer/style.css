@@ -91,11 +91,16 @@
      就是 0.9 / 1 / 1.15（默认中 = 下面写的基准值）。JS 只往 <html> 上写这一个变量。
      ================================================================== */
   --ui-size: 1;
-  --fs-xs: calc(12px * var(--ui-size));   /* 最小那档：说明、时间、标签、角标 */
-  --fs-sm: calc(14px * var(--ui-size));   /* 界面主体：按钮、列表、表单、正文 */
-  --fs-md: calc(16px * var(--ui-size));   /* 小标题、强调行 */
-  --fs-lg: calc(18px * var(--ui-size));   /* 页面标题 */
-  --fs-xl: calc(22px * var(--ui-size));   /* 大标题 / 数字展示 */
+  /* 字号**下限**（星宝：「小于 12 号的字体就不应该有」）。
+     「小」档系数 0.9 会把 12px 压到 **10.8px** —— 低于他定死的那条线，
+     所以每档都过一遍 max()。副作用只有一个：小档下 `--fs-xs` 被顶回 12，
+     和 `--fs-sm`(12.6) 贴得很近，那一档的层次会变薄 —— 这是刻意的取舍。 */
+  --fs-min: 12px;
+  --fs-xs: max(var(--fs-min), calc(12px * var(--ui-size)));   /* 最小那档：说明、时间、标签、角标 */
+  --fs-sm: max(var(--fs-min), calc(14px * var(--ui-size)));   /* 界面主体：按钮、列表、表单、正文 */
+  --fs-md: max(var(--fs-min), calc(16px * var(--ui-size)));   /* 小标题、强调行 */
+  --fs-lg: max(var(--fs-min), calc(18px * var(--ui-size)));   /* 页面标题 */
+  --fs-xl: max(var(--fs-min), calc(22px * var(--ui-size)));   /* 大标题 / 数字展示 */
 
   /* 界面字体。设置 → 外观 →「字体」改的就是它（本机实测存在的四套，见那个下拉）。
      ⚠️ 原来这行字体栈写死在 body 上，还带着 macOS 的 "PingFang SC"（Windows 上不存在）。 */
@@ -482,8 +487,8 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  /* 3 → 6：条目高从 34 涨到 60 之后，3px 的行距会让它们糊成一片。 */
-  gap: 6px;
+  /* 3 → 6（条目 60 高时）→ **4**（2026-10-13：条目回到 48，行距也跟着收一档）。 */
+  gap: 4px;
   margin: 0 -4px;
   padding: 0 4px;
 }
@@ -521,24 +526,26 @@ body {
 }
 
 /* 会话条目左边的方角小图。
-   稿子 2:24 画的是 20×20 圆角 3（「一行条目 + 小头像」的紧凑列表），
-   但 2026-10-12 深夜星宝要的是「一眼认人」：**48×48**，条目跟着长到 60 高。
-   两次改动方向相反，不是打架 —— 稿子是「信息密度」优先，这次是「认人」优先。
+   三个数都出现过，方向反了两次，别再「改回去」第三次：
+     · 20（设计稿 2:24）—— 稿子走「信息密度」，一行塞得下很多条；
+     · 48（2026-10-12 深夜）—— 星宝要「一眼认人」，头像大到能看清立绘；
+     · **36（2026-10-13）** —— 实拍发现 48 + 60 高的条目一屏只看得到 8~9 条，
+                             太占地方了。36 是折中：仍然明显大于稿子的 20，
+                             但条目回到 48 高，一屏能多看 3~4 条。
    ⚠️ 这里**不许写 background** —— `.g1`~`.g6` 是同优先级，写了会盖掉按人配的渐变。 */
 .convo-avatar {
-  /* 20 → 48（星宝 2026-10-12 深夜：「最近会话的会话图片太小了，大约 48px」）。
-     20 是设计稿 2:24 那个数的口径 —— 但稿子里条目是**紧凑列表**，
-     而这一版要的是「一眼认人」：头像大到能看清立绘，条目跟着长高（34 → 60）。
-     ⚠️ 条目高度是 min-height 不是 height，头像再大也不会被裁。 */
-  flex: 0 0 48px;
-  width: 48px;
-  height: 48px;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius);
   display: grid;
   place-items: center;
   overflow: hidden;
   color: var(--on-accent);
-  font-size: 20px;
+  /* 48px 时代这里写死 20px（绑固定容器，所以进了字号 lint 的白名单）。
+     回到 36 之后改用 token：首字跟着界面字号一起缩放，
+     而且不用再占白名单一个位子（不然「20px」会变成一条永远不会用到的豁免）。 */
+  font-size: var(--fs-md);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -1485,13 +1492,31 @@ body {
 }
 .bubble th { background: var(--th-bg); }
 
-/* 消息操作按钮（悬停显示） */
+/* 消息操作按钮（悬停显示）。
+   2026-10-13（星宝：「工具条收一收」）：一行原本排 8 颗文字按钮（复制 / 编辑 /
+   重新生成 / 继续 / 配图 / 帮我想想 / 分支 / 删除），鼠标扫过去满眼是字，
+   反而是常用的那几颗找不到。现在常显的只有前 3 颗，其余收在末尾「⋯」里。 */
 .msg-actions {
   display: flex;
+  /* 展开「⋯」之后多出来的按钮换到第二行 —— 不写的话工具条会被撑得很宽 */
+  flex-wrap: wrap;
   gap: 4px;
   margin-top: 6px;
   opacity: 0;
   transition: opacity 0.15s;
+}
+
+/* 低频按钮的收起/展开。**纯 CSS**：按钮一直在 DOM 里，`⋯` 只是给
+   .msg-actions 挂一个 .open（见 chatMessages.js 的 appendExtras）——
+   换成「展开时才建节点」的话，冒烟里那几条按文字找按钮的断言会全断。 */
+.mini-extra { display: none; }
+.msg-actions.open .mini-extra { display: inline-block; }
+
+/* 「⋯」那颗：三点在 12px 字号下小得像个杂点，给宽一点、字大一号 */
+.mini-more {
+  min-width: 30px;
+  font-size: var(--fs-sm);
+  letter-spacing: 0.06em;
 }
 
 .msg:hover .msg-actions,
@@ -7307,9 +7332,10 @@ body.pad-dragging {
 .convo-item {
   position: relative;
   gap: 10px;
-  /* 34 → 60：头像 20 → 48 之后，条目得跟着抬头（48 + 上下各 6）。
+  /* 34 → 60（头像 48 时）→ **48**（2026-10-13 头像回到 36）。
+     条目高 = 头像 36 + 上下各 6。
      ⚠️ min-height 而不是 height —— 名字/时间换行或将来加第二行都不会被裁。 */
-  min-height: 60px;
+  min-height: 48px;
   padding: 6px;
   border-radius: var(--radius);
   font-size: var(--fs-sm);
@@ -7330,8 +7356,8 @@ body.pad-dragging {
   left: 0;
   top: 50%;
   width: 2px;
-  /* 18 → 28：条目从 34 长到 60 之后，这条选中标记也得跟着长，否则显得很短促。 */
-  height: 28px;
+  /* 18 → 28（条目 60 时）→ **22**（2026-10-13 条目回到 48）。 */
+  height: 22px;
   border-radius: 1px;
   background: var(--accent);
   transform: translateY(-50%);

@@ -402,9 +402,15 @@ function messageNode(message, index, character, labels, ctx) {
     body.appendChild(buildOptionsBlock(ctx.options));
   }
 
-  // 操作按钮
+  // 操作按钮。
+  // 2026-10-13（星宝：「工具条收一收」）：8 颗文字按钮排一行太密 —— 鼠标扫过去
+  // 满眼是字，常用的那几颗反倒找不到。现在只留**复制 / 编辑 / 重新生成**，
+  // 其余（继续 / 配图 / 帮我想想 / 分支 / 删除）收进末尾那颗「⋯」，点开才出现。
+  // ⚠️ 收的是**视觉**不是 DOM：低频按钮仍然留在 .msg-actions 里（只是 display:none），
+  //    因为冒烟是靠 `.msg-actions .mini-btn` 的文字找按钮的 —— 节点不在就全断。
   const actions = document.createElement('div');
   actions.className = 'msg-actions';
+  const extras = [];
 
   if (!isError && message.content) {
     const copy = document.createElement('button');
@@ -445,7 +451,7 @@ function messageNode(message, index, character, labels, ctx) {
       cont.title = '让 AI 接着这条往下写（回复被截断时用）';
       cont.setAttribute('aria-label', '继续生成');
       cont.addEventListener('click', continueLastMessage);
-      actions.appendChild(cont);
+      extras.push(cont);
     }
 
     // 配图：配了生图服务商（云生图或本地桥接）才显示，免得点了才知道没配
@@ -456,7 +462,7 @@ function messageNode(message, index, character, labels, ctx) {
       draw.title = '用生图模型给这段配一张插画';
       draw.setAttribute('aria-label', '给这条回复配图');
       draw.addEventListener('click', () => illustrateMessage(index));
-      actions.appendChild(draw);
+      extras.push(draw);
     }
 
     // 帮我想想：卡住不知道说什么时，让 AI 给几个下一步让你挑
@@ -467,7 +473,7 @@ function messageNode(message, index, character, labels, ctx) {
       suggest.title = '让 AI 给几个下一步，点一下就直接发出去';
       suggest.setAttribute('aria-label', '让 AI 帮我想下一步');
       suggest.addEventListener('click', () => suggestNextActions(suggest));
-      actions.appendChild(suggest);
+      extras.push(suggest);
     }
   }
 
@@ -478,7 +484,7 @@ function messageNode(message, index, character, labels, ctx) {
   del.title = '删除这条消息';
   del.setAttribute('aria-label', '删除这条消息');
   del.addEventListener('click', () => removeMessage(index));
-  actions.appendChild(del);
+  extras.push(del);
 
   // 从这条分出一条新线：不动当前会话，另外复制一个出来
   if (!isError) {
@@ -488,14 +494,53 @@ function messageNode(message, index, character, labels, ctx) {
     branch.title = '从这条起另开一个会话（当前这条线原样保留）';
     branch.setAttribute('aria-label', '从这条消息分支');
     branch.addEventListener('click', () => branchFromMessage(index));
-    actions.appendChild(branch);
+    extras.push(branch);
   }
 
+  appendExtras(actions, extras);
   body.appendChild(actions);
 
   wrap.appendChild(avatar);
   wrap.appendChild(body);
   return wrap;
+}
+
+/**
+ * 把低频操作收进工具条末尾那颗「⋯」。
+ *
+ * 收起用的纯粹是 CSS（`.mini-extra { display: none }` +
+ * `.msg-actions.open .mini-extra { display: inline-block }`）——
+ * **按钮一直在 DOM 里**，`⋯` 只是给 .msg-actions 挂一个 .open。
+ * 这样有两个好处：冒烟按文字找按钮的那几条不用改成「先点开再找」；
+ * 展开/收起也不涉及任何重渲染。
+ *
+ * @param {HTMLElement} actions 工具条（.msg-actions）
+ * @param {HTMLElement[]} extras 要收起来的按钮，按展开后的显示顺序
+ */
+function appendExtras(actions, extras) {
+  if (!extras.length) return;
+
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'mini-btn mini-more';
+  more.textContent = '⋯';
+  // 提示按**这条消息实际有的**列出来 —— 用户消息没有「配图 / 帮我想想」，
+  // 写死一份会把不存在的项也念出来。
+  more.title = `更多操作（${extras.map((b) => b.textContent.trim()).join(' / ')}）`;
+  more.setAttribute('aria-label', '更多操作');
+  more.setAttribute('aria-expanded', 'false');
+  more.addEventListener('click', (event) => {
+    // 别冒到 document：将来若加「点别处收起」，这一下会被当成「点了别处」
+    event.stopPropagation();
+    const open = actions.classList.toggle('open');
+    more.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  actions.appendChild(more);
+
+  extras.forEach((btn) => {
+    btn.classList.add('mini-extra');
+    actions.appendChild(btn);
+  });
 }
 
 export function renderMessages(options) {

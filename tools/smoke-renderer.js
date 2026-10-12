@@ -107,6 +107,25 @@ async function clickMoreItem(sel) {
 }
 
 /**
+ * 展开消息工具条末尾那颗「⋯」，让收起来的低频按钮（继续 / 配图 / 帮我想想 / 分支 / 删除）显形。
+ *
+ * 和 clickMoreItem 同一个道理：这些按钮**一直在 DOM 里**（`.mini-extra` 只是
+ * `display:none`），直接对着它们 click() 也能触发 —— 但那样就绕开了
+ * 「⋯ 到底打不打得开」这件事；而 .open 挂不上去的时候，用户是真点不到那些按钮的。
+ */
+async function openMsgMore(node) {
+  const actions = node && node.querySelector('.msg-actions');
+  if (!actions) throw new Error('这条消息上没有工具条');
+  const more = actions.querySelector('.mini-more');
+  if (!more) throw new Error('这条消息的工具条上没有「⋯」');
+  if (!actions.classList.contains('open')) {
+    more.click();
+    await waitFor('消息工具条展开', () => actions.classList.contains('open'));
+  }
+  return actions;
+}
+
+/**
  * 点角色卡上的「聊天」，并把「你是谁」那一步走完。
  *
  * 开聊前会先弹这个窗（和「进世界」共用同一个），不填就是默认的「你」；
@@ -1720,6 +1739,8 @@ await scenario('续写：也把状态表补回来', async () => {
   const node = lastAssistant();
   check('兜底说明这条上有「继续」', !!node && !!buttonByText(node, '继续'));
 
+  // 「继续」2026-10-13 起收在「⋯」里 —— 先点开再点它（别对着 display:none 的元素点）
+  await openMsgMore(node);
   click(buttonByText(node, '继续'));
   const back = await settlePanelValue('金币', '55', 8000);
   await waitFor('流式结束', () => byId('btn-send').disabled === false, 8000);
@@ -2307,8 +2328,48 @@ await scenario('消息：编辑与继续', async () => {
   }
   check('每条都有「编辑」', actionsOf(lastNode()).includes('编辑'), JSON.stringify(actionsOf(lastNode())));
 
+  // --- 「⋯」：低频按钮默认收起、点开才显形（2026-10-13「工具条收一收」）---
+  // 守的是「收起来之后**还打不打得开**」。只断文字存在是不够的 ——
+  // 那些按钮一直在 DOM 里（只是 display:none），.open 挂不上时断言照样全绿，
+  // 而用户是真点不到「继续 / 配图 / 分支 / 删除」的。
+  {
+    const bar = () => lastNode().querySelector('.msg-actions');
+    const extraNow = () => bar().querySelector('.mini-extra');
+    const moreNow = () => bar().querySelector('.mini-more');
+
+    check('工具条末尾有「⋯」在（低频按钮收在它后面）', !!moreNow() && !!extraNow());
+    check(
+      '常显的只有 复制 / 编辑 / 重新生成 / ⋯',
+      Array.from(bar().querySelectorAll('.mini-btn'))
+        .filter((b) => getComputedStyle(b).display !== 'none')
+        .map((b) => b.textContent.trim())
+        .join(',') === '复制,编辑,重新生成,⋯',
+      Array.from(bar().querySelectorAll('.mini-btn'))
+        .filter((b) => getComputedStyle(b).display !== 'none')
+        .map((b) => b.textContent.trim())
+        .join(',')
+    );
+    check(
+      '低频按钮默认是收起的',
+      !!extraNow() && getComputedStyle(extraNow()).display === 'none',
+      extraNow() ? getComputedStyle(extraNow()).display : '(没有低频按钮)'
+    );
+
+    await openMsgMore(lastNode());
+    check(
+      '点「⋯」后低频按钮显形',
+      !!extraNow() && getComputedStyle(extraNow()).display !== 'none',
+      extraNow() ? getComputedStyle(extraNow()).display : '(没有低频按钮)'
+    );
+
+    click(moreNow());
+    await sleep(60);
+    check('再点一下「⋯」收起', !bar().classList.contains('open'));
+  }
+
   // --- 继续：应该是「追加」，不是「替换」---
   const before = lastNode().querySelector('.msg-content').textContent;
+  await openMsgMore(lastNode());
   click(buttonByText(lastNode(), '继续'));
   await waitFor('内容变长', () => {
     const node = lastNode();
@@ -2893,6 +2954,29 @@ await scenario('外观：界面字号与字体', async () => {
   const smallSize = titleSize();
   check('选「小」确实比「中」小', smallSize < baseSize, `${baseSize} → ${smallSize}`);
 
+  // 「小」档最小字号不许低于 12（星宝：「小于 12 号的字体就不应该有」）。
+  // --fs-xs/--fs-sm… 里都过了一遍 max(--fs-min, ...)，这里逐个探**实际计算值**——
+  // 因为 getPropertyValue('--fs-xs') 拿到的是没解析的 token 原文，看不出 max() 的结果。
+  // 小档是 0.9，没有这道闸的话 --fs-xs 会算出 10.8px。
+  const tokenPx = (name) => {
+    const probe = document.createElement('span');
+    probe.style.position = 'absolute';
+    probe.style.visibility = 'hidden';
+    probe.style.fontSize = `var(${name})`;
+    document.body.appendChild(probe);
+    const px = parseFloat(getComputedStyle(probe).fontSize);
+    probe.remove();
+    return px;
+  };
+  const TOKENS = ['--fs-xs', '--fs-sm', '--fs-md', '--fs-lg', '--fs-xl'];
+  const smallMin = Math.min(...TOKENS.map(tokenPx));
+  check('「小」档最小字号仍 ≥ 12px', smallMin >= 12, `${smallMin}px`);
+  check(
+    '五档字号在「小」档下全都 ≥ 12px',
+    TOKENS.every((t) => tokenPx(t) >= 12),
+    TOKENS.map((t) => `${t}=${tokenPx(t)}`).join(' ')
+  );
+
   // 落盘（这条单独验：变量生效和存进 config 是两条路）
   await sleep(200);
   const savedSize = ((await window.mimitale.getSettings()).settings || {}).uiSize;
@@ -3208,18 +3292,19 @@ await scenario('侧栏：入口网格与收起', async () => {
       btnNew ? String(Math.round(btnNew.getBoundingClientRect().height)) : '(没有)'
     );
 
-    // 会话项头像：稿子 2:24 是 20×20 r=3 —— 2026-10-12 深夜放大到 **48×48 r=4**，
-    // 条目跟着长到 60 高（min-height，不会被裁）。这两条守的是「别再悄悄缩回去」。
+    // 会话项头像：稿子 2:24 是 20×20 r=3 → 10-12 深夜放大到 48（「一眼认人」）
+    // → **10-13 回到 36**：48 配 60 高的条目，一屏只看得到 8~9 条，太占地方。
+    // 这两条守的是「别再悄悄缩回去」—— 36 仍然明显大于稿子的 20，也大过最初那版 38 的头。
     const cav = document.querySelector('.convo-item .convo-avatar');
     const cbox = cav ? cav.getBoundingClientRect() : null;
     check(
-      '会话项头像 48×48 方角 r=4（放大后）',
-      !!cbox && Math.round(cbox.width) === 48 && getComputedStyle(cav).borderTopLeftRadius === '4px',
+      '会话项头像 36×36 方角 r=4（密度回调后）',
+      !!cbox && Math.round(cbox.width) === 36 && getComputedStyle(cav).borderTopLeftRadius === '4px',
       cbox ? `${Math.round(cbox.width)} r=${getComputedStyle(cav).borderTopLeftRadius}` : '（没有头像）'
     );
     check(
-      '会话项高 60（配 48 的头像）',
-      active && Math.round(active.getBoundingClientRect().height) === 60,
+      '会话项高 48（配 36 的头像）',
+      active && Math.round(active.getBoundingClientRect().height) === 48,
       active ? String(Math.round(active.getBoundingClientRect().height)) : '（没有 active 项）'
     );
 
@@ -4565,6 +4650,7 @@ await scenario('会话：分支与存档点', async () => {
   check('消息列表够长', nodes.length >= 2, String(nodes.length));
   check('消息上有「分支」入口', !!buttonByText(nodes[1], '分支'), '没找到');
 
+  await openMsgMore(nodes[1]);
   click(buttonByText(nodes[1], '分支'));
   await sleep(500);
 
@@ -4756,6 +4842,7 @@ await scenario('帮我想想（给几个下一步）', async () => {
   check('建议列表一开始是空的', byId('suggest-list').children.length === 0);
 
   // 点「帮我想想」→ 假后端会回 5 条带序号和引号的选项
+  await openMsgMore(lastAssistant());
   const trigger = Array.from(lastAssistant().querySelectorAll('.msg-actions .mini-btn'))
     .find((b) => b.textContent.trim() === '帮我想想');
   click(trigger);
@@ -4790,6 +4877,7 @@ await scenario('帮我想想（给几个下一步）', async () => {
   await sleep(250);
 
   // ✕ 能收起
+  await openMsgMore(lastAssistant());
   const trigger2 = Array.from(lastAssistant().querySelectorAll('.msg-actions .mini-btn'))
     .find((b) => b.textContent.trim() === '帮我想想');
   if (trigger2) {

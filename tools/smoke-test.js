@@ -3912,6 +3912,51 @@ app.whenReady().then(async () => {
           $('#btn-sidebar-toggle')?.click();
           await nap(400);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 消息工具条：它为**悬停**服务，平时是 opacity: 0 —— 不强制显形的话，
+        // 任何一张普通截图里它都是空的，「8 颗收成 3 颗 + ⋯」之后长什么样只能靠断言猜。
+        // 所以这里先塞一条 style 把它钉成可见，再发两轮：第 1 条留**收起态**、
+        // 点开第 2 条的「⋯」—— 一张图里同时能看到两种状态。
+        // ⚠️ 模板字符串：注释里不能有反引号，也不能有美元花括号。
+        msgActions: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+
+          $('#btn-chars')?.click();
+          await nap(550);
+          const card = $$('#char-page-grid .char-card').find(c => {
+            const n = c.querySelector('.char-card-name');
+            return n && n.textContent.trim() === '属性测试角色';
+          });
+          const go = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '聊天');
+          if (go) { go.click(); await nap(700); }
+          if (!$('#player-modal')?.classList.contains('hidden')) {
+            $('#btn-start-play')?.click();
+            await nap(600);
+          }
+
+          const send = async (text) => {
+            const input = $('#input');
+            if (!input) return;
+            input.value = text;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            $('#btn-send')?.click();
+            await nap(2600);
+          };
+          await send('第一条：这一条留收起态，看常用的那三颗 + ⋯。');
+          await send('第二条：这一条点开 ⋯，看多出来的那几颗换行换得整不整齐。');
+
+          // ⚠️ 用**行内样式**而不是注入 style 标签：这套应用是 CSP default-src none，
+          //    插进来的 style 元素会被直接丢掉（第一版就是这么白跑的，还看不到任何报错）。
+          //    el.style 走 CSSOM，不受 style-src 管。
+          $$('.msg-actions').forEach(el => { el.style.opacity = '1'; });
+
+          const last = $$('#messages .msg.assistant').pop();
+          const more = last ? last.querySelector('.msg-actions .mini-more') : null;
+          if (more) more.click();
+          await nap(250);
+
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 角色编辑器：点左栏上传框会走真实的 shrinkAvatar → 落盘那条路
         // （images:pick 的桩给的是 1×1 PNG，裁完是一片纯色 —— 看不出裁切效果）。
         // 所以出图时直接往两个上传框里各塞一张 SVG 占位图，只为核对框子比例：

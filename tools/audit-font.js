@@ -30,8 +30,10 @@ const path = require('node:path');
 
 const CSS = path.join(__dirname, '..', 'renderer', 'style.css');
 
-// 绑固定容器的占位字，写死是对的
-const RAW_OK = new Set(['20px', '26px', '30px', '52px']);
+// 绑**固定尺寸容器**的占位字，写死是对的（容器不跟着 --ui-size 走，字也就不能跟）。
+// ⚠️ 2026-10-13 移除了 '20px'：那是侧栏会话头像的首字，头像从 48 回到 36 之后
+//    改用了 var(--fs-md) —— 留着就是一条永远用不到的豁免，以后容易误放行。
+const RAW_OK = new Set(['26px', '30px', '52px']);
 // 关键词（没有单位）：继承、显式归零，都不是「一个写死的档位」
 const KEYWORD_OK = new Set(['inherit', 'initial', 'unset', 'revert', '0']);
 // 相对单位（em / rem / %）：**它们本身就是「跟着上下文缩放」的** —— 正是我们要的东西。
