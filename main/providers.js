@@ -121,7 +121,9 @@ const MAX_ASSISTANT_PERSONA_CHARS = 20000;
 
 // 配色方案的可选值。渲染层 style.css 里每种都有一个 token 块，
 // ui/theme.js 按这个顺序循环切换 —— 加新配色要改这里 + style.css + ui/theme.js + preload.js。
-const ACCENTS = ['pink', 'blue', 'matcha'];
+// ⚠️ **第一项就是默认配色**（好几处 fallback 都写成 ACCENTS[0]），
+//    换默认配色 = 换这里的顺序，别在别处再写死一个名字。
+const ACCENTS = ['amber', 'pink', 'blue', 'matcha'];
 
 const DEFAULT_SETTINGS = {
   // 可以配置多个服务商，每个都有自己的地址、Key 和模型列表
@@ -142,9 +144,13 @@ const DEFAULT_SETTINGS = {
   maxTokens: 8192,
   topP: 0.95,
   // 界面主题：light（白天）/ dark（夜间）
-  theme: 'light',
-  // 配色方案：pink（草莓奶昔）/ blue（苏打气泡）/ matcha（抹茶奶绿），与明暗模式正交
-  accent: 'pink',
+  // ⚠️ 必须是**真实的出厂默认**，不能是「以前那版的默认」—— 它不只用来补缺键：
+  //    main/window.js 拿它当**首屏窗口底色**（loadSettings 抛错时的兜底），
+  //    写错就是「深色应用启动先闪一下白底」。
+  theme: 'dark',
+  // 配色方案：amber（琥珀灯）/ pink（草莓奶昔）/ blue（苏打气泡）/ matcha（抹茶奶绿），
+  // 与明暗模式正交。默认见 ACCENTS[0]。
+  accent: 'amber',
   sendOnEnter: true,
   showDate: true,
   showUsage: true,
@@ -182,6 +188,13 @@ const DEFAULT_SETTINGS = {
   chatFontSize: 14,     // 消息正文字号（px）
   chatBoldColor: '',    // **加粗** 用什么颜色，空 = 跟随主题
   chatBackground: '',   // 消息区背景图（dataURL），空 = 没有
+  // 消息区的左右内边距（px）。**两个独立的值，不是「一个宽度」** ——
+  // 需要它是因为浮动卡片常被放在左下角，那时候对话贴边会被挡住，
+  // 而那只需要把**左边**推开；用一个对称的宽度值会让右边跟着一起缩，
+  // 白白浪费本来够用的空间（用户明确提过这一点）。
+  // 20 = 设计稿的消息流内边距，也是没设过时的样子。
+  chatPadLeft: 20,
+  chatPadRight: 20,
   // --- 界面自己写得出来的键，**必须列在这儿** ---
   // saveSettings 的白名单是「默认设置里有 or 磁盘上本来就有」。autoContinue 和
   // commonAttributes 当初都漏在 DEFAULT_SETTINGS 之外，靠的就是「用户磁盘上早
@@ -346,11 +359,11 @@ function normalizeSettings(saved) {
     }
   }
 
-  // 界面主题
-  s.theme = raw.theme === 'dark' ? 'dark' : 'light';
+  // 界面主题。2026-10-12 起默认夜间 —— 只有明确写了 'light' 才走浅色。
+  s.theme = raw.theme === 'light' ? 'light' : 'dark';
 
-  // 配色方案（不认识的值退回默认粉）
-  s.accent = ACCENTS.includes(raw.accent) ? raw.accent : 'pink';
+  // 配色方案（不认识的值退回默认方案，见 ACCENTS 第一项：琥珀灯）
+  s.accent = ACCENTS.includes(raw.accent) ? raw.accent : ACCENTS[0];
 
   // 生图：和聊天完全分开的一组配置，所以这里只做格式清洗，
   // 不存在的服务商 id 就留着 —— 用户可能还没保存那个服务商
@@ -408,6 +421,15 @@ function normalizeSettings(saved) {
   const bg = typeof raw.chatBackground === 'string' ? raw.chatBackground : '';
   s.chatBackground =
     bg.startsWith('data:image/') && bg.length <= MAX_CHAT_BACKGROUND_CHARS ? bg : '';
+
+  // 消息区的左右内边距。夹取而不是「不合法就退回默认」：
+  // 这两个值只影响显示，但被夹到边界比整个跳回默认更不容易让人困惑 ——
+  // 拖到头就是头，不应该忽然弹回 20。
+  // 上限 360：再大消息区就窄得没法读了（1440 宽的窗口，两侧各 360 只剩 470）。
+  for (const key of ['chatPadLeft', 'chatPadRight']) {
+    const n = Number(raw[key]);
+    s[key] = Number.isFinite(n) ? Math.min(360, Math.max(0, Math.round(n))) : DEFAULT_SETTINGS[key];
+  }
 
   // 角色「属性」的快捷候选词（commonAttributes）：功能本身 2026-10-09 删了 ——
   // 属性名按角色写，一份全局清单省不了几个字，编辑器里却多占一行、还要人去维护。

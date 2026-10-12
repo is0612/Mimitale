@@ -13,24 +13,44 @@
       <!-- 品牌区只留标记 + 名字。配色方案和夜间模式原来在这挂了两颗图标，
            现在挪进「外观」弹窗（顶栏那颗按钮）—— 那里才是「改外观」的地方，
            而且弹窗里能用文字写清楚每套配色叫什么，图标只能靠猜。 -->
+      <!-- 左栏收起 / 展开。跟右栏那颗一个套路：收成窄条、点同一颗回来。
+           绝对定位，不参与侧栏的 flex 流 —— 收起时其它内容整片 display:none，
+           只剩它自己。 -->
+      <button id="btn-sidebar-toggle" class="sidebar-toggle" type="button"
+              title="收起侧栏" aria-label="收起侧栏" aria-expanded="true">‹</button>
+
       <div class="brand">
         <span class="brand-dot"></span>
-        <span class="brand-name">♪ 如我所书</span>
+        <span class="brand-name">如我所书</span>
+        <!-- 版本号从主进程启动参数递进来（preload 的 appVersion）。
+             拿不到就整个不显示 —— 不留一个光秃秃的「v」。 -->
+        <span id="brand-version" class="brand-version hidden"></span>
       </div>
 
       <button id="btn-new" class="btn btn-primary btn-block btn-new" aria-label="创建新对话">＋ 新对话</button>
 
-      <div id="convo-cap" class="sidebar-label">最近</div>
+      <!-- ⛔ 搜索会话框 2026-10-12 晚**去掉**了（星宝：「去掉搜索对话功能」）。
+           当时的实现只过滤侧栏这个列表、不动数据，但它挤在「新对话」和列表之间占一行，
+           而会话本来就不多。要做就做成全局搜索（连消息内容一起搜），half 版不如不做。 -->
+
+      <div id="convo-cap" class="sidebar-label">最近会话</div>
       <div id="convo-list" class="convo-list" role="list"></div>
 
+      <!-- 底部 6 颗入口。⚠️ 文字包在 .foot-label 里是**为了收起态**：
+           收成 52px 图标轨时只藏这层文字、图标留着（稿子屏 2 就是这样）。
+           文字直接裸在 button 里就没法单独隐藏，只能整颗 display:none。 -->
       <div class="sidebar-foot">
-        <button id="btn-chars" class="btn btn-ghost btn-block" data-icon="users" aria-label="打开角色库">角色库</button>
-        <button id="btn-worldbooks" class="btn btn-ghost btn-block" data-icon="book" aria-label="打开世界书">世界书</button>
-        <button id="btn-presets" class="btn btn-ghost btn-block" data-icon="sliders" aria-label="打开预设">预设</button>
-        <button id="btn-help" class="btn btn-ghost btn-block" data-icon="help" aria-label="打开帮助">帮助</button>
-        <button id="btn-settings" class="btn btn-ghost btn-block" data-icon="settings" aria-label="打开设置">设置</button>
-        <button id="btn-folder" class="btn btn-ghost btn-block" data-icon="folder" aria-label="打开数据文件夹">数据文件夹</button>
+        <button id="btn-chars" class="btn btn-ghost btn-block" data-icon="users" aria-label="打开角色库"><span class="foot-label">角色库</span></button>
+        <button id="btn-worldbooks" class="btn btn-ghost btn-block" data-icon="book" aria-label="打开世界书"><span class="foot-label">世界书</span></button>
+        <button id="btn-presets" class="btn btn-ghost btn-block" data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span></button>
+        <button id="btn-help" class="btn btn-ghost btn-block" data-icon="help" aria-label="打开帮助"><span class="foot-label">帮助</span></button>
+        <button id="btn-settings" class="btn btn-ghost btn-block" data-icon="settings" aria-label="打开设置"><span class="foot-label">设置</span></button>
+        <button id="btn-folder" class="btn btn-ghost btn-block" data-icon="folder" aria-label="打开数据文件夹"><span class="foot-label">数据</span></button>
       </div>
+
+      <!-- 收起态图标轨最下面那颗：当前会话的头像（稿子屏 2，y≈866 那个 20px 方角图）。
+           展开态里它是 display:none —— 展开态「我在哪个会话」由列表的选中态说。 -->
+      <span id="rail-avatar" class="rail-avatar" aria-hidden="true"></span>
     </aside>
 
     <!-- ================= 主对话区 ================= -->
@@ -74,13 +94,23 @@
             </button>
             <div id="model-menu" class="menu-pop model-menu hidden" role="menu" aria-label="选择模型"></div>
           </div>
-          <button id="btn-appearance" class="btn btn-ghost btn-sm" data-icon="palette" aria-label="打开对话窗口外观设置">外观</button>
-          <button id="btn-perspective" class="btn btn-ghost btn-sm" data-icon="eye" aria-label="打开视角设置">视角</button>
+          <!-- 顶栏这三颗改成**图标按钮**（设计稿：26×26、方角、深底细描边）——
+               标题下面多出一行元信息之后，三个文字按钮会把顶栏挤成两行。
+               可发现性交给 title，鼠标停一下就知道是什么。 -->
+          <button id="btn-appearance" class="topbar-icon" data-icon="palette" type="button"
+                  title="外观：主题配色 / 明暗 / 字号 / 加粗色 / 背景图" aria-label="打开对话窗口外观设置"></button>
+          <!-- ⛔ 顶栏那颗「对话宽度」+ 它的弹层（#pad-pop）**2026-10-12 晚去掉**了
+               （星宝：「头部的对话区宽度可以去掉，因为聊天框里已经可以调宽度了」）。
+               现在调宽度只有**消息区两侧那两根抓手**一个入口，拖的时候会浮出
+               「左内缩 224px · 可拖动」那个小标签把准确值报给你。
+               顺带把顶栏从 4 颗图标收回 3 颗（外观 / 视角 / ⋯）。 -->
+          <button id="btn-perspective" class="topbar-icon" data-icon="eye" type="button"
+                  title="视角：叙述模式 / 推进节奏 / GM 模式" aria-label="打开视角设置"></button>
           <!-- 其余几项收进「⋯」：一排七八个按钮把标题挤成竖排了。
                常用的（切换模型 / 外观 / 视角）留在外面，偶尔用的收进菜单。
                菜单的开关逻辑在 js/ui/menu.js，菜单项自己的事件还在原来各处绑。 -->
           <div class="menu-wrap">
-            <button id="btn-more" class="btn btn-ghost btn-sm menu-toggle" type="button"
+            <button id="btn-more" class="btn btn-ghost btn-sm menu-toggle topbar-icon" type="button"
                     aria-label="更多操作" aria-haspopup="menu" aria-expanded="false">
               <span id="more-dot" class="more-dot hidden" aria-hidden="true"></span>⋯
             </button>
@@ -92,6 +122,10 @@
                    它不是显示开关，是一次性的动作，所以用普通 menuitem。 -->
               <button id="btn-request-log" class="menu-item" type="button" role="menuitem"
                       title="看看这几轮到底给模型发了什么">请求记录</button>
+              <!-- 生成参数：稿子（屏 2）里是个右侧抽屉，但没画入口 —— 收进「⋯」
+                   正合这里的规矩：常点的留外面，偶尔调的收起来。 -->
+              <button id="btn-gen-params" class="menu-item" type="button" role="menuitem"
+                      title="这一局的采样参数（温度 / 核采样 / 最大长度）">生成参数</button>
               <button id="btn-clear" class="menu-item menu-item-danger" type="button" role="menuitem">清空对话</button>
             </div>
           </div>
@@ -112,12 +146,14 @@
 
       <footer class="composer">
         <!-- 「帮我想想」给出的几个下一步。点一下就当成你说的话发出去 -->
+        <!-- 设计稿（屏 1 / 屏 2）里这是一**行**：小标题 → 几颗胶囊 → 最右边收起。
+             原来是个「标题 + 收起」的头再加一列胶囊，白占一行高度。
+             ⚠️ 去掉 .suggest-head 这层包装是安全的：JS 只认 #suggest-strip 和
+                #suggest-list，中间那层没有任何代码在找。 -->
         <div id="suggest-strip" class="suggest-strip hidden" aria-label="可以这样接话">
-          <div class="suggest-head">
-            <span class="suggest-title">可以这样接</span>
-            <button id="btn-suggest-close" class="suggest-close" type="button" title="收起" aria-label="收起建议">✕</button>
-          </div>
+          <span class="suggest-title">可以这样接</span>
           <div id="suggest-list" class="suggest-list"></div>
+          <button id="btn-suggest-close" class="suggest-close" type="button" title="收起" aria-label="收起建议">✕</button>
         </div>
         <div class="composer-box">
           <textarea id="input" rows="2" placeholder="说点什么……（Shift + Enter 换行）" aria-label="输入消息"></textarea>
@@ -133,7 +169,86 @@
            只有卡片实体可交互。卡片是绝对定位的，位置由 stateCard.js 算。 -->
       <div id="state-cards" class="state-cards"></div>
 
+      <!-- 对话区宽度抓手：贴在消息流左右两侧，拖动改内缩。
+           和顶栏那颗「对话宽度」按钮是同一份设置的两个入口 ——
+           抓手是「直接拖」，弹层是「填一个准确值」，都要有。 -->
+      <button id="pad-handle-left" class="pad-handle" data-side="left" type="button"
+              title="拖动调节左侧内缩" aria-label="拖动调节对话区左侧内缩"></button>
+      <button id="pad-handle-right" class="pad-handle" data-side="right" type="button"
+              title="拖动调节右侧内缩" aria-label="拖动调节对话区右侧内缩"></button>
+
+      <!-- 拖动宽度时那条虚线：画在「松开后会落到哪」的位置上，拖到哪儿看见哪儿。
+           竖直范围跟着消息区（由 chatPad.js 算 top/height）—— 不跟着的话它会穿过
+           顶栏和输入框，看着像页面裂了一道。 -->
+      <div id="pad-guide-left" class="pad-guide hidden" aria-hidden="true"></div>
+      <div id="pad-guide-right" class="pad-guide hidden" aria-hidden="true"></div>
+
       </div><!-- /.chat-col -->
+
+      <!-- 右侧常驻面板（设计稿的第三栏）—— **两个页签**：「在场角色」/「生成参数」。
+           ⚠️ 2026-10-12 晚改的：生成参数原来是**另一个浮层**（#gen-drawer，320px，
+              从右边盖住这一栏，开的时候还会把对话列挤窄 264）。两者抢同一个右边缘 ——
+              稿子自己也没解决这处冲突（屏 2 画抽屉、屏 1/3 画在场角色栏）。
+              改成同一栏的两个页签之后：对话列**宽度一点不变**（开参数不再让正文跳一下），
+              而且两者本来就是同一类东西（「这一局的仪表盘」：一个是看、一个是调）。
+           出现条件：有在场角色、**或者**这一局绑了世界书、**或者**参数页签被打开。
+              什么都没有时整栏收起来，不白占 264px。 -->
+      <aside id="cast-panel" class="cast-panel hidden" aria-label="右侧面板">
+        <div class="cast-head">
+          <div class="cast-tabs" role="tablist" aria-label="右侧面板">
+            <button id="btn-tab-cast" class="cast-tab active" type="button" role="tab"
+                    aria-selected="true" aria-controls="cast-panel-body">在场角色 <b id="cast-panel-count" class="cast-head-count">0</b></button>
+            <button id="btn-tab-gen" class="cast-tab" type="button" role="tab"
+                    aria-selected="false" aria-controls="gen-body">生成参数</button>
+          </div>
+          <button id="btn-cast-collapse" class="cast-collapse" type="button"
+                  title="收起这一栏" aria-label="收起在场角色面板">›</button>
+        </div>
+        <div class="cast-divider"></div>
+        <div id="cast-panel-body" class="cast-body" role="tabpanel" aria-labelledby="btn-tab-cast"></div>
+
+        <!-- 页签二：生成参数（稿子屏 2 那个抽屉的内容搬进来的）。
+             参数**按会话存**（convo.sampling）：滑过 = 这一局改过；没滑过 = 跟随预设 / 全局，
+             所以数值用**主色**标出「这一局自己定了」，灰色就是「跟随中」。
+             ⚠️ 稿子上还有「重复惩罚 / 状态表扫描 / 心理描写 / 流式输出 / 正则」——
+               它们要么没有实现、要么已经有别的入口（「心理描写」就是「视角 → 叙述模式」），
+               摆一排点了没反应的控件比不画更糟，所以没做。 -->
+        <div id="gen-body" class="gen-body hidden" role="tabpanel" aria-labelledby="btn-tab-gen">
+          <p class="gen-preset-line">本轮生效：<span id="gen-preset" class="gen-preset"></span></p>
+
+          <div class="gen-group-title">采样</div>
+          <label class="gen-row">
+            <span class="gen-label">温度</span>
+            <input id="gen-temperature" class="gen-range" type="range" min="0" max="2" step="0.01" aria-label="温度" />
+            <span id="gen-temperature-value" class="gen-value">—</span>
+          </label>
+          <label class="gen-row">
+            <span class="gen-label">核采样</span>
+            <input id="gen-topp" class="gen-range" type="range" min="0" max="1" step="0.01" aria-label="核采样" />
+            <span id="gen-topp-value" class="gen-value">—</span>
+          </label>
+
+          <div class="gen-group-title">输出</div>
+          <label class="gen-row">
+            <span class="gen-label">最大长度</span>
+            <input id="gen-maxtokens" class="gen-range" type="range" min="64" max="32000" step="64" aria-label="最大长度" />
+            <span id="gen-maxtokens-value" class="gen-value">—</span>
+          </label>
+        </div>
+
+        <!-- 页签一的脚注：世界书 · 书名 / N 条已触发 -->
+        <div id="cast-foot" class="cast-foot">
+          <span id="cast-foot-book" class="cast-foot-text"></span>
+          <span id="cast-foot-hit" class="cast-foot-hit"></span>
+        </div>
+
+        <!-- 页签二的脚注：说明 + 恢复默认 -->
+        <div id="gen-foot" class="gen-foot hidden">
+          <p class="gen-hint">改动只影响这一局，跟着会话一起存；没动过的项跟随预设 / 全局设置。</p>
+          <button id="btn-gen-reset" class="btn btn-ghost btn-sm" type="button"
+                  title="三项都清空，回到跟随预设 / 全局">恢复默认</button>
+        </div>
+      </aside>
 
       </section>
 
@@ -1955,17 +2070,24 @@
         <div class="appearance-global">
           <div class="field field-stack">
             <span class="field-label">主题配色</span>
-            <!-- 三选一。原来是左上角一颗「循环」按钮：点一下换下一套，
-                 想知道「一共有几套、现在在哪套」只能一路点下去。 -->
+            <!-- 四选一（2026-10-12 加「琥珀灯」并设为默认）。原来是左上角一颗
+                 「循环」按钮：点一下换下一套，想知道「一共有几套、现在在哪套」
+                 只能一路点下去。 -->
             <div id="appearance-accents" class="accent-swatches" role="radiogroup" aria-label="主题配色">
-              <button class="accent-swatch" type="button" data-accent="pink" role="radio" aria-checked="false">
-                <span class="accent-dot" aria-hidden="true"></span>草莓奶昔
+              <!-- ⚠️ 名字要包在 .accent-label 里：设计稿（切片 A）是「只有选中的那颗
+                   带文字」，未选中的只留一个色点 —— 四套排一行，一眼扫得完。
+                   文字直接裸在按钮里就没法单独隐藏了。 -->
+              <button class="accent-swatch" type="button" data-accent="amber" role="radio" aria-checked="false" title="琥珀灯">
+                <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">琥珀灯</span>
               </button>
-              <button class="accent-swatch" type="button" data-accent="blue" role="radio" aria-checked="false">
-                <span class="accent-dot" aria-hidden="true"></span>苏打气泡
+              <button class="accent-swatch" type="button" data-accent="pink" role="radio" aria-checked="false" title="草莓奶昔">
+                <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">草莓奶昔</span>
               </button>
-              <button class="accent-swatch" type="button" data-accent="matcha" role="radio" aria-checked="false">
-                <span class="accent-dot" aria-hidden="true"></span>抹茶奶绿
+              <button class="accent-swatch" type="button" data-accent="blue" role="radio" aria-checked="false" title="苏打气泡">
+                <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">苏打气泡</span>
+              </button>
+              <button class="accent-swatch" type="button" data-accent="matcha" role="radio" aria-checked="false" title="抹茶奶绿">
+                <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">抹茶奶绿</span>
               </button>
             </div>
             <span class="field-help">整个界面的主色调。</span>

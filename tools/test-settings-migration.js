@@ -46,7 +46,7 @@ Module._load = function patched(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 
-const { normalizeSettings, takeSettingsNotices, DEFAULT_SETTINGS, saveSettings } = require('../main/providers.js');
+const { normalizeSettings, takeSettingsNotices, DEFAULT_SETTINGS, saveSettings, ACCENTS } = require('../main/providers.js');
 // 假 electron 的 userData 指在 tmpRoot 里，data-dir.js 会当成「显式改过」直接用它 —— 不碰真实数据
 const { dataFile } = require('../main/store.js');
 
@@ -106,6 +106,56 @@ test('全新安装（没有任何配置）：用默认值，且不产生迁移�
   assert.equal(out.worldbookRecursiveDepth, DEFAULT_SETTINGS.worldbookRecursiveDepth);
   assert.equal(DEFAULT_SETTINGS.worldbookRecursiveDepth, 1, '新装默认 1 层');
   assert.deepEqual(takeSettingsNotices(), [], '全新安装没什么好告知的');
+});
+
+// ---------------------------------------------------------------------------
+//  界面主题 / 配色方案的默认值
+//
+//  2026-10-12 把出厂默认从「白天 + 草莓奶昔」改成「夜间 + 琥珀灯」。
+//  这两个值的坑和 worldbookRecursiveDepth 一模一样：**光改默认值对老配置无效** ——
+//  每次 saveSettings 都会把整份归一化结果落盘，所以老 config.json 里
+//  theme / accent 都是显式写着的（"light" / "pink"），默认值碰不到它们。
+//  所以下面把「新装拿到啥」和「老配置保持啥」**分开**钉住 ——
+//  混在一条用例里测，哪一半坏了都看不出来（而且会误以为改默认值就万事大吉）。
+// ---------------------------------------------------------------------------
+test('全新安装：默认是夜间 + 琥珀灯', () => {
+  const out = normalizeSettings({});
+  assert.equal(out.theme, 'dark', '新装默认夜间');
+  assert.equal(out.accent, 'amber', '新装默认琥珀灯');
+
+  // 顺带钉住 DEFAULT_SETTINGS 本身 —— 它不只是「补缺键用的表」：
+  // main/window.js 直接拿 theme / accent 当**首屏窗口底色**，
+  // 写错就是「深色应用启动先闪一下白底 / 粉底」。
+  assert.equal(DEFAULT_SETTINGS.theme, 'dark', 'DEFAULT_SETTINGS 必须是真实的出厂默认');
+  assert.equal(DEFAULT_SETTINGS.accent, 'amber', 'DEFAULT_SETTINGS 必须和 ACCENTS[0] 一致');
+  // 「默认配色 = ACCENTS 第一项」这条约定被好几处 fallback 依赖（window.js / preload.js），
+  // 别让它们各写各的。
+  assert.equal(DEFAULT_SETTINGS.accent, ACCENTS[0], '默认配色就是 ACCENTS 的第一项');
+});
+
+test('老配置写着 light / pink → 原样保留（默认值只对「缺键」生效）', () => {
+  takeSettingsNotices();
+  const out = normalizeSettings({ ...legacy(1), theme: 'light', accent: 'pink' });
+  assert.equal(out.theme, 'light', '老用户选的白天不能被新默认值改掉');
+  assert.equal(out.accent, 'pink', '老用户选的草莓奶昔不能被新默认值改掉');
+  assert.deepEqual(takeSettingsNotices(), [], '改默认值不是「迁移」，不该发通知');
+});
+
+test('theme 只认 light，其余（缺键 / 脏值）一律算夜间', () => {
+  assert.equal(normalizeSettings({}).theme, 'dark', '缺键 → 夜间');
+  assert.equal(normalizeSettings({ theme: null }).theme, 'dark', 'null → 夜间');
+  assert.equal(normalizeSettings({ theme: 'DARK' }).theme, 'dark', '大小写对不上的脏值 → 夜间');
+  assert.equal(normalizeSettings({ theme: 'dark' }).theme, 'dark');
+  assert.equal(normalizeSettings({ theme: 'light' }).theme, 'light', '只有明确写了 light 才是白天');
+});
+
+test('accent 认这四套配色，认不出来就退回默认那套', () => {
+  for (const a of ACCENTS) {
+    assert.equal(normalizeSettings({ accent: a }).accent, a, `${a} 是合法配色`);
+  }
+  assert.equal(ACCENTS.length, 4, '一共四套配色');
+  assert.equal(normalizeSettings({ accent: 'rainbow' }).accent, DEFAULT_SETTINGS.accent, '脏值退回默认');
+  assert.equal(normalizeSettings({ accent: null }).accent, DEFAULT_SETTINGS.accent, 'null 退回默认');
 });
 
 test('saveSettings：内置名（constructor / toString）混不过白名单', async () => {

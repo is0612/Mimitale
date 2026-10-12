@@ -129,6 +129,40 @@ export async function matchWorldbookSection(convo) {
   }
 }
 
+/**
+ * 这一轮世界书会命中几条 —— 右栏脚注那颗「N 条已触发」用的。
+ *
+ * 和 matchWorldbookSection 走**同一套扫描口径**（同几个 id、同样的扫描深度和递归深度），
+ * 区别只是它把 `hits` 的长度取出来，而不是拼成注入文本。
+ * ⚠️ 之前 castPanel.js 的注释写着「previewWorldbook 回不到命中了几条」——
+ *    那句是错的：主进程 `worldbooks:preview` 的返回值里一直有 `hits` 和 `total`
+ *    （见 main/ipc.js 的 return），只是取的人只用了 section。
+ *
+ * 匹配失败**不抛错**：世界书挂了不该把右栏脚注搞没，返回 null 表示「这次没数出来」。
+ */
+export async function worldbookHitCount(convo) {
+  const allIds = [...new Set(effectiveWorldbookIds(convo))];
+  if (!allIds.length) return 0;
+
+  const history = (convo.messages || []).filter(
+    (m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
+  );
+
+  try {
+    const result = await api.previewWorldbook({
+      worldbookIds: allIds,
+      scanDepth: WORLDBOOK_SCAN_DEPTH,
+      recursiveDepth: recursiveDepthSetting(),
+      messages: history.slice(-WORLDBOOK_SCAN_DEPTH).map((m) => ({ role: m.role, content: m.content }))
+    });
+    if (!result || !Array.isArray(result.hits)) return null;
+    return result.hits.length;
+  } catch (err) {
+    console.error('世界书命中统计失败', err);
+    return null;
+  }
+}
+
 /** 玩家在这个世界里的角色（老的会话没有这个字段） */
 export function convoPlayer(convo) {
   const p = convo && convo.player;

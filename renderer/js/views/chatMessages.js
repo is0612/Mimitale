@@ -35,6 +35,62 @@ import { openStateCard } from './stateCard.js';
 /** 正在生成开局的那个会话 id；同一时间只允许一个 */
 let openingBusyId = null;
 
+/** 消息头右端那个时间：24 小时制、两位补零（22:41）。
+ *
+ *  只用于显示。读不到 `at`（老数据 / 手改过的 JSON）就返回空串、什么都不画 ——
+ *  宁可少一个时间，也不要随手 `new Date()` 编一个假的出来，
+ *  那种「所有历史消息都显示成刚才」的错看着特别真、特别难查。
+ */
+function formatClock(at) {
+  const ms = Number(at);
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** 一天的分组键（`2026-10-12`）。读不到时间返回空串 —— 空串不参与跨天判断，也不会插分隔。 */
+function dayKeyOf(at) {
+  const ms = Number(at);
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+/** 给人看的日期：今天 / 昨天 / M 月 D 日 */
+function dayLabel(at) {
+  const d = new Date(Number(at));
+  const now = new Date();
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, now)) return '今天';
+  if (sameDay(d, new Date(now.getTime() - 86400000))) return '昨天';
+  return `${d.getMonth() + 1} 月 ${d.getDate()} 日`;
+}
+
+/**
+ * 日期分隔（设计稿的「——— 今天 · 第 12 轮 ———」）。
+ *
+ * 只在**跨天**时插一条：聊到第三天时，上下两段一眼分得清是另一天了 ——
+ * 之前只能自己拿每条消息的时间戳去算。
+ *
+ * ⚠️ 「第 N 轮」按**一问一答算一轮**（本项目自己的口径，见 data/memory.js:
+ *    「一轮 = 一问一答 = 2 条」）。⚠️ 原来是 `index + 1`（消息条数）——
+ *    那会让「第 12 轮」显示成「第 24 轮」，而且和顶栏 `renderHeader` 里
+ *    同一个数字对不上（两处必须同口径，改一处就得改另一处）。
+ */
+function dateSeparator(message, index) {
+  const at = Number(message.at);
+  const when = Number.isFinite(at) && at > 0 ? dayLabel(at) : '';
+  const round = `第 ${Math.floor(index / 2) + 1} 轮`;
+  return h(
+    'div',
+    { class: 'msg-date-sep' },
+    h('span', { class: 'msg-date-line' }),
+    h('span', { class: 'msg-date-text', text: when ? `${when} · ${round}` : round }),
+    h('span', { class: 'msg-date-line' })
+  );
+}
+
 // ---- Markdown 渲染缓存 ----
 // renderAll 在每次发消息 / 收流结束 / 编辑 / 切候选 / 配图完成后都会整棵重建
 // 消息列表，长会话下几百条 assistant 消息每条都要重跑一遍 renderMarkdown
@@ -217,9 +273,16 @@ function messageNode(message, index, character, labels, ctx) {
   const body = document.createElement('div');
   body.className = 'msg-body';
 
+  // 消息头（设计稿：「谢临舟 掌柜 [deepseek-flash] ……… ‹2/3› 22:41」）
+  // 2026-10-12 之前这里只有一行灰色小字写着角色名，模型标签和候选翻页挂在它后面；
+  // 现在整行是 flex，右端多了时间，正文上面不再另起一行。
   const role = document.createElement('div');
   role.className = 'msg-role';
-  role.textContent = isError ? '出错了' : isUser ? userLabel : assistantLabel;
+
+  const name = document.createElement('span');
+  name.className = 'msg-role-name';
+  name.textContent = isError ? '出错了' : isUser ? userLabel : assistantLabel;
+  role.appendChild(name);
 
   // 助手消息上标出是哪个模型答的，方便对比多个模型
   if (!isUser && !isError && message.model) {
@@ -229,8 +292,13 @@ function messageNode(message, index, character, labels, ctx) {
     role.appendChild(tag);
   }
 
+  // 弹性空隙：把后面那几项（候选翻页 / 时间）顶到最右边。
+  // ⚠️ 用户那侧要**隐藏**它 —— 设计稿里自己的消息头是整体靠右的（「你 22:43」挨在一起，
+  //    不是「你」在左、「22:43」在右）。靠 .msg.user .msg-role .msg-spacer 那条规则实现。
+  role.appendChild(h('span', { class: 'msg-spacer' }));
+
   // 候选切换（重新生成过才会有多个版本）。
-  // 放在角色行而不是操作栏：操作栏是悬停才浮出的，那样就**看不出这条有几个版本**了。
+  // 放在消息头而不是操作栏：操作栏是悬停才浮出的，那样就**看不出这条有几个版本**了。
   const variants = Array.isArray(message.variants) ? message.variants : null;
   if (!isUser && !isError && variants && variants.length > 1) {
     const at = Number.isFinite(message.variantIndex) ? message.variantIndex : 0;
@@ -255,6 +323,12 @@ function messageNode(message, index, character, labels, ctx) {
         })
       )
     );
+  }
+
+  // 时间放最后（右端）。没有 `at` 就不画 —— 见 formatClock 的说明。
+  const clock = formatClock(message.at);
+  if (clock) {
+    role.appendChild(h('span', { class: 'msg-time', text: clock }));
   }
 
   const bubble = document.createElement('div');
@@ -505,7 +579,13 @@ export function renderMessages(options) {
   // 先攒进 fragment 再一次性挂上去：逐条往已挂载的列表里 append，
   // 每条都可能让样式失效一次；几百条时攒一批明显更稳
   const frag = document.createDocumentFragment();
+  // 跨天时插一条日期分隔。第一条前面也插（显示「今天 · 第 1 轮」）——
+  // 设计稿里那条就在第一条消息上方，它是这一段的抬头，不是「两条之间的东西」。
+  let lastDay = null;
   convo.messages.forEach((message, index) => {
+    const day = dayKeyOf(message.at);
+    if (day && day !== lastDay) frag.appendChild(dateSeparator(message, index));
+    if (day) lastDay = day;
     frag.appendChild(messageNode(message, index, character, labels, ctx));
   });
   el.messages.appendChild(frag);

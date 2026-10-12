@@ -253,16 +253,16 @@ await scenario('明暗切换', async () => {
 // ---------------------------------------------------------------------------
 //  场景 2b：主题配色（顺带验证 data-accent 与 CSS 变量 + 落盘）
 //  同样在「外观」弹窗里：原来是左上角一颗「循环」按钮（点一下换下一套，
-//  想知道一共有几套只能一路点下去），现在是三个色点，点哪个是哪个。
+//  想知道一共有几套只能一路点下去），现在是四个色点，点哪个是哪个。
 //  起点不写死 —— 前面哪个场景动过配色都不该让这里假红。
 // ---------------------------------------------------------------------------
 await scenario('主题配色', async () => {
   click('#btn-appearance');
   await waitFor('外观弹窗打开', () => shown('#appearance-modal'));
 
-  const ALL = ['pink', 'blue', 'matcha'];
+  const ALL = ['amber', 'pink', 'blue', 'matcha'];
   const swatch = (a) => $(`#appearance-accents [data-accent="${a}"]`);
-  check('三个色点都在', ALL.every((a) => !!swatch(a)));
+  check('四个色点都在', ALL.length === 4 && ALL.every((a) => !!swatch(a)));
 
   const readAttr = () => document.documentElement.getAttribute('data-accent');
   const readAccent = () => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
@@ -287,7 +287,7 @@ await scenario('主题配色', async () => {
   const settings = (await window.mimitale.getSettings()).settings;
   check('配色已落盘', settings.accent === next, `落盘的是 ${settings.accent}`);
 
-  // 再点第三个，确认三个色点各对应一套（不是只认「切换」两态）
+  // 再点第三套，确认四个色点各对应一套（不是只认「切换」两态）
   const third = ALL.find((a) => a !== start && a !== next);
   click(`#appearance-accents [data-accent="${third}"]`);
   await waitFor('切到第三套配色', () => readAttr() === third);
@@ -325,7 +325,9 @@ await scenario('顶栏「⋯」菜单', async () => {
     .join(', ');
   check(
     '菜单里的项目齐全、顺序没变',
-    menuIds === 'btn-memory, btn-copy-all, btn-export-convo, btn-request-log, btn-clear',
+    // 2026-10-12：中间多了「生成参数」—— 它在「请求记录」之后、「清空对话」之前
+    menuIds ===
+      'btn-memory, btn-copy-all, btn-export-convo, btn-request-log, btn-gen-params, btn-clear',
     menuIds
   );
 
@@ -353,11 +355,11 @@ await scenario('顶栏「⋯」菜单', async () => {
 //  场景 2d：顶栏「切换模型」
 //
 //  以前这里是原生 <select>。它的**下拉列表由系统画**（直角、系统蓝高亮、系统字体），
-//  CSS 完全碰不到 —— 跟这套「大圆角 + 柔和阴影」根本不搭，所以换成自绘弹层
+//  CSS 完全碰不到 —— 跟自绘弹层这套观感根本不搭，所以换成自绘弹层
 //  （views/chatList.js 铺内容 + ui/modelMenu.js 管开合）。
 //
 //  这里钉三件事：① 它不再是原生 select；② 分组 / 当前项标得出来；
-//  ③ 观感（不描边、大圆角、柔和阴影）—— 这几条 DOM 全对也可能错，
+//  ③ 观感（不描边、圆角、阴影）—— 这几条 DOM 全对也可能错，
 //  所以必须是**计算样式断言**（同一招用在状态卡那次体检里，翻过车）。
 // ---------------------------------------------------------------------------
 await scenario('顶栏：切换模型', async () => {
@@ -424,10 +426,12 @@ await scenario('顶栏：切换模型', async () => {
     ticks.map((s) => Math.round(s.getBoundingClientRect().width)).join(',')
   );
 
-  // 弹层自己的观感：大圆角 + 阴影，不是系统菜单那种直角
+  // 弹层自己的观感：圆角 + 阴影，不是系统菜单那种直角。
+  // 2026-10-12：整体圆角从 16px 压到 4px 级（酒馆式工具感），门槛跟着下调 ——
+  // 这条断言的本意是「排除系统菜单那种直角」，不是钉死「大圆角」这个尺寸。
   check(
-    '弹层是大圆角 + 阴影（不是系统菜单的样子）',
-    parseFloat(cs(menu, 'borderTopLeftRadius')) >= 10 && cs(menu, 'boxShadow') !== 'none',
+    '弹层是自绘的：有小圆角 + 阴影（不是系统菜单的样子）',
+    parseFloat(cs(menu, 'borderTopLeftRadius')) >= 2 && cs(menu, 'boxShadow') !== 'none',
     `${cs(menu, 'borderTopLeftRadius')} / ${cs(menu, 'boxShadow')}`
   );
 
@@ -730,6 +734,23 @@ await scenario('角色编辑器：长文本框自动增高', async () => {
   const example = byId('c-example');
   check('五个长文本框都在表单里', !!desc && !!example);
 
+  // --- 圆角体检（2026-10-12 晚补）---
+  //  ⚠️ 为什么非有不可：`--radius` 从 16px 压到 4px 那轮，**62 处写死的圆角没跟着动**
+  //  （弹窗卡片 16、服务商卡 14、属性行 7、消息工具条 6……），
+  //  而**整套冒烟在扫前扫后都是全绿** —— 一条断言都没守圆角。
+  //  这里钉几个「一眼能看见的面」：计算样式必须等于 token，不是等于某个字面数字。
+  {
+    const root = getComputedStyle(document.documentElement);
+    const R = root.getPropertyValue('--radius').trim();
+    const RSM = root.getPropertyValue('--radius-sm').trim();
+    const radiusOf = (sel) => {
+      const node = $(sel);
+      return node ? getComputedStyle(node).borderTopLeftRadius : '(没有)';
+    };
+    check('弹窗卡片圆角 = --radius（不是写死的 16）', radiusOf('#chars-modal .modal-card') === R, `${radiusOf('#chars-modal .modal-card')} vs ${R}`);
+    check('通用输入框圆角 = --radius-sm', radiusOf('#c-name') === RSM, radiusOf('#c-name'));
+  }
+
   const hOf = (node) => Math.round(node.getBoundingClientRect().height);
 
   // 内容少：高度应当停在「下限」附近
@@ -943,6 +964,25 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   click('#btn-add-attr');
   await sleep(100);
   check('保留字段名被拒绝', $$('#c-attr-list .attr-row').length === 2, `实际 ${$$('#c-attr-list .attr-row').length}`);
+
+  // --- 圆角体检：属性行与它里面的输入框（扫前是 7px / 6px，都是写死的）---
+  {
+    const root = getComputedStyle(document.documentElement);
+    const RSM = root.getPropertyValue('--radius-sm').trim();
+    const rows = $$('#c-attr-list .attr-row');
+    const radiusOf = (node) => (node ? getComputedStyle(node).borderTopLeftRadius : '(没有)');
+    check('属性行圆角 = --radius-sm（不是写死的 7）', radiusOf($('#c-attr-list .attr-item')) === RSM, `${radiusOf($('#c-attr-list .attr-item'))} vs ${RSM}`);
+    check(
+      '属性里的值输入框圆角 = --radius-sm（不是写死的 7）',
+      radiusOf(rows[0].querySelector('.attr-value')) === RSM,
+      `${radiusOf(rows[0].querySelector('.attr-value'))} vs ${RSM}`
+    );
+    check(
+      '属性类型下拉圆角 = --radius-sm（不是写死的 7）',
+      radiusOf(rows[0].querySelector('.attr-type')) === RSM,
+      `${radiusOf(rows[0].querySelector('.attr-type'))} vs ${RSM}`
+    );
+  }
 
   // 填初始值
   const attrRows = $$('#c-attr-list .attr-row');
@@ -1246,6 +1286,119 @@ await scenario('属性：从角色卡种到状态面板', async () => {
       '胶囊和标题是同一行的兄弟节点（不是塞在 h1 里）',
       nameRow && nameRow.classList.contains('topbar-name') && pill.parentElement === nameRow,
       nameRow ? nameRow.className : 'no-parent'
+    );
+  }
+
+  // --- 2026-10-12 晚：把「设计稿上的那几个数」逐条钉住 -------------------------
+  // 为什么单开一节：这一批全是「DOM 全绿、类名全在，观感照样错」的东西 ——
+  // 实际就是靠出图才看出顶栏是 68（稿子 48）、头像 44 圆（稿子 26 方角）、
+  // 入口条 48（稿子 34）。数字不进断言，下次还会悄悄漂回去。
+  {
+    const c = (node, prop) => getComputedStyle(node)[prop];
+    const r = (node) => Math.round(node.getBoundingClientRect().width);
+    const h = (node) => Math.round(node.getBoundingClientRect().height);
+
+    // 顶栏：稿子 2:82 高 48、2:83 头像是 26×26 圆角 4
+    check('顶栏高 48（稿子 2:82）', Math.abs(h($('.topbar')) - 48) <= 1, String(h($('.topbar'))));
+    const topAv = byId('topbar-avatar');
+    check('顶栏头像 26×26（稿子 2:83）', r(topAv) === 26 && h(topAv) === 26, `${r(topAv)}×${h(topAv)}`);
+    check('顶栏头像是方角 r=4（不是圆）', c(topAv, 'borderTopLeftRadius') === '4px', c(topAv, 'borderTopLeftRadius'));
+    check('顶栏元信息 11px（稿子 2:89）', c(byId('convo-meta'), 'fontSize') === '11px', c(byId('convo-meta'), 'fontSize'));
+    check(
+      '数值胶囊是方角（不是 999px 胶囊）',
+      c(byId('convo-pill'), 'borderTopLeftRadius') !== '999px',
+      c(byId('convo-pill'), 'borderTopLeftRadius')
+    );
+
+    // 「⋯」必须和另外三颗同规格（稿子 2:98 / 2:468 / 2:104 / 2:108 都是 26×26 + 1px 描边）
+    const more = byId('btn-more');
+    check(
+      '「⋯」也是 26×26 的方框按钮',
+      r(more) === 26 && h(more) === 26 && c(more, 'borderTopWidth') === '1px',
+      `${r(more)}×${h(more)} border=${c(more, 'borderTopWidth')}`
+    );
+
+    // 在场角色条：稿子 2:113 高 34、2:118 头像 20 方角
+    check('在场角色条高 34（稿子 2:113）', h(byId('panel-box')) === 34, String(h(byId('panel-box'))));
+    const panelAv = $('#panel-cast .panel-avatar');
+    check(
+      '入口条头像 20×20 方角 r=3（稿子 2:118）',
+      !!panelAv && r(panelAv) === 20 && c(panelAv, 'borderTopLeftRadius') === '3px',
+      panelAv ? `${r(panelAv)} r=${c(panelAv, 'borderTopLeftRadius')}` : '（没有头像）'
+    );
+
+    // 右栏：稿子 2:174 宽 264
+    check('右栏宽 264（稿子 2:174）', r(byId('cast-panel')) === 264, String(r(byId('cast-panel'))));
+
+    // ⚠️ 这条是 2026-10-12 那个真 bug 的守卫：`.cast-card-avatar` 里一旦写上
+    //    `background: var(--accent)`，就会盖掉 entityTone 的 `.g1`~`.g6`（同权重、它在后），
+    //    表现是「同一个人，消息区绿色、右栏琥珀色」。所以这里查的是**渐变**在不在。
+    const castAv = $('#cast-panel-body .cast-card-avatar');
+    check(
+      '右栏卡片头像是按人配色（entityTone 没被 background 盖掉）',
+      !!castAv && (c(castAv, 'backgroundImage') || '').includes('linear-gradient'),
+      castAv ? c(castAv, 'backgroundImage') : '（没有卡片头像）'
+    );
+
+    // 卡片头两行：名字 / 在场（稿子 d-rightrail）
+    check(
+      '右栏卡片头是「名字 / 在场」两行',
+      !!$('#cast-panel-body .cast-card-id .cast-card-role'),
+      ($('#cast-panel-body .cast-card-id') || {}).textContent || '（没有卡片头）'
+    );
+
+    // 字段额度 3（稿子三张卡是 3 / 3 / 2 个字段；取 2 会把「心境」这类文本字段挤掉）
+    const firstCard = $('#cast-panel-body .cast-card');
+    const rowCount = firstCard ? firstCard.querySelectorAll('.cast-field').length : 0;
+    check('右栏每张卡最多列 3 个字段', rowCount > 0 && rowCount <= 3, String(rowCount));
+
+    // 消息工具条那排小按钮：稿子的方角语言，6px 是「药丸时代」的残留。
+    // ⚠️ 只在真存在时才验 —— 这一局可能一条带工具条的消息都没有（点开 .msg-actions 看）。
+    //    「找不到就跳过」在这里是可接受的，因为**圆角 lint（tools/audit-radius.js）
+    //    已经在源头堵死了**：写死 4px 以上的盒状圆角会直接 FAIL。断言只是第二道。
+    if ($('.mini-btn')) {
+      const root = getComputedStyle(document.documentElement);
+      const want = root.getPropertyValue('--radius-sm').trim();
+      check('消息工具条小按钮圆角 = --radius-sm', getComputedStyle($('.mini-btn')).borderTopLeftRadius === want, getComputedStyle($('.mini-btn')).borderTopLeftRadius);
+    }
+
+    // 浮动状态卡 + 它上面的小按钮（稿子 2:476 那张卡是 r=4；小按钮走 --radius-sm）
+    {
+      const root = getComputedStyle(document.documentElement);
+      const R = root.getPropertyValue('--radius').trim();
+      const RSM = root.getPropertyValue('--radius-sm').trim();
+      const radiusOf = (sel) => {
+        const node = $(sel);
+        return node ? getComputedStyle(node).borderTopLeftRadius : '(没有)';
+      };
+      check('浮动状态卡圆角 = --radius（稿子 2:476 r=4，不是写死的 14）', radiusOf('#state-cards .state-card') === R, `${radiusOf('#state-cards .state-card')} vs ${R}`);
+      check('状态卡上的编辑/收起按钮圆角 = --radius-sm（不是写死的 6）', radiusOf('#state-cards .state-card .sc-edit') === RSM, `${radiusOf('#state-cards .state-card .sc-edit')} vs ${RSM}`);
+    }
+
+    // meter 和数值同一行（稿子：`好感 ▬▬▬▬ 62`）—— 进度条不该是字段下面另起的一行。
+    // ⚠️ 这条**必须硬断言**，不能「找不到就跳过」：2026-10-12 晚就是靠出图发现
+    //    **进度条一条都画不出来**的（值存的是 `"63/100"`，`Number()` 出来是 NaN）。
+    //    当时写成「没有 meter 就跳过」，于是它安安静静地绿着，什么都没守住。
+    const meterRow = $('#cast-panel-body .cast-field .cast-meter');
+    check(
+      '右栏的数值字段画出了进度条',
+      !!meterRow,
+      meterRow ? meterRow.parentElement.className : '（一个 .cast-meter 都没有）'
+    );
+    check(
+      '进度条和数值在同一行里',
+      !meterRow || meterRow.parentElement.classList.contains('cast-field'),
+      meterRow ? meterRow.parentElement.className : '（无 meter）'
+    );
+    check(
+      '进度条按「当前/上限」算对了比例（不是 0% 也不是 100%）',
+      (() => {
+        if (!meterRow) return false;
+        const fill = meterRow.querySelector('.cast-meter-fill');
+        const w = fill ? parseFloat(fill.style.width) : NaN;
+        return Number.isFinite(w) && w > 0 && w < 100;
+      })(),
+      meterRow ? (meterRow.querySelector('.cast-meter-fill') || {}).style?.width : '（无 meter）'
     );
   }
 
@@ -2572,6 +2725,418 @@ await scenario('外观：聊天区那几样', async () => {
 
   click('#btn-close-appearance');
   await waitFor('外观弹窗关闭', () => !shown('#appearance-modal'));
+});
+
+// ---------------------------------------------------------------------------
+//  场景：对话宽度（左右**独立**内缩）
+//
+//  为什么要有这条：用户要把浮动卡片放左下角，那时候对话贴边会被挡住，
+//  而只该推开左边。所以这个功能的核心不是「有个宽度设置」，而是
+//  **改一边另一边绝对不动** —— 那正是要断言的东西。
+//  ⚠️ 断言的是 .messages 的**计算样式**（padding-left/right），不是 CSS 变量：
+//     变量写对了但没接到元素上，一样是白干（这套测试里栽过好几次）。
+//  ⚠️ 2026-10-12 晚：顶栏那颗「对话宽度」+ 弹层（#pad-pop / 两根滑块）**去掉了**
+//     （星宝：「聊天框里已经可以调宽度了」）。所以现在**抓手是唯一入口**，
+//     这条契约只能靠**拖**来验 —— 顺带把「按钮和弹层真的没了」也钉住，
+//     免得哪天又被谁加回来。
+// ---------------------------------------------------------------------------
+await scenario('对话宽度：左右各管各的（拖动抓手）', async () => {
+  check('顶栏那颗「对话宽度」按钮已经拿掉', !byId('btn-chat-pad'));
+  check('宽度弹层也一起拿掉了', !byId('pad-pop'));
+
+  // 抓手：唯一入口，少一个就等于少了一半功能
+  const handleL = byId('pad-handle-left');
+  const handleR = byId('pad-handle-right');
+  check('消息区左右各有一个抓手', !!handleL && !!handleR);
+  check(
+    '两个抓手分得清左右',
+    handleL.dataset.side === 'left' && handleR.dataset.side === 'right',
+    `${handleL.dataset.side} / ${handleR.dataset.side}`
+  );
+
+  const msgs = byId('messages');
+  const padL = () => Math.round(parseFloat(getComputedStyle(msgs).paddingLeft));
+  const padR = () => Math.round(parseFloat(getComputedStyle(msgs).paddingRight));
+
+  // 拖某个抓手 dx 像素（正数往右）。mid 在「按住且已移动」那一刻跑，用来验拖动中的态。
+  const drag = async (handle, dx, mid) => {
+    const b = handle.getBoundingClientRect();
+    const y = Math.round(b.top + b.height / 2);
+    const x0 = Math.round(b.left + b.width / 2);
+    const send = (type, cx) =>
+      handle.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          buttons: type === 'pointerup' ? 0 : 1,
+          pointerId: 1,
+          clientX: cx,
+          clientY: y
+        })
+      );
+    send('pointerdown', x0);
+    send('pointermove', x0 + dx);
+    await sleep(60);
+    if (mid) mid();
+    send('pointerup', x0 + dx);
+    await sleep(220);
+  };
+
+  const startL = padL();
+  const startR = padR();
+
+  // --- 只拖左边：右边必须纹丝不动，而且拖动中要浮出小标签 + 左边的虚线 ---
+  const targetL = startL + 120;
+  let midOk = null;
+  await drag(handleL, 120, () => {
+    const badge = document.querySelector('.pad-badge');
+    midOk = {
+      guide: shown('#pad-guide-left') && !shown('#pad-guide-right'),
+      badge: !!badge && /左内缩\s*\d+px/.test(badge.textContent || '')
+    };
+  });
+  check('拖左边时只亮左边那条虚线', !!(midOk && midOk.guide), JSON.stringify(midOk));
+  // 没有弹层之后，这个标签是**唯一**能看到准确值的地方
+  check('拖动时浮出「左内缩 NNpx」小标签', !!(midOk && midOk.badge), JSON.stringify(midOk));
+  check('拖左边真的把左内缩改了', padL() === targetL, `期望 ${targetL}，实际 ${padL()}`);
+  check('拖左边时右边没跟着动', padR() === startR, `右边从 ${startR} 变成了 ${padR()}`);
+  check('松手后虚线收起来', !shown('#pad-guide-left'));
+  check('松手后小标签也收起来', !shown('.pad-badge'));
+
+  const savedAfterLeft = (await window.mimitale.getSettings()).settings;
+  check('左内缩已落盘', savedAfterLeft.chatPadLeft === targetL, `落盘的是 ${savedAfterLeft.chatPadLeft}`);
+  check('落左边时右内缩没被顺手改掉', savedAfterLeft.chatPadRight === startR, `落盘的是 ${savedAfterLeft.chatPadRight}`);
+
+  // --- 再只拖右边（右边抓手往**左**拖才是内缩变大）：左边必须保持刚才的值 ---
+  const targetR = startR + 80;
+  await drag(handleR, -80);
+  check('拖右边真的把右内缩改了', padR() === targetR, `期望 ${targetR}，实际 ${padR()}`);
+  check('拖右边时左边保持不动', padL() === targetL, `左边从 ${targetL} 变成了 ${padL()}`);
+
+  const savedAfterRight = (await window.mimitale.getSettings()).settings;
+  check('右内缩已落盘', savedAfterRight.chatPadRight === targetR, `落盘的是 ${savedAfterRight.chatPadRight}`);
+  check(
+    '两项是分别存的，没被合成一个',
+    savedAfterRight.chatPadLeft === targetL && savedAfterRight.chatPadRight === targetR,
+    `${savedAfterRight.chatPadLeft} / ${savedAfterRight.chatPadRight}`
+  );
+
+  // --- 拖到头会夹在边界上，不该把人卡住 ---
+  await drag(handleL, -9999);
+  check('往左拖过头会夹在 0（贴边）', padL() === 0, String(padL()));
+  await drag(handleL, 9999);
+  check('往右拖过头会夹在上限 360', padL() === 360, String(padL()));
+
+  // 复原，别影响后面的截图和布局断言
+  await drag(handleL, -(360 - startL));
+  await drag(handleR, targetR - startR);
+  check('复原后左右都回到原值', padL() === startL && padR() === startR, `${padL()} / ${padR()}`);
+});
+
+// ---------------------------------------------------------------------------
+//  场景：右栏的两个页签（在场角色 / 生成参数）
+//
+//  为什么要有这条：右边缘只有一个位置 —— 「在场角色」和「生成参数」以前是
+//  「一栏 + 一个从右边盖住它的浮层」，开参数会把对话列挤窄 264px（正文跳一下）。
+//  改成同一栏的两个页签之后，**对话列宽度必须一点不变**，那正是这条要钉的东西
+//  （也是当初选「页签」而不是「覆盖 / 挤窄」的全部理由）。
+// ---------------------------------------------------------------------------
+await scenario('右栏：在场角色 / 生成参数 两个页签', async () => {
+  const tabCast = byId('btn-tab-cast');
+  const tabGen = byId('btn-tab-gen');
+  check('右栏有两个页签', !!tabCast && !!tabGen);
+  check(
+    '默认停在「在场角色」',
+    !!tabCast && tabCast.classList.contains('active') && !!tabGen && !tabGen.classList.contains('active'),
+    `${tabCast ? tabCast.className : '?'} / ${tabGen ? tabGen.className : '?'}`
+  );
+
+  const chatCol = $('.chat-col');
+  const colWidth = () => Math.round(chatCol.getBoundingClientRect().width);
+  const before = colWidth();
+
+  click('#btn-tab-gen');
+  await sleep(250);
+  check('切到「生成参数」后高亮跟着走', tabGen.classList.contains('active') && !tabCast.classList.contains('active'));
+  check('生成参数那一页露出来', shown('#gen-body'));
+  check('在场角色那一页收起来', !shown('#cast-panel-body'));
+  check('两个脚注也跟着换', !shown('#cast-foot') && shown('#gen-foot'));
+  check(
+    '⚠️ 切页签不改对话列宽度（选页签方案的全部意义）',
+    colWidth() === before,
+    `${before} → ${colWidth()}`
+  );
+
+  // 三项滑块显示的必须是**当前生效值**：没设过 = 跟随全局（滑块没法表达「空」，
+  // 所以「这一局自己定了」只能靠数值文字的主色来标）。
+  const settings = (await window.mimitale.getSettings()).settings;
+  const temp = byId('gen-temperature');
+  check(
+    '温度滑块显示的是生效值（跟随全局）',
+    Math.abs(Number(temp.value) - Number(settings.temperature)) < 0.001,
+    `${temp.value} vs 全局 ${settings.temperature}`
+  );
+  check(
+    '没设过时数值文字是灰的（不是主色）',
+    !byId('gen-temperature-value').classList.contains('is-own'),
+    byId('gen-temperature-value').className
+  );
+
+  const slide = async (input, value) => {
+    input.value = String(value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await sleep(80);
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await sleep(220);
+  };
+
+  const convos = await window.mimitale.getConversations();
+  const active = convos.conversations.find((c) => c.id === convos.activeId) || convos.conversations[0];
+  check('有活动会话可写', !!active);
+
+  await slide(temp, 1.35);
+  check(
+    '滑过之后数值变主色（这一局自己定了）',
+    byId('gen-temperature-value').classList.contains('is-own'),
+    byId('gen-temperature-value').className
+  );
+  check(
+    '数值文字跟着更新',
+    byId('gen-temperature-value').textContent.trim() === '1.35',
+    byId('gen-temperature-value').textContent
+  );
+
+  // ⚠️ 必须**重新取一次**：getConversations() 走 IPC，回来的是结构化克隆的**副本**，
+  //    拖之前拿到的那个对象不会跟着内存里的改动变（这条我第一次就写错了）。
+  await sleep(200);
+  const after = await window.mimitale.getConversations();
+  const saved = after.conversations.find((c) => c.id === after.activeId) || after.conversations[0];
+  check(
+    '落盘的是**会话**上的 sampling.temperature',
+    !!saved && !!saved.sampling && Math.abs(Number(saved.sampling.temperature) - 1.35) < 0.001,
+    JSON.stringify(saved && saved.sampling)
+  );
+  check(
+    '没动过的项**不会**被写进去（留空才能跟随预设 / 全局）',
+    !!saved && !!saved.sampling && saved.sampling.topP === undefined && saved.sampling.maxTokens === undefined,
+    JSON.stringify(saved && saved.sampling)
+  );
+
+  click('#btn-gen-reset');
+  // ⚠️ persistConversations() 是**防抖**的（默认 350ms）+ 一次 IPC。
+  //    这里读盘前必须等够，不然读到的是清空**之前**那份（我第一版就等了 320ms，
+  //    结果断言报「{"temperature":1.35}」，看着像「恢复默认没生效」）。
+  await sleep(750);
+  const afterReset = await window.mimitale.getConversations();
+  const cleared =
+    afterReset.conversations.find((c) => c.id === afterReset.activeId) || afterReset.conversations[0];
+  check(
+    '「恢复默认」把这一局的参数清空、回到跟随全局',
+    !cleared || !cleared.sampling || Object.keys(cleared.sampling).length === 0,
+    JSON.stringify(cleared && cleared.sampling)
+  );
+  check(
+    '清空之后数值文字又变回灰的',
+    !byId('gen-temperature-value').classList.contains('is-own'),
+    byId('gen-temperature-value').className
+  );
+
+  // 「在场角色」那一页签回得去
+  click('#btn-tab-cast');
+  await sleep(220);
+  check('点回「在场角色」页签能回去', shown('#cast-panel-body') && !shown('#gen-body'));
+  check('回去之后对话列宽度还是没变', colWidth() === before, `${before} → ${colWidth()}`);
+
+  // 收起的右栏被「⋯ → 生成参数」叫醒时，应该顺手展开（不然只看见一条窄条）
+  click('#btn-cast-collapse');
+  await sleep(200);
+  check('右栏能收成窄条', byId('cast-panel').classList.contains('collapsed'));
+  click('#btn-more');
+  await sleep(250);
+  click('#btn-gen-params');
+  await sleep(300);
+  check('从「⋯」点生成参数会顺手展开右栏', !byId('cast-panel').classList.contains('collapsed'));
+  check('并且切到生成参数页签', shown('#gen-body'));
+
+  click('#btn-tab-cast');
+  await sleep(200);
+  const t = byId('toast');
+  if (t) {
+    t.classList.add('hidden');
+    t.textContent = '';
+  }
+});
+
+// ---------------------------------------------------------------------------
+//  场景：侧栏（稿子的左栏）
+//
+//  这一批把左栏换成了稿子的语言：232 宽、底部入口 3 列 × 2 行、当前会话
+//  左侧一条琥珀竖线、能收起。**圆角和间距 DOM 断言看不出来**（那得靠图），
+//  但「结构和状态对不对」恰恰是最容易悄悄回退的部分 —— 这几条就守这个。
+// ---------------------------------------------------------------------------
+await scenario('侧栏：入口网格与收起', async () => {
+  const sidebar = document.querySelector('.sidebar');
+  check('侧栏宽度按稿子（232）', Math.round(sidebar.getBoundingClientRect().width) === 232, String(Math.round(sidebar.getBoundingClientRect().width)));
+
+  const foot = $$('.sidebar-foot .btn');
+  check('底部入口 6 颗（3 列 × 2 行）', foot.length === 6, String(foot.length));
+  check(
+    '每颗都带图标',
+    foot.every((b) => !!b.querySelector('svg')),
+    foot.filter((b) => !b.querySelector('svg')).map((b) => b.id).join(', ') || '（都带着）'
+  );
+  check(
+    '第三颗是按稿子写的「数据」',
+    !!byId('btn-folder') && byId('btn-folder').textContent.trim() === '数据',
+    byId('btn-folder') ? byId('btn-folder').textContent.trim() : '(没有)'
+  );
+
+  // 当前会话左侧那条短竖线是 ::before 画的
+  const active = document.querySelector('.convo-item.active');
+  const line = active ? getComputedStyle(active, '::before') : null;
+  check('当前会话有那条选中竖线', !!line && line.content !== 'none', line ? line.content : '（没有 active 项）');
+
+  // --- 2026-10-12 晚：把稿子上的尺寸钉住（这几条全是「不报错、只难看」那一类）---
+  {
+    // 「新对话」高 32（稿子 2:12）。⚠️ 曾经翻过车：文件里同时存在两条 `.btn-new`，
+    // 旧的 `height:40px` 在后面、同权重 → 赢了新写的 32，而 CHANGELOG 已经写了「高 32」。
+    // 所以这条断言就是那次事故的守卫。
+    const btnNew = byId('btn-new');
+    check(
+      '「新对话」高 32（稿子 2:12）',
+      btnNew && Math.round(btnNew.getBoundingClientRect().height) === 32,
+      btnNew ? String(Math.round(btnNew.getBoundingClientRect().height)) : '(没有)'
+    );
+
+    // 会话项头像：稿子 2:24 是 20×20 圆角 3（原来 38 圆的，会把 34 高的条目顶到 54）
+    const cav = document.querySelector('.convo-item .convo-avatar');
+    const cbox = cav ? cav.getBoundingClientRect() : null;
+    check(
+      '会话项头像 20×20 方角 r=3（稿子 2:24）',
+      !!cbox && Math.round(cbox.width) === 20 && getComputedStyle(cav).borderTopLeftRadius === '3px',
+      cbox ? `${Math.round(cbox.width)} r=${getComputedStyle(cav).borderTopLeftRadius}` : '（没有头像）'
+    );
+    check(
+      '会话项还是 34 高（稿子 2:23）',
+      active && Math.round(active.getBoundingClientRect().height) === 34,
+      active ? String(Math.round(active.getBoundingClientRect().height)) : '（没有 active 项）'
+    );
+
+    // 底部入口：稿子 2:47 那一组的 `fills` 和 `strokes` 都是**空数组** ——
+    // 纯 ghost：没有底、也没有边框，只有图标 + 文字。
+    // ⚠️ 2026-10-12 我给它们加过 1px 描边，那是**看低分辨率缩略图**看出来的；
+    //    拿节点数据一对就露馅了。这条断言就是那次误判的守卫。
+    check(
+      '底部入口是纯 ghost（无底、无边框，稿子 2:47）',
+      foot.every((b) => {
+        const cs = getComputedStyle(b);
+        return cs.backgroundColor === 'rgba(0, 0, 0, 0)' && cs.borderTopWidth === '1px' && cs.borderTopStyle === 'solid' && cs.borderTopColor === 'rgba(0, 0, 0, 0)';
+      }),
+      foot.map((b) => `${getComputedStyle(b).backgroundColor}/${getComputedStyle(b).borderTopColor}`).join(' ')
+    );
+    // 这一组上面有一条**通栏**分隔线（稿子 2:28，1px #2a2e34）——
+    // 用 ::before 画的，所以得读伪元素的计算样式。
+    const footLine = getComputedStyle(document.querySelector('.sidebar-foot'), '::before');
+    check(
+      '底部入口上面有那条通栏分隔线（稿子 2:28）',
+      !!(footLine && footLine.content !== 'none' && footLine.backgroundColor !== 'rgba(0, 0, 0, 0)'),
+      footLine ? `${footLine.content} ${footLine.backgroundColor}` : '（没有）'
+    );
+
+    // 深色面板档位：稿子 2:5（侧栏）/ 2:82（顶栏）/ 2:174（右栏）都是 #16181b。
+    // ⚠️ 曾经写成 #0c0d0f —— 那个值在设计稿的 6 级里根本不存在，
+    // 后果是侧栏/右栏发闷、顶栏连色带都没有。
+    check(
+      '深色侧栏底 = 稿子的面板色 #16181b',
+      getComputedStyle(sidebar).backgroundColor === 'rgb(22, 24, 27)',
+      getComputedStyle(sidebar).backgroundColor
+    );
+
+    // 搜索会话框 2026-10-12 晚去掉了（星宝要求）—— 别再被加回来
+    check('搜索会话框已经拿掉', !byId('convo-search'));
+
+    // ⚠️ 三列里每颗的文字都不许被截断。这条是 2026-10-12 踩出来的：
+    //    一行 66.67px 要装下 pad 7 + 图标 13 + gap + 文字 + pad 7，
+    //    11.5px 的「角色库」是 34.5px → 刚好卡在边界，实拍出来是「角…」。
+    //    scrollWidth > clientWidth 是浏览器给的硬证据，比看图靠谱。
+    check(
+      '底部 6 颗的字都没被截断（角… / 世…）',
+      foot.every((b) => {
+        const label = b.querySelector('.foot-label');
+        return !label || label.scrollWidth <= label.clientWidth + 1;
+      }),
+      foot
+        .map((b) => {
+          const l = b.querySelector('.foot-label');
+          return l ? `${l.textContent}:${l.scrollWidth}/${l.clientWidth}` : '?';
+        })
+        .join(' ')
+    );
+  }
+
+  // 收起 / 展开：收成 **52px 图标轨**、点同一颗回来
+  const toggle = byId('btn-sidebar-toggle');
+  check('收起按钮在', !!toggle);
+  if (toggle) {
+    click('#btn-sidebar-toggle');
+    await sleep(150);
+    check('收起后加上 collapsed', sidebar.classList.contains('collapsed'), sidebar.className);
+    check('收起后窄到 52', Math.round(sidebar.getBoundingClientRect().width) === 52, String(Math.round(sidebar.getBoundingClientRect().width)));
+    check('收起后会话列表藏起来', getComputedStyle(byId('convo-list')).display === 'none');
+    check('收起后「新对话」也藏起来', getComputedStyle(byId('btn-new')).display === 'none');
+
+    // --- 稿子屏 2 的图标轨：品牌方块 + 6 颗图标 + 最底下当前会话头像 ---
+    // 这一节是 2026-10-12 晚补的：之前收起态是 `> *:not(.sidebar-toggle){display:none}`，
+    // 收起来就是一根**空条**，而稿子那里是一整列图标。
+    const railDot = document.querySelector('.brand-dot');
+    check(
+      '收起后品牌方块还在，而且放大到 20（稿子 y≈10..31）',
+      !!railDot &&
+        Math.round(railDot.getBoundingClientRect().width) === 20 &&
+        getComputedStyle(railDot).display !== 'none',
+      railDot ? String(Math.round(railDot.getBoundingClientRect().width)) : '（没有）'
+    );
+    check(
+      '收起后 6 颗入口图标都还在，只是文字藏了',
+      foot.length === 6 &&
+        foot.every((b) => getComputedStyle(b).display !== 'none' && !!b.querySelector('svg')) &&
+        foot.every((b) => {
+          const label = b.querySelector('.foot-label');
+          return !label || getComputedStyle(label).display === 'none';
+        }),
+      foot.map((b) => getComputedStyle(b).display).join(',')
+    );
+    check(
+      '收起后入口竖成一列（稿子的图标轨就是单列）',
+      getComputedStyle(document.querySelector('.sidebar-foot')).gridTemplateColumns.split(' ').length === 1,
+      getComputedStyle(document.querySelector('.sidebar-foot')).gridTemplateColumns
+    );
+    const railAv = byId('rail-avatar');
+    check(
+      '收起后最底下有当前会话头像（稿子 y≈866）',
+      !!railAv && getComputedStyle(railAv).display !== 'none' && railAv.getBoundingClientRect().height > 0,
+      railAv ? `${Math.round(railAv.getBoundingClientRect().width)}×${Math.round(railAv.getBoundingClientRect().height)} display=${getComputedStyle(railAv).display}` : '（没有）'
+    );
+    // ⚠️ 它必须走 entityTone 那套按人配色，不许被某条 background 盖成主色
+    check(
+      '会话头像的按人配色没被盖掉（entityTone 生效）',
+      !!railAv && (getComputedStyle(railAv).backgroundImage || '').includes('linear-gradient'),
+      railAv ? getComputedStyle(railAv).backgroundImage : '（没有）'
+    );
+
+    // 图标轨里每一行都该落在 52px 之内（不许溢出）
+    check(
+      '图标轨内容不溢出（都在 52px 内）',
+      foot.every((b) => b.getBoundingClientRect().right <= sidebar.getBoundingClientRect().right + 0.5),
+      String(sidebar.getBoundingClientRect().right)
+    );
+
+    click('#btn-sidebar-toggle');
+    await sleep(150);
+    check('再点一下展开', !sidebar.classList.contains('collapsed'), sidebar.className);
+    check('展开后又回到 232', Math.round(sidebar.getBoundingClientRect().width) === 232);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -4171,9 +4736,14 @@ await scenario('角色自带的世界书：顶部能看出生效', async () => {
         await waitFor('回到聊天视图', () => shown('#view-chat'), 8000);
         await sleep(500);
 
+        // ⚠️ 2026-10-12：世界书信息从顶栏的元信息行**搬到了右侧在场角色面板的脚注**
+        //    （设计稿指定的位置，见 views/castPanel.js）—— 断言跟着搬，
+        //    同时反过来守一条「顶栏别再重复」。
+        const foot = String(byId('cast-foot-book').textContent || '');
+        check('绑上角色后，右栏脚注显示它自带的世界书', foot.includes('冒烟测试世界'), foot);
+        check('并且标明了是「角色自带」', foot.includes('（角色自带）'), foot);
         const meta = String(byId('convo-meta').textContent || '');
-        check('绑上角色后头部显示它自带的世界书', meta.includes('冒烟测试世界'), meta);
-        check('并且标明了是「角色自带」', meta.includes('（角色自带）'), meta);
+        check('元信息行不再重复世界书', !meta.includes('冒烟测试世界'), meta);
       }
     }
   }

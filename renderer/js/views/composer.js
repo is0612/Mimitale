@@ -21,7 +21,7 @@ import { showToast } from '../ui/toast.js';
 import { h, button, clear } from '../ui/build.js';
 import { persistConversations } from '../data/persist.js';
 import { ensureConvoEndpoint, isBridgeProvider } from '../data/providers.js';
-import { buildApiMessages, characterContextForConvo, dialoguePresetSampling } from '../data/messages.js';
+import { buildApiMessages, characterContextForConvo, effectiveSampling } from '../data/messages.js';
 import { matchWorldbookSection } from '../data/cast.js';
 import { recallSection } from '../data/rag.js';
 import {
@@ -253,7 +253,7 @@ async function extendAssistantMessage(convo, endpoint, worldbookSection, ragSect
       model: endpoint.model,
       messages,
       characterContext: characterContextForConvo(convo),
-      sampling: dialoguePresetSampling(convo)
+      sampling: effectiveSampling(convo)
     });
 
     if (!response || response.ok !== true) {
@@ -492,7 +492,7 @@ async function requestCompletion(convo, options) {
       model: endpoint.model,
       messages: buildApiMessages(convo, worldbookSection, ragSection),
       characterContext: characterContextForConvo(convo),
-      sampling: dialoguePresetSampling(convo)
+      sampling: effectiveSampling(convo)
     });
 
     if (!response || response.ok !== true) {
@@ -569,7 +569,7 @@ async function requestCompletion(convo, options) {
         model: endpoint.model,
         messages: retryMessages,
         characterContext: characterContextForConvo(convo),
-        sampling: dialoguePresetSampling(convo)
+        sampling: effectiveSampling(convo)
       });
 
       if (retry && retry.ok === true) {

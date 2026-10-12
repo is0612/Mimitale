@@ -77,6 +77,8 @@ import { initRequestLog, closeRequestLog } from './views/requestLog.js';
 import { closePlayerModal, applyPlayerCharChoice } from './views/player.js';
 import { initMemoryUi, closeMemoryModal } from './views/memoryUi.js';
 import { initPanelUi } from './views/panelUi.js';
+import { initCastPanel } from './views/castPanel.js';
+import { initGenParams } from './views/genParams.js';
 import { initStateCards } from './views/stateCard.js';
 import { initWorldbookList, renderWorldbookPage } from './views/worldbookList.js';
 import { initPresetList } from './views/presetList.js';
@@ -90,6 +92,7 @@ import {
 } from './views/preset.js';
 import { initSettings, setEditingProvider, openSettings, leaveSettings, closePersonaDialog, expandSettingsSection } from './views/settings.js';
 import { initAppearance, applyChatAppearance, closeAppearanceModal } from './views/appearance.js';
+import { initChatPad } from './views/chatPad.js';
 import { streamPainter, initStreamFollow } from './views/stream.js';
 import { initChatImages } from './views/chatImages.js';
 import { initSuggestionsUi, pickOption } from './views/suggestionsUi.js';
@@ -156,6 +159,8 @@ function registerRefreshListeners() {
   // 剧情选项挂在气泡下面，它的动作（点选项/换一批/收起）由 chatMessages.js
   // 直接接 suggestionsUi.js，不经过这里。
   initPanelUi(); // → onRefresh(renderPanel)
+  initCastPanel(); // → onRefresh(renderCastPanel)：右侧那条常驻面板（跟入口条共用名单）
+  initGenParams(); // 生成参数抽屉（入口在「⋯」菜单里）
   initMemoryUi(); // → onRefresh(renderMemoryIndicator)
   onRefresh(renderMessages);
   // 浮动状态卡（点「我」/角色的头像打开）。登记在消息之后：它读的是同一份面板数据，
@@ -182,6 +187,36 @@ function registerRefreshListeners() {
 // ---------------------------------------------------------------------------
 
 function bindEvents() {
+  // ⛔ 侧栏搜索框的接线 2026-10-12 晚去掉了（星宝：「去掉搜索对话功能」）。
+  //    连 #convo-search 这个输入框一起删了 —— 只过滤标题的半版搜索不如不做，
+  //    要做就做成带消息内容的全局搜索。
+
+  // 品牌行右端的版本号：主进程启动时通过 preload 递过来。
+  // 格式化成 major.minor（package.json 的 1.0.0 → v1.0），拿不到就整个不显示。
+  if (el.brandVersion) {
+    const raw = String((window.mimitale && window.mimitale.appVersion) || '');
+    const m = raw.match(/^(\d+)\.(\d+)/);
+    if (m) {
+      el.brandVersion.textContent = `v${m[1]}.${m[2]}`;
+      el.brandVersion.classList.remove('hidden');
+    }
+  }
+
+  // 侧栏收起 / 展开。收成 44px 的窄条，点同一颗（这时是 ›）回来 ——
+  // 跟右侧在场角色那栏同一个套路，收起来和展开在同一个位置。
+  if (el.btnSidebarToggle) {
+    el.btnSidebarToggle.addEventListener('click', () => {
+      const bar = el.btnSidebarToggle.parentElement;
+      if (!bar) return;
+      const collapsed = bar.classList.toggle('collapsed');
+      const btn = el.btnSidebarToggle;
+      btn.textContent = collapsed ? '›' : '‹';
+      btn.title = collapsed ? '展开侧栏' : '收起侧栏';
+      btn.setAttribute('aria-label', collapsed ? '展开侧栏' : '收起侧栏');
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    });
+  }
+
   // 「＋ 新对话」= 直接建一个空白会话并切到聊天屏。
   // 想跟某个角色聊，去角色库点卡片上的「聊天」—— 那条路会自己建会话并绑角色。
   el.btnNew.addEventListener('click', () => {
@@ -567,6 +602,9 @@ async function init() {
   initRequestLog();
   // 外观弹窗同理：改完即时生效 + 落盘，没有需要整体重绘的 DOM。
   initAppearance();
+  // 对话区宽度（顶栏弹层 + 消息流两侧的抓手）——2026-10-12 从外观弹窗搬出来的。
+  // 它写的是同一批 CSS 变量，但 UI 和接线都在 views/chatPad.js。
+  initChatPad();
   // 弹窗「放大」状态：关弹窗时自动摘掉，下次打开回到正常大小。
   initModalMax();
   // 「用户在看历史就别自动跟随」挂在消息区上，自己绑自己。

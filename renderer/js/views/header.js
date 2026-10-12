@@ -98,6 +98,23 @@ function charMeterLabel(convo, character) {
   return '';
 }
 
+/**
+ * 元信息行最后那一段：这次发出去用了多少上下文（`6.2k`）。
+ *
+ * ⚠️ 设计稿画的是 `6.2k / 128k` 这种「已用 / 上限」，但**上限现在没有数据源** ——
+ * 项目里没有「模型的上下文窗口」这个配置项（settings 里的 maxTokens 是**输出**上限，
+ * 不是上下文窗口）。宁可不显示，也不要拿错数凑一个好看的比值：
+ * 显示成 `6.2k / 8.2k` 会把「输出上限」误当成「窗口」。
+ * 真要带上限，得先在模型配置里加一项上下文窗口。
+ */
+function contextUsedLabel() {
+  const usage = state.usage;
+  if (!usage) return '';
+  const n = Number(usage.prompt_tokens);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
 export function renderHeader() {
   const convo = activeConvo();
   const settings = state.settings || {};
@@ -113,31 +130,40 @@ export function renderHeader() {
   } else if (!endpoint.provider.apiKey) {
     el.convoMeta.textContent = `${prefix}还没有填「${endpoint.provider.name}」的 API Key —— 点左下角「设置」`;
   } else {
-    el.convoMeta.textContent = `${prefix}${endpoint.provider.name} · ${endpoint.model || '未选模型'}`;
+    // 元信息行的构成（设计稿：`谢临舟 · deepseek-flash · 第 12 轮 · 6.2k / 128k`）。
+    // ⚠️ 这里**不放世界书**了 —— 2026-10-12 挪到右侧在场角色面板的脚注
+    //    （设计稿指定的位置，见 views/castPanel.js），腾出来的位置给轮数和用量。
+    const bits = [];
+    if (character) bits.push(character.name);
+    bits.push(endpoint.model || '未选模型');
+    // ⚠️ 「第 N 轮」是**轮数**，不是消息条数 —— 本项目自己的口径是
+    //    「一轮 = 一问一答 = 2 条」（见 data/memory.js 的 SUMMARY_TRIGGER_MESSAGES 注释）。
+    //    原来直接把 messages.length 当轮数，于是聊了 12 个来回会显示「第 24 轮」，
+    //    跟设计稿的「第 12 轮」差一倍。
+    //    ⚠️ dateSeparator（views/chatMessages.js）用的是同一个口径，两处要一起改。
+    const rounds = convo && Array.isArray(convo.messages) ? Math.ceil(convo.messages.length / 2) : 0;
+    if (rounds) bits.push(`第 ${rounds} 轮`);
+    const used = contextUsedLabel();
+    if (used) bits.push(used);
+    el.convoMeta.textContent = bits.join(' · ');
   }
 
-  // 世界书：把「当前实际生效的是哪些」写清楚，并标出来源。
-  // 以前这里只显示会话绑的书，角色自带的那本完全不可见 ——
-  // 用户根本没法判断它到底有没有生效，只能靠猜。
+  // 世界书：**常规信息**（这一局绑了哪几本、角色自带哪本）现在显示在右侧
+  // 在场角色面板的脚注里（设计稿指定的位置，见 views/castPanel.js）。
+  // 这里只留**异常提示** —— 「角色自带的书这次不生效」这种事必须说出来，
+  // 不能让它悄悄失效；而且那层解释塞不进脚注那一行。
   const convoBookIds = convoWorldbookIds(convo);
   const convoBooks = convoBookIds.map((id) => worldbookById(id)).filter(Boolean);
   const charBookIds = character && Array.isArray(character.worldbookIds) ? character.worldbookIds : [];
   const charBooks = charBookIds.map((id) => worldbookById(id)).filter(Boolean);
 
-  if (convoBooks.length) {
-    el.convoMeta.textContent += ` · 世界：${convoBooks.map((b) => b.name).join('、')}`;
-    // 会话绑了世界时，角色的书按设计让位 —— 但要说出来，不能悄悄不生效
-    if (charBooks.length) {
-      el.convoMeta.textContent +=
-        character.worldbookEnabled === false
-          ? '（角色自带的书已关掉）'
-          : '（角色自带的书这次不生效：世界优先）';
-    }
-  } else if (charBooks.length) {
+  if (convoBooks.length && charBooks.length) {
     el.convoMeta.textContent +=
       character.worldbookEnabled === false
-        ? ` · 自带世界书：${charBooks.map((b) => b.name).join('、')}（已关掉）`
-        : ` · 世界：${charBooks.map((b) => b.name).join('、')}（角色自带）`;
+        ? ' · 角色自带的书已关掉'
+        : ' · 角色自带的书不生效（世界优先）';
+  } else if (!convoBooks.length && charBooks.length && character.worldbookEnabled === false) {
+    el.convoMeta.textContent += ` · 自带世界书 ${charBooks.map((b) => b.name).join('、')}（已关掉）`;
   }
 
   // 视角：只在偏离默认（标准 + 一步一步 + 非 GM）时提示。

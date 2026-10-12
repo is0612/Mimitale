@@ -12,15 +12,22 @@ const { contextBridge, ipcRenderer } = require('electron');
 //  在这里（而不是 renderer.js 里）打标记，是为了在首屏渲染前就生效，
 //  否则深色模式下启动会先闪一下浅色。
 // ---------------------------------------------------------------------------
+// 2026-10-12：默认改成夜间 —— 判断方向反过来写（明确说了 'light' 才走浅色），
+// 不传参或值不认识都落到 dark，和 main/providers.js 的默认保持一致。
 const themeArg = (process.argv || []).find((arg) => arg.startsWith('--mimitale-theme='));
-const initialTheme = themeArg && themeArg.endsWith('dark') ? 'dark' : 'light';
+const initialTheme = themeArg && themeArg.endsWith('light') ? 'light' : 'dark';
 
 const accentArg = (process.argv || []).find((arg) => arg.startsWith('--mimitale-accent='));
 // 和 main/providers.js 的 ACCENTS 保持同步。preload 跑在渲染进程里、
 // 拿不到主进程模块，所以这份小列表只能单独列一遍。
-const INITIAL_ACCENTS = ['pink', 'blue', 'matcha'];
+const INITIAL_ACCENTS = ['amber', 'pink', 'blue', 'matcha'];
 const accentValue = accentArg ? accentArg.slice('--mimitale-accent='.length) : '';
-const initialAccent = INITIAL_ACCENTS.includes(accentValue) ? accentValue : 'pink';
+const initialAccent = INITIAL_ACCENTS.includes(accentValue) ? accentValue : 'amber';
+
+// 版本号：侧栏品牌行要显示它，而渲染层是无构建、无 Node 的，读不到 package.json。
+// 主进程启动时用启动参数递进来（见 main/window.js 的 additionalArguments）。
+const versionArg = (process.argv || []).find((arg) => arg.startsWith('--mimitale-version='));
+const appVersion = versionArg ? versionArg.slice('--mimitale-version='.length) : '';
 
 function applyInitialTheme() {
   if (document && document.documentElement) {
@@ -33,6 +40,10 @@ applyInitialTheme();
 window.addEventListener('DOMContentLoaded', applyInitialTheme);
 
 contextBridge.exposeInMainWorld('mimitale', {
+  // 应用版本号（就是 package.json 的 version）。只读的一个字符串，
+  // 给侧栏品牌行用 —— 它经过启动参数传进来，不走 IPC。
+  appVersion,
+
   // --- 设置 ---
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (patch) => ipcRenderer.invoke('settings:save', patch),

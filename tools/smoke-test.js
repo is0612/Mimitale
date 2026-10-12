@@ -41,7 +41,7 @@ process.env.MIMITALE_DATA_DIR = path.join(os.tmpdir(), 'mimitale-smoke-data');
 // 设置落盘归一化：和 main.js 的 settings:save 跑的是同一份。
 // 假后端以前只做 Object.assign，等于**跳过**了归一化 —— 归一化里删错一个键
 // （maxTurns 就被 `delete s.maxTurns` 删过）测试照样全绿，真机上却怎么改都不生效。
-const { DEFAULT_SETTINGS, normalizeSettings } = require('../main/providers.js');
+const { DEFAULT_SETTINGS, normalizeSettings, ACCENTS } = require('../main/providers.js');
 
 // 关键：用**主进程真正在用的**归一化，而不是自己糊一套。
 // 角色「属性」丢过一次，就是因为假后端只做存取、不做归一化 ——
@@ -158,7 +158,16 @@ function makeStore() {
       temperature: 0.7,
       maxTokens: 512,
       topP: 0.95,
-      theme: 'light',
+      // ⚠️ 钉在**当前出厂默认**上（夜间 + 琥珀灯），不是「以前那版的默认」。
+      //    理由：整套断言和出图都应该跑在用户实际看到的那一档上 ——
+      //    这里跟着旧默认走，就等于「默认值改了、测试还在验旧的那套」，
+      //    出图也会拿一张浅色粉图当「默认长什么样」。
+      //    「老配置不被强行改掉」那条路由 tools/test-settings-migration.js 单独守
+      //    （它直接喂 raw 对象，不依赖这份夹具）。
+      //    ⚠️ 这两个键必须**显式写出来**：上面 DEFAULT_SETTINGS 一改，
+      //       靠 `...` 继承的话这里会跟着静默漂移。
+      theme: 'dark',
+      accent: 'amber',
       sendOnEnter: true,
       showDate: false,
       // 打开用量显示：头部那行「输入 / 输出（其中思考 N）」才有得测 ——
@@ -1107,6 +1116,18 @@ function registerStubs() {
     // 用户发「表情标签」时，回复末尾带一个 <emo> 标签。
     // 顺带验「标签优先于关键词」：正文里同时有「这是加粗」（会命中「表情甲」），
     // 标签说的是 shy，最终该以标签为准。按 role 过滤，别被提示词里的 <emo> 字样误触发。
+    // 出图（--shot=chat）用：用户消息里带「心理」时，回复补一段心理描写 + 一段旁白。
+    // 这两块现在是**左侧 2px 竖条**（心理实线 / 旁白虚线），「元素在不在」能断言，
+    // 「竖条位置、缩进、跟正文的间距对不对」只能靠图 —— 所以留个稳定的触发词。
+    const askedForVO = ((payload && payload.messages) || []).some(
+      (m) => m && m.role === 'user' && String(m.content || '').includes('心理')
+    );
+    if (askedForVO) {
+      const vo = '\n\n【心理】他嘴上说得轻巧，指尖却在袖口里蜷了一下。\n\n【旁白】雨从后半夜起就没停过。';
+      CONTENT = `${CONTENT}${vo}`;
+      pieces = [...pieces, vo];
+    }
+
     const askedEmoTag = ((payload && payload.messages) || []).some(
       (m) => m && m.role === 'user' && String(m.content || '').includes('表情标签')
     );
@@ -1260,6 +1281,8 @@ async function probeHover(win, result) {
  * 按钮 —— 按钮的 click 收不到，还会被当成「点了背景」把浮层一并关掉。
  * 这套行为只在真实指针下出现，页面里 dispatchEvent 复现不出来。
  */
+const window_shape = (pair) => `${pair[0]}×${pair[1]}`;
+
 async function probeLightboxClick(win, result) {
   const run = (code) => win.webContents.executeJavaScript(code);
   const read = () =>
@@ -1369,8 +1392,49 @@ async function probeLightboxClick(win, result) {
     // 回到 1 倍再点左上角空白 —— 这才是该关的时候
     await run("document.getElementById('lightbox-reset')?.click(); true");
     await sleep(80);
-    await clickAt(6, 6);
+    // ⚠️ 点「背景」有两个坑，2026-10-12 一次踩齐：
+    //   ① 不能写死 (6,6) —— 那是赌「左上角一定有背景」；
+    //   ② 也不能按图片元素的 rect 去找「外面」—— 图片一旦停在「实际大小」档，
+    //      它的 rect 就会铺满整个浮层，于是点哪都在图片上，浮层当然不关。
+    // 可靠做法：先把缩放档**确认回「适应」**（scale 回到 1）。这时 2:3 的图
+    // 在 1008×689 的视口里只有 ~386 宽、居中，左右各留三百来像素的真空白。
+    for (let i = 0; i < 4; i++) {
+      const scaleText = await run(`(() => {
+        const img = document.querySelector('#lightbox .lightbox-img');
+        return (img && img.style.transform) || '';
+      })()`);
+      const m = /scale\(([\d.]+)\)/.exec(scaleText);
+      if (!m || Number(m[1]) <= 1.001) break;   // 没有 scale、或已经是 1 倍
+      await run("document.getElementById('lightbox-reset')?.click(); true");
+      await sleep(150);
+    }
+
+    const outside = await run(`(() => {
+      const img = document.querySelector('#lightbox .lightbox-img');
+      const r = img ? img.getBoundingClientRect() : null;
+      const mid = Math.round(window.innerHeight / 2);
+      if (!r || r.left < 40) return { x: 8, y: mid, where: '图片贴着左边，退回 8px' };
+      return { x: Math.max(8, Math.round(r.left) - 16), y: mid, where: '图片左侧的留白' };
+    })()`);
+    await clickAt(outside.x, outside.y);
     afterBackdrop = await read();
+
+    // 这几个数是「窗口到底多大」的唯一实证。写在这里不是凑数：
+    // 灯箱是 fixed;inset:0，它的 rect 就等于视口 —— 视口不对，后面所有
+    // 按坐标点的断言都会跟着错，而且错得很像「功能坏了」。
+    const winInfo = await run(`({
+      inner: [window.innerWidth, window.innerHeight],
+      outer: [window.outerWidth, window.outerHeight],
+      dpr: window.devicePixelRatio,
+      scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight]
+    })`);
+    console.log(
+      '  [窗口探针] 视口', window_shape(winInfo.inner),
+      '外框', window_shape(winInfo.outer),
+      'dpr', winInfo.dpr,
+      '内容', window_shape(winInfo.scroll),
+      '· 点的是', outside.where, `(${outside.x},${outside.y})`
+    );
     result.results.push({
       name: '看大图：真实鼠标点背景能关掉',
       pass: !afterBackdrop.open,
@@ -3354,7 +3418,12 @@ app.whenReady().then(async () => {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
-      backgroundThrottling: false // 窗口不可见时不要限制定时器/动画帧
+      backgroundThrottling: false, // 窗口不可见时不要限制定时器/动画帧
+      // 版本号跟真实窗口一样从启动参数递进去（见 main/window.js 的 additionalArguments）。
+      // ⚠️ 不传的话，侧栏品牌行那个「v1.0」在**出图里永远空着** ——
+      //    功能是好的，但「到底显示对了没有」只能靠猜（2026-10-12 就这么疑惑过一轮）。
+      // 主题 / 配色**故意不在这里传**：测试要自己控制它们，传了会跟测试的切换打架。
+      additionalArguments: [`--mimitale-version=${require('../package.json').version}`]
     }
   });
 
@@ -3425,23 +3494,28 @@ app.whenReady().then(async () => {
   // 用法：electron tools/smoke-test.js --no-sandbox --shot=settings
   // 精确匹配 --shot=，别让 --shot-only 也命中（它没有 =，会被误当成截图场景）
   const shotArg = (process.argv.find((a) => a.startsWith('--shot=')) || '').split('=')[1];
-  // 再加 --shot-dark 就用夜间模式出图，文件名带 -dark 后缀。
-  // 暗色主题是另一套变量，只验白天等于只验了一半 —— 「浅色底 + 浅色字」
-  // 这类错误在白天截图里根本不会露头。
-  const shotDark = process.argv.includes('--shot-dark');
+  // --shot-dark / --shot-light：指定出图用哪一档明暗，文件名带对应后缀。
+  // ⚠️ 2026-10-12 起出厂默认是**夜间**，所以这两个都不给时出的是暗色图 ——
+  //    要核对「浅色底配浅色字」这类只在白天露头的毛病，必须显式加 --shot-light。
+  //    暗色和浅色是两套变量，只验一档等于只验了一半。
+  const shotMode = process.argv.includes('--shot-light')
+    ? 'light'
+    : process.argv.includes('--shot-dark')
+      ? 'dark'
+      : '';
   if (shotArg) {
     try {
       win.show();
-      if (shotDark) {
+      if (shotMode) {
         // 点真实的明暗按钮（只点按钮，不调内部函数）。
         // 控件在外观弹窗里 —— 不用先把弹窗打开，click() 对隐藏元素照样生效。
         await win.webContents.executeJavaScript(
-          `document.querySelector('#appearance-modes [data-mode="dark"]')?.click(); true`
+          `document.querySelector('#appearance-modes [data-mode="${shotMode}"]')?.click(); true`
         );
         await new Promise((r) => setTimeout(r, 300));
       }
-      // --shot-accent=<pink|blue|matcha>：切到指定配色再截图。
-      // 现在弹窗里是三个色点，直接点对应的那一颗就行（以前是循环按钮，
+      // --shot-accent=<amber|pink|blue|matcha>：切到指定配色再截图。
+      // 现在弹窗里是四个色点，直接点对应的那一颗就行（以前是循环按钮，
       // 得一路点到 data-accent 等于目标为止）。
       const shotAccent = (process.argv.find((a) => a.startsWith('--shot-accent')) || '').split('=')[1];
       if (shotAccent) {
@@ -3687,11 +3761,93 @@ app.whenReady().then(async () => {
           }
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }
           await nap(150);`,
+        // 生成参数（稿子屏 2）：入口在「⋯」菜单里，点它 = 把右栏切到第二个页签。
+        // ⚠️ 2026-10-12 晚之前它是一个**独立浮层**（#gen-drawer，盖住右栏、还把对话列挤窄）；
+        //    现在是右栏里的页签 —— 图里要看的正是「两个页签长什么样、
+        //    滑块有没有被通用 input 规则顶成大高个、数值文字有没有跟轨道打架」。
+        genParams: `
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-more')?.click();
+          await nap(300);
+          $('#btn-gen-params')?.click();
+          await nap(450);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 剧情选项：整条测试跑完正好停在场景 21 的会话里（最新回复带选项），
-        // 这里只需要确认在聊天视图、把 toast 收掉，就能截到「气泡下面的选项块」。
+        // 这里只需要确认在聊天视图、把 toast 收掉，就能截到「消息下面的选项块」。
         msgOptions: `
           const t = document.querySelector('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }
           await new Promise(r => setTimeout(r, 300));`,
+        // 聊天主页：消息流本体 —— 消息头（角色名 / 模型牌 / 时间）、通栏正文、方角头像、
+        // 心理 / 旁白那两根 2px 竖条，还有最要紧的「用户侧右对齐」。
+        // ⚠️ 现有 driver 几乎全是弹层，消息区只有这里能系统性地看到。去气泡改造后
+        // 「左右还分不分得清」「多行正文的换行位置对不对」是**只有肉眼能判**的，
+        // 所以这个场景必须自己开一个会话（--shot-only 不跑断言，不会替你建会话）。
+        chat: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+
+          $('#btn-chars')?.click();
+          await nap(550);
+          const card = $$('#char-page-grid .char-card').find(c => {
+            const n = c.querySelector('.char-card-name');
+            return n && n.textContent.trim() === '属性测试角色';
+          });
+          const go = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '聊天');
+          if (go) { go.click(); await nap(700); }
+
+          // 第一次开这个角色的会话会先弹「创建你的角色」。⚠️ 要点「开始游玩」
+          // （btn-start-play）**进会话** —— 点「取消」等于放弃这次聊天，
+          // 视图会退角色库，截出来就是一张角色库图（踩过）。
+          // ⚠️ 这个 driver 整段是**模板字符串**：注释里千万别写反引号，
+          //    一个就把字符串提前闭合了，报「Unexpected identifier」。
+          //    要找元素就写纯文字名字，别写 CSS 选择器的引号形式。
+          if (!$('#player-modal')?.classList.contains('hidden')) {
+            $('#btn-start-play')?.click();
+            await nap(600);
+          }
+
+          const send = async (text) => {
+            const input = $('#input');
+            if (!input) return;
+            input.value = text;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            $('#btn-send')?.click();
+            await nap(2600);
+          };
+
+          // 第一轮：一句够长的正文 —— 看用户侧右对齐之后多行怎么折
+          await send('这一句故意写得长一点，用来核对用户消息右对齐之后，多行正文的换行位置是不是还正常。');
+
+          // 第二轮：带「心理」触发假后端补上【心理】/【旁白】两段，好核对那两根竖条
+          await send('再说说它心里在想什么，我要看心理描写。');
+
+          // 想让图里顺带报一下「分隔 / 消息 / 抓手」三个数？在 URL 上加 #probe。
+          // 为什么要有它：日期分隔和两侧抓手都很小，消息一多分隔还会被滚到可视区外，
+          // 光看缩略图分不清「没渲染」和「滚上去了」（2026-10-12 就误判过一次）。
+          // ⚠️ 这整段在一个**模板字符串**里：反引号会把字符串提前闭合、
+          //    美元花括号会被当成插值 —— 要拼字符串就用加号。
+          if (location.hash === '#probe') {
+            const sep = document.querySelectorAll('.msg-date-sep').length;
+            const msg = document.querySelectorAll('.msg').length;
+            const handle = document.querySelectorAll('.pad-handle').length;
+            const hint = $('#hint-text');
+            if (hint) hint.textContent = '分隔 ' + sep + ' / 消息 ' + msg + ' / 抓手 ' + handle;
+          }
+
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 收起态的**图标轨**（设计稿屏 2）：点一下收起按钮，然后拍左栏那 52px。
+        // ⚠️ 这个场景是 2026-10-12 晚补的 —— 那之前收起态是一条**空条**
+        //    （`> *:not(.sidebar-toggle){display:none}`），稿子那里却是一整列图标；
+        //    没有这个 driver，「图标轨到底长出来没有」只能靠 DOM 断言猜。
+        // ⚠️ 模板字符串：注释里不能有反引号，也不能有美元花括号。
+        rail: `
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-sidebar-toggle')?.click();
+          await nap(400);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 角色编辑器：点左栏上传框会走真实的 shrinkAvatar → 落盘那条路
         // （images:pick 的桩给的是 1×1 PNG，裁完是一片纯色 —— 看不出裁切效果）。
         // 所以出图时直接往两个上传框里各塞一张 SVG 占位图，只为核对框子比例：
@@ -4261,6 +4417,7 @@ app.whenReady().then(async () => {
           const h = (sel) => { const n = document.querySelector(sel); return n ? Math.round(n.getBoundingClientRect().height) : 0; };
           return {
             theme: document.documentElement.getAttribute('data-theme') || 'light',
+            accent: document.documentElement.getAttribute('data-accent') || '(没设)',
             card: bg('.modal-card'),
             panel: bg('.attr-panel'),
             tabs: bg('.attr-tabs'),
@@ -4290,16 +4447,21 @@ app.whenReady().then(async () => {
             })()
           };
         })()`);
-        console.log(`  主题=${probe.theme} 弹窗底=${probe.card} 属性卡=${probe.panel} 标签栏=${probe.tabs} 值框=${probe.value}`);
+        console.log(`  主题=${probe.theme} 配色=${probe.accent} 弹窗底=${probe.card} 属性卡=${probe.panel} 标签栏=${probe.tabs} 值框=${probe.value}`);
         console.log(`  弹窗卡片=${probe.modal}`);
         if (shotArg === 'charTextareas') {
           console.log(`  长文本框实高(px) 描述=${probe.desc} 性格=${probe.personality} 场景=${probe.scenario} 开场白=${probe.first} 示例对话=${probe.example}`);
         }
         const dir = path.join(__dirname, 'shots');
         fs.mkdirSync(dir, { recursive: true });
-        // 配色不是默认粉时把配色名缀进文件名，免得几套配色的图互相覆盖
-        const accentTag = shotAccent && shotAccent !== 'pink' ? `-${shotAccent}` : '';
-        const shotName = `${shotArg}${accentTag}${shotDark ? '-dark' : ''}.png`;
+        // 配色不是默认那套（ACCENTS 第一项）时把配色名缀进文件名，
+        // 免得几套配色的图互相覆盖。默认从 providers.js 取，别在这儿再写死一遍。
+        const defaultAccent = ACCENTS[0];
+        const accentTag = shotAccent && shotAccent !== defaultAccent ? `-${shotAccent}` : '';
+        // 明暗同理：显式指定了哪一档就缀上哪一档（-dark / -light），
+        // 都不给 = 出厂默认档，不加后缀。
+        const modeTag = shotMode ? `-${shotMode}` : '';
+        const shotName = `${shotArg}${accentTag}${modeTag}.png`;
         fs.writeFileSync(path.join(dir, shotName), (await win.webContents.capturePage()).toPNG());
         console.log(`  截图: tools/shots/${shotName}`);
       }

@@ -33,23 +33,28 @@ import { switchConvo, removeConvo } from './convoActions.js';
 export function renderConvoList() {
   clear(el.convoList);
 
-  // 分组标题带条数，像设计稿那样写成「最近 · 5」
-  if (el.convoCap) {
-    el.convoCap.textContent = state.conversations.length
-      ? `最近 · ${state.conversations.length}`
-      : '最近';
-  }
+  // ⛔ 侧栏搜索框 2026-10-12 晚去掉（星宝要求）—— 这里不再按关键词过滤。
+  //    当时的实现只匹配**标题**、不搜消息内容，而且会话本来就不多；
+  //    真要做搜索就做成全局的（标题 + 正文），别留一个「搜不到内容」的错觉。
+  const list = state.conversations;
 
-  if (!state.conversations.length) {
+  // 分区标题：平时就是「最近会话」
+  if (el.convoCap) el.convoCap.textContent = '最近会话';
+
+  if (!list.length) {
     // 这两条内联样式是「空状态」专属的，没有别的用处（真要认真做该进样式表）
-    const empty = h('div', { class: 'convo-title', text: '（还没有会话）' });
+    const empty = h('div', {
+      class: 'convo-title',
+      text: '（还没有会话）'
+    });
     empty.style.padding = '8px 9px';
     empty.style.color = 'var(--text-faint)';
     el.convoList.appendChild(empty);
+    renderRailAvatar();
     return;
   }
 
-  for (const convo of state.conversations) {
+  for (const convo of list) {
     const label = convo.title || '新对话';
 
     el.convoList.appendChild(
@@ -61,14 +66,12 @@ export function renderConvoList() {
           onclick: () => switchConvo(convo.id)
         },
         convoAvatar(convo),
-        // 两行：名字 + 「谁 · 什么时候」。有了副行，条目才不只是一串标题，
-        // 也不用再靠左侧那条竖线标「当前」了。
-        h(
-          'div',
-          { class: 'convo-info' },
-          h('span', { class: 'convo-title', text: label, title: label }),
-          h('span', { class: 'convo-sub', text: convoSub(convo, label) })
-        ),
+        // 一行：名字 + 时间（设计稿的写法）。
+        // ⚠️ 2026-10-12 去掉了原来那行副标题（「谁 · 什么时候」）：
+        //    「跟谁聊」头像已经在说，「什么时候」挪到右端 —— 两行并一行之后
+        //    一屏能多放进两个会话，扫列表也快一点。
+        h('span', { class: 'convo-title', text: label, title: label }),
+        h('span', { class: 'convo-time', text: convoTimeLabel(convo.updatedAt) }),
         button({
           class: 'convo-del',
           text: '×',
@@ -82,6 +85,37 @@ export function renderConvoList() {
       )
     );
   }
+
+  renderRailAvatar();
+}
+
+/**
+ * 收起态图标轨最下面那颗：**当前会话**是谁（稿子屏 2 最底下那个 20px 方角图）。
+ *
+ * 展开态里它是 `display:none` —— 展开态「我在哪个会话」由列表的选中态说，
+ * 不需要再说第二遍。
+ * ⚠️ 复用 convoAvatar() 的产物（同一套 entityTone）—— 否则同一个人
+ *    在列表里是绿的、在图标轨里变成主色，又会出现「同一个人两个颜色」。
+ */
+function renderRailAvatar() {
+  const host = el.railAvatar;
+  if (!host) return;
+
+  const convo = activeConvo();
+  const node = convo ? convoAvatar(convo) : null;
+
+  host.className = 'rail-avatar';
+  host.textContent = '';
+  host.removeAttribute('title');
+  if (!node) return;
+
+  for (const cls of String(node.className || '').split(/\s+/)) {
+    if (cls && cls !== 'convo-avatar') host.classList.add(cls);
+  }
+  if (node.title) host.title = node.title;
+  const img = node.querySelector('img');
+  if (img) host.appendChild(h('img', { src: img.getAttribute('src'), alt: '' }));
+  else host.textContent = node.textContent;
 }
 
 /**
@@ -118,35 +152,31 @@ function convoAvatar(convo) {
 }
 
 /**
- * 会话条目的副标题：「谁 · 什么时候」。
- * 标题已经是那个名字时就不重复（绑了角色的会话，标题默认就是角色名）。
+ * 会话条目右端那个时间（设计稿的写法，看的是**日历位置**不是时长）：
+ *   今天   → `14:03`（给时刻比给「3 小时前」更好定位）
+ *   昨天   → 「昨天」
+ *   七天内 → 「周三」
+ *   更早   → `10-08`
+ *
+ * ⚠️ 这跟原来那个 relativeTime（刚刚 / 12 分钟前 / 3 小时前…）不是一回事，
+ *    那个读的是「多久以前」，所以把 2026-10-12 一起换掉了：
+ *    列表右端要的是「哪天聊的」，不是「过去多少小时」。
  */
-function convoSub(convo, title) {
-  const char = convo.characterId ? characterById(convo.characterId) : null;
-  const wbId = char ? '' : convoWorldbookIds(convo)[0] || '';
-  const wb = wbId ? worldbookById(wbId) : null;
-  const who = (char && char.name) || (wb && wb.name) || '';
-
-  const parts = [];
-  if (who && who !== title) parts.push(who);
-  const when = relativeTime(convo.updatedAt);
-  if (when) parts.push(when);
-  return parts.join(' · ') || '还没有消息';
-}
-
-/** 相对时间：刚刚 / 12 分钟前 / 3 小时前 / 昨天 / 5 天前 / 2 个月前 */
-function relativeTime(ts) {
-  if (!ts) return '';
-  const diff = Date.now() - ts;
-  const min = 60e3;
-  const hour = 60 * min;
-  const day = 24 * hour;
-  if (diff < min) return '刚刚';
-  if (diff < hour) return `${Math.floor(diff / min)} 分钟前`;
-  if (diff < day) return `${Math.floor(diff / hour)} 小时前`;
-  if (diff < 2 * day) return '昨天';
-  if (diff < 30 * day) return `${Math.floor(diff / day)} 天前`;
-  return `${Math.floor(diff / (30 * day))} 个月前`;
+function convoTimeLabel(ts) {
+  const t = Number(ts);
+  if (!Number.isFinite(t) || t <= 0) return '';
+  const d = new Date(t);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dayMs = 86400000;
+  if (t >= startOfToday) {
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+  if (t >= startOfToday - dayMs) return '昨天';
+  if (t >= startOfToday - 6 * dayMs) {
+    return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
+  }
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /** 当前端点的 `服务商id::模型名`，没选就空串（和选项的 value 同一套写法） */

@@ -94,6 +94,26 @@ function syncCardsForConvo(convo) {
 // ---------------------------------------------------------------------------
 
 /**
+ * 一行的实际步进：取「现在场上最高的那张卡」+ 间距。
+ *
+ * ⚠️ 不能再写死成 ROW_STEP。卡片高度跟着字段多少走，右栏也一直在变可用宽度 ——
+ * 一行只放得下一张时（右栏在场角色占了 264px 之后就是这么回事），
+ * 写死的行距比卡片矮，两张卡就会**上下叠着压一起**（2026-10-12 冒烟报的
+ * 「开两张卡时自动并排，不互相压」）。
+ * 量不到（第一张卡）就退回默认值。
+ */
+function rowStep() {
+  const host = el.stateCards;
+  if (!host) return ROW_STEP;
+  let tallest = 0;
+  for (const card of host.children) {
+    const h = card.getBoundingClientRect().height;
+    if (h > tallest) tallest = h;
+  }
+  return Math.max(ROW_STEP, Math.round(tallest) + CARD_GAP);
+}
+
+/**
  * 第 index 张卡的落点。**整卡宽 + 间距**地横向铺开，一行装不下才换行。
  *
  * 「从右往左」铺：气泡是左对齐的，右边本来就是空的，卡片放右边最不挡字。
@@ -111,7 +131,7 @@ function layoutSideBySide(index) {
   const row = Math.floor(index / perRow);
 
   const x = Math.max(EDGE, w - EDGE - CARD_W - col * (CARD_W + CARD_GAP));
-  const y = TOP + row * ROW_STEP;
+  const y = TOP + row * rowStep();
   return { x, y };
 }
 

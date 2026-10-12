@@ -10,9 +10,13 @@
    ========================================================================== */
 
 /* ==========================================================================
-   配色方案 ①：草莓奶昔（默认，不带 data-accent 属性时就是它）
+   配色方案 ①：草莓奶昔
    暖粉底 + 玫红强调。**底色本身带粉、描线也是粉的** —— 「可爱」主要靠这个，
    光把按钮变圆是变不出来的。换气质只换这一组值，结构/间距/字号一个都不动。
+
+   ⚠️ 2026-10-12 起**默认方案是 ④ 琥珀灯**，不是这里。把这两套拆开是因为
+   「删掉 data-accent 属性」和「点了草莓奶昔」在 DOM 上长得一样（都是没有
+   data-accent="amber"），得有个确定的兜底 —— 兜底就是 :root，也就是这一套。
    ========================================================================== */
 
 :root {
@@ -52,7 +56,6 @@
   --ok-text: #1a7d52;
   --ok-border: #cbe9d9;
   --overlay: rgba(43, 31, 38, 0.28);
-  --user-bubble: #ffd9e6;    /* 自己消息气泡：淡粉 */
   --pre-bg: #fdf0f5;
   --code-bg: rgba(217, 41, 104, 0.07);
   --code-text: #6b3a4d;
@@ -66,15 +69,15 @@
   /* 阴影带主色、但很淡 —— 扁平感有一半来自「影子是彩色的、而且铺得开」。
      对齐设计稿：范围大一点（10px/22px）、透明度低一点（.10/.14），
      卡片/按钮靠这一层影子分层，不靠 1px 边框。 */
-  --shadow-sm: 0 2px 10px rgba(217, 41, 104, 0.10);
-  --shadow-lg: 0 6px 22px rgba(217, 41, 104, 0.14);
+  --shadow-sm: 0 1px 2px rgba(23, 18, 24, 0.05);
+  --shadow-lg: 0 14px 36px rgba(23, 18, 24, 0.16);
   /* 透明底立绘的描边：淡底素材压在浅底上会糊边，给它描一圈深色（详解见 .sc-photo img）。
      ⚠️ 不用 drop-shadow —— 它在 Chromium 里是按图的不透明区域算形状，一张图算一次，
      二十几张表情图再加立绘、缩略图会明显卡（filter 还逼出合成层）。
      box-shadow 走的是元素矩形，一遍就够，这里所有立绘都铺满框、矩形描边正好落在图边上。 */
   --art-edge: 0 0 1px rgba(0, 0, 0, 0.35);
-  --radius: 16px;
-  --radius-sm: 12px;
+  --radius: 4px;
+  --radius-sm: 3px;
 }
 
 /* ==========================================================================
@@ -115,7 +118,6 @@
   --danger-bg-hover: #eaf2fb;
   --danger-border-hover: #bcd2e9;
   --overlay: rgba(22, 34, 46, 0.28);
-  --user-bubble: #d3e9ff;
   --pre-bg: #f1f7fe;
   --code-bg: rgba(22, 112, 184, 0.07);
   --code-text: #33536e;
@@ -126,10 +128,10 @@
   --scrollbar-hover: #b0cde8;
   --focus-ring: 0 0 0 3px rgba(22, 112, 184, 0.18);
   --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2363788e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  --shadow-sm: 0 2px 10px rgba(22, 112, 184, 0.10);
-  --shadow-lg: 0 6px 22px rgba(22, 112, 184, 0.14);
-  --radius: 16px;
-  --radius-sm: 12px;
+  --shadow-sm: 0 1px 2px rgba(22, 34, 46, 0.05);
+  --shadow-lg: 0 14px 36px rgba(22, 34, 46, 0.16);
+  --radius: 4px;
+  --radius-sm: 3px;
 }
 
 [data-accent='blue'][data-theme='dark'] {
@@ -144,7 +146,6 @@
   --accent-border-strong: rgba(91, 157, 255, 0.5);
   --accent-border-soft: rgba(91, 157, 255, 0.28);
   --accent-border-faint: rgba(91, 157, 255, 0.25);
-  --user-bubble: #26324a;
   --focus-ring: 0 0 0 3px rgba(91, 157, 255, 0.28);
   --brand-grad: linear-gradient(135deg, #5b9dff 0%, #7fb2ff 100%);
   --brand-glow: 0 0 12px rgba(91, 157, 255, 0.7), 0 0 6px rgba(127, 178, 255, 0.55);
@@ -186,7 +187,6 @@
   --danger-bg-hover: #e9f4ee;
   --danger-border-hover: #bcdcc9;
   --overlay: rgba(23, 36, 29, 0.28);
-  --user-bubble: #d6f0e2;    /* 自己消息气泡：奶绿 */
   --pre-bg: #f0f9f4;
   --code-bg: rgba(26, 125, 82, 0.07);
   --code-text: #356151;
@@ -197,10 +197,10 @@
   --scrollbar-hover: #b2d4c3;
   --focus-ring: 0 0 0 3px rgba(26, 125, 82, 0.18);
   --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23647a6d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  --shadow-sm: 0 2px 10px rgba(26, 125, 82, 0.10);
-  --shadow-lg: 0 6px 22px rgba(26, 125, 82, 0.14);
-  --radius: 16px;
-  --radius-sm: 12px;
+  --shadow-sm: 0 1px 2px rgba(23, 36, 29, 0.05);
+  --shadow-lg: 0 14px 36px rgba(23, 36, 29, 0.16);
+  --radius: 4px;
+  --radius-sm: 3px;
 }
 
 /* 抹茶 × 夜间：底子沿用 [data-theme='dark'] 的中性暗底，只把主色系调亮，
@@ -217,26 +217,118 @@
   --accent-border-strong: rgba(76, 201, 138, 0.5);
   --accent-border-soft: rgba(76, 201, 138, 0.28);
   --accent-border-faint: rgba(76, 201, 138, 0.25);
-  --user-bubble: #1e3a2c;
   --focus-ring: 0 0 0 3px rgba(76, 201, 138, 0.28);
   --brand-grad: linear-gradient(135deg, #4cc98a 0%, #6dd9a3 100%);
   --brand-glow: 0 0 12px rgba(76, 201, 138, 0.7), 0 0 6px rgba(109, 217, 163, 0.55);
 }
 
+/* ==========================================================================
+   配色方案 ④：琥珀灯（data-accent="amber"）—— **默认方案**
+   中性灰底 + 琥珀金强调。和 ①②③ 一样，把整套表面色重声明一遍。
+
+   ⚠️ 浅色档的强调色必须**压深**（#8a6314）：亮琥珀 #e8b84b 压在白底上只有
+   1.9:1，当按钮底色时上面的白字也读不出来。这跟 ① 的浅色 #d92968 / 夜间
+   #fb4d74 是同一个道理 —— 同一个色相在明暗两档不能共用一个值。
+   ========================================================================== */
+[data-accent='amber'] {
+  --bg: #f4f5f7;
+  --bg-side: #edeff2;
+  --bg-elev: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #f7f8fa;
+  --border: #dde1e6;
+  --border-hover: #c8ced6;
+  --border-soft: #e8eaee;
+  --text: #1b1e22;
+  --text-dim: #4a5158;
+  --text-faint: #6b7280;     /* 白卡片上 4.8:1，过 WCAG AA */
+  --accent: #8a6314;         /* 深琥珀 —— 当按钮底时白字 5.4:1 */
+  --accent-hover: #a1751a;
+  --accent-pressed: #6e4f10;
+  --on-accent: #ffffff;
+  --accent-soft: rgba(138, 99, 20, 0.10);
+  --accent-soft-strong: rgba(138, 99, 20, 0.16);
+  --accent-line: rgba(138, 99, 20, 0.35);
+  --accent-wash: rgba(138, 99, 20, 0.06);
+  --accent-border: rgba(138, 99, 20, 0.35);
+  --accent-border-strong: rgba(138, 99, 20, 0.5);
+  --accent-border-soft: rgba(138, 99, 20, 0.28);
+  --accent-border-faint: rgba(138, 99, 20, 0.25);
+  --brand-grad: linear-gradient(135deg, #d9a94b 0%, #8a6314 100%);
+  --brand-glow: 0 0 12px rgba(217, 169, 75, 0.7), 0 0 6px rgba(138, 99, 20, 0.55);
+  --danger-bg: #fdf1f0;
+  --danger-border: #f2d4d1;
+  --danger-bg-hover: #fbe5e3;
+  --danger-border-hover: #e7b9b5;
+  --overlay: rgba(27, 30, 34, 0.28);
+  --pre-bg: #f2f4f6;
+  --code-bg: rgba(138, 99, 20, 0.07);
+  --code-text: #5c4715;
+  --th-bg: rgba(138, 99, 20, 0.05);
+  --foot-bg: #f7f8fa;
+  --toggle-track: #dfe3e8;
+  --scrollbar: #d5dae0;
+  --scrollbar-hover: #bfc6ce;
+  --focus-ring: 0 0 0 3px rgba(138, 99, 20, 0.18);
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --shadow-sm: 0 1px 2px rgba(27, 30, 34, 0.05);
+  --shadow-lg: 0 14px 36px rgba(27, 30, 34, 0.16);
+  --radius: 4px;
+  --radius-sm: 3px;
+}
+
+/* 琥珀 × 夜间：底子沿用 [data-theme='dark'] 的中性灰，这里只换主色系。
+   两个值都在深底上调过：主色 on #101113 = 10.2:1，
+   压在黄金底上的深字 on #e8b84b = 10.1:1 —— 小字号也站得住。 */
+[data-accent='amber'][data-theme='dark'] {
+  --accent: #e8b84b;
+  --accent-hover: #f2ce74;
+  --accent-pressed: #c99a33;
+  --on-accent: #0e1216;
+  --accent-soft: rgba(232, 184, 75, 0.14);
+  --accent-soft-strong: rgba(232, 184, 75, 0.22);
+  --accent-line: rgba(232, 184, 75, 0.40);
+  --accent-wash: rgba(232, 184, 75, 0.07);
+  --accent-border: rgba(232, 184, 75, 0.35);
+  --accent-border-strong: rgba(232, 184, 75, 0.5);
+  --accent-border-soft: rgba(232, 184, 75, 0.28);
+  --accent-border-faint: rgba(232, 184, 75, 0.25);
+  --focus-ring: 0 0 0 3px rgba(232, 184, 75, 0.28);
+  --brand-grad: linear-gradient(135deg, #f2ce74 0%, #e8b84b 100%);
+  --brand-glow: 0 0 12px rgba(242, 206, 116, 0.7), 0 0 6px rgba(232, 184, 75, 0.55);
+}
+
 [data-theme='dark'] {
   color-scheme: dark;
-  --bg: #17161b;
-  --bg-side: #131217;
-  --bg-elev: #1f1e25;
-  --bg-card: #1f1e25;
-  --bg-input: #232229;
-  --border: #2f2c34;
-  --border-hover: #3f3a45;
-  --text: #eceaf0;
-  --text-dim: #a49fa9;
-  /* 卡片底（#1f1e25）上 4.5:1。原值是 #76717c，实测只有 3.5:1 —— 比浅色那套
-     4.7:1 弱一截，同样是「说明文字」，两套主题的观感对不齐。 */
-  --text-faint: #89848f;
+  /* 2026-10-12：暗底从紫调（#17161b）换成**零色偏中性灰 6 级**。
+     酒馆质感有一半靠这一层 —— 底色不参与情绪，颜色只从强调色来；
+     底色一旦带色偏，换任何强调色都会「两种气质打架」。
+
+     ⚠️ 2026-10-12 晚：这 6 级**原来写歪了一档**，跟设计稿对不上：
+        · 稿子的「面板」（侧栏 / 顶栏 / 右栏 / 输入区 / 左栏底部）是 **#16181b**，
+          这里却写成了 #0c0d0f —— **#0c0d0f 在设计稿的 6 级里根本不存在**，
+          是把面板压到比稿子暗两档，于是侧栏/右栏发闷、顶栏连色带都没有；
+        · 稿子的「卡片」（右栏状态卡 / 浮动卡 / 按钮）是 **#1b1e22**，
+          这里却把卡片填成了面板的 #16181b —— 卡片跟面板分不开。
+     现在按稿子重排：底 #101113 / 面板 #16181b / 卡片 #1b1e22 /
+     次级条 #191c21 / 输入 #1e2126 / 描线 #2a2e34。 */
+  --bg: #101113;
+  --bg-side: #16181b;
+  --bg-elev: #16181b;
+  --bg-card: #1b1e22;
+  /* 次级条（「在场角色 N」那一行，稿子 2:113 = #191c21）：夹在面板和卡片中间。
+     只在这一档声明，浅色档靠 var() 的兜底继续用 --bg-side。 */
+  --bg-band: #191c21;
+  /* 列表项选中 / 悬停底（稿子 2:23 = #23262b）：比面板亮两档才对得上。 */
+  --bg-item: #23262b;
+  --bg-input: #1e2126;
+  --border: #2a2e34;
+  --border-hover: #3a3f46;
+  --text: #e4e7ea;
+  --text-dim: #9aa1a9;
+  /* 卡片底（现在 #1b1e22）上 4.6:1。⚠️ 原来的 #89848f 是按紫调底算的，
+     换中性底后必须重校；设计稿里的 #6C737B 只有 3.7:1，不能用。 */
+  --text-faint: #7d848c;
   --accent: #fb4d74;         /* 暗色下略调亮一点，保证对比度 */
   --accent-hover: #fc7492;
   --accent-pressed: #e0385e;
@@ -251,21 +343,20 @@
   --danger-border-hover: #6b3b40;
   --ok-text: #7fd6a8;
   --ok-border: #2f5342;
-  --overlay: rgba(0, 0, 0, 0.55);
-  --user-bubble: #35232b;    /* 暗色下淡玫红灰的气泡 */
-  --border-soft: #26232b;
-  --pre-bg: #17151a;
+  --overlay: rgba(0, 0, 0, 0.62);
+  --border-soft: #1f2227;
+  --pre-bg: #14161a;
   --code-bg: rgba(255, 255, 255, 0.08);
-  --code-text: #d6cbd8;
+  --code-text: #d4d8dd;
   --th-bg: rgba(255, 255, 255, 0.05);
-  --foot-bg: #1b1a1f;
-  --toggle-track: #3a3540;
-  --scrollbar: #3a3540;
-  --scrollbar-hover: #4a4450;
+  --foot-bg: #15171b;
+  --toggle-track: #34383e;
+  --scrollbar: #34383e;
+  --scrollbar-hover: #454a51;
   --focus-ring: 0 0 0 3px rgba(251, 77, 116, 0.28);
-  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2376717c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
-  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237d848c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
   /* 浅色立绘压在暗底上会「发光」，反着描一圈白（见 .sc-photo img 的注释） */
   --art-edge: 0 0 1px 1px rgba(255, 255, 255, 0.55);
 }
@@ -382,10 +473,10 @@ body {
 .convo-item {
   display: flex;
   align-items: center;
-  /* 10px：头像从 24 长到 38 之后，9px 会让文字贴在圆边上（设计稿 .ritem 也是 10） */
-  gap: 10px;
+  /* 8px：头像从 38 收到 20（稿子 2:24）之后，10px 会让文字离得太远 */
+  gap: 8px;
   padding: 8px 9px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   cursor: pointer;
   color: var(--text-dim);
   font-size: 13px;
@@ -397,60 +488,48 @@ body {
 /* 当前会话不再靠左侧那条竖线标识 —— 白底卡片 + 阴影本身就够了，
    而且竖线跟圆头像挤在一起显得脏（设计稿的 .ritem.on 也只有底色和阴影）。 */
 .convo-item:hover {
-  background: var(--bg-card);
+  background: var(--bg-item, var(--bg-card));
   color: var(--text);
 }
 
 .convo-item.active {
-  background: var(--bg-card);
+  background: var(--bg-item, var(--bg-card));
   color: var(--text);
   box-shadow: var(--shadow-sm);
 }
 
-/* 会话条目左边的圆头像：和消息区、状态卡、在场角色栏同一套长相
-   （38px 渐变圆 + 白字，设计稿的 .ava.sm）。
-   原来是 24px 的浅色底 + 主色字 —— 小且淡，一排看下来分不出谁是谁。 */
+/* 会话条目左边的方角小图：稿子 2:24 是 **20×20、圆角 3**。
+   ⚠️ 原来是 38px 圆 —— 那张卡是按「两行条目 + 大圆头像」排的；条目并成一行、
+   条目高只有 34 之后，38 的头像会把行高顶到 54，一屏少放两条会话。
+   ⚠️ 这里**不许写 background** —— `.g1`~`.g6` 是同优先级，写了会盖掉按人配的渐变。 */
 .convo-avatar {
-  flex: 0 0 38px;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   overflow: hidden;
   color: var(--on-accent);
-  font-size: 15px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
 }
 .convo-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
-/* 没绑角色的（世界书会话之类）：中性点，别抢「有主」那几条 */
+/* 没绑角色的（世界书会话之类）：中性点，别抢「有主」的那几条 */
 .convo-avatar.plain { background: var(--border-soft); color: var(--text-faint); font-weight: 400; }
 /* 世界书会话的头像是**方的**（设计稿 .ava.book）—— 形状本身就是分类 */
-.convo-avatar.book { border-radius: 11px; }
+.convo-avatar.book { border-radius: var(--radius-sm); }
 
 /* 会话条目里的两行：主行是标题，副行是「谁 · 什么时候」。
    副行让条目有了信息层次，也不再需要靠左侧那条竖线标「当前」了。 */
-.convo-info {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
+/* ⛔ `.convo-info` / `.convo-sub` 删于 2026-10-12 晚：会话项并成一行之后
+   （头像 + 名字 + 时间），没人再产出这两层。 */
 
 .convo-title {
   font-size: 13.5px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.convo-sub {
-  font-size: 11px;
-  color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -466,33 +545,78 @@ body {
   font-size: 15px;
   line-height: 1;
   padding: 2px 4px;
-  border-radius: 4px;
+  border-radius: var(--radius);
 }
 
 .convo-item:hover .convo-del,
 .convo-del:focus-visible { opacity: 1; }
 .convo-del:hover { color: var(--danger); background: var(--danger-bg); }
 
-/* 侧栏底部这四颗（角色库 / 世界书 / 设置 / 数据文件夹）：
-   设计稿 .rail-foot 是「一行两颗平铺」，我们有四颗 → 排成 2×2。
-   靠图标 + 文字居中，和设计稿的 .ghost-btn 一致（原来居左，四颗竖着排占掉大半屏）。 */
+/* 侧栏底部 6 颗入口（角色库 / 世界书 / 预设 / 帮助 / 设置 / 数据）。
+   稿子 2:45 是 **3 列 × 2 行**、`gap 6`、四周 `pad 10`（之前是 2 列 3 行）。 */
 .sidebar-foot {
+  position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  /* 不再画那条分隔线：这几颗已经靠「白底 + 阴影」浮起来了（设计稿 .rail-foot） */
-  padding-top: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding-top: 14px;
 }
 
-.sidebar-foot .btn {
-  height: 36px;
-  /* 字号 12 而不是 12.5：「数据文件夹」五个字 + 图标刚好卡进 95px 的格子，
-     给 12.5 会顶出省略号 */
-  padding: 0 6px;
-  gap: 6px;
-  font-size: 12px;
+/* 这一组上面**有一条通栏分隔线**（稿子 2:28 分隔线2，1px #2a2e34）。
+   ⚠️ 之前这里写的是「不再画那条分隔线」，理由是「这几颗靠白底 + 阴影浮起来了」——
+   那是浅色卡片时期的判断；深色这套里这条线是「列表结束 / 底部入口开始」的唯一分界。
+   用 ::before 而不是 border-top：侧栏自己有 10px 左右内边距，
+   border 会被缩进去一截，而稿子这条线是**通栏**的（x 0..232）。 */
+.sidebar-foot::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -10px;
+  right: -10px;
+  height: 1px;
+  background: var(--border);
 }
-.sidebar-foot .btn svg { flex: 0 0 14px; width: 14px; height: 14px; opacity: 0.75; }
+
+/* ⚠️ 这几颗是**纯 ghost：没有底、也没有边框**。
+   节点数据里 2:47 的 `strokes` 和 `fills` 都是**空数组**（`strokeWeight: 1` 只是
+   残留的元数据），截图上也确认了 —— 只有图标 + 文字，左对齐。
+   2026-10-12 我给它们加过 1px 描边，那是**看低分辨率缩略图看出来的**，
+   拿节点数据一对就露馅了。 */
+.sidebar-foot .btn {
+  height: 28px;
+  padding: 0 7px;
+  gap: 5px;
+  /* ⚠️ 11px 不是随手写的：一行 66.67px 里要塞下 `pad 7 + 图标 13 + gap + 文字 + pad 7`，
+     「角色库」三个字在 11.5px 下是 34.5px → 7+13+5+34.5+7 = 66.5，**刚好卡在边界上**，
+     换个字体/缩放就折成「角…」。11px 留出余量，跟稿子（≈11px）也一致。
+     ⚠️ 别用 `min-width: 0` 去救它 —— 那只会把文字截成省略号（看着像功能坏了）。 */
+  font-size: 11px;
+  justify-content: flex-start;
+  white-space: nowrap;
+  overflow: hidden;
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+.sidebar-foot .btn:hover {
+  color: var(--text);
+  background: var(--bg-item, var(--bg-card));
+}
+.sidebar-foot .btn svg { flex: 0 0 13px; width: 13px; height: 13px; opacity: 0.75; }
+/* 收起态要单独藏的那层文字（见下面的 .sidebar.collapsed）。
+   ⚠️ 不给 min-width:0 / text-overflow —— 一旦允许收缩，三列里塞不下的那颗就会
+   变成「角…」（2026-10-12 踩过）。宁可让它撑破那 1px，也别把字吃了。 */
+.foot-label { flex: 0 0 auto; }
+
+/* 「新对话」：稿子是高 32 的方角块，居中一颗 ＋ 加文字 */
+.btn-new {
+  height: 32px;
+  padding: 0 10px;
+  gap: 6px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+}
 
 /* ------------------------------ 按钮 ------------------------------ */
 
@@ -503,7 +627,10 @@ body {
   border: 1px solid transparent;
   /* 12px（设计稿的 --r-btn）。原来是 999px 胶囊 —— 满屏圆滚滚的胶囊、再加上到处
      1px 边框，就是「不够扁平」的来源。只有发送键保留胶囊（设计稿里 .send 也是 pill）。 */
-  border-radius: 12px;
+  /* ⚠️ 跟 --radius 走，别再写死。12px 是上一版「大圆角」时期的数 ——
+     2026-10-12 把 --radius 压到 4px 时漏了这里，结果整个界面的按钮
+     还是圆的，跟稿子的方角对不上（星宝一眼就看到了）。 */
+  border-radius: var(--radius);
   padding: 10px 16px;
   font-size: 13px;
   line-height: 1.2;
@@ -517,11 +644,6 @@ body {
 
 .btn-block { width: 100%; }
 .btn-sm { padding: 6px 11px; font-size: 12px; }
-
-/* 侧栏最上面那颗「＋ 新建对话」：设计稿的 .new-btn —— 满宽、40 高、字重 600。
-   .btn-block 已经给了满宽，这里只补高度和字重（原来是 400 的常规字重，
-   压在绿底上显得松松垮垮）。 */
-.btn-new { height: 40px; padding: 0 16px; font-size: 13.5px; font-weight: 600; }
 
 /* 主按钮：一层主色底 + 淡阴影，不描边（描边正是「鼓」的来源之一） */
 .btn-primary {
@@ -602,10 +724,11 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  /* 68 高 + 左右 22（设计稿的 .top）：整条靠 align-items 垂直居中，
-     头像抬到 44 之后不用再给上下 padding 撑 */
-  min-height: 68px;
-  padding: 0 22px;
+  /* 高 48（设计稿 2:82 h=48）：一颗 26 的方角头像 + 两行字，靠 align-items 垂直居中。
+     ⚠️ 原来是 68 —— 那是「44px 圆头像 + 一行字」时期的数，头像收到 26 之后
+     顶栏白多出 20px，把下面的「在场角色条」整条往下推。 */
+  min-height: 48px;
+  padding: 0 14px;
   /* 抬高两层：① 不这样「⋯」/「切换模型」弹层展开时会被下面的消息区盖住；
      ② 还要高过浮动的状态卡 —— .state-cards 是**整列大小**（inset:0）且 z-index 40，
         它虽然在 DOM 里排在顶栏后面，只要层级比顶栏高，就能把整个顶栏连同弹层
@@ -614,23 +737,27 @@ body {
   position: relative;
   z-index: 45;
   border-bottom: 1px solid var(--border);
-  /* 不填底色：设计稿的顶栏是浮在背景上的，填了 --bg-side 就多出一条色带 */
-  background: transparent;
+  /* 稿子 2:82 顶栏是有底色的（#16181b，和侧栏/右栏同一个面板色）。
+     ⚠️ 原来这里写的是「不填底色，设计稿的顶栏是浮在背景上的」—— 那句跟稿子对不上，
+     结果是顶栏和消息区都是 --bg，中间那条 1px 描线成了唯一的分层。 */
+  background: var(--bg-side);
 }
 
-/* 顶栏左边那颗头像（设计稿 .top 里的 .ava lg）：
-   44px 渐变圆 + 白字，和侧栏 / 消息区 / 状态卡共用同一套色板（js/ui/avatarTone.js）。
-   ⚠️ 别在这里写 background —— `.g1`~`.g6` 是同优先级 (0,1,0)，写了会盖掉渐变。 */
+/* 顶栏左边那颗头像（设计稿 2:83）：26×26 的**方角**图（r=4）。
+   ⚠️ 原来是 44px 圆形 —— 圆形是「账号头像」的语言，这套稿子全线是方角；
+   而且 44 那颗会把顶栏顶到 68 高。
+   ⚠️ 别在这里写 background —— `.g1`~`.g6` 是同优先级 (0,1,0)，写了会盖掉按人配的渐变
+   （2026-10-12 右栏的 .cast-card-avatar 就是这么栽的，见那条注释）。 */
 .topbar-avatar {
   flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
   overflow: hidden;
   color: var(--on-accent);
-  font-size: 17px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -639,7 +766,7 @@ body {
 
 .topbar-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* 世界书会话的头像是**方的** —— 和侧栏条目一样，形状本身就是分类 */
-.topbar-avatar.book { border-radius: 14px; }
+.topbar-avatar.book { border-radius: var(--radius); }
 /* 什么都没绑：中性底，别假装是某个角色 */
 .topbar-avatar.plain { background: var(--border-soft); color: var(--text-faint); font-weight: 400; }
 
@@ -663,11 +790,12 @@ body {
 .topbar-name h1 { min-width: 0; }
 
 /* 标题旁边那颗小胶囊（设计稿的 .pill-tag）：视角偏离 / 关键数值。
-   主色浅底 + 主色字，和「正在生效的特别设置」这层语义对上。 */
+   主色浅底 + 主色字，和「正在生效的特别设置」这层语义对上。
+   ⚠️ 圆角跟 --radius 走（方角），不是 999px 胶囊 —— 胶囊是上一版的语言。 */
 .pill-tag {
   flex: 0 0 auto;
-  padding: 1px 9px;
-  border-radius: 999px;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 10.5px;
@@ -685,9 +813,10 @@ body {
   text-overflow: ellipsis;
 }
 
+/* 元信息行：设计稿 2:89 是 fs=11（原来是 12 —— 顶栏收到 48 之后要跟着降一档） */
 .meta {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -697,9 +826,12 @@ body {
 .topbar-actions { display: flex; gap: 6px; flex: 0 0 auto; align-items: center; }
 
 /* 顶栏这几颗是「轻」的：透明底、hover 才浮出主色浅底（设计稿的 .ic-btn）。
-   别跟着 .btn-ghost 一起变白卡 —— 一行三个白块会把标题压下去。 */
-.topbar-actions .btn-ghost { background: transparent; box-shadow: none; }
-.topbar-actions .btn-ghost:hover { background: var(--accent-soft); color: var(--accent); }
+   别跟着 .btn-ghost 一起变白卡 —— 一行三个白块会把标题压下去。
+   ⚠️ `:not(.topbar-icon)` 不能省：设计稿里「⋯」和另外三颗是**同一个规格**的方框按钮
+   （2:98 / 2:468 / 2:104 / 2:108 都是 26×26 + 1px 描边），它虽然还带着 .btn-ghost，
+   但不该被这条压回透明、变成一颗光秃秃的字。 */
+.topbar-actions .btn-ghost:not(.topbar-icon) { background: transparent; box-shadow: none; }
+.topbar-actions .btn-ghost:not(.topbar-icon):hover { background: var(--accent-soft); color: var(--accent); }
 
 /* 顶栏按钮里的图标（外观的调色盘 / 视角的眼睛）：跟着文字走，
    和字之间留 5px（.btn 是 inline-flex，不给 margin 图标会贴着第一个字）。 */
@@ -752,7 +884,7 @@ body {
   align-items: center;
   padding: 7px 11px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -861,7 +993,7 @@ body {
   width: 100%;
   padding: 7px 10px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -887,10 +1019,14 @@ body {
 .messages {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 24px 20px 18px;
+  /* 左右内缩**分开写**：外观里的「对话宽度」两项就是这两个变量。
+     需要它是因为浮动卡片放到左下角时会挡住贴边的对话 ——
+     那种情况下只想把左边推开，右边不该跟着一起缩，所以不能写成一个对称的 padding。
+     没设过时两边都是 20px（设计稿的消息流内边距）。 */
+  padding: 20px var(--chat-pad-right, 20px) 18px var(--chat-pad-left, 20px);
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px; /* 设计稿消息流 gap 16 */
   /* 对话窗口背景图（外观设置里选的），没设就是 none */
   background-image: var(--chat-bg-image, none);
   background-size: cover;
@@ -903,21 +1039,30 @@ body {
   scroll-behavior: auto;
 }
 
-/* ------------------------------ 消息气泡 ------------------------------ */
+/* ------------------------------ 消息 ------------------------------ */
+
+/* 2026-10-12 起**没有气泡了**（酒馆质感）。
+   以前是 IM 那套「左右两个彩色气泡」；现在正文直接铺在页底上，
+   左右靠「头像在哪一侧」+「正文往哪一侧对齐」区分。
+   ⚠️ `.bubble` 这个类名**保留**（它是排版容器，JS 和一堆断言都按它找节点），
+      但已经没有任何「气泡」的外观了 —— 见下面 .bubble 那一段。 */
 
 .msg {
   display: flex;
-  gap: 10px;
-  max-width: 860px;
+  gap: 10px; /* 设计稿：头像与消息体间距 10 */
   width: 100%;
-  margin: 0 auto;
+  /* ⚠️ 这里原来是 `max-width: 860px; margin: 0 auto`（对话居中、宽度封顶）。
+     现在**去掉了** —— 宽度改由消息流的左右内缩值控制（--chat-pad-*），
+     两套机制并存的话，把左边推开时 860 的上限会把效果吃掉一半。 */
 }
 
 .msg-avatar {
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  /* 设计稿是**方形圆角**（36×36 / r=4），不是圆形 ——
+     圆形是上一版「聊天软件」语气的残留，方角跟这套工具感才对得上。 */
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -939,75 +1084,115 @@ body {
 .msg-avatar.clickable:hover { box-shadow: var(--art-edge), 0 0 0 3px var(--accent-soft-strong); }
 .msg-avatar.clickable:focus-visible { outline: none; box-shadow: var(--art-edge), var(--focus-ring); }
 
-.msg-body { flex: 1 1 auto; min-width: 0; }
+/* 消息体：竖排、间隙 7（设计稿）。第一行是「谁说的」，下面是正文和其它块。 */
+.msg-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
 
+/* 消息头：角色名（亮）+ 模型标签 + …… + 时间（右端）。
+   2026-10-12 之前这里是「一行灰色小字」，只写角色名；
+   现在模型标签、候选翻页、时间都收进这一行，正文上面不会再多出一行时间。 */
 .msg-role {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* 弹性空隙：把时间顶到最右边（对应设计稿里的「弹性空隙」节点） */
+.msg-role .msg-spacer { flex: 1 1 auto; }
+
+/* 时间：等宽字体 + 表格数字，同一列上下对得齐；比角色名暗一档 */
+.msg-time {
+  font-family: Consolas, "Courier New", monospace;
   font-size: 11px;
+  font-weight: 400;
   color: var(--text-faint);
-  margin-bottom: 4px;
-  letter-spacing: 0.4px;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
 }
 
-/* 助手消息上的模型小标签：一眼看出这条是哪个模型答的 */
+/* 助手消息上的模型小标签：一眼看出这条是哪个模型答的。
+   设计稿是「深底 + 细描边 + 圆角 2」的方牌，不再是上一版那种圆胶囊。 */
 .msg-model {
-  margin-left: 7px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--border-soft);
+  padding: 2px 4px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
   color: var(--text-faint);
-  font-size: 10.5px;
-  letter-spacing: 0;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 10px;
+  font-weight: 400;
 }
 
+/* ⚠️ `.bubble` 现在**不是气泡**了，只剩「正文排版容器」这一个职责。
+   2026-10-12 去掉气泡时**故意保留了这个类名**，没有改名：
+   它被 JS（流式输出的 chunkTarget、就地编辑、截断提示）和一堆断言按名字找，
+   改名等于同时动三处，而这次要的只是「看起来没有气泡」。
+   所以这里把所有「气泡特征」逐个清掉，而不是删掉这个类 —— 见每行注释。 */
 .bubble {
-  border-radius: var(--radius);
-  padding: 11px 15px;
+  border: none;        /* 原来是 1px 描边 */
+  border-radius: 0;    /* 原来是 --radius，两头还各有一个 6px 的方向角 */
+  background: none;    /* 原来是卡片色实底 —— 去气泡后不再需要底色 */
+  box-shadow: none;    /* 原来有一层很淡的投影，用来把白气泡从页底上浮起来 */
+  padding: 0;          /* 原来是 11px 15px —— 没有底了，内边距也就不需要 */
   overflow-wrap: break-word;
   word-break: break-word;
   user-select: text;
-  /* 字号来自「对话窗口」设置；里面的标题/表格/心理旁白都用 em 跟着缩 */
-  font-size: var(--chat-font-size, 14px);
+  /* 字号来自「对话窗口」设置；里面的标题/表格/心理旁白都用 em 跟着缩。
+     行高 1.75：设计稿正文是 13px / 23px，正好对上，
+     而且字号调到 22px 时行高会跟着放大，不会挤成一片。 */
+  font-size: var(--chat-font-size, 13px);
+  line-height: 1.75;
 }
 
-.msg.user .bubble {
-  background: var(--user-bubble);
-  white-space: pre-wrap;
-}
-
-/* 自己的消息靠右：头像换到右边、正文右对齐、气泡收窄到内容宽度。
-   AI 回复保持靠左撑满，一眼就能分清谁在说话（经典 IM 对话布局）。 */
+/* 自己的消息靠右：头像换到右边（row-reverse）、**消息头也整体靠右**、正文右对齐。
+   这是「没有气泡之后」区分谁在说话的唯一手段 ——
+   之前靠气泡底色（自己那条是浅色实底），底色一去掉就必须把对齐方式做明确。
+   ⚠️ 这里是 justify-content / text-align，**不是** align-items: flex-end：
+      后者会让消息体收缩到内容宽度，多行正文的换行位置就跟着变了。 */
 .msg.user {
   flex-direction: row-reverse;
 }
 
-.msg.user .msg-body {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+.msg.user .msg-role {
+  justify-content: flex-end;
 }
 
-.msg.user .bubble {
-  width: fit-content;
-  max-width: 100%;
-  /* 同 .msg.assistant .bubble：说话人那一侧的上角收小 */
-  border-top-right-radius: 6px;
+/* 自己的消息头**整体靠右**（「你 22:43」挨在一起），所以不能留那个会把时间
+   顶到最右边的弹性空隙 —— 留着的话名字会孤零零留在左边。
+   设计稿里用户那侧的消息头宽度是 hug（贴着右边），和这条规则是一回事。 */
+.msg.user .msg-role .msg-spacer { display: none; }
+
+/* ⚠️ `white-space: pre-wrap` 不能少：自己的消息是 `textContent` 直接塞进去的，
+   换行本来就是 `\n`。这条原来挂在 `.msg.user .bubble` 上，去气泡时跟着没了 ——
+   少它的话多行消息会被拍成一行（AI 那侧不受影响，它走 markdown 渲染）。 */
+.msg.user .msg-content {
+  text-align: right;
+  white-space: pre-wrap;
 }
 
-/* AI 的回答：不要**重**边框，但内边距要跟用户气泡一致，
-   否则文字紧贴边缘，看着特别挤。
-   （投影是有的，而且刻意留得很轻 —— 见下面那行 box-shadow 的说明，
-     它的作用是让白气泡从暖粉白的页底上浮起来。） */
-.msg.assistant .bubble { 
-  background: var(--bg-card);
-  border: 1px solid var(--border-soft);
-  /* 气泡底（白）和页底（暖粉白）只差一点，光靠 1px 淡描线看不出「这是个气泡」——
-     加一层很淡的主色阴影，它才像一个浮在页面上的物件。这也是设计稿里
-     「可爱感」的一半来源：影子是彩色的、而且很轻。 */
-  box-shadow: var(--shadow-sm);
-  /* 说话人那一侧的上角收小，气泡才有「从这个人嘴里出来」的方向感 */
-  border-top-left-radius: 6px;
+/* AI 的回答：不加任何底，只把字号/行高继承给正文（排版见 .bubble） */
+.msg.assistant .bubble {
+  background: none;
+  border: none;
+  box-shadow: none;
 }
+
+/* 出错的那条：**唯一保留「块」的一条**。
+   去气泡是为了「正文直接铺在页底上」，但报错必须一眼看见 ——
+   一抹底色比一行灰字可靠得多，所以这里有意不走「无气泡」那套。
+   （设计稿没画出错态，这是按用途定的取舍。） */
 .msg.error .bubble {
+  padding: 10px 14px;   /* 上面那条总规则把 padding 清了，这里得补回来 */
+  border-radius: var(--radius);
   background: var(--danger-bg);
   color: var(--danger-text);
   white-space: pre-wrap;
@@ -1048,7 +1233,7 @@ body {
   color: var(--accent);
   background: var(--accent-soft);
   padding: 0 3px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 /* 「这条被回复上限截断了」的一行说明。
@@ -1079,7 +1264,7 @@ body {
   max-height: 50vh;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-input);
   color: var(--text);
   font-family: inherit;
@@ -1130,20 +1315,26 @@ body {
 }
 
 /* 候选切换：‹ 2/3 › —— 重新生成过才会有多个版本。
-   放在角色行里常驻显示，这样一眼能看出「这条留了几个版本」；
-   放操作栏的话要悬停才看得见，等于发现不了。 */
+   放在消息头里常驻显示，这样一眼能看出「这条留了几个版本」；
+   放操作栏的话要悬停才看得见，等于发现不了。
+   （2026-10-12：消息头变成 flex 之后这里不再需要 margin-left —— 间距由父级 gap 给。） */
 .variant-nav {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  margin-left: 8px;
-  vertical-align: middle;
+}
+
+/* 候选翻页在消息头里也用等宽字体，和相邻的时间是一套（设计稿 11px 等宽） */
+.variant-nav .variant-btn,
+.variant-nav .variant-count {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
 }
 
 .variant-btn {
   padding: 0 5px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text-dim);
   font-family: inherit;
@@ -1167,31 +1358,33 @@ body {
   user-select: none;
 }
 
-/* 心理描写：弱化的旁白块，和正文一眼区分开。
-   用带透明度的颜色，浅色/夜间两套主题都不用各写一遍。 */
+/* 心理描写：一条 2px 的**主色竖条** + 弱一档的灰字，没有底纹、也不斜体。
+   2026-10-12 按设计稿改的（原来是「3px 淡主色竖条 + 一层主色底纹 + 斜体」）：
+   去气泡之后正文整个铺在页底上，再来一层有色底纹就会和正文抢，
+   而一根实心主色竖条已经足够把「这是内心活动」标出来。
+   ⚠️ 字号用 em（0.92 × 13px = 12px，对上设计稿），别写死 px ——
+      正文调到 22px 时它还停在 12px 就不成比例了。 */
 .bubble .msg-inner {
   margin: 8px 0;
-  padding: 7px 12px;
-  border-left: 3px solid var(--accent-line);
-  border-radius: 0 6px 6px 0;
-  background: var(--accent-wash);
+  padding: 0 0 0 12px;
+  border-left: 2px solid var(--accent);
+  background: none;
   color: var(--text-dim);
-  font-style: italic;
-  font-size: 0.89em; /* 12.5px */
-  line-height: 1.7;
+  font-size: 0.92em; /* 13px 正文 → 12px，同设计稿 */
+  line-height: 1.6;  /* 设计稿 12px / 19px */
 }
 
-/* 旁白 / 上帝视角：再弱一档，用虚线边框和不同色相区分于「心理」 */
+/* 旁白 / 上帝视角：和心理描写**同一套画法**，只把竖条换成虚线、颜色退到中性 ——
+   两者要一眼分得开，但都留在「单色 + 主色」这套语言里，
+   原来那条紫色虚线和四套配色都对不上（2026-10-12 改）。 */
 .bubble .msg-aside {
   margin: 8px 0;
-  padding: 7px 12px;
-  border-left: 3px dashed rgba(150, 130, 200, 0.4);
-  border-radius: 0 6px 6px 0;
-  background: rgba(150, 130, 200, 0.06);
+  padding: 0 0 0 12px;
+  border-left: 2px dashed var(--text-faint);
+  background: none;
   color: var(--text-dim);
-  font-style: italic;
-  font-size: 0.89em; /* 12.5px */
-  line-height: 1.7;
+  font-size: 0.92em;
+  line-height: 1.6;
 }
 
 /* 块内不再受段落间距影响 */
@@ -1206,7 +1399,7 @@ body {
   background: var(--code-bg);
   color: var(--code-text);
   padding: 1px 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 
 .bubble pre {
@@ -1271,7 +1464,7 @@ body {
   font-family: inherit;
   font-weight: 400;
   padding: 3px 9px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.12s ease;
 }
@@ -1308,7 +1501,7 @@ body {
 .msg-option-skeleton {
   height: 27px;
   margin: 3px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: linear-gradient(90deg, var(--border-soft) 25%, var(--bg-input) 37%, var(--border-soft) 63%);
   background-size: 400% 100%;
   animation: option-skeleton-shimmer 1.3s ease-in-out infinite;
@@ -1332,7 +1525,7 @@ body {
   font-size: 14px;
   color: var(--text);
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
@@ -1358,7 +1551,7 @@ body {
   line-height: 1;
   color: var(--accent);
   background: var(--accent-soft);
-  border-radius: 4px;
+  border-radius: var(--radius);
 }
 
 .msg-option-btn .opt-text {
@@ -1383,7 +1576,7 @@ body {
   font-size: 12px;
   color: var(--text-faint);
   padding: 2px 4px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
@@ -1481,7 +1674,7 @@ body {
   background: var(--bg-card);
   box-shadow: var(--shadow-sm);
   /* 24px：单行时看着接近胶囊，长到三四行也不会变成怪形状 */
-  border-radius: 24px;
+  border-radius: var(--radius);
   padding: 8px;
   transition: box-shadow 0.15s;
 }
@@ -1497,17 +1690,12 @@ body {
   margin: 0 auto 8px;
   padding: 9px 11px 11px;
   border: 1px solid var(--border-soft);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--bg-side);
 }
 
-.suggest-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
+/* ⛔ `.suggest-head` 删于 2026-10-12 晚：那层包装 div 早从 index.html 拿掉了
+   （建议条压成了一行），JS 只认 #suggest-strip / #suggest-list。 */
 
 .suggest-title { font-size: 11.5px; color: var(--text-faint); }
 
@@ -1519,7 +1707,7 @@ body {
   font-size: 12px;
   line-height: 1;
   padding: 3px 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 
 .suggest-close:hover { color: var(--text); background: var(--bg-input); }
@@ -1533,7 +1721,7 @@ body {
   text-align: left;
   padding: 8px 11px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text);
   font-family: inherit;
@@ -1561,7 +1749,7 @@ body {
 .bubble-image {
   max-width: 240px;
   max-height: 240px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   cursor: zoom-in;
   display: block;
@@ -1696,7 +1884,7 @@ body {
   overflow: hidden;
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   animation: card-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   /* 点了「放大到窗口」时让卡片长过去，而不是啪一下跳满 —— 几个长度值之间
@@ -1745,7 +1933,7 @@ body {
   justify-content: center;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
@@ -1847,7 +2035,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
+  border-radius: var(--radius);
   background: var(--accent-soft);
   color: var(--accent);
 }
@@ -1879,45 +2067,11 @@ body {
 
 /* ------------------------------ 多服务商 ------------------------------ */
 
-/* 服务商切换标签 */
-.provider-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.provider-tab {
-  max-width: 165px;
-  padding: 6px 14px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-card);
-  color: var(--text-dim);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.provider-tab:hover { 
-  background: var(--bg-side);
-  border-color: var(--border-hover);
-  color: var(--text);
-}
-
-.provider-tab.active {
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
-  color: var(--accent);
-}
-
-.provider-tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* ⛔ `.provider-tabs` / `.provider-tab`（6 条，含 :hover / .active / :focus-visible）
+   2026-10-12 晚删掉了 —— 服务商切换早就从「药丸标签」换成了 `.provider-card`
+   （见 settings.js 的 renderProviderTabs：函数名没改，建出来的是卡片）。
+   这一段是**彻底没人引用的死规则**，而且里面还留着 999px 药丸圆角 ——
+   留着只会让人以为「切换还是药丸」。 */
 
 .provider-add { margin-bottom: 12px; }
 
@@ -1929,14 +2083,14 @@ body {
   padding: 10px;
   margin-bottom: 14px;
   border: 1px dashed var(--border-hover);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--bg-side);
 }
 
 .preset-chip {
   padding: 6px 13px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text-dim);
   font-family: inherit;
@@ -2127,7 +2281,7 @@ body {
   width: 100%;
   padding: 9px 11px;
   border: 0;
-  border-radius: 11px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--text-dim);
   font: inherit;
@@ -2155,7 +2309,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--accent);
   transition: background 0.15s, color 0.15s;
@@ -2275,7 +2429,7 @@ body {
   gap: 8px;
   padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--bg-card);
 }
 
@@ -2300,7 +2454,7 @@ body {
 .settings-content > .panel-section .field > input[type="number"],
 .settings-content > .panel-section .field > textarea,
 .settings-content > .panel-section .field > select {
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--bg-side);
   border: 1px solid transparent;
 }
@@ -2336,7 +2490,7 @@ body {
   gap: 12px;
   padding: 13px 14px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius);
   background: var(--bg-card);
   color: var(--text-dim);
   font: inherit;
@@ -2364,7 +2518,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 14px;
@@ -2500,7 +2654,7 @@ body {
   font-size: 16px;
   line-height: 1;
   padding: 2px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   transition: opacity 0.12s ease;
 }
 
@@ -2793,7 +2947,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--bg-elev);
   box-shadow: var(--shadow-lg);
 }
@@ -2878,7 +3032,7 @@ body {
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--bg-elev);
   box-shadow: var(--shadow-lg);
 }
@@ -2891,7 +3045,7 @@ body {
 .crop-view {
   position: relative;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-input);
   cursor: grab;
   /* 指针拖拽由自己处理，别让浏览器抢去当页面滚动 */
@@ -2971,7 +3125,7 @@ body {
 .attr-panel {
   margin-top: 8px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--pre-bg);   /* 比弹窗底再深一档，读成「凹进去的一块」 */
   overflow: hidden;            /* 卡头底色要贴住圆角，否则四角会露出直角 */
 }
@@ -3126,7 +3280,7 @@ body {
   margin-bottom: 9px;
   padding: 8px 9px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-input);
 }
 
@@ -3144,7 +3298,7 @@ body {
   min-height: 28px;
   padding: 4px 9px;
   font-size: 12.5px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
 }
 
 .attr-group-edit .btn { flex: 0 0 auto; }
@@ -3178,7 +3332,7 @@ body {
   flex-direction: column;
   gap: 4px;
   padding: 3px 4px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   transition: background 0.15s;
 }
 
@@ -3203,7 +3357,7 @@ body {
   min-height: 28px;
   padding: 4px 9px;
   font-size: 12.5px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
 }
 
 /* 类型选择框：文本 / 数值 / 列表 */
@@ -3213,7 +3367,7 @@ body {
   min-height: 28px;
   padding: 2px 5px;
   font-size: 11.5px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: var(--text-dim);
 }
 
@@ -3228,7 +3382,7 @@ body {
   font-size: 11.5px;
   line-height: 1;
   padding: 7px 8px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
@@ -3277,7 +3431,7 @@ body {
   min-height: 26px;
   padding: 3px 7px;
   font-size: 11.5px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 /* 变化规则：整行铺满 */
@@ -3287,7 +3441,7 @@ body {
   min-height: 26px;
   padding: 3px 8px;
   font-size: 11.5px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 /* 分组下拉 / 「＋ 新建分组…」临时输入框。
@@ -3304,7 +3458,7 @@ body {
   min-height: 26px;
   padding: 3px 8px;
   font-size: 11.5px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 /* 下拉右边要给 CSS 画的小箭头留位置，否则长组名会顶到箭头底下 */
@@ -3336,7 +3490,7 @@ body {
   min-height: 30px;
   padding: 5px 10px;
   font-size: 12.5px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
 }
 
 /* 批量粘贴区：平时收着，点「粘贴文本」才展开 */
@@ -3344,7 +3498,7 @@ body {
   margin-top: 8px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--pre-bg);
 }
 
@@ -3490,7 +3644,7 @@ body {
 .char-portrait {
   width: 108px;
   height: 162px;
-  border-radius: 14px;
+  border-radius: var(--radius);
 }
 
 .char-avatar::after,
@@ -3574,7 +3728,7 @@ body {
   justify-content: center;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   cursor: pointer;
   font-family: inherit;
 }
@@ -3609,7 +3763,7 @@ body {
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-faint);
   font-size: 12px;
@@ -3627,7 +3781,7 @@ body {
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-faint);
   font-size: 13px;
@@ -3655,7 +3809,7 @@ body {
   margin-top: 2px;
   padding: 11px 14px;
   border: 1px solid var(--border-soft);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--bg-side);
 }
 
@@ -3693,7 +3847,7 @@ body {
 /* 说明文字里的小代码块，比如 {{user}} */
 .field-help code {
   padding: 0 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--code-bg);
   font-family: Consolas, "Courier New", monospace;
   font-size: 11px;
@@ -3866,7 +4020,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   padding: 14px 16px;
   margin-bottom: 9px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--bg-card);
   font-size: 13px;
   line-height: 1.55;
@@ -3969,7 +4123,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 2px solid transparent;
   background-clip: content-box;
   transition: background 0.2s;
@@ -4127,7 +4281,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   line-height: 1.3;
   color: var(--text-faint);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .wb-char-chip-btn:hover { color: var(--text); background: var(--border-soft); }
@@ -4144,7 +4298,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   cursor: pointer;
   user-select: none;
   padding: 2px 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .wb-char-chip-show:hover { color: var(--text); background: var(--border-soft); }
@@ -4162,7 +4316,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   gap: 9px;
   padding: 7px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
   cursor: pointer;
   min-width: 0;
@@ -4286,7 +4440,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   /* 右侧留出 × 的位置，常驻 / 停用那两个徽章不会被压在它下面 */
   padding: 7px 26px 7px 9px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   min-width: 0;
 }
@@ -4308,7 +4462,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--text-faint);
   font-size: 13px;
@@ -4437,7 +4591,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 「采样参数」折叠区：默认收起，展开后是一小组数字输入 */.preset-sampling {
   margin-top: 18px;
   border: 1px solid var(--border-soft);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--bg-side);
   padding: 0 14px;
 }
@@ -4487,7 +4641,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   overflow-y: auto;
   padding: 6px;
   border: 1px solid var(--border-soft);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--bg-input);
 }
 
@@ -4497,7 +4651,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   align-items: center;
   gap: 9px;
   padding: 7px 9px;
-  border-radius: 9px;
+  border-radius: var(--radius);
   cursor: pointer;
   transition: background 0.12s ease;
 }
@@ -4599,11 +4753,15 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 22px 10px;
+  margin: 0 14px 10px;
+  /* 稿子 2:113 = h34：7px 上下内边距 + 20px 方角头像 = 34（原来 7px + 34px 圆头像 = 48） */
   padding: 7px 12px;
   border: 0;
-  border-radius: 12px;
-  background: var(--bg-side);
+  /* ⚠️ 方角通栏，不是 12px 圆角 —— 12px 是「大圆角时代」的漏网（跟 .btn 那次同一类）。 */
+  border-radius: var(--radius);
+  /* 稿子这条是**次级条**色（#191c21），比面板亮一档。浅色档没声明 --bg-band，
+     靠 var() 的兜底继续沿用 --bg-side。 */
+  background: var(--bg-band, var(--bg-side));
 }
 
 /* 「在场角色 N」这一行是**标签**，不是按钮、不可折叠 —— 别接开关。
@@ -4652,17 +4810,18 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .panel-cast:empty { display: none; }
 
-/* 34px 渐变圆 + 白字（设计稿的 .cav）。
-   原来是「1px 描边 + 主色浅底 + 主色字」，跟底色一个调子，一排看下来糊在一起。 */
+/* 20px 方角图（稿子 2:118 头像组实测高 20）。
+   ⚠️ 原来是 34px 圆 + 白字，一颗就把这条顶到 48 高。
+   ⚠️ 这里**不许写 background** —— `.g1`~`.g6` 是同优先级，写了会盖掉 entityTone 的按人配色。 */
 .panel-avatar {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   color: var(--on-accent);
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1;
   display: inline-flex;
@@ -4703,7 +4862,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   pointer-events: auto;
   background: var(--bg-card);
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
@@ -4806,7 +4965,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font: inherit;
 }
 
@@ -4883,7 +5042,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .sc-bar {
   flex: 1 0 100%;
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--border-soft);
   overflow: hidden;
   margin: 4px 0 6px;
@@ -4891,7 +5050,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .sc-bar-fill {
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   transition: width 0.18s ease-out;
 }
@@ -4909,7 +5068,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   padding: 3px 7px;
   font-size: 12.5px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--bg-input);
   color: var(--text);
 }
@@ -4929,7 +5088,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   line-height: 1;
 }
@@ -4944,7 +5103,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   font-size: 11.5px;
   /* 不描边：主色浅底已经够说明「这颗能点」（卡片里其它按钮全是纯文字） */
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--accent);
   cursor: pointer;
@@ -4961,7 +5120,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   font-size: 11px;
   line-height: 1;
   padding: 3px 4px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -4973,11 +5132,11 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* ------------------------------ 对话窗口外观弹窗 ------------------------------ */
 
 /* 比通用弹窗（.modal-card 的 700px）**窄**一档：这一页只有「明暗 + 配色」两组
-   小控件，撑到 700 会左右空出一大片。620 刚好够「主题配色」三个色点并排一行。 */
+   小控件，撑到 700 会左右空出一大片。620 刚好够「主题配色」四个色点并排一行。 */
 .appearance-card { max-width: 620px; }
 
 /* 「主题配色」和「明暗」并排一行。单栏堆着的话弹窗会长出可视区，
-   底部那几样得滚动才看得见。两栏比例靠配色那边宽些（三个色点比两颗按钮宽）。 */
+   底部那几样得滚动才看得见。两栏比例靠配色那边宽些（四个色点比两颗按钮宽）。 */
 .appearance-global {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
@@ -4986,15 +5145,18 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 .appearance-global > * { min-width: 0; }
 
-/* 「主题配色」的三个色点。
+/* 「主题配色」的四个色点。
    原来是左上角一颗「循环」按钮：点一下换下一套，想知道一共有几套、现在在哪套
-   只能一路点下去。摊成三选一之后一眼看全，选中的那项用主题色描边 + 淡底，
-   跟界面上其它「选中态」是同一套语言。 */
-.accent-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
+   只能一路点下去。摊成四选一之后一眼看全，选中的那项用主题色描边 + 淡底，
+   跟界面上其它「选中态」是同一套语言。
+
+   ⚠️ 布局规则**不在这里** —— 在文件后部那条 `.accent-swatches`
+   （2026-10-12 晚改的：未选中的收成纯色点之后，四套**并排一行**放得下，
+   这正是稿子切片 A 的样子）。
+   ⛔ 这里曾有一条 `display:grid; repeat(2, max-content)`（2×2），理由是
+   「放不下四个一行、实测折成 3+1」—— 那个结论在**色点收窄之前**成立，
+   之后就不成立了。两条规则同权重、后部那条赢，于是这条一直是死规则，
+   却会把下一个读注释的人引向错的修法（「把它改回 2×2」）。已删。 */
 
 .accent-swatch {
   display: inline-flex;
@@ -5019,8 +5181,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text);
 }
 
-/* 色点里那颗圆：三套配色的主色写死在这儿（对应 :root / [data-accent] 里的 --accent）。
-   ⚠️ 以后改配色，这三行的色值要跟着一起改。 */
+/* 色点里那颗圆：四套配色的主色写死在这儿（对应 :root / [data-accent] 里的 --accent）。
+   ⚠️ 以后改配色，这几行的色值要跟着一起改。
+
+   每个配色**分两档写**，跟 --accent 一样 —— 一个值在两种底上不可能都好看：
+   · 浅色档（下面的默认那四行）：点在白卡（#fff）上，要用压深的那个
+     （亮琥珀 #e8b84b 在白底上只有 1.9:1，糊成一坨）。
+   · 夜间档（[data-theme='dark'] 那四行）：点在深卡（#16181b）上，要换成亮的那个。
+   色点是「选了会变成什么样」的唯一线索，跟着当前明暗档走才对得上。 */
 .accent-dot {
   width: 14px;
   height: 14px;
@@ -5028,9 +5196,16 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   flex: 0 0 auto;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
 }
+.accent-swatch[data-accent='amber'] .accent-dot { background: #8a6314; }
 .accent-swatch[data-accent='pink'] .accent-dot { background: #d92968; }
 .accent-swatch[data-accent='blue'] .accent-dot { background: #1670b8; }
 .accent-swatch[data-accent='matcha'] .accent-dot { background: #1a7d52; }
+
+/* 夜间档的色点。值对齐各配色 [data-accent='…'][data-theme='dark'] 里的 --accent。 */
+[data-theme='dark'] .accent-swatch[data-accent='amber'] .accent-dot { background: #e8b84b; }
+[data-theme='dark'] .accent-swatch[data-accent='pink'] .accent-dot { background: #fb4d74; }
+[data-theme='dark'] .accent-swatch[data-accent='blue'] .accent-dot { background: #5b9dff; }
+[data-theme='dark'] .accent-swatch[data-accent='matcha'] .accent-dot { background: #4cc98a; }
 
 /* 「白天 / 夜间」——分段控件的画法：一条淡底轨道，选中项填主题色。
    ⚠️ 外层 .field 是 grid，item 默认 stretch 会把轨道拉满整行，
@@ -5120,10 +5295,12 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
    所以轨道自己画：已选部分用主题色，未选部分用和开关同一条轨道色，
    比例靠 --range-fill 这个变量跟着值走（JS 里更新）。
 
-   选择器覆盖两处：外观设置那行（.appearance-row）和设置页里普通的 .field
-   （桌宠「大小」那种，没有 .appearance-row 包着）—— 别让同一个软件里的
-   滑块长得不一样。 */
+   选择器覆盖三处：外观设置那行（.appearance-row）、生成参数那三根（.gen-row）、
+   以及设置页里普通的 .field（桌宠「大小」那种，没有 .appearance-row 包着）——
+   ⚠️ **别让同一个软件里的滑块长得不一样**。2026-10-12 生成参数从浮层搬进右栏时
+   就漏了这一步：滑块没被覆盖，直接露的是 Chromium 默认那套蓝灰色。 */
 .appearance-row input[type="range"],
+.gen-row input[type="range"],
 .field input[type="range"] {
   flex: 1 1 auto;
   min-width: 0;
@@ -5136,6 +5313,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .appearance-row input[type="range"]::-webkit-slider-runnable-track,
+.gen-row input[type="range"]::-webkit-slider-runnable-track,
 .field input[type="range"]::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 999px;
@@ -5147,6 +5325,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .appearance-row input[type="range"]::-webkit-slider-thumb,
+.gen-row input[type="range"]::-webkit-slider-thumb,
 .field input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -5162,6 +5341,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .appearance-row input[type="range"]:focus-visible,
+.gen-row input[type="range"]:focus-visible,
 .field input[type="range"]:focus-visible {
   outline: none;
   border-radius: 999px;
@@ -5176,6 +5356,11 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
+
+/* 「对话宽度」的左右两行。左边那个「左/右」小标固定宽度 ——
+   不固定的话两根滑块的起点会错开一两个像素，看着像没对齐。 */
+/* ⛔ `.appearance-pad-tag` / `.appearance-pad-row` 删于 2026-10-12 晚：
+   对话宽度那一行早搬去顶栏弹层、当天又搬去消息区两侧的抓手，这里只剩残骸。 */
 
 /* 「大小」那个百分比标签：跟在 label 文字后面，小而弱 */
 .field-badge {
@@ -5193,7 +5378,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   height: 30px;
   padding: 2px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg-input);
   cursor: pointer;
 }
@@ -5203,7 +5388,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .appearance-bg-preview {
   margin-top: 8px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   max-height: 120px;
 }
@@ -5368,7 +5553,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   gap: 6px 14px;
   padding: 9px 11px;
   border: 1px solid var(--border-soft);
-  border-radius: 9px;
+  border-radius: var(--radius);
   background: var(--bg-side);
 }
 
@@ -5381,7 +5566,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .memory-empty {
   padding: 22px 16px;
   border: 1px dashed var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   text-align: center;
   font-size: 12px;
   line-height: 1.7;
@@ -5395,7 +5580,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .modal-body .memory-card {
   padding: 11px 13px;
   border: 1px solid var(--border-soft);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--bg-card);
   max-width: none;
 }
@@ -5413,7 +5598,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 摘要正文：保留换行和空行 */
 .memory-card-text {
   padding: 9px 11px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-side);
   font-size: 12.5px;
   line-height: 1.75;
@@ -5447,7 +5632,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   margin: 4px 0 14px;
   padding: 11px 13px;
   border: 1px solid var(--border-soft);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--bg-side);
 }
 
@@ -5470,7 +5655,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   gap: 8px;
   padding: 6px 9px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
   min-width: 0;
 }
@@ -5496,7 +5681,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   font-size: 11px;
   line-height: 1;
   padding: 3px 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 
 .cwb-row-del:hover { color: var(--danger-text); background: var(--bg-input); }
@@ -5521,7 +5706,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--bg-elev);
   box-shadow: var(--shadow-lg);
 }
@@ -5556,7 +5741,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   text-align: left;
   padding: 9px 11px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text);
   font-family: inherit;
@@ -5603,7 +5788,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .lightbox-img {
   max-width: 92vw;
   max-height: 84vh;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 16px 56px rgba(0, 0, 0, 0.55);
   /* 解码完才显出来，免得先闪一下空白 */
   opacity: 0;
@@ -5655,7 +5840,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   height: 28px;
   min-width: 28px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--text-faint);
 }
 .lightbox-bar .btn.icon-btn svg { width: 17px; height: 17px; }
@@ -5764,7 +5949,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   min-width: 30px;
   height: 22px;
   padding: 0 7px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--accent-soft-strong);
   color: var(--accent);
   font-size: 12px;
@@ -5885,7 +6070,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   display: inline-block;
   margin: 0 6px;
   padding: 1px 7px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--accent-soft-strong);
   color: var(--accent);
   font-size: 11px;
@@ -5967,7 +6152,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   min-width: 44px;
   margin-right: 6px;
   padding: 1px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 700;
   text-align: center;
@@ -6039,7 +6224,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   position: relative;
   width: 15px;
   height: 15px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: var(--bg-input);
   border: 1.5px solid var(--border);
   transition: background 0.15s, border-color 0.15s;
@@ -6183,3 +6368,893 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text);
   word-break: break-word;
 }
+
+/* ==========================================================================
+   2026-10-12 · 按设计稿补回「三栏 + 顶栏图标按钮 + 侧栏搜索框」
+
+   这一整块是**新增**的，不改上面任何既有规则 —— 原来这套界面在 2026-09-30
+   撤掉过右栏（.chat-col 的注释里还留着那句话），这次按设计稿把它加回来。
+   ========================================================================== */
+
+/* ---- 聊天这一屏改成「对话列 + 右侧在场角色面板」两栏 ----
+   ⚠️ 只覆盖 #view-chat：角色库 / 世界书 / 设置那几个视图仍然是上下单列。 */
+#view-chat {
+  flex-direction: row;
+}
+
+.cast-panel {
+  flex: 0 0 264px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-side);
+  border-left: 1px solid var(--border);
+  /* ⚠️ min-width: 0 是**必须的**，不是保险。
+     flex item 的 min-width 默认是 auto（= 内容宽度），里面的长文本
+     （世界书名、字段值）会把这一栏撑宽；撑出主区就是一条**横向滚动条**，
+     而横向滚动条一出现，视口高度立刻少 15px —— 所有按尺寸算出来的东西
+     （图片适应、裁剪框比例、按坐标点击）都会跟着飘。
+     2026-10-12 加这一栏时就是漏了它，让两条跟图片有关的断言一起变红，
+     查了半天才发现根因在这儿。 */
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cast-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+/* ---- 两个页签：在场角色 / 生成参数 ----
+   ⚠️ 2026-10-12 晚才有这一层：生成参数原来是**另一个浮层**（#gen-drawer）从右边盖住
+   这一栏，两者抢同一个右边缘。改成同一栏的两个页签之后对话列宽度一点不变。
+   做成「分段控件」（一条浅底轨道上两颗按钮），跟「明暗」那两颗粒子同一套语言。 */
+.cast-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+
+.cast-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.cast-tab:hover {
+  color: var(--text);
+}
+
+.cast-tab.active {
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+.cast-tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.cast-head-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.cast-tab.active .cast-head-count {
+  color: var(--accent);
+}
+
+.cast-collapse {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-faint);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cast-collapse:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.cast-divider {
+  flex: 0 0 1px;
+  height: 1px;
+  background: var(--border);
+}
+
+.cast-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+
+/* 一个在场角色 = 一块。全空的时候整栏收起来（.hidden），不占那 264px。 */
+.cast-card {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.cast-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ⚠️ 这里**绝对不能写 background**。
+   `castPanel.js` 给每颗头像挂的是 `entityTone(owner, name)` → `.g1`…`.g6` / `.gme`，
+   和这条同权重 (0,1,0)；而这条在文件里靠后得多 —— 一旦写上 background，
+   `entityTone` 就是死代码，右栏每颗字母头像都变成同一个主色
+   （2026-10-12 实测：同一张卡，消息区是绿的、右栏是琥珀的）。
+   写这条时 `notes-ui.md` 已经明令过「avatar 规则里一律不许写 background」。
+   （`.panel-avatar` / `.sc-avatar` / `.convo-avatar` / `.topbar-avatar` 都遵守了。） */
+.cast-card-avatar {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-accent);
+}
+
+.cast-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 名字 + 身份（两行，稿子 d-rightrail：`谢临舟` / `掌柜 · 在场`）。
+   ⚠️ 角色卡里**没有「身份」这个字段**，所以第二行只放得到「在场 / 你」——
+   不为了凑稿子去造数据；等角色卡有了这个字段，往 .cast-card-role 里填就行。 */
+.cast-card-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cast-card-name {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.cast-card-role {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.cast-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.cast-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cast-field-name {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.cast-field-value {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+/* 数值进度条（好感这类 meter）：3px 高，已填充用强调色。
+   ⚠️ 它和数值**同一行**（稿子 d-rightrail：`好感 ▬▬▬▬ 62`），
+   所以在这里吃满剩余宽度就够了 —— 不要再把它排成字段下面单独一行。 */
+.cast-meter {
+  flex: 1 1 auto;
+  min-width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.cast-meter-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.cast-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+}
+
+.cast-foot-text {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.cast-foot-hit {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ok-text);
+}
+
+/* ---- 顶栏图标按钮（设计稿：26×26、方角、深底 + 细描边）----
+   可发现性交给 title —— 这三颗不写文字，是为了给标题下面那行元信息腾地方。 */
+.topbar-icon {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.topbar-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.topbar-icon:hover,
+.topbar-icon[aria-expanded='true'] {
+  color: var(--accent);
+  border-color: var(--accent-border-soft);
+}
+
+.topbar-icon:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---- 侧栏品牌行的版本号 ---- */
+.brand-version {
+  flex: 0 0 auto;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+/* ⛔ 侧栏搜索框那套（.convo-search / .convo-search-icon / .convo-search-input）
+   2026-10-12 晚整块删掉了 —— 星宝：「去掉搜索对话功能」。
+   它只匹配会话**标题**、不搜消息正文，做了一半不如不做；
+   真要做就做全局搜索（标题 + 正文），那时这里再建新的一套。 */
+
+/* ---- 消息区两侧的宽度抓手（设计稿：16×16 方角小把手，贴在消息流左右）----
+   常态很淡，鼠标进消息区 / 拖拽时才亮起来 —— 它是常驻的可拖元素，
+   但没必要一直在正文两边晃。 */
+.pad-handle {
+  position: absolute;
+  z-index: 20;
+  width: 16px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-faint);
+  cursor: col-resize;
+  /* 常驻但别太吵：它一直挂在正文两边，0.45 在深底上几乎看不见（出图时差点
+     被当成「没渲染出来」），0.8 是既能看见、又不抢正文的档。 */
+  opacity: 0.8;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.pad-handle svg {
+  width: 10px;
+  height: 10px;
+}
+
+.pad-handle:hover,
+.pad-handle.dragging {
+  opacity: 1;
+  color: var(--accent);
+  border-color: var(--accent-border-soft);
+}
+
+.pad-handle:focus-visible {
+  outline: none;
+  opacity: 1;
+  box-shadow: var(--focus-ring);
+}
+
+/* 拖动时显示的那个「左内缩 224px · 可拖动」小标签 */
+.pad-badge {
+  position: absolute;
+  z-index: 21;
+  padding: 3px 7px;
+  border: 1px solid var(--accent-border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--accent);
+  font-size: 11px;
+  font-family: Consolas, "Courier New", monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* 抓手贴在消息流左右两侧的中间高度。挂在 .chat-col 上（它是 position:relative），
+   ⚠️ 不能挂进 .messages —— 那个容器 overflow-y:auto，绝对定位的把手会跟着正文一起滚走。 */
+.pad-handle[data-side='left'] {
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.pad-handle[data-side='right'] {
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* 拖动时那条虚线：**落在松开后会到的地方**，不是跟着鼠标走。
+   竖直范围由 chatPad.js 按消息区算（top/height），不然会穿过顶栏和输入框。 */
+.pad-guide {
+  position: absolute;
+  width: 0;
+  border-left: 1px dashed var(--accent);
+  opacity: 0.85;
+  pointer-events: none;
+  /* 比抓手低一层：虚线是提示，抓手才是能按的东西 */
+  z-index: 19;
+}
+
+/* ---- 右栏收起态 ----
+   收成一根窄条，只留那颗方向按钮 —— 收起和展开在**同一个位置**，
+   不用去别处找「怎么打开它」。 */
+.cast-panel.collapsed {
+  flex-basis: 34px;
+}
+
+.cast-panel.collapsed .cast-head {
+  justify-content: center;
+  padding: 12px 0;
+}
+
+/* 收起态只留那颗方向按钮 —— 页签、两个身体、两个脚注全藏掉。
+   ⚠️ 加新东西进这一栏时记得回到这里补一行，否则它会**在 34px 的窄条里露出来**。 */
+.cast-panel.collapsed .cast-tabs,
+.cast-panel.collapsed .cast-divider,
+.cast-panel.collapsed .cast-body,
+.cast-panel.collapsed .cast-foot,
+.cast-panel.collapsed .gen-body,
+.cast-panel.collapsed .gen-foot {
+  display: none;
+}
+
+/* 对话区宽度那个顶栏弹层（.pad-pick / .pad-pop + 两根滑块）2026-10-12 晚整块删掉了 ——
+   星宝：「头部的对话区宽度可以去掉，因为聊天框里已经可以调宽度了」。
+   调宽度只剩消息区两侧那两根抓手，拖动时浮出的 .pad-badge 负责报准确值。 */
+
+/* 拖宽度的时候：整页锁定指针样式、别选中正文（不然拖一下就糊一片蓝） */
+body.pad-dragging {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* ---- 日期分隔（「——— 今天 · 第 12 轮 ———」）----
+   只在跨天时出现，是那一段消息的抬头。两条线各自撑满剩余宽度，文字居中。 */
+.msg-date-sep {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.msg-date-line {
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border);
+}
+
+.msg-date-text {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* ---- 外观面板：主题配色（设计稿切片 A）----
+   未选中的收成一个**纯色点**（去掉胶囊底和描边），选中的那颗才把名字显出来 ——
+   四套并排一行就摆得下，也不用挨个读一遍才知道有几套。
+   ⚠️ 名字得包在 .accent-label 里才藏得掉，见 index.html 里那段注释。 */
+.accent-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.accent-swatch .accent-label {
+  display: none;
+}
+
+.accent-swatch[aria-checked='true'] .accent-label {
+  display: inline;
+}
+
+.accent-swatch:not([aria-checked='true']) {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+  border-color: transparent;
+  background: none;
+}
+
+/* ==========================================================================
+   2026-10-12 · 侧栏 + 输入区按设计稿对齐（星宝：「样式没统一」）
+
+   前面那批改的是消息区和主区骨架，这两块还留着旧的那套「聊天软件」语言：
+   260px 宽的侧栏、渐变品牌字、圆头像圆角 12 的会话项、860px 居中的胶囊输入框。
+   这一块只做「把语言换过来」，不动任何结构（除了会话项那一行）。
+   ========================================================================== */
+
+/* ---- 侧栏 ---- */
+.sidebar {
+  /* position: relative 是给那颗收起按钮当定位基准的 */
+  position: relative;
+  width: 232px;
+  flex: 0 0 232px;
+  padding: 12px 10px;
+  gap: 10px;
+}
+
+/* 收起 / 展开按钮：常态在品牌行右端，收起后挪到窄条正中间 */
+.sidebar-toggle {
+  position: absolute;
+  top: 14px;
+  right: 8px;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-faint);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sidebar-toggle:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* 收起态 = 设计稿屏 2 的**图标轨**（52 宽，x=0..51 是面板色）。
+   稿子里的排布（逐行量出来的）：品牌方块 y≈10..31 → 通栏分隔线 y=36 →
+   6 颗图标（角色库/世界书/预设/帮助/设置/数据，行距 ≈34）→ 最底下当前会话头像 y≈866。
+   ⚠️ 那 6 颗在稿子里是**在顶部**（紧跟品牌块），不是留在底部 ——
+      所以收起态要用 order 把它们挪上去，并把 .sidebar-foot 从 3 列网格改成 1 列。 */
+.sidebar.collapsed {
+  width: 52px;
+  flex: 0 0 52px;
+  padding: 10px 8px 12px;
+  gap: 6px;
+}
+
+/* 收起态藏掉的都是展开态才成立的东西：新对话按钮 / 名字 / 版本号 / 列表标题 / 列表本体。
+   ⚠️ 别写成 `> *:not(.sidebar-toggle) { display: none }` —— 那样连图标轨要用的
+   品牌方块、6 颗入口、会话头像一起藏掉，收起来就是一根空条（2026-10-12 之前就是这样）。 */
+.sidebar.collapsed #btn-new,
+.sidebar.collapsed .brand-name,
+.sidebar.collapsed .brand-version,
+.sidebar.collapsed #convo-cap,
+.sidebar.collapsed #convo-list {
+  display: none;
+}
+
+.sidebar.collapsed .brand {
+  order: 1;
+  width: 100%;
+  justify-content: center;
+  padding: 2px 0 8px;
+  /* 稿子 y=36 那条通栏分隔线（品牌块下沿） */
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar.collapsed .brand-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+}
+
+/* 展开按钮：⚠️ 稿子的图标轨里**没画**这一颗（它只有品牌块 + 6 颗图标 + 会话头像），
+   但没有它就出不去。放在品牌块正下方做一颗很淡的箭头，不抢图标轨的节奏。
+   （展开态它在右上角；收起态改成参与 flex 流 —— 绝对定位会和品牌方块叠在一起。） */
+.sidebar.collapsed .sidebar-toggle {
+  position: static;
+  order: 2;
+  width: 20px;
+  height: 20px;
+  margin: 0 auto;
+  font-size: 12px;
+}
+
+.sidebar.collapsed .sidebar-foot {
+  order: 3;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding-top: 0;
+}
+
+/* 通栏分隔线只在展开态画（收起态那条已经在品牌块下面了） */
+.sidebar.collapsed .sidebar-foot::before {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-foot .btn {
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.sidebar.collapsed .foot-label {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-foot .btn svg {
+  opacity: 1;
+}
+
+/* 当前会话的头像：展开态整颗不显示（「我在哪个会话」由列表的选中态说），
+   收起态贴在最底下 —— 稿子 y≈866 那个 20px 方角图。 */
+.rail-avatar {
+  display: none;
+}
+
+.sidebar.collapsed .rail-avatar {
+  order: 4;
+  display: grid;
+  place-items: center;
+  margin: auto auto 0;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--on-accent);
+}
+
+.sidebar.collapsed .rail-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* ⚠️ 这里同样**不许写 background** —— 它的按人配色来自 entityTone 的 .g1~.g6。
+   这条是那个**例外**：没绑角色的会话（`plain`）本来就没有 tone 类，
+   不给它一个中性底就是一颗几乎看不见的「·」。 */
+.rail-avatar.plain {
+  background: var(--border-soft);
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.rail-avatar.book {
+  border-radius: var(--radius);
+}
+
+.brand {
+  gap: 8px;
+  /* 右边留 24px：那颗「收起侧栏」按钮是绝对定位在右上角的，
+     不给它让位就会正好压在版本号「v1.0」上面。 */
+  padding: 4px 24px 4px 6px;
+}
+
+/* 品牌标记：稿子是一个 16×16 的**方角琥珀块**。
+   原来那个会呼吸的渐变圆点是「聊天软件」时期的符号，跟这套方角语言不搭。 */
+.brand-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  box-shadow: none;
+  animation: none;
+}
+
+.brand-name {
+  margin-right: auto;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  /* ⚠️ 原来这行字是渐变填充（background-clip: text + text-fill-color: transparent）。
+     光写 color 没用 —— -webkit-text-fill-color 的优先级比 color 高，
+     必须把它显式改回实色，否则字还是渐变的（甚至可能整行看不见）。 */
+  background: none;
+  -webkit-background-clip: border-box;
+  -webkit-text-fill-color: var(--text);
+  color: var(--text);
+}
+
+/* 会话项：稿子是「头像 + 名字 + 时间」一行、高 34、方角 4 */
+/* 当前会话：左边一条 2×18 的琥珀竖线（稿子里的选中标记）。
+   上一版把它去掉了 —— 那时候条目是白底卡片，靠底色 + 阴影就够；
+   现在条目是深色底，光靠一点点底色差根本分不出哪条是当前。 */
+.convo-item {
+  position: relative;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px;
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+
+.convo-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.convo-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 18px;
+  border-radius: 1px;
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+
+/* 右端那个时间：今天给时刻、昨天给「昨天」、一周内给星期几、更早给日期 */
+.convo-time {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+/* ---- 输入区 ----
+   稿子这块是「方角 + 1px 描边 + 深底」的一整块，不是浮在页底上的白胶囊：
+   胶囊 + 阴影 + 860px 居中那套是上一版的语言。 */
+.composer {
+  padding: 10px 14px 12px;
+}
+
+.composer-box {
+  max-width: none;
+  margin: 0;
+  gap: 8px;
+  padding: 10px;
+  min-height: 64px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  box-shadow: none;
+}
+
+.composer-box:focus-within {
+  border-color: var(--accent-border-soft);
+  box-shadow: none;
+}
+
+/* 输入框自己在 .composer-box 里，不要再画一层框 */
+.composer-box #input {
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* 发送按钮：稿子 70×32、方角，不再跟着输入框长高 */
+.composer-box .btn-send {
+  flex: 0 0 auto;
+  min-width: 70px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+}
+
+/* 建议条：一行放下「标题 → 胶囊 → 收起」 */
+.suggest-strip {
+  max-width: none;
+  margin: 0 0 9px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.suggest-title {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.suggest-list {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.suggest-close {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* 底部那行提示：跟输入框同宽，不居中 */
+.composer-hint {
+  max-width: none;
+  margin: 0;
+  padding: 0 2px;
+}
+
+/* ---- 生成参数（右侧那一栏的**第二个页签**）----
+   ⚠️ 2026-10-12 晚：它原来是独立的浮层 #gen-drawer（320px、盖住右栏、还把对话列挤窄 264）。
+   现在它是右栏里的一个页签，所以宽度、底色、边框全都不归它管 —— 只排内容。
+   参数按会话存：滑过 = 这一局改过，没滑过 = 跟随预设 / 全局。 */
+.gen-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 12px;
+}
+
+.gen-preset-line {
+  margin: 0 0 2px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.gen-preset {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* 分组小标题：稿子屏 2 里标题右边还拖着一条细线（「采样 ────────」），
+   作用是**把分组切开**、又不占一行的分隔距离。
+   ⚠️ 稿子对这一栏就是这么画的；但**状态卡**那边不许这么干
+   （`notes-ui.md` 的「分组、字段行不画分隔线」说的是状态卡那种一屏十几行的地方）。 */
+.gen-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--text-faint);
+}
+
+.gen-group-title::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border);
+}
+
+.gen-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gen-label {
+  flex: 0 0 auto;
+  width: 48px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* 滑块：吃满剩余宽度（轨道样式复用文件里那条通用 input[type=range] 规则） */
+.gen-range {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 右端那个数值：**主色 = 这一局自己定的**，灰色 = 跟随预设 / 全局。
+   ⚠️ 这是滑块方案唯一的「没设过」表达方式 —— 滑块本身没法为空。 */
+.gen-value {
+  flex: 0 0 auto;
+  min-width: 44px;
+  text-align: right;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.gen-value.is-own {
+  color: var(--accent);
+}
+
+.gen-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+
+.gen-foot {
+  flex: 0 0 auto;
+  padding: 10px 12px 12px;
+}
+
+.gen-foot .btn {
+  width: 100%;
+}
+
+/* ⛔ `#view-chat.with-drawer` 那两条（开抽屉时把在场角色栏 display:none、
+   再把对话列 margin-right 264px 挤窄）2026-10-12 晚一起删了 ——
+   生成参数变成右栏的第二个页签之后，**根本不存在「谁让位」这回事**：
+   对话列宽度从始至终不变，开参数不会让正文跳一下。
+   这也正是选「页签」而不是「覆盖 / 挤窄」的原因（见 CHANGELOG 第五批）。 */

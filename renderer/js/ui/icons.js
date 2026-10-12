@@ -15,6 +15,12 @@
 // ============================================================================
 
 const ICONS = {
+  // 搜索 —— 放大镜（侧栏「搜索会话」）
+  search:
+    '<circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/>',
+  // 对话宽度 —— 左右箭头夹一条竖线（顶栏那颗按钮 + 消息区两侧的抓手）
+  width:
+    '<path d="M8 8 5 12l3 4"/><path d="M16 8l3 4-3 4"/><line x1="12" y1="5" x2="12" y2="19"/>',
   // 角色描述 —— 一个人
   user:
     '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
@@ -84,7 +90,7 @@ const ICONS = {
  * @param {string} name ICONS 里的键
  * @returns {string} 找不到时返回空串（调用方自行决定要不要插）
  */
-function iconSvg(name) {
+export function iconSvg(name) {
   // Object.hasOwn 而不是 ICONS[name]：后者会走原型链，ICONS['constructor'] 之类的
   // 会取到函数/对象，再被 insertAdjacentHTML 拼进 DOM。现在 data-icon 全是硬编码的、
   // 不可达，但这属于「不该留着」的一类写法，一行就能堵上。

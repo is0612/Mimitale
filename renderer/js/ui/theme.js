@@ -57,10 +57,16 @@ export function setTheme(theme) {
 
 // 名字给外观弹窗里的色点标签和提示用
 const ACCENT_NAME = {
+  amber: '琥珀灯',
   pink: '草莓奶昔',
   blue: '苏打气泡',
   matcha: '抹茶奶绿'
 };
+
+// 认不出来的 accent 退回它。⚠️ 要和 main/providers.js 的 fallback、
+// preload.js 的 initialAccent 三处一致 —— 否则「配置文件里是个脏值」时，
+// 首屏和后续渲染会切到两套不同的配色上。
+const DEFAULT_ACCENT = 'amber';
 
 function isAccent(value) {
   return Object.prototype.hasOwnProperty.call(ACCENT_NAME, value);
@@ -68,11 +74,11 @@ function isAccent(value) {
 
 function currentAccent() {
   const value = document.documentElement.getAttribute('data-accent');
-  return isAccent(value) ? value : 'pink';
+  return isAccent(value) ? value : DEFAULT_ACCENT;
 }
 
 export function applyAccent(accent) {
-  const next = isAccent(accent) ? accent : 'pink';
+  const next = isAccent(accent) ? accent : DEFAULT_ACCENT;
   document.documentElement.setAttribute('data-accent', next);
 
   const group = el.appearanceAccents;
@@ -84,7 +90,7 @@ export function applyAccent(accent) {
 
 /** 切配色（外观弹窗点色点）。选的就是当前那个的话什么都不做。 */
 export function setAccent(accent) {
-  const next = isAccent(accent) ? accent : 'pink';
+  const next = isAccent(accent) ? accent : DEFAULT_ACCENT;
   if (next === currentAccent()) return;
 
   applyAccent(next);

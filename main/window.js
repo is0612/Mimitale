@@ -10,7 +10,7 @@
 //  改 main.js / main/* / preload.js 仍然要重启 —— 它们只在启动时读一次。
 // ============================================================================
 
-const { BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -21,10 +21,15 @@ let mainWindow = null;
 // 窗口底色跟着主题 + 配色方案走，启动时就不会先闪一下别的颜色。
 // 这两个值必须和 style.css 里 --bg 保持一致（改配色时两边一起改）——
 // 之前是 #1a1d23，但 style.css 的夜间 --bg 是 #17161b，启动会闪一下，这里对齐掉。
+// ⚠️ 2026-10-12：夜间 --bg 从紫调 #17161b 换成了**中性灰 #101113**，
+//    三套配色的 dark 值跟着一起改 —— 不改就等于每次启动先闪一下旧紫底。
+//    同一天加了第 4 套配色 amber（默认），这里必须一起补，否则
+//    `WINDOW_BG['amber']` 是 undefined，会兜回 pink 的粉色底。
 const WINDOW_BG = {
-  pink: { light: '#fff5f8', dark: '#17161b' },
-  blue: { light: '#f4f9ff', dark: '#17161b' },
-  matcha: { light: '#f3faf5', dark: '#17161b' }
+  amber: { light: '#f4f5f7', dark: '#101113' },
+  pink: { light: '#fff5f8', dark: '#101113' },
+  blue: { light: '#f4f9ff', dark: '#101113' },
+  matcha: { light: '#f3faf5', dark: '#101113' }
 };
 
 // 窗口尺寸 —— **只有这一处定义**。
@@ -80,7 +85,9 @@ function createWindow() {
   try {
     const saved = loadSettings();
     theme = saved.theme === 'dark' ? 'dark' : 'light';
-    accent = ACCENTS.includes(saved.accent) ? saved.accent : 'pink';
+    // 兜底要和 providers.js 的 normalizeSettings / preload.js / ui/theme.js 三处一致，
+    // 别在这儿写死一个旧配色名（以前写的是 'pink'）。
+    accent = ACCENTS.includes(saved.accent) ? saved.accent : ACCENTS[0];
   } catch (err) {
     // 读不到设置就用默认主题，不影响启动
   }
@@ -91,7 +98,7 @@ function createWindow() {
     // 本机屏幕 1920×1080、工作区 1920×1040，边框再吃掉一点也放得下。
     ...WINDOW_SIZE,
     useContentSize: true,
-    backgroundColor: (WINDOW_BG[accent] || WINDOW_BG.pink)[theme],
+    backgroundColor: (WINDOW_BG[accent] || WINDOW_BG[ACCENTS[0]])[theme],
     title: '如我所书',
     autoHideMenuBar: true,
     webPreferences: {
@@ -100,7 +107,13 @@ function createWindow() {
       nodeIntegration: false,
       spellcheck: false,
       // 把主题提前告诉 preload，让它在首屏渲染前就打好标记
-      additionalArguments: [`--mimitale-theme=${theme}`, `--mimitale-accent=${accent}`]
+      additionalArguments: [
+        `--mimitale-theme=${theme}`,
+        `--mimitale-accent=${accent}`,
+        // 版本号同路：侧栏品牌行要显示它，而渲染层是无构建、无 Node 的，
+        // 读不到 package.json —— 只能在启动时从主进程递进去。
+        `--mimitale-version=${app.getVersion()}`
+      ]
     }
   });
 

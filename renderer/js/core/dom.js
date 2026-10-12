@@ -12,6 +12,13 @@ export const el = {
   convoList: $('convo-list'),
   // 会话列表头上的分组标签（「最近 · 5」，条数由 renderConvoList 填）
   convoCap: $('convo-cap'),
+  // 左栏收起 / 展开（收成 52px 图标轨，点同一颗回来）
+  btnSidebarToggle: $('btn-sidebar-toggle'),
+  // 图标轨最下面那颗：当前会话的头像（只在收起态显示，由 renderConvoList 填）
+  railAvatar: $('rail-avatar'),
+  // ⛔ 侧栏搜索框 2026-10-12 晚去掉了（星宝要求），这里不再登记 #convo-search
+  // 品牌行右端的版本号，值从 preload 的 appVersion 来（main.js 启动时填）
+  brandVersion: $('brand-version'),
   convoTitle: $('convo-title'),
   convoMeta: $('convo-meta'),
   // 顶栏左边那颗头像 + 标题旁边的小胶囊（都是 renderHeader 填的）
@@ -62,6 +69,31 @@ export const el = {
   panelCastCount: $('panel-cast-count'),
   // 「全部展开 / 全部收起」批量开关（在入口条那一行的右端）
   btnCardsAll: $('btn-cards-all'),
+  // 右侧常驻的「在场角色 / 生成参数」面板（2026-10-12 按设计稿加回的第三栏）。
+  // ⚠️ 当天晚些时候它从「一栏 + 一个盖住它的抽屉」改成了**两个页签**：
+  //    · 在场角色：每角色一块（只读，点一块开状态卡）
+  //    · 生成参数：按会话存的采样参数（原来那个 #gen-drawer 浮层搬进来了）
+  castPanel: $('cast-panel'),
+  castPanelCount: $('cast-panel-count'),
+  castPanelBody: $('cast-panel-body'),
+  castFoot: $('cast-foot'),
+  castFootBook: $('cast-foot-book'),
+  castFootHit: $('cast-foot-hit'),
+  btnCastCollapse: $('btn-cast-collapse'),
+  btnTabCast: $('btn-tab-cast'),
+  btnTabGen: $('btn-tab-gen'),
+  // 生成参数的入口收在「⋯」菜单里（点它 = 切到第二个页签）
+  btnGenParams: $('btn-gen-params'),
+  genBody: $('gen-body'),
+  genFoot: $('gen-foot'),
+  genPreset: $('gen-preset'),
+  genTemperature: $('gen-temperature'),
+  genTemperatureValue: $('gen-temperature-value'),
+  genTopP: $('gen-topp'),
+  genTopPValue: $('gen-topp-value'),
+  genMaxTokens: $('gen-maxtokens'),
+  genMaxTokensValue: $('gen-maxtokens-value'),
+  btnGenReset: $('btn-gen-reset'),
   // 浮动状态卡的容器（铺满对话列、本身不挡鼠标，只有卡片实体可交互）
   stateCards: $('state-cards'),
   // 外观（主题配色 + 明暗管整个界面，字号 / 加粗色 / 背景图只管聊天区）
@@ -73,6 +105,14 @@ export const el = {
   appearanceModes: $('appearance-modes'),
   appearanceFontSize: $('appearance-fontsize'),
   appearanceFontSizeValue: $('appearance-fontsize-value'),
+  // 对话区宽度：⛔ 顶栏那颗按钮 + 它的弹层（#pad-pop / 两根滑块）2026-10-12 晚**去掉了**
+  // （星宝：「聊天框里已经可以调宽度了」）。现在只剩消息区两侧的抓手。
+  // ⚠️ 左右是**两个独立的元素**，不是同一个控件的两处引用：用户要的就是「改一边另一边不动」。
+  padHandleLeft: $('pad-handle-left'),
+  padHandleRight: $('pad-handle-right'),
+  // 拖动时那条虚线（落在「松开后会到的地方」，由 chatPad.js 定位）
+  padGuideLeft: $('pad-guide-left'),
+  padGuideRight: $('pad-guide-right'),
   appearanceBoldColor: $('appearance-boldcolor'),
   appearanceBoldColorText: $('appearance-boldcolor-text'),
   appearanceBgPreview: $('appearance-bg-preview'),

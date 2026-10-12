@@ -23,6 +23,12 @@ import { setAccent, setTheme } from '../ui/theme.js';
 const CHAT_FONT_MIN = 12;
 const CHAT_FONT_MAX = 22;
 const CHAT_FONT_DEFAULT = 14;
+// 对话宽度的左右内缩。20 = 设计稿的消息流内边距；360 是上限，
+// 再大消息区就窄得没法读了（1440 的窗口两侧各 360 只剩 470）。
+// ⚠️ 2026-10-12 起这两个常量是 **export** 的：宽度那套 UI（顶栏弹层 + 两侧抓手）
+//    已经搬到 views/chatPad.js，两边必须同一个上限 —— 别再各写一份。
+export const CHAT_PAD_DEFAULT = 20;
+export const CHAT_PAD_MAX = 360;
 // 读不到主题色时给色盘一个兜底值（正常情况走 currentAccentHex()）
 const BOLD_COLOR_FALLBACK = '#409eff';
 
@@ -55,14 +61,22 @@ export function applyChatAppearance() {
   if (s.chatBoldColor) root.style.setProperty('--chat-bold-color', s.chatBoldColor);
   else root.style.removeProperty('--chat-bold-color');
 
+  // 对话宽度：左右各一个变量，样式表里分别落在 .messages 的左右 padding 上。
+  // 写成同一个值就会「一调两边一起缩」—— 那正是用户不要的行为。
+  // 夹取放在这里再做一遍（主进程已经夹过）：手改过的 config.json 可能绕过保存那条路。
+  for (const [key, cssVar] of [['chatPadLeft', '--chat-pad-left'], ['chatPadRight', '--chat-pad-right']]) {
+    const n = Number(s[key]);
+    const v = Number.isFinite(n) ? Math.min(CHAT_PAD_MAX, Math.max(0, Math.round(n))) : CHAT_PAD_DEFAULT;
+    root.style.setProperty(cssVar, `${v}px`);
+  }
+
   // dataURL 里不会出现引号，包一层更保险
   if (s.chatBackground) root.style.setProperty('--chat-bg-image', `url("${s.chatBackground}")`);
   else root.style.removeProperty('--chat-bg-image');
 }
 
 /** 滑块的「已选比例」是 CSS 渐变画的，所以值一变就得把 --range-fill 同步过去 */
-function syncRangeFill() {
-  const input = el.appearanceFontSize;
+export function syncRangeFill(input) {
   if (!input) return;
 
   const min = Number(input.min) || 0;
@@ -80,8 +94,10 @@ function renderAppearanceForm() {
   const px = Number.isFinite(size) && size >= CHAT_FONT_MIN && size <= CHAT_FONT_MAX ? Math.round(size) : CHAT_FONT_DEFAULT;
   el.appearanceFontSize.value = String(px);
   el.appearanceFontSizeValue.textContent = `${px}px`;
-  syncRangeFill();
+  syncRangeFill(el.appearanceFontSize);
 
+  // ⚠️ 对话宽度**不在这里**了 —— 2026-10-12 搬到顶栏那颗按钮弹出来的面板里
+  //    （views/chatPad.js）。「外观」只管长什么样，宽度管的是版面。
   el.appearanceBoldColorText.value = s.chatBoldColor || '';
   el.appearanceBoldColor.value = s.chatBoldColor || currentAccentHex();
 
@@ -98,7 +114,7 @@ function renderAppearanceForm() {
 }
 
 /** 改一项外观：立刻生效 + 落盘 */
-async function persistAppearance(patch) {
+export async function persistAppearance(patch) {
   state.settings = { ...(state.settings || {}), ...patch };
   applyChatAppearance();
   renderAppearanceForm();
@@ -226,7 +242,7 @@ export function initAppearance() {
   el.appearanceFontSize.addEventListener('input', () => {
     const px = Number(el.appearanceFontSize.value);
     el.appearanceFontSizeValue.textContent = `${px}px`;
-    syncRangeFill();
+    syncRangeFill(el.appearanceFontSize);
     state.settings = { ...(state.settings || {}), chatFontSize: px };
     applyChatAppearance();
   });
@@ -234,6 +250,8 @@ export function initAppearance() {
     persistAppearance({ chatFontSize: Number(el.appearanceFontSize.value) });
   });
 
+  // ⚠️ 对话宽度那两根滑块的接线**不在这里**了 —— 2026-10-12 跟着 UI 一起
+  //    搬到了 views/chatPad.js（顶栏弹层 + 消息区两侧可拖的线）。
   // 加粗颜色：和字号一个道理 —— 色盘拖动时 input 每帧都触发，
   // 只预览不落盘（不然拖一次色盘要写几十次配置文件），松手（change）才落盘。
   // 手填的等回车/失焦再认

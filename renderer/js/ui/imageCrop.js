@@ -253,18 +253,33 @@ export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = '�
         // 目标尺寸比它大就按原样输出 —— 放大只是把同一份信息摊得更糊、文件更大，
         // 一个细节都补不出来（老卡里的小图尤其明显）。
         const srcWidth = Math.max(1, Math.round(vw / scale));
-        const w = Math.max(1, Math.min(outWidth, srcWidth));
+        // 原图这块能给的最大高度，同理。
+        const srcHeight = Math.max(1, Math.round(vh / scale));
+        let w = Math.max(1, Math.min(outWidth, srcWidth));
         // 高度**直接从 w 按整数比算**：w * rh / rw。
         // 中间不能借道视口的取整结果 —— vw/vh 一取整比例就歪了（340 / 453 = 1.3324），
         // 拿它换算出来是 1365 而不是 1536。
-        const h = Math.max(1, Math.round((w * rh) / rw));
+        let h = Math.max(1, Math.round((w * rh) / rw));
+        // ⚠️ 但「按 w 算出来的 h」可能比原图能给的高 1px（w 四舍五入上去的时候：
+        //    134 × 3/2 = 201，而原图那块只有 200 高）。这时**把高度收回上限、
+        //    再按比例回算宽度**（→133），而不是留着它越界。
+        //    「不放大」是这个函数的硬约束；比例失真同样不能接受，所以改宽不改比。
+        //    （2026-10-12：冒烟那条「不放大」的断言就是这么红起来的。）
+        if (h > srcHeight) {
+          h = srcHeight;
+          w = Math.max(1, Math.min(outWidth, Math.round((h * rw) / rh)));
+        }
 
         const out = document.createElement('canvas');
         out.width = w;
         out.height = h;
 
-        // 落笔范围和输出同比例，图片不会被拉扁
-        const k = w / vw;
+        // 落笔范围和输出同比例，图片不会被拉扁。
+        // ⚠️ 取两个方向里**较大的**那个比例：上面「h 超了就收窄 w」那步会把
+        //    k = w / vw 一起带小，于是落笔高度够不到画布底 —— 实测 200 高的画布
+        //    只画到 ≈198.5（w 从 134 收到 133），底边留一条半透明缝。
+        //    取 max 保证盖满画布，多出来的那一丁点被裁掉，跟「不放大」的约束不冲突。
+        const k = Math.max(w / vw, h / vh);
         const octx = out.getContext('2d');
         octx.imageSmoothingEnabled = true;
         octx.imageSmoothingQuality = 'high';
