@@ -44,8 +44,13 @@ function base64Utf8(text) {
  * character_book：这张卡绑定的世界书（导入时自动绑上的那本）。
  * 导出时一起带走，别人拿到这张卡就能直接用上它的背景设定 ——
  * 酒馆也认这个字段，会当成「角色绑定的世界书」。
+ *
+ * ⚠️ 导出（export）：`tools/smoke-test.js` 要拿它验「备选开场白 / 作者 / 版本」
+ *    这三个字段**能被写回去** —— 它们以前在这里写死成空值，而角色编辑器里
+ *    没有它们的输入框，不走这一步就测不到。和 library.js 的 worldbookPayload
+ *    是同一个理由（宿主要能直接调到那个纯函数）。
  */
-function characterCardPayload(character) {
+export function characterCardPayload(character) {
   // 只带第一本：v2 规范里 character_book 是单本（酒馆同样只导出主世界书）
   const boundId = Array.isArray(character.worldbookIds) ? character.worldbookIds[0] : null;
   const boundBook = boundId ? worldbookById(boundId) : null;
@@ -64,10 +69,13 @@ function characterCardPayload(character) {
       system_prompt: character.systemPrompt || '',
       post_history_instructions: character.postHistoryInstructions || '',
       tags: Array.isArray(character.tags) ? character.tags : [],
-      alternate_greetings: [],
+      // 备选开场白要原样带上。⚠️ 这里以前写死成 `[]` —— 等于「导入侧读了也白读」：
+      // 一张带 4 条开场白的卡，导入再导出就被抹成 0 条。读写必须成对。
+      alternate_greetings: Array.isArray(character.alternateGreetings) ? character.alternateGreetings : [],
       ...(boundBook ? { character_book: characterBookPayload(boundBook) } : {}),
-      creator: '',
-      character_version: '',
+      // 同上：creator / character_version 也从角色上带出来，别写死空串
+      creator: character.creator || '',
+      character_version: character.characterVersion || '',
       extensions: {
         mimitale: {
           age: character.age || '',

@@ -134,7 +134,7 @@ export function startWorldPlay(book) {
  * 身份要在绑卡**之前**落到会话上 —— 自动插入的开场白里，{{user}} 得用刚填的名字。
  * 选了角色卡当自己时，那张卡的身份和属性一并种进「我」那张状态卡。
  */
-function startCharacterChat(character) {
+async function startCharacterChat(character) {
   if (!character) return;
 
   const draft = readPlayerDraft();
@@ -148,8 +148,11 @@ function startCharacterChat(character) {
     seedPanelFromCharacters(convo, [draft.card], 'player');
   }
 
-  // 复用「绑定角色」那套：自动插入开场白、自动把会话标题起成角色名
-  applyCharacterChoice(character.id);
+  // 复用「绑定角色」那套：自动插入开场白、自动把会话标题起成角色名。
+  // ⚠️ 必须 await：卡上带多条开场白时，这一步会开「选一条开场白」的弹窗等着，
+  //    后面的 closePlayerModal / showView / el.input.focus 得等它选完再走 ——
+  //    否则底下的身份弹窗先关了、输入框还把焦点抢走，弹窗的键盘操作就废了。
+  await applyCharacterChoice(character.id);
 
   // 绑定之后才并：单卡会话里挑一张卡当自己，而这张卡（或同名角色）正好
   // 又是 TA 自带世界书里的副本 —— 同上，合并成「我」一份。

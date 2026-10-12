@@ -41,6 +41,17 @@ const MAX_EXPRESSION_KEY = 16;
 // 之后用户还能手工加，所以给一个够用但不会失控的上限。
 const MAX_CHARACTER_WORLDBOOKS = 50;
 
+// 一张卡最多带几条「备选开场白」（同一个角色的不同入场剧本，比如
+// 「男性开场 / 女性开场 / NTR 开场 1 / NTR 开场 2」）。
+// 语料实测：1341 张卡里 424 张带（31%），共 1916 条，单卡最多 29 条 ——
+// 给 50 足够宽松，又能挡住畸形卡把 characters.json 撑爆。
+const MAX_ALTERNATE_GREETINGS = 50;
+// 单条备选开场白的长度上限，和 firstMes 对齐（都是「一段正文」）。
+const MAX_GREETING_CHARS = 10000;
+// 作者名 / 版本号这类元信息的长度上限。语料里通常只有二三十字符，
+// 但转录站的作者字段偶尔塞一长串简介，所以留够、但不无限。
+const MAX_META_CHARS = 100;
+
 /**
  * 世界书 id 列表归一化。
  * 去重、去空、限制条数 —— 和渲染层的 normalizeIdList 一个思路。
@@ -54,6 +65,29 @@ function normalizeWorldbookIds(value) {
     if (!id || out.includes(id)) continue;
     out.push(id);
     if (out.length >= MAX_CHARACTER_WORLDBOOKS) break;
+  }
+  return out;
+}
+
+/**
+ * 备选开场白归一化：去空、去重、限条数、限长度。
+ *
+ * 去重是有必要的 —— 同一张卡里 `first_mes` 和 `alternate_greetings[0]`
+ * 经常一字不差（作者复制粘贴留下的），摆出两条一模一样的选项只会让人以为点错了。
+ * 这里只管数组内部；和 firstMes 的重合由调用方（渲染层的选择器）再滤一道。
+ */
+function normalizeAlternateGreetings(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of value) {
+    if (typeof item !== 'string') continue;
+    // 两端空白先剪掉：卡里的开场白常以空行开头，留着会让预览第一屏是空的
+    const text = item.trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    out.push(text.slice(0, MAX_GREETING_CHARS));
+    if (out.length >= MAX_ALTERNATE_GREETINGS) break;
   }
   return out;
 }
@@ -178,6 +212,8 @@ function normalizeCharacter(raw, source) {
   const portrait = typeof r.portrait === 'string' && r.portrait.startsWith('data:image/') ? r.portrait : '';
   // 表情图（多张，按回复正文里的关键词取用）。空数组就不落这个键。
   const expressions = normalizeExpressions(r.expressions);
+  // 备选开场白（同一张卡的不同入场剧本）
+  const alternateGreetings = normalizeAlternateGreetings(r.alternateGreetings);
 
   return {
     id: typeof r.id === 'string' && r.id ? r.id : newCharacterId(),
@@ -197,6 +233,13 @@ function normalizeCharacter(raw, source) {
     systemPrompt: str(r.systemPrompt, 10000),
     postHistoryInstructions: str(r.postHistoryInstructions, 10000),
     creatorNotes: str(r.creatorNotes, 5000),
+    // 备选开场白。空数组就不落这个键（和 expressions 同理）—— 省得每一张老卡
+    // 存盘后都多出一个空数组，白白撑大 characters.json。
+    ...(alternateGreetings.length ? { alternateGreetings } : {}),
+    // 元信息：作者与版本号。转录站会填（语料里 77% / 65% 有值），
+    // 用来分辨「同一个角色的不同作者 / 不同版本」；没有就是空串。
+    creator: str(r.creator, MAX_META_CHARS).trim(),
+    characterVersion: str(r.characterVersion, MAX_META_CHARS).trim(),
     // 身份三项。酒馆卡规范里没有它们，有些卡会写在 extensions 里，
     // 所以这里有就收、没有就是空（种族不硬塞「人类」，免得给精灵安个人类）。
     age: str(r.age, 40).trim(),
@@ -229,6 +272,7 @@ module.exports = {
   normalizeCharacter,
   normalizeAttributes,
   normalizeExpressions,
+  normalizeAlternateGreetings,
   normalizeOptionsSpec,
   normalizeGender,
   normalizeWorldbookIds,

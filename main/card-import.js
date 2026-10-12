@@ -122,6 +122,24 @@ function attributesFromStatusTemplate(tpl) {
 }
 
 /**
+ * 卡里的备选开场白（同一个角色的不同入场剧本）。
+ *
+ * v2 规范里叫 `alternate_greetings`；另有 `group_only_greetings`
+ * —— 规范上那是「只在群聊里露出来」的那些，我们不做群聊，但它们和前者是
+ * 同一形态的入场剧本，并进来才算不浪费。两处都不是数组时就当没有。
+ *
+ * 这里只做「取出来」，去重 / 限长 / 限条数在 normalizeCharacter 里统一做。
+ */
+function alternateGreetingsFromCard(d) {
+  const out = [];
+  for (const src of [d.alternate_greetings, d.group_only_greetings]) {
+    if (!Array.isArray(src)) continue;
+    out.push(...src);
+  }
+  return out;
+}
+
+/**
  * 从 v3 卡的 `chat_history` 里取开场白。标准 v3 规范没有 chat_history（开场白叫
  * first_mes），但有些站点导出的变体把开场白放在 chat_history[0].messages 里那条
  * assistant 消息。只读第一个 session 的第一条 assistant 消息（纯文本），
@@ -200,10 +218,16 @@ function characterFromCard(card, avatar, source, fallbackName, makeWorldbookId, 
       personality: d.personality,
       scenario: d.scenario || d.world_scenario,
       firstMes,
+      // 备选开场白：绑定角色时给用户挑一条（一张卡带多条时）。
+      // 本批语料 424/1341 张卡带，单卡最多 29 条。
+      alternateGreetings: alternateGreetingsFromCard(d),
       mesExample: d.mes_example || d.example_dialogue || d.char_example_dialogue,
       systemPrompt: d.system_prompt,
       postHistoryInstructions: d.post_history_instructions,
       creatorNotes: d.creator_notes || d.creatorcomment,
+      // 元信息：作者与版本号。转录站会填，用来分辨同一个角色的不同作者 / 版本。
+      creator: d.creator,
+      characterVersion: d.character_version,
       tags: d.tags,
       // 自己导出去的卡会把年龄/性别/种族放在 extensions.mimitale，
       // 这里读回来，导出再导入才是一个闭环（别的软件按规范会原样忽略这段）

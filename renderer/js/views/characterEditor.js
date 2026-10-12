@@ -31,7 +31,7 @@ import { el } from '../core/dom.js';
 import { uid, now } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
-import { button } from '../ui/build.js';
+import { button, h, clear } from '../ui/build.js';
 import { MAX_PANEL_FIELDS } from '../data/panel.js';
 import { MAX_EXPRESSIONS } from '../data/expressions.js';
 import {
@@ -261,6 +261,13 @@ let charDraftPortrait;
 // 正在编辑的表情图草稿：[{ name, keywords, image }]。和形象一样是深拷贝 ——
 // 编辑期间改了不算数，点「保存角色」才写回卡上（见 draftExpressionsOf）。
 let charExpressions = [];
+// 正在编辑的「备选开场白」草稿：同一张卡的多个入场剧本（导入卡常带，单卡最多见过 29 条）。
+// 和表情图一个套路 —— 编辑期改动只留在数组里，点「保存角色」才写回卡上。
+// 上面这些行是动态铺的（条数不定），渲染见 renderAltGreetings。
+let charAltGreetings = [];
+// 条数上限。和主进程那份（main/characters.js 的 MAX_ALTERNATE_GREETINGS）对齐 ——
+// 两边不一致的话，UI 里能加、保存时会被悄悄砍掉，用户会以为丢数据了。
+const MAX_ALT_GREETINGS = 50;
 // 正在编辑的角色「自带世界书」开关。跟头像一样是草稿：改动先留在这里，
 // 保存时才写回角色卡 —— 这样切换开关能立刻反映到界面上。
 let charDraftWbEnabled = true;
@@ -549,6 +556,9 @@ function fillCharForm(character) {
   el.c.personality.value = character.personality || '';
   el.c.scenario.value = character.scenario || '';
   el.c.first.value = character.firstMes || '';
+  // 备选开场白：先深拷贝成草稿，再按草稿把行铺出来（条数不定，不能写死 HTML）
+  charAltGreetings = draftAltGreetingsOf(character);
+  renderAltGreetings();
   el.c.example.value = character.mesExample || '';
   el.c.system.value = character.systemPrompt || '';
   el.c.post.value = character.postHistoryInstructions || '';
@@ -607,7 +617,7 @@ function fillCharForm(character) {
 
   // 长文本框的最后一步：到这儿弹窗才是可见的（上面那些调用方刚摘掉 .hidden），
   // 这时候量高度才量得准。见上面那段注释 —— 在隐藏状态下量会永远得到 84px。
-  syncAutoGrowAll(longTextAreas().map((pair) => pair[0]));
+  syncAutoGrowAll(longTextAreas().map((pair) => pair[0]).concat(altGreetTextAreas()));
   // 角标也一样：值是程序塞进去的，得显式刷一次
   syncAllCharCounts();
 }
@@ -879,6 +889,15 @@ function stashCharForm() {
   character.personality = el.c.personality.value;
   character.scenario = el.c.scenario.value;
   character.firstMes = el.c.first.value;
+  // 备选开场白：空行直接丢掉（多半是「点了添加又没写」）。
+  // 去两端空白 + 去重 + 限条数，口径和主进程的 normalizeAlternateGreetings 一致，
+  // 免得 UI 里存的形状和导入卡不一样。
+  const altGreetings = charAltGreetings
+    .map((s) => String(s == null ? '' : s).trim())
+    .filter((s, i, arr) => s && arr.indexOf(s) === i)
+    .slice(0, MAX_ALT_GREETINGS);
+  if (altGreetings.length) character.alternateGreetings = altGreetings;
+  else delete character.alternateGreetings;
   character.mesExample = el.c.example.value;
   character.systemPrompt = el.c.system.value;
   character.postHistoryInstructions = el.c.post.value;
@@ -1294,6 +1313,126 @@ async function applyFirstMesTemplate() {
   box.setSelectionRange(box.value.length, box.value.length);
 }
 
+// ---------------------------------------------------------------------------
+//  备选开场白：同一张卡的多个入场剧本
+//
+//  数据源是角色卡上的 `alternateGreetings`（导出时写回卡里的 `alternate_greetings`）。
+//  导入侧（main/card-import.js）把 `alternate_greetings` 和 `group_only_greetings`
+//  合并进来；绑定角色时若不止一条，会话页会弹一个选择器让玩家挑。
+//
+//  这里只做纯文本的增删改：条数不定，所以行由 renderAltGreetings 动态铺，
+//  HTML 里只留「列表容器 + 总条数角标 + 添加按钮」三个壳。
+//  行上的字少（序号 / 字数 / ×），正文一律走 textContent —— 卡里的字是不可信内容。
+// ---------------------------------------------------------------------------
+
+/** 从角色卡里取一份备选开场白的**副本**（编辑期改动不碰原数据） */
+function draftAltGreetingsOf(character) {
+  const list = character && Array.isArray(character.alternateGreetings) ? character.alternateGreetings : [];
+  return list
+    .filter((s) => typeof s === 'string' && s.trim())
+    .map((s) => s)
+    .slice(0, MAX_ALT_GREETINGS);
+}
+
+/** 列表里所有备选开场白输入框（量高度 / 聚焦都用得上） */
+function altGreetTextAreas() {
+  return el.c.altList ? Array.from(el.c.altList.querySelectorAll('.alt-greet-text')) : [];
+}
+
+/** 把草稿铺成行。每次增删都整体重铺 —— 条数少，不值得做增量 diff */
+function renderAltGreetings() {
+  const list = el.c.altList;
+  if (!list) return;
+
+  clear(list);
+  charAltGreetings.forEach((text, i) => {
+    const ta = h('textarea', {
+      class: 'alt-greet-text',
+      // id 约定见 charCountNode：`<textarea id>-count` 就是它的字数角标，
+      // 这样 charForm 的 input 委托能顺手把角标刷掉，不用另接一套。
+      id: `c-alt-${i}`,
+      rows: 3,
+      spellcheck: 'false',
+      placeholder: '第 ' + (i + 1) + ' 个入场剧本：定场 → 登场 → 留个话头',
+      value: text,
+      dataset: { index: i }
+    });
+    // 自动增高：不传 key —— 高度记忆是按「字段」记的，而这里行会重排，
+    // 记了反而会错位（删掉第 2 行，第 3 行会继承它的高度）。
+    attachAutoGrow(ta, {});
+
+    list.append(
+      h(
+        'div',
+        { class: 'alt-greet-row', dataset: { index: i } },
+        h(
+          'div',
+          { class: 'alt-greet-head' },
+          h('span', { class: 'alt-greet-no', text: `备选 ${i + 1}` }),
+          h('span', { class: 'field-count', id: `c-alt-${i}-count`, text: `${text.length.toLocaleString()} 字` }),
+          h('button', {
+            class: 'alt-greet-del',
+            type: 'button',
+            title: '删掉这条',
+            'aria-label': `删掉备选 ${i + 1}`,
+            text: '×'
+          })
+        ),
+        ta
+      )
+    );
+  });
+
+  updateAltCountBadge();
+}
+
+/** 字段头那个「N 条」角标。一条都没有就留空，别显示「0 条」占地方 */
+function updateAltCountBadge() {
+  if (!el.c.altCount) return;
+  const n = charAltGreetings.length;
+  el.c.altCount.textContent = n ? `${n} 条` : '';
+}
+
+/** 「＋ 添加一条」：追加一个空行，光标落进去（空行在保存时会被丢掉） */
+function addAltGreeting() {
+  if (charAltGreetings.length >= MAX_ALT_GREETINGS) {
+    showToast(`一张卡最多 ${MAX_ALT_GREETINGS} 条备选开场白`);
+    return;
+  }
+  charAltGreetings.push('');
+  renderAltGreetings();
+
+  const rows = altGreetTextAreas();
+  const last = rows[rows.length - 1];
+  if (last) {
+    last.focus();
+    last.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+/** 删掉第 index 条（草稿级删除，点「保存角色」才落盘） */
+function removeAltGreeting(index) {
+  if (!Number.isInteger(index) || index < 0 || index >= charAltGreetings.length) return;
+  charAltGreetings.splice(index, 1);
+  renderAltGreetings();
+}
+
+/** 列表上的事件委托：删按钮 + 正文输入 */
+function onAltListClick(event) {
+  const del = event.target.closest('.alt-greet-del');
+  if (!del) return;
+  const row = del.closest('.alt-greet-row');
+  removeAltGreeting(row ? Number(row.dataset.index) : NaN);
+}
+
+function onAltListInput(event) {
+  const ta = event.target;
+  if (!ta || !ta.classList || !ta.classList.contains('alt-greet-text')) return;
+  const i = Number(ta.dataset.index);
+  if (Number.isInteger(i) && i >= 0 && i < charAltGreetings.length) charAltGreetings[i] = ta.value;
+  // 字数角标由 charForm 的 input 委托统一刷（靠 id 约定），自动增高由 attachAutoGrow 管。
+}
+
 /** 绑编辑器自己的所有按钮。rerender 由入口层注入 */
 export function initCharacterEditor(injected) {
   actions = { rerender: () => {}, ...(injected || {}) };
@@ -1341,6 +1480,13 @@ export function initCharacterEditor(injected) {
 
   // 「套用开场白模板」：把「定场 → 登场 → 留个话头」三段骨架填进开场白框
   if (el.c.btnFirstTemplate) el.c.btnFirstTemplate.addEventListener('click', applyFirstMesTemplate);
+
+  // 备选开场白：添加按钮 + 列表上的删除/输入（行是动态铺的，所以用委托）
+  if (el.c.btnAltAdd) el.c.btnAltAdd.addEventListener('click', addAltGreeting);
+  if (el.c.altList) {
+    el.c.altList.addEventListener('click', onAltListClick);
+    el.c.altList.addEventListener('input', onAltListInput);
+  }
 
   // 字数角标：手动输入时刷新（回填路径在 fillCharForm 里统一刷过）
   el.charForm.addEventListener('input', (event) => {

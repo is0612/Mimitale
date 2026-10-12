@@ -118,6 +118,18 @@ async function startChatWith(card, opts = {}) {
   if (opts.name) setValue('#player-name', opts.name);
   if (opts.profile) setValue('#player-profile', opts.profile);
   click('#btn-start-play');
+
+  // 卡上带**多条**开场白时会先弹「选一条开场白」等着（worldPlay 的
+  // applyCharacterChoice 里 await 着它）。只有一条的卡不会弹 —— 那时候
+  // 下面这个循环会因为身份弹窗已经关掉而立刻退出，一轮都不空转。
+  for (let i = 0; i < 20 && shown('#player-modal') && !shown('#pick-modal'); i += 1) await sleep(25);
+  if (shown('#pick-modal')) {
+    const rows = $$('#pick-list .pick-item');
+    const idx = Math.min(Math.max(Number(opts.greeting) || 0, 0), Math.max(rows.length - 1, 0));
+    if (rows[idx]) rows[idx].click();
+    await waitFor('「选一条开场白」关掉', () => !shown('#pick-modal'));
+  }
+
   await waitFor('「你是谁」弹窗关掉', () => !shown('#player-modal'));
 }
 
@@ -896,6 +908,92 @@ await scenario('角色编辑器：字数角标与放大编辑', async () => {
   click('#confirm-ok');
   await waitFor('编辑器关闭', () => !shown('#chars-modal'));
   await sleep(120);
+});
+
+// ---------------------------------------------------------------------------
+//  场景：角色编辑器 —— 备选开场白（增 / 删 / 存）
+//    行是动态铺的（条数不定，不能写死 HTML），所以这里真点按钮、真删行，
+//    验证：草稿跟着走、序号重排、字数角标联动、保存后真写进卡。
+//    导入 / 导出那两个方向由 smoke-test.js 的「备选开场白 / 作者 / 版本」覆盖。
+// ---------------------------------------------------------------------------
+await scenario('角色编辑器：备选开场白增删改', async () => {
+  click('#btn-chars');
+  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+
+  const list = byId('c-alt-list');
+  const badge = byId('c-alt-count');
+  check('备选开场白有列表容器', !!list);
+  check('一条都没有时不铺行', list.querySelectorAll('.alt-greet-row').length === 0);
+  check('没条目时总条数角标是空的', badge.textContent.trim() === '', JSON.stringify(badge.textContent));
+
+  // --- 加第一条 ---
+  click('#btn-alt-add');
+  await sleep(60);
+  let rows = $$('#c-alt-list .alt-greet-row');
+  check('点「添加一条」长出一行', rows.length === 1, String(rows.length));
+  check('总条数角标跟着变', badge.textContent === '1 条', badge.textContent);
+  check('行上有序号', rows[0].querySelector('.alt-greet-no').textContent === '备选 1',
+    rows[0].querySelector('.alt-greet-no').textContent);
+
+  const count0 = byId('c-alt-0-count');
+  check('行上带字数角标', !!count0);
+  check('空行的角标是 0 字', !!count0 && count0.textContent === '0 字', count0 && count0.textContent);
+  setValue(rows[0].querySelector('.alt-greet-text'), '甲条');
+  await sleep(60);
+  check('输入后备选的字数角标跟着变', count0.textContent === '2 字', count0.textContent);
+
+  // --- 加第二条 ---
+  click('#btn-alt-add');
+  await sleep(60);
+  rows = $$('#c-alt-list .alt-greet-row');
+  check('再加一条变成两行', rows.length === 2, String(rows.length));
+  check('总条数角标是 2 条', badge.textContent === '2 条', badge.textContent);
+  setValue(rows[1].querySelector('.alt-greet-text'), '乙条');
+  await sleep(40);
+
+  // --- 删掉第一条：剩下的应该是「乙条」，序号要重排回 1 ---
+  click(rows[0].querySelector('.alt-greet-del'));
+  await sleep(60);
+  rows = $$('#c-alt-list .alt-greet-row');
+  check('删掉一行后只剩一行', rows.length === 1, String(rows.length));
+  check('剩下的那条正文是第二条', rows[0].querySelector('.alt-greet-text').value === '乙条',
+    rows[0].querySelector('.alt-greet-text').value);
+  check('序号重排成「备选 1」', rows[0].querySelector('.alt-greet-no').textContent === '备选 1',
+    rows[0].querySelector('.alt-greet-no').textContent);
+  check('总条数角标回到 1 条', badge.textContent === '1 条', badge.textContent);
+
+  // --- 保存并落盘 ---
+  const NAME = '备选开场白测试';
+  setValue('#c-name', NAME);
+  setValue('#c-first', 'F-主开场白');
+  click('#btn-save-char');
+  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await sleep(150);
+
+  const saved = (await savedCharacters()).find((c) => c.name === NAME);
+  check('角色存下来了', !!saved);
+  check(
+    '备选开场白写进了卡',
+    !!saved && JSON.stringify(saved.alternateGreetings) === JSON.stringify(['乙条']),
+    JSON.stringify(saved && saved.alternateGreetings)
+  );
+
+  // --- 收尾：把这张卡删掉 ---
+  // 后面的场景有好几处直接取 `.char-card[0]`（空会话导出 / 开聊问「你是谁」…），
+  // 还留着这张卡会把「第一张卡是谁」整个带偏；而且下面的「卡片上删除」那条
+  // 断言的是「删完就空了」，多一张就再也删不空。所以这里必须清干净。
+  const mine = $$('#char-page-grid .char-card').find(
+    (c) => c.querySelector('.char-card-name') && c.querySelector('.char-card-name').textContent === NAME
+  );
+  check('新建的卡出现在角色库', !!mine);
+  if (mine) {
+    click(mine.querySelector('.char-card-del'));
+    await waitFor('删除确认框出现', () => shown('#confirm-modal'));
+    click('#confirm-ok');
+    await waitFor('卡片删掉', () => !$$('#char-page-grid .char-card-name').some((n) => n.textContent === NAME));
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -8835,6 +8933,166 @@ await scenario('请求记录：列表、原文 JSON、清空', async () => {
   // --- 4) 关掉，别挡着后面的场景 ---
   click('#btn-close-requests');
   await waitFor('请求记录弹窗关掉', () => !shown('#requests-modal'));
+});
+
+// ---------------------------------------------------------------------------
+//  场景：世界书「＋ 事件」——一条一个事件、靠关键词激活
+//
+//  和「套用模板」里那条**常驻**的「事件表」配套：前者给地图、后者给开关。
+// ---------------------------------------------------------------------------
+await scenario('世界书：＋ 事件', async () => {
+  click('#btn-worldbooks');
+  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
+  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
+  await waitFor('世界书弹窗打开', () => shown('#worldbooks-modal'));
+
+  const before = $$('#wb-entry-list .wb-entry').length;
+  click('#btn-wb-add-event');
+  await waitFor('多出一条条目', () => $$('#wb-entry-list .wb-entry').length === before + 1);
+
+  const title = byId('wb-e-title');
+  check('标题预填成「事件：」', title.value.startsWith('事件：'), title.value);
+  // 这一条是整个按钮的重点：事件靠关键词激活，**不常驻**
+  check('新条目不是常驻（靠关键词激活）', byId('wb-e-constant').checked === false, String(byId('wb-e-constant').checked));
+  check('order 预填 888（排在设定那几条之后）', byId('wb-e-order').value === '888', byId('wb-e-order').value);
+  check(
+    '正文带上了填写骨架（含「关键词」的提示）',
+    byId('wb-e-content').value.includes('触发时机') && byId('wb-e-content').value.includes('关键词'),
+    byId('wb-e-content').value.slice(0, 40)
+  );
+  // 焦点落在标题末尾（接着打名字），不是整段选中
+  check(
+    '光标落在标题末尾，不是整段选中',
+    document.activeElement === title && title.selectionStart === title.value.length,
+    `${document.activeElement && document.activeElement.id} @${title.selectionStart}`
+  );
+  check(
+    '左栏那一行跟着出现',
+    $('#wb-entry-list').textContent.includes('事件：'),
+    $('#wb-entry-list').textContent.slice(0, 60)
+  );
+
+  // 和别的条目一样只动草稿：没点保存之前磁盘上不该有它
+  check(
+    '没点「保存」之前不落盘',
+    !((await savedWorldbooks())[0].entries || []).some((e) => String(e.title || '').startsWith('事件：')),
+    '磁盘上已经出现了事件条目'
+  );
+
+  // 收尾：把这条从草稿里删掉，免得影响后面还用这本书的场景
+  const rows = $$('#wb-entry-list .wb-entry');
+  const del = rows[rows.length - 1].querySelector('.wb-entry-del');
+  check('新条目行上有 ×', !!del);
+  if (del) del.click();
+  await waitFor('草稿里删掉了', () => $$('#wb-entry-list .wb-entry').length === before);
+});
+
+// ---------------------------------------------------------------------------
+//  场景：开场白选择器
+//
+//  分两半测：
+//    · 组件那一半（选项渲染 / 点谁返回谁 / Esc 返回 null）—— 直接动态 import
+//      真模块来调，和宿主侧调 worldbookPayload 是同一个路子；
+//    · 接线那一半（只有一条开场白时**不该**弹）—— 走真实点击的开聊流程。
+//  多开场白的完整点击流程需要一张「导入进来就带备选开场白」的卡，
+//  冒烟里的导入夹具没有这个字段，所以那一半靠导入侧的宿主断言覆盖
+//  （见 smoke-test.js 的「备选开场白 / 作者 / 版本」两条）。
+// ---------------------------------------------------------------------------
+await scenario('开场白：选择器组件', async () => {
+  const { pickFromList } = await import(new URL('js/ui/pickList.js', document.baseURI).href);
+
+  // 开着等，先把 DOM 看清楚，再点第二项
+  const HTMLISH = '<b>粗体</b> 不该被解释';
+  const picked = pickFromList({
+    title: '选一条开场白',
+    hint: '测试用',
+    items: [{ text: '第一条' }, { text: '第二条', note: '默认' }, { text: '第三条' }, { text: HTMLISH }]
+  });
+  await waitFor('选择器打开', () => shown('#pick-modal'));
+
+  const rows = $$('#pick-list .pick-item');
+  check('四条候选都渲染出来了', rows.length === 4, String(rows.length));
+  check('标题和说明都填上了', byId('pick-title').textContent === '选一条开场白' && byId('pick-hint').textContent === '测试用',
+    `${byId('pick-title').textContent} / ${byId('pick-hint').textContent}`);
+  check('角标跟着候选项走', (rows[1].querySelector('.pick-item-note') || {}).textContent === '默认',
+    rows[1].textContent.slice(0, 20));
+  // 候选正文一律走 textContent —— 卡里的字是不可信内容，不许当 HTML 解释
+  check(
+    '候选正文里的标签是原样文字（没被解释成 HTML）',
+    rows[3].querySelector('b') === null && rows[3].textContent.includes(HTMLISH),
+    rows[3].textContent.slice(0, 30)
+  );
+
+  click(rows[1]);
+  await waitFor('选择器关掉', () => !shown('#pick-modal'));
+  check('点第二条返回下标 1', (await picked) === 1, String(await picked));
+
+  // 取消那一路：Esc 必须返回 null，而且不能把底下的弹窗一起关掉
+  const cancelled = pickFromList({ title: '再选一次', items: [{ text: '甲' }, { text: '乙' }] });
+  await waitFor('选择器又打开了', () => shown('#pick-modal'));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await waitFor('Esc 后关掉', () => !shown('#pick-modal'));
+  check('Esc 返回 null', (await cancelled) === null, String(await cancelled));
+});
+
+await scenario('导出：备选开场白 / 作者 / 版本', async () => {
+  // 这三个字段在角色编辑器里**没有输入框**（导入专有），导出这一步以前把它们
+  // 写死成空值/空数组 —— 一张带 4 条开场白的卡导入再导出就被抹平。直接调真正的
+  // 导出函数验（和宿主侧调 worldbookPayload 是同一个路子）。
+  const { characterCardPayload } = await import(new URL('js/views/chatExport.js', document.baseURI).href);
+  const d = (
+    characterCardPayload({
+      name: '多开场白测试卡',
+      firstMes: '第一条',
+      alternateGreetings: ['第二条', '第三条'],
+      creator: '某作者',
+      characterVersion: '2.2',
+      tags: []
+    }) || {}
+  ).data || {};
+
+  check('备选开场白写回去了', Array.isArray(d.alternate_greetings) && d.alternate_greetings.length === 2, JSON.stringify(d.alternate_greetings));
+  check('作者写回去了', d.creator === '某作者', JSON.stringify(d.creator));
+  check('版本号写回去了', d.character_version === '2.2', JSON.stringify(d.character_version));
+  check('卡名照旧', d.name === '多开场白测试卡', JSON.stringify(d.name));
+
+  // 没有备选开场白的卡：导出成**空数组**（酒馆规范里那就是「没有」），不是 undefined
+  const plain = (characterCardPayload({ name: 'X', firstMes: '一', tags: [] }) || {}).data || {};
+  check(
+    '没有备选开场白时导出空数组',
+    Array.isArray(plain.alternate_greetings) && plain.alternate_greetings.length === 0,
+    JSON.stringify(plain.alternate_greetings)
+  );
+});
+
+await scenario('开场白：只有一条时不弹选择器', async () => {
+  const NAME = '单开场白测试角色';
+
+  click('#btn-chars');
+  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  setValue('#c-name', NAME);
+  setValue('#c-first', '只有这一条开场白');
+  click('#btn-save-char');
+  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await sleep(200);
+
+  const card = $$('#char-page-grid .char-card').find((c) => c.textContent.includes(NAME));
+  check('找到了这张卡', !!card);
+
+  // 开聊：只有一条开场白，整条流程里选择器一秒都不该出现
+  await startChatWith(card);
+  await waitFor('切到聊天视图', () => shown('#view-chat'));
+  check('只有一条开场白时没有弹过选择器', !shown('#pick-modal'));
+
+  const convo = await activeConvo();
+  const first = (convo.messages || [])[0] || {};
+  check(
+    '开场白照旧自动插进去了',
+    first.greeting === true && String(first.content).includes('只有这一条开场白'),
+    JSON.stringify(String(first.content || '').slice(0, 40))
+  );
 });
 
 return { results, notes, hoverProbe };

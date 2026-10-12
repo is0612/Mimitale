@@ -1918,6 +1918,67 @@ function probeExports(result) {
     detail: roundOk ? '' : roundDetail
   });
 
+  // --- 备选开场白 / 作者 / 版本：**真导入链路**读得进 ---
+  // 这三个字段在角色编辑器里没有输入框（导入专有），所以只能手搓一张 v2 卡
+  // 过一遍真的 parseImportFile + normalizeCharacter。
+  // 「导出写得回」那半在渲染层（probeExports 不是 async，调不了 executeJavaScript），
+  // 见 smoke-renderer.js 的「导出：备选开场白 / 作者 / 版本」。
+  let metaOk = false;
+  let metaDetail = '';
+  try {
+    const withAlt = {
+      spec: 'chara_card_v2',
+      spec_version: '2.0',
+      data: {
+        name: '多开场白测试卡',
+        first_mes: '第一条',
+        // 第二条故意重复、第三条两端带空白 —— 归一化必须去重 + 剪掉两端空白
+        alternate_greetings: ['第二条', '第二条', '   第三条   '],
+        creator: '某作者',
+        character_version: '2.2'
+      }
+    };
+    const imported = parseImportFile({
+      buffer: Buffer.from(JSON.stringify(withAlt), 'utf8'),
+      ext: '.json',
+      fallbackName: 'x',
+      makeWorldbookId: () => 'w-alt',
+      normalizeCharacters: (raw) => normalizeCharacter(raw, 'json')
+    });
+    const c = imported.character || {};
+
+    // 没有备选开场白的卡：不该凭空多出这个键（和 expressions 同理，省存储）
+    const plain = parseImportFile({
+      buffer: Buffer.from(JSON.stringify({ data: { name: '单开场白', first_mes: '一' } }), 'utf8'),
+      ext: '.json',
+      fallbackName: 'x',
+      makeWorldbookId: () => 'w-plain',
+      normalizeCharacters: (raw) => normalizeCharacter(raw, 'json')
+    });
+    const p = plain.character || {};
+
+    metaOk =
+      imported.kind === 'character' &&
+      c.creator === '某作者' &&
+      c.characterVersion === '2.2' &&
+      Array.isArray(c.alternateGreetings) &&
+      c.alternateGreetings.length === 2 &&
+      c.alternateGreetings[0] === '第二条' &&
+      c.alternateGreetings[1] === '第三条' &&
+      !('alternateGreetings' in p) &&
+      p.creator === '';
+    metaDetail = `kind=${imported.kind} creator=${JSON.stringify(c.creator)} version=${JSON.stringify(
+      c.characterVersion
+    )} alt=${JSON.stringify(c.alternateGreetings)} 没有备选的卡多出键=${'alternateGreetings' in p}`;
+  } catch (err) {
+    metaDetail = '崩了：' + ((err && err.message) || err);
+  }
+  result.results.push({
+    name: '备选开场白 / 作者 / 版本：真导入链路读得进（去重 + 剪空白）',
+    pass: metaOk,
+    detail: metaOk ? '' : metaDetail
+  });
+
   // --- 世界书导出 → 真导入：**开场白和书里的 NPC 也不能丢** ---------------
   // 见 probeWorldbookExportRoundTrip()：那条用的是页面里真实的 worldbookPayload()，
   // 而 worldbookPayload 住在渲染层（ESM），宿主侧 require 不到 —— 所以放在那儿，

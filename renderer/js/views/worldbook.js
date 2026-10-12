@@ -82,6 +82,7 @@ export function initWorldbook(opts = {}) {
   el.wb.btnNew.addEventListener('click', newWorldbook);
   el.wb.btnNewEntry.addEventListener('click', newEntry);
   if (el.wb.btnEntryTemplate) el.wb.btnEntryTemplate.addEventListener('click', applyEntryTemplate);
+  if (el.wb.btnWbAddEvent) el.wb.btnWbAddEvent.addEventListener('click', addEventEntry);
   el.wb.btnDelBook.addEventListener('click', deleteWorldbook);
   el.wb.btnDelEntry.addEventListener('click', deleteEntry);
   el.wb.btnSave.addEventListener('click', saveWorldbook);
@@ -1120,6 +1121,68 @@ function newEntry() {
 
   el.wb.e.title.focus();
   el.wb.e.title.select();
+}
+
+// ---------------------------------------------------------------------------
+//  「＋ 事件」——一条一个事件，靠关键词激活
+//
+//  依据（这批语料里最常见的「时间轴」写法）：《美月》的 `<Plot_Trigger>` 把
+//  「圣诞节 / 假扮情侣 / 庙会 / 相亲 / 游乐园 / 情侣酒店」这些剧情各挂一个关键词，
+//  玩家聊到哪个就把哪段演出来 —— 事件不用等模型「想起来」，提到就点着。
+//
+//  ⚠️ 它和上面四条模板里那条「事件表」是**配套而不是重复**：
+//      模板那条是常驻的（constant=true），给模型一张「有哪些事件」的地图；
+//      这条是每条一个事件、靠关键词激活（constant=false），给的是开关。
+//      两个都要 —— 只留地图会全都一次性涌出来，只留开关模型不知道还有别的。
+// ---------------------------------------------------------------------------
+const WB_EVENT_CONTENT = [
+  '触发时机：{玩家提到关键词、或者走到这里的时候}',
+  '发生什么：{具体演出来什么 —— 写成能直接演的段落，别只写梗概}',
+  '牵动谁：{在场的人各自的反应}',
+  '',
+  '（关键词填在「关键词」那一栏：把玩家可能说到的说法都列上，',
+  '  比如「圣诞节, 圣诞, 平安夜」—— 命中任意一个就激活这条）'
+].join('\n');
+
+/** 「＋ 事件」：新建一条事件条目并跳过去填。和 newEntry 一样只动草稿 */
+function addEventEntry() {
+  const draft = currentDraft();
+  if (!draft) return;
+
+  stashEntryForm();
+
+  const entry = {
+    id: `e${Date.now().toString(36)}${Math.floor(Math.random() * 9000 + 1000)}`,
+    title: '事件：',
+    keys: [],
+    secondaryKeys: [],
+    selectiveLogic: WB_NEW_ENTRY_DEFAULTS.selectiveLogic,
+    content: WB_EVENT_CONTENT,
+    // 888 = 排在主线 / 人物 / 名词（100）之后，更贴近生成位置 ——
+    // 事件是要被「演出来」的，压在设定后面才不会被前面那几条冲淡。
+    // （和模板里那条「事件表」用同一个数，两者本来就该挨在一起。）
+    order: 888,
+    // 关键差异：**不常驻** —— 靠关键词激活，不是每轮都塞给模型
+    constant: false,
+    matchWholeWords: false,
+    caseSensitive: false,
+    probability: WB_NEW_ENTRY_DEFAULTS.probability,
+    enabled: true
+  };
+
+  draft.entries = [...draft.entries, entry];
+  markDraftDirty();
+
+  el.wb.entryCount.textContent = wbEntryCountText(draft.entries);
+  renderEntryList();
+  selectEntry(entry.id);
+
+  // 标题已经填了「事件：」，把光标落到末尾接着打名字 ——
+  // 不 select：那一整段是要接着写的，不是要被覆盖掉的
+  el.wb.e.title.focus();
+  el.wb.e.title.setSelectionRange(entry.title.length, entry.title.length);
+
+  showToast('已新建一条事件条目 —— 别忘了填关键词，改完点「保存」才写进磁盘');
 }
 
 /**

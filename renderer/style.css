@@ -447,20 +447,12 @@ body {
   padding: 3px 5px 8px;
 }
 
-.brand-dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  /* 品牌标识色跟随配色方案（粉/蓝） */
-  background: var(--brand-grad);
-  box-shadow: var(--brand-glow);
-  animation: pulse-dot 3s ease-in-out infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.08); opacity: 0.88; }
-}
+/* ⛔ `.brand-dot` 的基础样式删于 2026-10-13 凌晨 —— **是合并，不是丢掉**：
+   这一条（11px 的渐变小圆点）的六条声明（width / height / border-radius /
+   background / box-shadow / animation）已经被文件末尾「侧栏 + 输入区按设计稿对齐」
+   那一段里的 **24px 方角琥珀块**逐条覆盖，渲染上早就不生效，留着只让人多翻一遍。
+   现在 .brand-dot 只有末尾那一处定义。查全部重复：node tools/audit-css-dup.js
+   ⚠️ `--brand-grad` / `--brand-glow` 先留在 :root 别删（.brand-name 那边还引用着）。 */
 
 .brand-name {
   font-size: var(--fs-md);
@@ -1735,15 +1727,11 @@ body {
 
 /* ---------------------- 「帮我想想」的建议条 ---------------------- */
 
-/* 摆在输入框上方。每个选项是一颗按下去就发出去的按钮。 */
-.suggest-strip {
-  max-width: 860px;
-  margin: 0 auto 8px;
-  padding: 9px 11px 11px;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  background: var(--bg-side);
-}
+/* 摆在输入框上方。每个选项是一颗按下去就发出去的按钮。
+   ⛔ 基础样式（860px 居中 + 描边 + 底色那一版）删于 2026-10-13 凌晨 —— 同样是**合并**：
+   它的 6 条声明（max-width / margin / padding / border / border-radius / background）
+   已被文件末尾「侧栏 + 输入区按设计稿对齐」那一段整体覆盖，渲染上早就不生效。
+   现在 .suggest-strip 只有末尾那一处定义。 */
 
 /* ⛔ `.suggest-head` 删于 2026-10-12 晚：那层包装 div 早从 index.html 拿掉了
    （建议条压成了一行），JS 只认 #suggest-strip / #suggest-list。 */
@@ -1888,6 +1876,10 @@ body {
    确认框（70）仍然在它上面。 */
 #persona-modal { z-index: 66; }
 #persona-modal .modal-card { max-width: 620px; }
+/* 「选一条开场白」是从开聊流程里弹出来的 —— 那一刻底下还压着「你是谁」那个
+   身份弹窗（worldPlay.js 里 closePlayerModal 排在 applyCharacterChoice 之后），
+   不单独抬一层就会被它盖住。68：高于所有普通弹窗，仍让确认框（70）压得住。 */
+#pick-modal { z-index: 68; }
 
 /* ------------------------------ AI 生成角色 ------------------------------ */
 
@@ -2056,6 +2048,102 @@ body {
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 22px 20px;
+}
+
+/* --------------------------- 选一条（备选开场白） --------------------------- */
+
+/* 卡片比别人宽一点：开场白动辄几百字，预览要让人看得出是哪一条。 */
+.pick-card { max-width: 560px; }
+
+.pick-head { padding: 20px 22px 4px; }
+
+.pick-head h3 {
+  margin: 0 0 6px;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.pick-head p {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+/* 列表自己滚，头尾不滚 —— 29 条的时候靠它把弹窗关在 86vh 里 */
+.pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 22px;
+  overflow-y: auto;
+}
+
+.pick-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.pick-item:hover,
+.pick-item:focus-visible {
+  border-color: var(--accent-border-soft);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.pick-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 序号：让「第几条」在列表里一眼可数（用户常要按卡的顺序挑） */
+.pick-item-no {
+  flex: 0 0 auto;
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.pick-item-note {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+.pick-item-text {
+  color: var(--text-dim);
+  overflow-wrap: break-word;
+  /* 预览最多两行，长短不一的十几条扫起来才整齐 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pick-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 4px 22px 20px;
 }
 
 /* ------------------------------ 分组 ------------------------------ */
@@ -2974,6 +3062,68 @@ body {
   flex: 0 0 auto;
   color: var(--text-faint);
 }
+
+/* 备选开场白：条数不定的一列「可增删」文本框（行由 renderAltGreetings 动态铺）。
+   每行 = 一行头（序号 + 字数 + ×）+ 一个自动增高的框。 */
+.alt-greet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 一条都没有时不留空档，别把「＋ 添加一条」孤单地推下去 */
+.alt-greet-list:empty { display: none; }
+
+.alt-greet-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
+.alt-greet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.alt-greet-no {
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+/* 行上的 ×：平时淡着、扫过这一行（或 Tab 到）才亮 —— 删的只是草稿，
+   点「保存角色」才落盘，反悔的办法是不保存。和世界书条目那一行同一个手感。 */
+.alt-greet-del {
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+  line-height: 1;
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.alt-greet-row:hover .alt-greet-del,
+.alt-greet-del:focus-visible { opacity: 1; }
+.alt-greet-del:hover { color: var(--danger); background: var(--danger-bg); }
+
+.alt-greet-text { resize: vertical; }
 
 .char-expand-btn:hover { color: var(--text); background: var(--bg-input); }
 
@@ -4477,11 +4627,23 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   align-items: baseline;
   gap: 6px;
   padding: 12px 12px 0;
+  /* 左栏只有 268px，「N 条条目 · M 条启用」长起来时这一行必须能折 */
+  flex-wrap: wrap;
 }
 
-/* 「套用模板」那颗按钮：这一行是 baseline 对齐的（为了跟条目数对齐），
-   按钮挂上去会歪，所以单独居中并推到最右。 */
-.wb-entry-head .btn { align-self: center; margin-left: auto; }
+/* 「套用模板 / ＋ 事件」这一组：这一行是 baseline 对齐的（为了跟条目数对齐），
+   按钮挂上去会歪，所以整组居中并推到最右。
+   ⚠️ 按钮包在 .wb-entry-actions 里之后，`margin-left: auto` 要挂**那一层** ——
+   还留在 `.btn` 上的话，组里第一颗也会被推到右边，和组内的 gap 叠成一个大空档。 */
+.wb-entry-head .btn { align-self: center; }
+
+.wb-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+  align-self: center;
+}
 
 .wb-entry-head .field-label { padding-top: 0; }
 
@@ -6920,6 +7082,22 @@ body.pad-dragging {
    前面那批改的是消息区和主区骨架，这两块还留着旧的那套「聊天软件」语言：
    260px 宽的侧栏、渐变品牌字、圆头像圆角 12 的会话项、860px 居中的胶囊输入框。
    这一块只做「把语言换过来」，不动任何结构（除了会话项那一行）。
+
+   ⚠️⚠️ **开始改这一块之前先读这段：本段是「覆盖层」。**
+   下面这些选择器在文件**前面已经有基础定义**了 —— 同一个选择器两处定义，
+   改样式时**两处都得看**，否则会出现「改了没反应」（不报错、测试也不红）：
+
+       node tools/audit-css-dup.js        ← 列出当前所有重复 + 后一处重定义了哪些属性
+
+   （2026-10-13 凌晨那次的结果：全文件 14 个重复，其中只有 `.brand-dot` / `.suggest-strip`
+     是「前一处被**完全**覆盖」—— 那两个的基础定义已就地删掉，并留了说明。
+     其余 12 个是「补充 + 覆盖」混着（前一处还有独有属性），**硬合并会有视觉风险**
+     —— 那种要逐条比对 + 出图核对，留着单独一批做。所以这里保留两处 + 这条索引。）
+
+   本段覆盖到的：.sidebar · .brand · .brand-dot · .brand-name · .convo-item ·
+                .convo-title · .composer · .composer-box · .suggest-strip ·
+                .suggest-close · .composer-hint
+   不在本段、但也是两处定义的有：.settings-content > .panel-section · .char-portrait · select
    ========================================================================== */
 
 /* ---- 侧栏 ---- */

@@ -1594,6 +1594,26 @@
               </span>
             </label>
 
+            <!-- 备选开场白：同一张卡的多个入场剧本（导入卡常带，单卡最多见过 29 条）。
+                 绑定角色时若不止一条会弹出来让玩家挑；这里只做纯文本的增删改。
+                 列表由 characterEditor.js 的 renderAltGreetings() 动态铺 —— 条数不定，
+                 所以不能在 HTML 里写死几行。 -->
+            <div class="field field-stack" id="c-alt-field">
+              <span class="field-head">
+                <span class="field-label" data-icon="layers">备选开场白</span>
+                <span class="field-count" id="c-alt-count"></span>
+              </span>
+              <span class="field-help">
+                同上一条开场白，但可以写好几条（日常 / 忙碌 / 剧情后期……）。
+                <b>绑定角色时会弹出来让你挑一条</b>；一条都不加就只用上面那条。
+              </span>
+              <div id="c-alt-list" class="alt-greet-list"></div>
+              <div class="field-template-bar">
+                <button id="btn-alt-add" class="btn btn-ghost btn-sm" type="button"
+                        title="加一条备选开场白">＋ 添加一条</button>
+              </div>
+            </div>
+
             <label class="field field-stack" for="c-example">
               <span class="field-head">
                 <span class="field-label" data-icon="messages-square">示例对话</span>
@@ -1881,10 +1901,18 @@
             <div class="wb-entry-head">
               <span class="field-label">条目</span>
               <span id="wb-entry-count" class="wb-count"></span>
-              <!-- 世界书条目模板：一键种入世界模拟类卡最常用的四条骨架。
-                   文案在 worldbook.js 的 WB_ENTRY_TEMPLATE。 -->
-              <button id="btn-wb-entry-template" class="btn btn-ghost btn-sm" type="button"
-                      title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</button>
+              <!-- 两颗按钮包一层：左栏只有 268px，「N 条条目 · M 条启用」长起来时
+                   这一行必须能换行，否则会被 overflow:hidden 直接切掉。 -->
+              <div class="wb-entry-actions">
+                <!-- 世界书条目模板：一键种入世界模拟类卡最常用的四条骨架。
+                     文案在 worldbook.js 的 WB_ENTRY_TEMPLATE。 -->
+                <button id="btn-wb-entry-template" class="btn btn-ghost btn-sm" type="button"
+                        title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</button>
+                <!-- 「＋ 事件」：一条一个事件、靠关键词激活（和上面那条常驻的「事件表」配套：
+                     前者给地图，后者给开关）。文案在 worldbook.js 的 WB_EVENT_CONTENT。 -->
+                <button id="btn-wb-add-event" class="btn btn-ghost btn-sm" type="button"
+                        title="新建一条「事件」条目：填上关键词，聊到就把这段演出来">＋ 事件</button>
+              </div>
             </div>
             <div id="wb-entry-list" class="wb-entry-list"></div>
           </div>
@@ -2456,6 +2484,20 @@
       <div class="confirm-foot">
         <button id="confirm-cancel" class="btn btn-ghost" type="button">取消</button>
         <button id="confirm-ok" class="btn btn-primary" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 选择开场白（备选开场白多于一条时才开） ================= -->
+  <div id="pick-modal" class="modal hidden">
+    <div class="modal-card pick-card" role="dialog" aria-modal="true" aria-labelledby="pick-title">
+      <div class="pick-head">
+        <h3 id="pick-title">选一条开场白</h3>
+        <p id="pick-hint"></p>
+      </div>
+      <div id="pick-list" class="pick-list"></div>
+      <div class="pick-foot">
+        <button id="pick-cancel" class="btn btn-ghost" type="button">取消</button>
       </div>
     </div>
   </div>

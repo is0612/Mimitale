@@ -170,6 +170,11 @@ export const el = {
   confirmMessage: $('confirm-message'),
   confirmOk: $('confirm-ok'),
   confirmCancel: $('confirm-cancel'),
+  pickModal: $('pick-modal'),
+  pickTitle: $('pick-title'),
+  pickHint: $('pick-hint'),
+  pickList: $('pick-list'),
+  pickCancel: $('pick-cancel'),
   toast: $('toast'),
   // 角色库
   charsModal: $('chars-modal'),
@@ -243,6 +248,11 @@ export const el = {
     scenario: $('c-scenario'),
     first: $('c-first'),
     btnFirstTemplate: $('btn-first-template'),
+    // 备选开场白：个数不定，行是动态铺的（characterEditor.js 的 renderAltGreetings）。
+    // 这里只登记「列表容器 / 总条数角标 / 添加按钮」三样。
+    altList: $('c-alt-list'),
+    altCount: $('c-alt-count'),
+    btnAltAdd: $('btn-alt-add'),
     example: $('c-example'),
     system: $('c-system'),
     post: $('c-post'),
@@ -360,6 +370,7 @@ export const el = {
     btnPreview: $('btn-preview-wb'),
     btnNewEntry: $('btn-new-entry'),
     btnEntryTemplate: $('btn-wb-entry-template'),
+    btnWbAddEvent: $('btn-wb-add-event'),
     btnExport: $('btn-export-wb'),
     btnDelBook: $('btn-del-worldbook'),
     charList: $('wb-char-list'),

@@ -16,6 +16,7 @@ import { el } from '../core/dom.js';
 import { activeConvo, now } from '../core/util.js';
 import { api } from '../core/api.js';
 import { showToast } from '../ui/toast.js';
+import { pickFromList } from '../ui/pickList.js';
 import { h, button, clear } from '../ui/build.js';
 import { closeModelMenu } from '../ui/modelMenu.js';
 import { entityTone } from '../ui/avatarTone.js';
@@ -304,6 +305,40 @@ export function renderModelSwitch() {
   menu.scrollTop = scrollTop;
 }
 
+/**
+ * 一张卡的开场白候选：主开场白（firstMes）排最前，后面接备选开场白。
+ *
+ * 按文本去重 —— 作者的 `first_mes` 和 `alternate_greetings[0]` 经常一字不差
+ * （复制粘贴留下的），不去重的话列表里会出现两条一模一样的，用户会以为点错了。
+ * 两级都裁掉两端空白：卡里的开场白常以空行开头，留着预览第一屏是空的。
+ */
+function greetingChoices(character) {
+  const list = [];
+  const seen = new Set();
+  for (const raw of [character.firstMes, ...(character.alternateGreetings || [])]) {
+    const text = typeof raw === 'string' ? raw.trim() : '';
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    list.push(text);
+  }
+  return list;
+}
+
+/**
+ * 让用户从这张卡的开场白里挑一条。
+ *
+ * @returns {Promise<number>} 选中的下标；取消 / Esc / 点背景 → -1（表示「不插开场白」）
+ */
+async function pickGreeting(name, greetings) {
+  const who = String(name || '').trim() || '这个角色';
+  const index = await pickFromList({
+    title: '选一条开场白',
+    hint: `${who} 带了 ${greetings.length} 条开场白，它们是同一个场景的不同入场剧本 —— 挑一条作为这次对话的开头。`,
+    items: greetings.map((text, i) => ({ text, note: i === 0 ? '默认' : '' }))
+  });
+  return index === null ? -1 : index;
+}
+
 /** 顶部的角色下拉框已经去掉：角色改成在角色列表页用卡片上的「聊天」按钮选 */
 export async function applyCharacterChoice(characterId) {
   const convo = activeConvo();
@@ -334,16 +369,26 @@ export async function applyCharacterChoice(characterId) {
   convo.optionsSpec = optionsSpecFromCharacter(next);
   if (!convo.optionsSpec) convo.options = [];
 
-  if (next.firstMes && untouched) {
-    // 空对话绑上带开场白的角色时，自动把开场白放进去，省得每次手动开个头
-    convo.messages = [
-      {
-        role: 'assistant',
-        content: applyMacros(next.firstMes, next, convoUserName(convo)),
-        at: now(),
-        greeting: true
-      }
-    ];
+  if (untouched) {
+    // 空对话绑上带开场白的角色时，自动把开场白放进去，省得每次手动开个头。
+    // 卡上带多条时（语料实测 424/1341 张卡带，单卡最多 29 条）先让用户挑一条 ——
+    // 那些不是冗余，是同一个场景的**不同入场剧本**（比如「男性开场 / 女性开场 /
+    // NTR 开场」），永远只进第一条等于把一张卡当四分之一张用。
+    const greetings = greetingChoices(next);
+    let pick = 0;
+    if (greetings.length > 1) {
+      pick = await pickGreeting(next.name, greetings);
+    }
+    if (greetings.length && pick >= 0) {
+      convo.messages = [
+        {
+          role: 'assistant',
+          content: applyMacros(greetings[pick], next, convoUserName(convo)),
+          at: now(),
+          greeting: true
+        }
+      ];
+    }
   }
 
   // 标题是跟着角色自动起的话，换角色时一起换掉
