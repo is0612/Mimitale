@@ -148,7 +148,16 @@ function convoAvatar(convo) {
     });
   }
 
-  return h('span', { class: 'convo-avatar plain', text: '·' });
+  // 2026-10-12 深夜：这里原来是个「·」—— 头像只有 20px 时，那是个不起眼的小点；
+  // 放大到 48 之后，它就是一个**空落落的大方块**（出图时才看出来的，DOM 断言看不见）。
+  // 改成显示**会话标题首字**：和上面两条一样是「一眼认人」，只是走中性色，
+  // 不跟有角色的那几条抢注意力。标题为空时兜底还是那个「·」。
+  const title = String(convo.title || '').trim();
+  return h('span', {
+    class: 'convo-avatar plain',
+    text: title ? title.slice(0, 1) : '·',
+    title: title || '空对话'
+  });
 }
 
 /**

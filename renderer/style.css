@@ -496,6 +496,10 @@ body {
   padding: 0 4px;
 }
 
+/* ⚠️ 这条在文件末尾「2026-10-12 · 侧栏 + 输入区按设计稿对齐」那一段里**又被定义了一次**
+   （那边改了 gap / min-height / padding / font-size）。这是本项目 CSS 的结构，不是笔误：
+   基础段写「一套通用样子」，末尾覆盖层写「按设计稿对齐之后的样子」。
+   改这里的属性之前，先去末尾搜一遍同名选择器 —— 否则会出现「改了没反应」。 */
 .convo-item {
   display: flex;
   align-items: center;
@@ -558,6 +562,8 @@ body {
 /* ⛔ `.convo-info` / `.convo-sub` 删于 2026-10-12 晚：会话项并成一行之后
    （头像 + 名字 + 时间），没人再产出这两层。 */
 
+/* ⚠️ 同上：`.convo-title` 在文件末尾的覆盖层里还有一条（那边只留了 font-size，
+   而且字号走的是 var(--fs-sm)）。改这条之前先去末尾搜一遍。 */
 .convo-title {
   font-size: var(--fs-sm);
   font-weight: 600;
@@ -5188,7 +5194,9 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 /* 比通用弹窗（.modal-card 的 700px）**窄**一档：这一页只有「明暗 + 配色」两组
    小控件，撑到 700 会左右空出一大片。620 刚好够「主题配色」四个色点并排一行。 */
-.appearance-card { max-width: 620px; }
+/* ⛔ .appearance-card 的 max-width 删于 2026-10-12 深夜：外观弹窗（#appearance-modal）
+   整块搬进设置页之后，那颗 620px 的卡片外壳就不存在了，这条规则谁也命中不到。
+   死 CSS 留着不报错，但会让人以为「外观还有个弹窗」。 */
 
 /* 「主题配色」和「明暗」并排一行。单栏堆着的话弹窗会长出可视区，
    底部那几样得滚动才看得见。两栏比例靠配色那边宽些（四个色点比两颗按钮宽）。 */

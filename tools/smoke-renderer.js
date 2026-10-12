@@ -2758,6 +2758,74 @@ await scenario('外观：聊天区那几样', async () => {
 });
 
 // ---------------------------------------------------------------------------
+//  场景 15b：外观 →「界面字号」三档 +「字体」
+//
+//  这两项是 2026-10-12 深夜新加的。字号三档改的是 **--ui-size 一个变量**，
+//  全站的 --fs-* 都写成 calc(基准px * var(--ui-size))，所以「点一下大、整站都变大」
+//  这条链必须**验穿**：只验「设置存下来了」是不够的 —— 那只证明写了，
+//  不证明真的生效（渲染层写错变量名，落盘照样是好的）。
+// ---------------------------------------------------------------------------
+await scenario('外观：界面字号与字体', async () => {
+  await openAppearanceSection();
+
+  const root = document.documentElement;
+  const scale = () => getComputedStyle(root).getPropertyValue('--ui-size').trim();
+  // 拿设置页的「设置」标题当标尺：它的字号是 var(--fs-lg)，会跟着 --ui-size 走
+  const titleSize = () => parseFloat(getComputedStyle($('.page-title')).fontSize);
+
+  const segBtn = (k) => $(`#appearance-uiscale [data-uiscale="${k}"]`);
+  check(
+    '三档都在（小 / 中 / 大）',
+    !!segBtn('small') && !!segBtn('medium') && !!segBtn('large')
+  );
+
+  const baseSize = titleSize();
+
+  // --- 大 ---
+  click(segBtn('large'));
+  await waitFor('--ui-size 变成 1.15', () => scale() === '1.15');
+  check('选「大」后 --ui-size = 1.15', scale() === '1.15', scale());
+  check('选中的那颗标了 aria-checked', segBtn('large').getAttribute('aria-checked') === 'true');
+  const bigSize = titleSize();
+  check('整站字号真的变大了（拿页面标题当标尺）', bigSize > baseSize, `${baseSize} → ${bigSize}`);
+
+  // --- 小 ---
+  click(segBtn('small'));
+  await waitFor('--ui-size 变成 0.9', () => scale() === '0.9');
+  const smallSize = titleSize();
+  check('选「小」确实比「中」小', smallSize < baseSize, `${baseSize} → ${smallSize}`);
+
+  // 落盘（这条单独验：变量生效和存进 config 是两条路）
+  await sleep(200);
+  const savedSize = ((await window.mimitale.getSettings()).settings || {}).uiSize;
+  check('界面字号落盘了', savedSize === 'small', String(savedSize));
+
+  // --- 字体 ---
+  const fontSel = byId('appearance-font');
+  check('字体下拉在、至少 4 套', !!fontSel && fontSel.options.length >= 4, fontSel ? `${fontSel.options.length} 项` : '(没有)');
+  const fontOf = () => getComputedStyle(document.body).fontFamily;
+  const beforeFont = fontOf();
+  setValue('#appearance-font', 'serif');
+  fontSel.dispatchEvent(new Event('change', { bubbles: true }));
+  await waitFor('字体换过去了', () => fontOf() !== beforeFont);
+  check('换字体后 body 的 font-family 真的变了', fontOf() !== beforeFont, `${beforeFont} → ${fontOf()}`);
+
+  await sleep(200);
+  const savedFont = ((await window.mimitale.getSettings()).settings || {}).uiFont;
+  check('字体落盘了', savedFont === 'serif', String(savedFont));
+
+  // --- 还原：后面的场景依赖默认值（中 + 默认字体）---
+  click(segBtn('medium'));
+  await waitFor('字号还原成「中」', () => scale() === '1');
+  setValue('#appearance-font', 'default');
+  fontSel.dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(200);
+  check('还原后 body 字体也回默认了', fontOf() === beforeFont, fontOf());
+
+  await leaveAppearanceSection();
+});
+
+// ---------------------------------------------------------------------------
 //  场景：对话宽度（左右**独立**内缩）
 //
 //  为什么要有这条：用户要把浮动卡片放左下角，那时候对话贴边会被挡住，
