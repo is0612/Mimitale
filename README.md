@@ -180,7 +180,7 @@ mimitale/
 │   ├── presets.js         预设：落盘时的归一化（说明与正文分离）
 │   ├── card-import.js     导入一个文件的解析
 │   ├── import-files.js    导入编排（读文件 → 解析 → 自动绑定）
-│   ├── png.js             PNG 角色卡的读写（tEXt / ccv3 块）
+│   ├── png.js             PNG 角色卡的读写（tEXt / zTXt / iTXt 里的 ccv3 / chara 块）
 │   ├── vectors.js         向量 / 余弦相似度 / 排序
 │   └── request-log.js     「请求记录」：只存内存的环形缓冲，最近 20 条
 ├── preload.js       contextBridge 安全桥，把主进程能力暴露给页面
