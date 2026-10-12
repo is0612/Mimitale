@@ -2682,6 +2682,86 @@ await scenario('默认人设：只进通用对话，不漏进世界模式和角�
 });
 
 // ---------------------------------------------------------------------------
+//  世界书「常驻条目深度注入」：位置对不对
+//
+//  背景：社区卡把「不许代写玩家」「输出格式」这类**规则**做成常驻条目（constant），
+//  在酒馆里作者能把它们放到 at depth（贴近生成位置）。我们原来的做法是把整块世界书
+//  钉在人设之后（第 2 条消息），后面还压着历史 / 面板 / 后置指令 —— 几万 token 之后
+//  模型早忘了，于是「同一张卡在我们这儿的约束力弱于酒馆」。
+//
+//  现在：关键词条目照旧跟在人设之后；常驻条目单独一块，插在**对话后指令之后、
+//  「主角不可代写」之前**。这里直接用真模块算索引，不依赖界面。
+//
+//  ⚠️ 最后一条（deep 必须排在【主角不可代写】**之前**）是这次改动最容易修坏的地方：
+//     `playerOwnershipReminder` 存在的理由就是「世界书条目太贴近生成位置，模型会把玩家
+//     也当 NPC 写」。把常驻条目压到它后面 = 把这道闸拆掉，会变成「修一个坏一个」。
+// ---------------------------------------------------------------------------
+await scenario('世界书：常驻条目注入到靠近落笔的位置', async () => {
+  let messagesMod = null;
+  try {
+    messagesMod = await import(new URL('js/data/messages.js', document.baseURI).href);
+    check('上下文拼装模块能加载', typeof messagesMod.buildApiMessages === 'function');
+  } catch (err) {
+    check('上下文拼装模块能加载', false, (err && err.message) || String(err));
+  }
+  if (!messagesMod || typeof messagesMod.buildApiMessages !== 'function') return;
+
+  const SECTION = 'SECTION-MARK 关键词命中的设定。';
+  const DEEP = 'DEEP-MARK 每一轮都成立的规则。';
+  const HIST = 'HISTORY-MARK 玩家这一轮说的话';
+  const LEGACY = 'LEGACY-MARK 直接传字符串的老调用';
+
+  // 世界模式：这样才有【主角不可代写】那条压轴提醒可当锚点。
+  const conv = {
+    id: 'smoke-wb-deep',
+    gmMode: true,
+    worldbookIds: [],
+    player: { name: '小怡', profile: '大一女生。' },
+    messages: [{ role: 'user', content: HIST }]
+  };
+
+  const out = messagesMod.buildApiMessages(conv, { section: SECTION, deepSection: DEEP }, '');
+  const idx = (mark) => out.findIndex((m) => String((m && m.content) || '').includes(mark));
+
+  const sectionIdx = idx('SECTION-MARK');
+  const deepIdx = idx('DEEP-MARK');
+  const histIdx = idx('HISTORY-MARK');
+  const ownIdx = idx('【主角不可代写】');
+
+  check('关键词块注入了', sectionIdx >= 0, String(sectionIdx));
+  check('常驻块注入了', deepIdx >= 0, String(deepIdx));
+  check('【主角不可代写】还在（锚点没丢）', ownIdx >= 0, String(ownIdx));
+
+  if (sectionIdx >= 0 && deepIdx >= 0 && histIdx >= 0 && ownIdx >= 0) {
+    check('关键词块排在对话历史之前（照旧紧跟人设）', sectionIdx < histIdx, `${sectionIdx} < ${histIdx}`);
+    check('常驻块排在对话历史之后（这才叫深度注入）', deepIdx > histIdx, `${deepIdx} > ${histIdx}`);
+    check('常驻块排在关键词块之后', deepIdx > sectionIdx, `${deepIdx} > ${sectionIdx}`);
+    check(
+      '常驻块压在【主角不可代写】之前 —— 不许把这道闸拆掉',
+      deepIdx < ownIdx,
+      `${deepIdx} < ${ownIdx}`
+    );
+    check(
+      '常驻块正文原样传进提示词（没被改写）',
+      String(out[deepIdx].content).includes(DEEP),
+      String(out[deepIdx].content).slice(0, 40)
+    );
+  }
+
+  // 兼容：老调用（和一堆测试）传的是**一个字符串** —— 那它就是关键词块，照旧的老位置。
+  const legacyOut = messagesMod.buildApiMessages(conv, LEGACY, '');
+  const legacyIdx = legacyOut.findIndex((m) => String((m && m.content) || '').includes('LEGACY-MARK'));
+  const legacyHistIdx = legacyOut.findIndex((m) => String((m && m.content) || '').includes('HISTORY-MARK'));
+  check('传字符串的老调用照旧生效', legacyIdx >= 0, String(legacyIdx));
+  check('老调用落在对话历史之前（老位置）', legacyIdx >= 0 && legacyHistIdx >= 0 && legacyIdx < legacyHistIdx,
+    `${legacyIdx} < ${legacyHistIdx}`);
+  check(
+    '老调用不会凭空多出常驻块',
+    !legacyOut.some((m) => String((m && m.content) || '').includes('[世界设定 · 常驻]'))
+  );
+});
+
+// ---------------------------------------------------------------------------
 //  场景 14：给剧情配图（生图）
 //
 //  生图和聊天是**两套配置**，所以这里从「还没配」开始走完整条路：

@@ -22,7 +22,7 @@ import { h, button, clear } from '../ui/build.js';
 import { persistConversations } from '../data/persist.js';
 import { ensureConvoEndpoint, isBridgeProvider } from '../data/providers.js';
 import { buildApiMessages, characterContextForConvo, effectiveSampling } from '../data/messages.js';
-import { matchWorldbookSection } from '../data/cast.js';
+import { matchWorldbookSections } from '../data/cast.js';
 import { recallSection } from '../data/rag.js';
 import {
   convoFieldDisplayNames,
@@ -234,15 +234,18 @@ function reasoningTokensOf(usage) {
  *
  * 刻意不抛异常，返回 { ok, usage, finishReason, error } —— 好让调用方自己决定
  * 是弹提示（用户手动点「继续」）还是静默降级（自动续写失败时不必打扰用户）。
+ *
+ * ⚠️ `worldbook` 是 `matchWorldbookSections()` 的返回值 `{ section, deepSection }`
+ *    （**不是**一个字符串），原样透传给 buildApiMessages 就行 —— 两块缺一不可。
  */
-async function extendAssistantMessage(convo, endpoint, worldbookSection, ragSection, nudge, opts) {
+async function extendAssistantMessage(convo, endpoint, worldbook, ragSection, nudge, opts) {
   const last = convo.messages[convo.messages.length - 1];
   if (!last || last.role !== 'assistant') return { ok: false, error: '没有可续写的回复' };
 
   const requestId = uid();
   state.requestId = requestId;
 
-  const messages = buildApiMessages(convo, worldbookSection, ragSection);
+  const messages = buildApiMessages(convo, worldbook, ragSection);
   messages.push({ role: 'user', content: nudge || CONTINUE_NUDGE });
   const before = String(last.content || '');
 
@@ -312,14 +315,14 @@ function panelWrittenIn(convo, text) {
  * 走 extendAssistantMessage 是为了复用「分片直接追加到最后一条消息」那条路 ——
  * 界面上的字接着往外长，不会突然换掉一整条回复。
  */
-async function ensurePanelWritten(convo, endpoint, worldbookSection, ragSection, assistant) {
+async function ensurePanelWritten(convo, endpoint, worldbook, ragSection, assistant) {
   if (!convoPanelFields(convo).length) return false;
   if (!String(assistant.content || '').trim()) return false;   // 空正文走别的分支
   if (panelWrittenIn(convo, assistant.content)) return false;
 
   const before = String(assistant.content || '');
   // keepFinishReason：补问只是一次附加的补救请求，别让它改写这条回复的收尾信号
-  const res = await extendAssistantMessage(convo, endpoint, worldbookSection, ragSection, PANEL_PROMPT_NUDGE, {
+  const res = await extendAssistantMessage(convo, endpoint, worldbook, ragSection, PANEL_PROMPT_NUDGE, {
     keepFinishReason: true
   });
   return res.ok && String(assistant.content || '') !== before;
@@ -347,7 +350,7 @@ export async function continueLastMessage() {  const convo = activeConvo();
     return;
   }
 
-  const worldbookSection = await matchWorldbookSection(convo);
+  const worldbook = await matchWorldbookSections(convo);
   const ragSection = await recallSection(convo);
 
   const index = convo.messages.length - 1;
@@ -357,11 +360,11 @@ export async function continueLastMessage() {  const convo = activeConvo();
   setStreaming(true);
 
   try {
-    const res = await extendAssistantMessage(convo, endpoint, worldbookSection, ragSection, CONTINUE_NUDGE);
+    const res = await extendAssistantMessage(convo, endpoint, worldbook, ragSection, CONTINUE_NUDGE);
     if (!res.ok) throw new Error(res.error);
     // 续写也可能整轮不提状态表 —— 尤其是「只思考没落笔」之后点继续的那条路径：
     // 它绕开了 requestCompletion 里的补问分支，不补的话状态卡就一直停在旧值上。
-    await ensurePanelWritten(convo, endpoint, worldbookSection, ragSection, last);
+    await ensurePanelWritten(convo, endpoint, worldbook, ragSection, last);
   } catch (err) {
     showToast((err && err.message) || '继续失败', 'error');
   } finally {
@@ -388,7 +391,7 @@ export async function continueLastMessage() {  const convo = activeConvo();
  * 分支（见 requestCompletion），两边不重叠。
  * 返回 { rounds, reasoningTokens }：续了几轮、这几轮的思考量合计。
  */
-async function autoContinueTruncated(convo, index, endpoint, worldbookSection, ragSection) {
+async function autoContinueTruncated(convo, index, endpoint, worldbook, ragSection) {
   const out = { rounds: 0, reasoningTokens: 0 };
   if ((state.settings || {}).autoContinue === false) return out;
 
@@ -413,7 +416,7 @@ async function autoContinueTruncated(convo, index, endpoint, worldbookSection, r
     }
     if (tip) tip.textContent = `写到「回复上限」了，正在接着写…（第 ${out.rounds} 次）`;
 
-    const res = await extendAssistantMessage(convo, endpoint, worldbookSection, ragSection, CONTINUE_NUDGE);
+    const res = await extendAssistantMessage(convo, endpoint, worldbook, ragSection, CONTINUE_NUDGE);
     if (!res.ok) break;
     out.reasoningTokens += reasoningTokensOf(res.usage);
   }
@@ -439,7 +442,7 @@ async function requestCompletion(convo, options) {
   // 世界书在渲染层匹配（和 buildApiMessages 同一个进程，省一次往返）。
   // 之前这里要求「消息数 ≥ 3」才匹配，但那会让世界模型的第一个回合拿不到设定 ——
   // 而开场引导往往正是最需要世界书的时候。匹配本身是本地纯计算，不省这一下。
-  const worldbookSection = await matchWorldbookSection(convo);
+  const worldbook = await matchWorldbookSections(convo);
   const ragSection = await recallSection(convo);
 
   const requestId = uid();
@@ -490,7 +493,7 @@ async function requestCompletion(convo, options) {
       requestId,
       providerId: endpoint.provider.id,
       model: endpoint.model,
-      messages: buildApiMessages(convo, worldbookSection, ragSection),
+      messages: buildApiMessages(convo, worldbook, ragSection),
       characterContext: characterContextForConvo(convo),
       sampling: effectiveSampling(convo)
     });
@@ -558,7 +561,7 @@ async function requestCompletion(convo, options) {
         waitNode.textContent = truncated ? '思考把篇幅用光了，正在重写正文…' : '它只思考没落笔，正在重写正文…';
       }
 
-      const retryMessages = [...buildApiMessages(convo, worldbookSection, ragSection)];
+      const retryMessages = [...buildApiMessages(convo, worldbook, ragSection)];
       retryMessages.push({ role: 'user', content: REASONING_RETRY_NUDGE });
 
       const retryId = uid();
@@ -602,17 +605,17 @@ async function requestCompletion(convo, options) {
       // 情形二：正文写了一半撞上限（典型：状态栏写到一半断掉，看到一条残缺的回复）。
       // 自动接着写 —— 省掉手点「继续」，但**只续有限次**（见 MAX_AUTO_CONTINUE）：
       // 每续一次都要再花一次钱，撞满就停下挂标记，剩下的交给用户按「继续」。
-      const cont = await autoContinueTruncated(convo, index, endpoint, worldbookSection, ragSection);
+      const cont = await autoContinueTruncated(convo, index, endpoint, worldbook, ragSection);
       assistant.autoContinued = cont.rounds;
       reasoningTokens += cont.reasoningTokens;
       // 状态表在正文末尾，撞上限时**最先被截掉的就是它** —— 续写把正文救回来之后，
       // 状态表往往还是缺的。这里照样走一次补问（续写里带了就自动跳过，不重复请求）。
-      await ensurePanelWritten(convo, endpoint, worldbookSection, ragSection, assistant);
+      await ensurePanelWritten(convo, endpoint, worldbook, ragSection, assistant);
     } else if (!contentEmpty) {
       // 情形三：正文好好地写完了，但整轮一个状态字段都没提。
       // 状态卡"不跟着剧情走"最常见的就是这种 —— 不是程序没接住，是模型压根没写。
       // 补问一次（见 ensurePanelWritten 里的取舍），多半能把状态表要回来。
-      await ensurePanelWritten(convo, endpoint, worldbookSection, ragSection, assistant);
+      await ensurePanelWritten(convo, endpoint, worldbook, ragSection, assistant);
     }
 
     if (reasoningTokens > 0) assistant.reasoningTokens = reasoningTokens;

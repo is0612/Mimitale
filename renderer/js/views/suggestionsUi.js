@@ -23,7 +23,7 @@ import { showToast } from '../ui/toast.js';
 import { ensureConvoEndpoint } from '../data/providers.js';
 import { persistConversations } from '../data/persist.js';
 import { buildApiMessages } from '../data/messages.js';
-import { matchWorldbookSection } from '../data/cast.js';
+import { matchWorldbookSections } from '../data/cast.js';
 import { recallSection } from '../data/rag.js';
 import {
   suggestInstruction,
@@ -143,9 +143,9 @@ export async function suggestNextActions(trigger) {
   try {
     // 和「换一批」一样复用 buildApiMessages（带人设、世界书、面板、选项指令），
     // 否则模型只能看到一截裸对话。再追加一句「帮我想想」。
-    const worldbookSection = await matchWorldbookSection(convo);
+    const worldbook = await matchWorldbookSections(convo);
     const ragSection = await recallSection(convo);
-    const messages = buildApiMessages(convo, worldbookSection, ragSection);
+    const messages = buildApiMessages(convo, worldbook, ragSection);
     messages.push({ role: 'user', content: suggestInstruction() });
 
     const response = await api.sendChat({
@@ -202,11 +202,11 @@ export async function rerollOptions(convo) {
   const previous = Array.isArray(convo.options) ? convo.options.slice() : [];
 
   try {
-    const worldbookSection = await matchWorldbookSection(convo);
+    const worldbook = await matchWorldbookSections(convo);
     const ragSection = await recallSection(convo);
 
     // 完整上下文（含剧情选项指令）已经由 buildApiMessages 组好，再追加换一批指令
-    const messages = buildApiMessages(convo, worldbookSection, ragSection);
+    const messages = buildApiMessages(convo, worldbook, ragSection);
     messages.push({ role: 'user', content: rerollOptionsInstruction(convo) });
 
     const response = await api.sendChat({

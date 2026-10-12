@@ -200,11 +200,49 @@ function matchWorldbookEntries(entries, scanText, options) {
   return { hits, rounds, recursiveCount };
 }
 
-/** 命中条目拼成注入块 */
-function formatWorldbookSection(hits) {
-  if (!hits.length) return '';
+// 命中条目拼成注入块。
+//
+// 两种抬头是**刻意分开**的：模型对抬头最敏感，而这两块的性质不同 ——
+//   · 关键词条目 = 「这一轮聊到才相关」的参考资料（早读早有用，紧跟人设之后）
+//   · 常驻条目   = 「每一轮都成立」的设定与规则（要靠得近才会被照做）
+const WORLDBOOK_HEADER = '[世界设定]\n以下资料与当前对话相关，请自然地运用，不要直接复述：';
+const WORLDBOOK_DEEP_HEADER =
+  '[世界设定 · 常驻]\n以下是这个世界每一轮都成立的设定与规则，请始终遵守，不要直接复述：';
+
+function formatWorldbookSection(hits, header) {
+  if (!hits || !hits.length) return '';
   const lines = hits.map((e) => `【${e.title}】\n${String(e.content).trim()}`);
-  return `[世界设定]\n以下资料与当前对话相关，请自然地运用，不要直接复述：\n\n${lines.join('\n\n')}`;
+  return `${header || WORLDBOOK_HEADER}\n\n${lines.join('\n\n')}`;
 }
 
-module.exports = { entryMatches, matchWorldbookEntries, formatWorldbookSection, keywordHit };
+/**
+ * 把命中条目拆成两块注入文本：
+ *   section     —— 带关键词命中的那批，照旧紧跟人设之后（调用的位置见 messages.js 第 2 步）
+ *   deepSection —— 常驻条目（`constant === true`）单独一块，由渲染层送到更靠近**生成位置**的地方
+ *
+ * 为什么要拆：社区作者把「不许代写玩家」「输出格式」「状态栏每轮必须写」这类**规则**做成常驻
+ * 条目，在酒馆里是可以放到 `at depth`（贴近生成位置）的。我们原来把整块世界书钉在人设之后，
+ * 往后还有检索 / 摘要 / 示例对话 / 几十轮历史 / 面板…… 几万 token 之后模型早忘了，
+ * 于是**同一张卡在我们这儿的约束力弱于酒馆**。拆开之后，常驻条目能落到离落笔只剩几条消息的位置。
+ *
+ * 判据只认 `constant === true`，**不是**「keys 为空」：`entryMatches` 里
+ * `anyKeywordHit(haystack, [], e)` 恒为 false，所以不带关键词又没勾常驻的条目
+ * 根本不会命中，不会走到这里来。
+ */
+function formatWorldbookSections(hits) {
+  const list = Array.isArray(hits) ? hits : [];
+  const constant = list.filter((e) => e && e.constant === true);
+  const keyword = list.filter((e) => !e || e.constant !== true);
+  return {
+    section: formatWorldbookSection(keyword),
+    deepSection: formatWorldbookSection(constant, WORLDBOOK_DEEP_HEADER)
+  };
+}
+
+module.exports = {
+  entryMatches,
+  matchWorldbookEntries,
+  formatWorldbookSection,
+  formatWorldbookSections,
+  keywordHit
+};

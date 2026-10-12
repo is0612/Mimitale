@@ -50,7 +50,7 @@ const { normalizeCharacter } = require('../main/characters.js');
 // 导出 PNG 卡要插 tEXt 块、导入要读回来 —— 用同一份实现，才能测真正的往返
 const { pngWithTextChunk, parseCharacterCardPng } = require('../main/png.js');
 // 世界书匹配（含递归扫描）也用真实现
-const { matchWorldbookEntries, formatWorldbookSection } = require('../main/worldbook-match.js');
+const { matchWorldbookEntries, formatWorldbookSections } = require('../main/worldbook-match.js');
 // 导入链路的编排：读文件 → 解析 → 自动绑定。
 // 以前 characters:import 在冒烟测试里是个 `{canceled:true}` 的桩，
 // 所以「卡里内嵌的世界书被丢掉」「导入后绑定指到不存在的书」这类 bug 测不出来。
@@ -609,7 +609,10 @@ function registerStubs() {
         recursive: e.recursive === true,
         length: String(e.content).length
       })),
-      section: formatWorldbookSection(matched.hits)
+      // 和真实现（main/ipc.js 的 worldbooks:preview）一样拆两块：
+      // section = 关键词命中的，deepSection = 常驻条目（每轮都成立，渲染层送到生成位置附近）。
+      // ⚠️ 假后端漏掉 deepSection 的话，「常驻条目还能不能进提示词」就整条测不到了。
+      ...formatWorldbookSections(matched.hits)
     };
   });
 
@@ -3132,6 +3135,67 @@ function probeAssistantPersona(result) {
 }
 
 /**
+ * 世界书命中条目要拆成两块：关键词命中的（`section`）和常驻的（`deepSection`）。
+ *
+ * 为什么值得单独钉：拆块本身是纯函数（main/worldbook-match.js 的
+ * `formatWorldbookSections`），但**谁落在哪一块**决定了常驻条目还能不能被人送到
+ * 靠近生成位置的地方（渲染层 messages.js 第 6b 步）。
+ * 判据如果写成「keys 为空」就会把「不带关键词、又没勾常驻」的条目也当成常驻 ——
+ * 而那种条目在 `entryMatches` 里恒不命中（`[].some()` 永远是 false），根本不会走到这里，
+ * 于是错判永远不报错、只是偶尔把东西放错位置。所以这里把边界钉死。
+ *
+ * 位置那一半（第 6b 步到底插在哪儿）在页面侧，见 smoke-renderer.js 的
+ * 「世界书：常驻条目注入到靠近落笔的位置」。
+ */
+function probeWorldbookDeepSplit(result) {
+  const push = (name, pass, detail) => result.results.push({ name, pass: !!pass, detail: detail || '' });
+
+  const hits = [
+    { id: 'a', title: '常驻规则', content: '玩家不是世界中心。', constant: true, order: 5 },
+    { id: 'b', title: '拳馆', content: '月费十二镑。', constant: false, order: 10, keys: ['拳馆'] },
+    { id: 'c', title: '教派', content: '只在周日开门。', order: 20, keys: ['教派'] }
+  ];
+
+  let out;
+  try {
+    out = formatWorldbookSections(hits);
+  } catch (err) {
+    push('世界书拆块：纯函数跑得通', false, (err && err.message) || String(err));
+    return;
+  }
+
+  push(
+    '世界书拆块：section 只装关键词命中那批',
+    out.section.includes('拳馆') && out.section.includes('教派') && !out.section.includes('常驻规则'),
+    out.section.slice(0, 60)
+  );
+  push(
+    '世界书拆块：deepSection 只装常驻条目',
+    out.deepSection.includes('常驻规则') && !out.deepSection.includes('拳馆') && !out.deepSection.includes('教派'),
+    out.deepSection.slice(0, 60)
+  );
+  push(
+    '世界书拆块：两块抬头不一样',
+    out.section.startsWith('[世界设定]') && out.deepSection.startsWith('[世界设定 · 常驻]'),
+    `${out.section.slice(0, 12)} / ${out.deepSection.slice(0, 14)}`
+  );
+
+  const odd = formatWorldbookSections([{ id: 'd', title: '没关键词也没勾常驻', content: 'x', keys: [] }]);
+  push(
+    '世界书拆块：不勾常驻的条目不会被误当常驻',
+    odd.section.includes('没关键词也没勾常驻') && odd.deepSection === '',
+    `section=${odd.section.slice(0, 26)} deep=${JSON.stringify(odd.deepSection)}`
+  );
+
+  const empty = formatWorldbookSections([]);
+  push(
+    '世界书拆块：没命中时两块都是空串',
+    empty.section === '' && empty.deepSection === '',
+    JSON.stringify(empty)
+  );
+}
+
+/**
  * 世界书「导出 → 导入」的**真**往返：导出的字节由页面里真实的
  * `worldbookPayload()`（renderer/js/data/library.js）生成，再喂给主进程真实的
  * `importFiles` —— 中间隔着进程边界和两层归一化，两边都换不掉。
@@ -3542,6 +3606,7 @@ app.whenReady().then(async () => {
       await probeStoreWriteFailure(result);
       await probeAiGenParse(win, result);
       await probeWorldbookExportRoundTrip(win, result);
+      probeWorldbookDeepSplit(result);
       await probeHover(win, result);
       await probeLightboxClick(win, result);
     } catch (err) {

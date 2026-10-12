@@ -102,13 +102,23 @@ export function effectiveWorldbookIds(convo) {
   return asArray(character.worldbookIds);
 }
 
+/** 世界书两块注入文本的空值 —— 调用方拿到的形状永远一致，不用各自判空 */
+const EMPTY_WORLDBOOK = { section: '', deepSection: '' };
+
 /**
- * 按当前对话正文去世界书里匹配一段设定，拼成能直接注入的文本。
- * 匹配失败**不抛错**：世界书挂了不该拦住正常聊天，返回空串就行。
+ * 按当前对话正文去世界书里匹配设定，返回**两块**能直接注入的文本：
+ *   section     —— 关键词命中的那批（「这一轮聊到才相关」的参考资料）
+ *   deepSection —— 常驻条目（「每一轮都成立」的规则），由 messages.js 送到靠近生成位置的地方
+ *
+ * 为什么要分两块：见 main/worldbook-match.js 的 `formatWorldbookSections` 注释。
+ * 调用方**必须把两块都传给 `buildApiMessages`** —— 只传 section 的话常驻条目就丢了
+ * （表现是「导入的卡那些规则一条都不生效」，而且不会报错）。
+ *
+ * 匹配失败**不抛错**：世界书挂了不该拦住正常聊天，返回两个空串就行。
  */
-export async function matchWorldbookSection(convo) {
+export async function matchWorldbookSections(convo) {
   const allIds = [...new Set(effectiveWorldbookIds(convo))];
-  if (!allIds.length) return '';
+  if (!allIds.length) return { ...EMPTY_WORLDBOOK };
 
   const history = convo.messages.filter(
     (m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
@@ -121,18 +131,21 @@ export async function matchWorldbookSection(convo) {
       recursiveDepth: recursiveDepthSetting(),
       messages: history.slice(-WORLDBOOK_SCAN_DEPTH).map((m) => ({ role: m.role, content: m.content }))
     });
-    return (result && result.section) || '';
+    return {
+      section: (result && result.section) || '',
+      deepSection: (result && result.deepSection) || ''
+    };
   } catch (err) {
     // 世界书匹配失败不该拦住正常聊天
     console.error('世界书匹配失败', err);
-    return '';
+    return { ...EMPTY_WORLDBOOK };
   }
 }
 
 /**
  * 这一轮世界书会命中几条 —— 右栏脚注那颗「N 条已触发」用的。
  *
- * 和 matchWorldbookSection 走**同一套扫描口径**（同几个 id、同样的扫描深度和递归深度），
+ * 和 matchWorldbookSections 走**同一套扫描口径**（同几个 id、同样的扫描深度和递归深度），
  * 区别只是它把 `hits` 的长度取出来，而不是拼成注入文本。
  * ⚠️ 之前 castPanel.js 的注释写着「previewWorldbook 回不到命中了几条」——
  *    那句是错的：主进程 `worldbooks:preview` 的返回值里一直有 `hits` 和 `total`

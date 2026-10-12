@@ -62,7 +62,7 @@ const { getMainWindow, sendToRenderer } = require('./window.js');
 const { dataDir, dataDirInfo, probeDirWritable } = require('./data-dir.js');
 
 // 关键词命中判定、递归扫描这些纯逻辑都在 main/worldbook-match.js 里。
-const { matchWorldbookEntries, formatWorldbookSection } = require('./worldbook-match.js');
+const { matchWorldbookEntries, formatWorldbookSections } = require('./worldbook-match.js');
 const { parseImportFile } = require('./card-import.js');
 const { importFiles, MAX_IMPORT_BYTES } = require('./import-files.js');
 // 外部世界书里那份 `characters`（世界书自带的 NPC）要过一遍角色归一化器 ——
@@ -504,6 +504,8 @@ function registerIpc() {
     });
     const hits = result.hits;
 
+    // section = 关键词命中的那批（紧跟人设之后）；deepSection = 常驻条目（每轮都成立，
+    // 由渲染层送到更靠近生成位置的地方）。拆块的道理见 worldbook-match.js 的注释。
     return {
       total: entries.length,
       scanDepth,
@@ -517,7 +519,7 @@ function registerIpc() {
         recursive: e.recursive === true,
         length: String(e.content).length
       })),
-      section: formatWorldbookSection(hits)
+      ...formatWorldbookSections(hits)
     };
   });
 

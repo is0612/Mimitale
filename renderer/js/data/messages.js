@@ -261,11 +261,29 @@ export function effectiveSampling(convo) {
 }
 
 /**
+ * 世界书那两段注入文本的取用口。
+ *
+ * 兼容两种入参，因为这条链路有两条：
+ *   · 正式链路（composer / suggestionsUi）传 `matchWorldbookSections()` 的返回值，
+ *     形状是 `{ section, deepSection }`；
+ *   · 老调用和一堆测试传的是**一个字符串**（就是 section 本身）。
+ * 都收在这一处，免得下面每用到一次就判一次。
+ */
+function worldbookParts(value) {
+  if (value && typeof value === 'object') {
+    return { section: String(value.section || ''), deep: String(value.deepSection || '') };
+  }
+  return { section: String(value == null ? '' : value), deep: '' };
+}
+
+/**
  * 组装真正发给模型的消息数组。
  * 参数里的两段（世界书命中 / 语义检索）是调用方异步取好的 ——
  * 这里保持同步，方便两边共用同一份拼接逻辑（发送、继续、重新生成都走它）。
+ *
+ * `worldbook` 收字符串或 `{ section, deepSection }`，见 `worldbookParts`。
  */
-export function buildApiMessages(convo, worldbookSection, ragSection) {
+export function buildApiMessages(convo, worldbook, ragSection) {
   const settings = state.settings || {};
   const character = characterForConvo(convo);
   // 进了世界的会话用玩家自己创建的角色名，其它会话用设置里的名字
@@ -389,8 +407,10 @@ export function buildApiMessages(convo, worldbookSection, ragSection) {
   // 放在角色定义后面（酒馆叫 After Char Defs）——比角色本身靠前会稀释人设，
   // 比对话历史靠后又容易被忽略，这里是比较稳的位置。
   // 默认对话不带：那是「这个世界有哪些设定」的补充，属于扮演那一套。
-  if (!plainChat && String(worldbookSection || '').trim()) {
-    messages.push({ role: 'system', content: applyMacros(worldbookSection, character, me, charMacro).trim() });
+  // ⚠️ 这里只放**关键词命中**的那批。常驻条目是另一块，在第 6b 步注入（要靠生成位置近）。
+  const wb = worldbookParts(worldbook);
+  if (!plainChat && wb.section.trim()) {
+    messages.push({ role: 'system', content: applyMacros(wb.section, character, me, charMacro).trim() });
   }
 
   // ---- 2.2 语义检索捞回来的往事 / 设定 ----
@@ -450,6 +470,24 @@ export function buildApiMessages(convo, worldbookSection, ragSection) {
       role: 'system',
       content: applyMacros(character.postHistoryInstructions, character, me).trim()
     });
+  }
+
+  // ---- 6b. 世界书的「常驻条目」：送到离生成位置最近的地方 ----
+  // 常驻条目（`constant` / 不带关键词）不是「这一轮聊到才相关的资料」，而是
+  // 「每一轮都成立的规则」—— 社区卡拿它写「不许代写玩家」「输出格式」「状态栏每轮必须写」，
+  // 作者在酒馆里是把它们放到 at depth（贴近生成位置）的。
+  //
+  // 所以这里**故意不跟第 2 步那批放一起**：关键词条目是参考资料（早读早有用），
+  // 常驻条目是要被照做的规则（越近越管用）。放这儿之后，后面只剩
+  // 「主角不可代写 → 标重点 → 状态表提醒」三条，抬头也换成了「每一轮都成立」。
+  // 这就是「导入的卡在酒馆里管用、在我们这儿变弱」那条差距的补丁。
+  //
+  // ⚠️ 必须排在下面 7b 的 playerOwnershipReminder **之前**：那条提醒存在的理由正是
+  //    「世界书条目太贴近生成位置会把玩家当 NPC 写」（见 7b 的注释）。把常驻条目压到它后面，
+  //    等于把这道闸拆掉 —— 那会变成「修一个坏一个」。
+  // ⚠️ 已经在这里了，别再往末尾挪：末尾是【标重点】和状态表提醒的地盘（那两条各管一件事）。
+  if (!plainChat && wb.deep.trim()) {
+    messages.push({ role: 'system', content: applyMacros(wb.deep, character, me, charMacro).trim() });
   }
 
   // ---- 7. 状态表的最后一声提醒 ----
