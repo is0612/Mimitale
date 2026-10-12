@@ -209,6 +209,24 @@ function panelDefByName(defs, name) {
 }
 
 // ---------------------------------------------------------------------------
+//  外观：2026-10-12 深夜从**顶栏弹窗**（#appearance-modal）搬进了
+//  设置 → 外观（视图六的 #sec-appearance，星宝：「把头部的外观加入到设置里」）。
+//  下面两个小工具把「怎么进去 / 怎么出来」封起来 —— 走的是**真实用户路径**：
+//  点侧栏那颗「设置」→ 点左栏「外观」；出来就点页头的「返回」。
+//  ⚠️ 别再写成 click('#btn-appearance')：那颗按钮已经不存在了。
+// ---------------------------------------------------------------------------
+async function openAppearanceSection() {
+  click('#btn-settings');
+  await waitFor('切到设置页', () => shown('#view-settings'));
+  click('.settings-nav-item[data-target="sec-appearance"]');
+  await waitFor('切到外观那一组', () => shown('#sec-appearance'));
+}
+async function leaveAppearanceSection() {
+  click('#btn-back-settings');
+  await waitFor('离开设置页', () => !shown('#view-settings'));
+}
+
+// ---------------------------------------------------------------------------
 //  场景 1：启动
 // ---------------------------------------------------------------------------
 await scenario('启动', async () => {
@@ -220,12 +238,12 @@ await scenario('启动', async () => {
 
 // ---------------------------------------------------------------------------
 //  场景 2：明暗切换（顺带验证 settings 落盘）
-//  控件在「外观」弹窗里：2026-10-08 之前是左上角一颗「点一下切一下」的图标，
-//  并进弹窗之后换成「白天 / 夜间」两颗 —— 点哪个是哪个，不再是盲切。
+//  控件在 设置 → 外观 里（2026-10-08 之前是左上角一颗「点一下切一下」的图标，
+//  并进「外观」之后换成「白天 / 夜间」两颗 —— 点哪个是哪个，不再是盲切；
+//  2026-10-12 深夜整块从顶栏弹窗搬进设置页，控件本身没变）。
 // ---------------------------------------------------------------------------
 await scenario('明暗切换', async () => {
-  click('#btn-appearance');
-  await waitFor('外观弹窗打开', () => shown('#appearance-modal'));
+  await openAppearanceSection();
 
   const modeBtn = (m) => $(`#appearance-modes [data-mode="${m}"]`);
   const before = document.documentElement.getAttribute('data-theme');
@@ -246,8 +264,7 @@ await scenario('明暗切换', async () => {
   await waitFor('主题切回', () => document.documentElement.getAttribute('data-theme') === before);
   check('切回后 aria-checked 也跟着换', modeBtn(before).getAttribute('aria-checked') === 'true');
 
-  click('#btn-close-appearance');
-  await waitFor('外观弹窗关闭', () => !shown('#appearance-modal'));
+  await leaveAppearanceSection();
 });
 
 // ---------------------------------------------------------------------------
@@ -257,8 +274,7 @@ await scenario('明暗切换', async () => {
 //  起点不写死 —— 前面哪个场景动过配色都不该让这里假红。
 // ---------------------------------------------------------------------------
 await scenario('主题配色', async () => {
-  click('#btn-appearance');
-  await waitFor('外观弹窗打开', () => shown('#appearance-modal'));
+  await openAppearanceSection();
 
   const ALL = ['amber', 'pink', 'blue', 'matcha'];
   const swatch = (a) => $(`#appearance-accents [data-accent="${a}"]`);
@@ -300,8 +316,7 @@ await scenario('主题配色', async () => {
   await waitFor('配色转回起点', () => readAttr() === start);
   check('转回起点后 --accent 也回到原值', readAccent() === startAccent);
 
-  click('#btn-close-appearance');
-  await waitFor('外观弹窗关闭', () => !shown('#appearance-modal'));
+  await leaveAppearanceSection();
 });
 
 // ---------------------------------------------------------------------------
@@ -325,10 +340,17 @@ await scenario('顶栏「⋯」菜单', async () => {
     .join(', ');
   check(
     '菜单里的项目齐全、顺序没变',
-    // 2026-10-12：中间多了「生成参数」—— 它在「请求记录」之后、「清空对话」之前
-    menuIds ===
-      'btn-memory, btn-copy-all, btn-export-convo, btn-request-log, btn-gen-params, btn-clear',
+    // 2026-10-12 深夜：「记忆」从这份菜单**提到顶栏**了（星宝：「把记忆放出来」），
+    // 所以它不再出现在这里 —— 顶栏那颗 #btn-memory 由下面那条断言守。
+    menuIds === 'btn-copy-all, btn-export-convo, btn-request-log, btn-gen-params, btn-clear',
     menuIds
+  );
+
+  // 「记忆」现在和「⋯」平级，是顶栏那一排里的一颗图标按钮
+  check(
+    '记忆按钮已经提到顶栏（不在「⋯」里）',
+    !!byId('btn-memory') && !!byId('btn-memory').closest('.topbar-actions'),
+    byId('btn-memory') ? (byId('btn-memory').closest('.topbar-actions') ? '在顶栏' : '不在顶栏') : '（没有这颗按钮）'
   );
 
   // 点别处收起
@@ -1298,10 +1320,11 @@ await scenario('属性：从角色卡种到状态面板', async () => {
     const r = (node) => Math.round(node.getBoundingClientRect().width);
     const h = (node) => Math.round(node.getBoundingClientRect().height);
 
-    // 顶栏：稿子 2:82 高 48、2:83 头像是 26×26 圆角 4
+    // 顶栏：稿子 2:82 高 48；头像 / 图标 2026-10-12 深夜放大（26 → 34 / 32），
+    // 但都小于 min-height 48，所以顶栏高度**一点没变**。
     check('顶栏高 48（稿子 2:82）', Math.abs(h($('.topbar')) - 48) <= 1, String(h($('.topbar'))));
     const topAv = byId('topbar-avatar');
-    check('顶栏头像 26×26（稿子 2:83）', r(topAv) === 26 && h(topAv) === 26, `${r(topAv)}×${h(topAv)}`);
+    check('顶栏头像 34×34（放大后）', r(topAv) === 34 && h(topAv) === 34, `${r(topAv)}×${h(topAv)}`);
     check('顶栏头像是方角 r=4（不是圆）', c(topAv, 'borderTopLeftRadius') === '4px', c(topAv, 'borderTopLeftRadius'));
     check('顶栏元信息 11px（稿子 2:89）', c(byId('convo-meta'), 'fontSize') === '11px', c(byId('convo-meta'), 'fontSize'));
     check(
@@ -1310,25 +1333,26 @@ await scenario('属性：从角色卡种到状态面板', async () => {
       c(byId('convo-pill'), 'borderTopLeftRadius')
     );
 
-    // 「⋯」必须和另外三颗同规格（稿子 2:98 / 2:468 / 2:104 / 2:108 都是 26×26 + 1px 描边）
+    // 顶栏图标按钮：稿子 2:98 / 2:468 / 2:104 / 2:108 是 26×26 + 1px 描边，
+    // 2026-10-12 深夜统一放大到 **32×32**。
     const more = byId('btn-more');
     check(
-      '「⋯」也是 26×26 的方框按钮',
-      r(more) === 26 && h(more) === 26 && c(more, 'borderTopWidth') === '1px',
+      '「⋯」是 32×32 的方框按钮（放大后）',
+      r(more) === 32 && h(more) === 32 && c(more, 'borderTopWidth') === '1px',
       `${r(more)}×${h(more)} border=${c(more, 'borderTopWidth')}`
     );
 
-    // 在场角色条：稿子 2:113 高 34、2:118 头像 20 方角
-    check('在场角色条高 34（稿子 2:113）', h(byId('panel-box')) === 34, String(h(byId('panel-box'))));
+    // 在场角色条：稿子 2:113 高 34、2:118 头像 20 —— 2026-10-12 深夜头像 20 → 28、条高 → 46
+    check('在场角色条高 46（放大后）', h(byId('panel-box')) === 46, String(h(byId('panel-box'))));
     const panelAv = $('#panel-cast .panel-avatar');
     check(
-      '入口条头像 20×20 方角 r=3（稿子 2:118）',
-      !!panelAv && r(panelAv) === 20 && c(panelAv, 'borderTopLeftRadius') === '3px',
+      '入口条头像 28×28 方角 r=4（放大后）',
+      !!panelAv && r(panelAv) === 28 && c(panelAv, 'borderTopLeftRadius') === '4px',
       panelAv ? `${r(panelAv)} r=${c(panelAv, 'borderTopLeftRadius')}` : '（没有头像）'
     );
 
-    // 右栏：稿子 2:174 宽 264
-    check('右栏宽 264（稿子 2:174）', r(byId('cast-panel')) === 264, String(r(byId('cast-panel'))));
+    // 右栏：264 → 280 → 300（2026-10-12 晚起**始终跟左栏等宽**）
+    check('右栏宽 300', r(byId('cast-panel')) === 300, String(r(byId('cast-panel'))));
 
     // ⚠️ 这条是 2026-10-12 那个真 bug 的守卫：`.cast-card-avatar` 里一旦写上
     //    `background: var(--accent)`，就会盖掉 entityTone 的 `.g1`~`.g6`（同权重、它在后），
@@ -2622,18 +2646,18 @@ await scenario('给剧情配图（生图）', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 15：外观弹窗里「只管聊天区」的那几样（字号 / 加粗颜色 / 背景图）
-//  主题配色和明暗在场景 2 / 2b，它们在同一个弹窗但管整个界面。
+//  场景 15：设置 → 外观 里「只管聊天区」的那几样（字号 / 加粗颜色 / 背景图）
+//  主题配色和明暗在场景 2 / 2b —— 它们和这三样在**同一组**里，只是管整个界面。
+//  （2026-10-12 深夜：这一整块从顶栏弹窗搬进了设置页，见 openAppearanceSection。）
 // ---------------------------------------------------------------------------
 await scenario('外观：聊天区那几样', async () => {
-  click('#btn-appearance');
-  await waitFor('外观弹窗打开', () => shown('#appearance-modal'));
+  await openAppearanceSection();
   check(
     '聊天区三样控件都在（字号 / 颜色 / 背景）',
     !!byId('appearance-fontsize') && !!byId('appearance-boldcolor-text') && !!byId('btn-pick-bg')
   );
   check(
-    '管整个界面的两样也在这个弹窗里（配色 / 明暗）',
+    '管整个界面的两样也在一起（配色 / 明暗）',
     !!byId('appearance-accents') && !!byId('appearance-modes')
   );
 
@@ -2723,8 +2747,7 @@ await scenario('外观：聊天区那几样', async () => {
     `${byId('appearance-boldcolor').value} vs ${accentHex}`
   );
 
-  click('#btn-close-appearance');
-  await waitFor('外观弹窗关闭', () => !shown('#appearance-modal'));
+  await leaveAppearanceSection();
 });
 
 // ---------------------------------------------------------------------------
@@ -2971,13 +2994,16 @@ await scenario('右栏：在场角色 / 生成参数 两个页签', async () => 
 // ---------------------------------------------------------------------------
 //  场景：侧栏（稿子的左栏）
 //
-//  这一批把左栏换成了稿子的语言：232 宽、底部入口 3 列 × 2 行、当前会话
+//  这一批把左栏换成了稿子的语言：280 宽、底部入口 3 列 × 2 行、当前会话
 //  左侧一条琥珀竖线、能收起。**圆角和间距 DOM 断言看不出来**（那得靠图），
 //  但「结构和状态对不对」恰恰是最容易悄悄回退的部分 —— 这几条就守这个。
+//  2026-10-12 深夜：星宝嫌三处偏小（收起态图标 / 品牌行 / 底部入口），
+//  整套跟着放大一档，侧栏 280 → 300、收起态 56 → 60 —— 下面这些数也跟着走。
 // ---------------------------------------------------------------------------
 await scenario('侧栏：入口网格与收起', async () => {
   const sidebar = document.querySelector('.sidebar');
-  check('侧栏宽度按稿子（232）', Math.round(sidebar.getBoundingClientRect().width) === 232, String(Math.round(sidebar.getBoundingClientRect().width)));
+  // 232 → 280（2026-10-12 晚）→ 300（底部入口图标 18 / 字 14px 之后需要的列宽）
+  check('侧栏宽度 300', Math.round(sidebar.getBoundingClientRect().width) === 300, String(Math.round(sidebar.getBoundingClientRect().width)));
 
   const foot = $$('.sidebar-foot .btn');
   check('底部入口 6 颗（3 列 × 2 行）', foot.length === 6, String(foot.length));
@@ -3009,17 +3035,18 @@ await scenario('侧栏：入口网格与收起', async () => {
       btnNew ? String(Math.round(btnNew.getBoundingClientRect().height)) : '(没有)'
     );
 
-    // 会话项头像：稿子 2:24 是 20×20 圆角 3（原来 38 圆的，会把 34 高的条目顶到 54）
+    // 会话项头像：稿子 2:24 是 20×20 r=3 —— 2026-10-12 深夜放大到 **48×48 r=4**，
+    // 条目跟着长到 60 高（min-height，不会被裁）。这两条守的是「别再悄悄缩回去」。
     const cav = document.querySelector('.convo-item .convo-avatar');
     const cbox = cav ? cav.getBoundingClientRect() : null;
     check(
-      '会话项头像 20×20 方角 r=3（稿子 2:24）',
-      !!cbox && Math.round(cbox.width) === 20 && getComputedStyle(cav).borderTopLeftRadius === '3px',
+      '会话项头像 48×48 方角 r=4（放大后）',
+      !!cbox && Math.round(cbox.width) === 48 && getComputedStyle(cav).borderTopLeftRadius === '4px',
       cbox ? `${Math.round(cbox.width)} r=${getComputedStyle(cav).borderTopLeftRadius}` : '（没有头像）'
     );
     check(
-      '会话项还是 34 高（稿子 2:23）',
-      active && Math.round(active.getBoundingClientRect().height) === 34,
+      '会话项高 60（配 48 的头像）',
+      active && Math.round(active.getBoundingClientRect().height) === 60,
       active ? String(Math.round(active.getBoundingClientRect().height)) : '（没有 active 项）'
     );
 
@@ -3075,14 +3102,14 @@ await scenario('侧栏：入口网格与收起', async () => {
     );
   }
 
-  // 收起 / 展开：收成 **52px 图标轨**、点同一颗回来
+  // 收起 / 展开：收成 **60px 图标轨**、点同一颗回来
   const toggle = byId('btn-sidebar-toggle');
   check('收起按钮在', !!toggle);
   if (toggle) {
     click('#btn-sidebar-toggle');
     await sleep(150);
     check('收起后加上 collapsed', sidebar.classList.contains('collapsed'), sidebar.className);
-    check('收起后窄到 52', Math.round(sidebar.getBoundingClientRect().width) === 52, String(Math.round(sidebar.getBoundingClientRect().width)));
+    check('收起后窄到 60', Math.round(sidebar.getBoundingClientRect().width) === 60, String(Math.round(sidebar.getBoundingClientRect().width)));
     check('收起后会话列表藏起来', getComputedStyle(byId('convo-list')).display === 'none');
     check('收起后「新对话」也藏起来', getComputedStyle(byId('btn-new')).display === 'none');
 
@@ -3091,9 +3118,9 @@ await scenario('侧栏：入口网格与收起', async () => {
     // 收起来就是一根**空条**，而稿子那里是一整列图标。
     const railDot = document.querySelector('.brand-dot');
     check(
-      '收起后品牌方块还在，而且放大到 20（稿子 y≈10..31）',
+      '收起后品牌方块还在，而且放大到 28（图标轨的唯一大块）',
       !!railDot &&
-        Math.round(railDot.getBoundingClientRect().width) === 20 &&
+        Math.round(railDot.getBoundingClientRect().width) === 28 &&
         getComputedStyle(railDot).display !== 'none',
       railDot ? String(Math.round(railDot.getBoundingClientRect().width)) : '（没有）'
     );
@@ -3125,9 +3152,9 @@ await scenario('侧栏：入口网格与收起', async () => {
       railAv ? getComputedStyle(railAv).backgroundImage : '（没有）'
     );
 
-    // 图标轨里每一行都该落在 52px 之内（不许溢出）
+    // 图标轨里每一行都该落在 60px 之内（不许溢出）
     check(
-      '图标轨内容不溢出（都在 52px 内）',
+      '图标轨内容不溢出（都在 60px 内）',
       foot.every((b) => b.getBoundingClientRect().right <= sidebar.getBoundingClientRect().right + 0.5),
       String(sidebar.getBoundingClientRect().right)
     );
@@ -3135,7 +3162,7 @@ await scenario('侧栏：入口网格与收起', async () => {
     click('#btn-sidebar-toggle');
     await sleep(150);
     check('再点一下展开', !sidebar.classList.contains('collapsed'), sidebar.className);
-    check('展开后又回到 232', Math.round(sidebar.getBoundingClientRect().width) === 232);
+    check('展开后又回到 300', Math.round(sidebar.getBoundingClientRect().width) === 300);
   }
 });
 

@@ -81,6 +81,7 @@ export function initWorldbook(opts = {}) {
   el.wb.btnImport.addEventListener('click', importBooks);
   el.wb.btnNew.addEventListener('click', newWorldbook);
   el.wb.btnNewEntry.addEventListener('click', newEntry);
+  if (el.wb.btnEntryTemplate) el.wb.btnEntryTemplate.addEventListener('click', applyEntryTemplate);
   el.wb.btnDelBook.addEventListener('click', deleteWorldbook);
   el.wb.btnDelEntry.addEventListener('click', deleteEntry);
   el.wb.btnSave.addEventListener('click', saveWorldbook);
@@ -980,6 +981,113 @@ function newWorldbook() {
   openWorldbooksModal(book.id);
   el.wb.name.focus();
   el.wb.name.select();
+}
+
+// ---------------------------------------------------------------------------
+//  世界书条目模板：一键种入世界模拟类卡最常用的四条骨架
+//
+//  从社区角色卡里归纳出来的那套「世界模拟三件套 + 事件表」：
+//  主线走向 / 主要人物 / 专有名词 常驻（世界模型得一直知道这个世界长什么样），
+//  事件表也用常驻 + 固定关键词（玩家提到关键词就把那段剧情演出来）。
+//
+//  四条都是**空骨架**，占位符用 { } 圈起来，只为让用户照着填，不替用户创作。
+//
+//  ⚠️ 刻意**不含**「视角规则」和「人物的变化」：那两条已经做成了内置默认规则
+//    （见 data/narration.js 的 cameraRuleText / changeRuleText），这里再种一份
+//    只会白占 token；用户真要在某一本书里改，直接新建条目覆盖即可。
+// ---------------------------------------------------------------------------
+const WB_ENTRY_TEMPLATE = [
+  {
+    title: '主线走向',
+    constant: true,
+    order: 100,
+    content: [
+      '先定三到五步，再往下写。每步一句话，只写「发生什么」，不写细节：',
+      '1. 开场：{玩家进入这个世界遇到的第一件事}',
+      '2. 升级：{什么打破了原来的平衡}',
+      '3. 转折：{一个不可逆的节点}',
+      '4. 收束：{这件事最后按什么方向落地}',
+      '每轮只推进当前这一步的一小段，不要跳步。'
+    ].join('\n')
+  },
+  {
+    title: '主要人物',
+    constant: true,
+    order: 100,
+    content: [
+      '每个 NPC 一行，写清「想要什么」和「什么挡着他」：',
+      '- {名字}：{身份}；想要{…}，但{…}。',
+      '（只列玩家会碰到的人。装不下的细节另开条目，用关键词触发。）'
+    ].join('\n')
+  },
+  {
+    title: '专有名词',
+    constant: true,
+    order: 100,
+    content: [
+      '这个世界特有的词，一个一个写清它是什么、怎么起作用：',
+      '- {词}：{一句话定义}；{它会造成什么后果}。'
+    ].join('\n')
+  },
+  {
+    title: '事件表',
+    constant: true,
+    order: 888,
+    content: [
+      '下面这些剧情挂在固定关键词上，玩家提到关键词时就把它演出来，不要简略带过：',
+      '- 「{关键词}」→ {发生什么}',
+      '- 「{关键词}」→ {发生什么}',
+      '- 「{关键词}」→ {发生什么}',
+      '没被提到的剧情不要主动推进。'
+    ].join('\n')
+  }
+];
+
+/** 按模板造条目（跳过书里已经同名的，双击两下不会种出两份） */
+function entriesFromTemplate(existing) {
+  const taken = new Set((existing || []).map((e) => String(e.title || '').trim()));
+  return WB_ENTRY_TEMPLATE.filter((t) => !taken.has(t.title)).map((t, i) => ({
+    id: `e${Date.now().toString(36)}${i}${Math.floor(Math.random() * 900 + 100)}`,
+    title: t.title,
+    keys: [],
+    secondaryKeys: [],
+    selectiveLogic: WB_NEW_ENTRY_DEFAULTS.selectiveLogic,
+    content: t.content,
+    order: t.order,
+    constant: t.constant,
+    matchWholeWords: false,
+    caseSensitive: false,
+    probability: WB_NEW_ENTRY_DEFAULTS.probability,
+    enabled: true
+  }));
+}
+
+/**
+ * 「套用模板」：种入四条骨架并跳到第一条。
+ *
+ * 和 newEntry 一样只动**草稿** —— 整本书点「保存」才写进磁盘，
+ * 所以这里不需要确认框（点错了把这四条删掉就行）。
+ */
+function applyEntryTemplate() {
+  const draft = currentDraft();
+  if (!draft) return;
+
+  stashEntryForm();
+
+  const made = entriesFromTemplate(draft.entries);
+  if (!made.length) {
+    showToast('模板条目都已经有了，没有新增');
+    return;
+  }
+
+  draft.entries = [...draft.entries, ...made];
+  markDraftDirty();
+
+  el.wb.entryCount.textContent = wbEntryCountText(draft.entries);
+  renderEntryList();
+  selectEntry(made[0].id);
+
+  showToast(`已种入 ${made.length} 条模板骨架，改完点「保存」才会写进磁盘`);
 }
 
 function newEntry() {

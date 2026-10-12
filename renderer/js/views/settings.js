@@ -45,6 +45,9 @@ import { el } from '../core/dom.js';
 import { h, clear } from '../ui/build.js';
 // 桌宠区块（它自己不依赖本模块，单向 import，不成环）
 import { openPetSection } from './petSettings.js';
+// 外观那一组（2026-10-12 深夜从顶栏弹窗搬进本页，见 index.html 的 #sec-appearance）。
+// 同样单向：appearance.js 不认识本模块。
+import { renderAppearanceForm } from './appearance.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { providers, providerById, isBridgeProvider } from '../data/providers.js';
@@ -210,6 +213,10 @@ export function showSettingsSection(id) {
   // 换了一组 = 换了一页内容，滚动条回到顶部（否则会保留上一组的滚动位置）
   const content = el.viewSettings.querySelector('.settings-content');
   if (content) content.scrollTop = 0;
+
+  // 切到「外观」那一组时回填一次 —— 它读的是**内存里的设置**，不是上面那张表单：
+  // 不填的话，换过主题 / 明暗再回来，色盘还是上一次的颜色（加粗色默认跟随主题色）。
+  if (id === 'sec-appearance') renderAppearanceForm();
 }
 
 /** 旧名保留：外部（入口层）一直按这个名字喊，语义已从「展开折叠卡」变成「切到那一组」 */
@@ -922,6 +929,10 @@ export function openSettings() {
   // 桌宠区块要现拉一次状态（它改的是另一个窗口里的东西，不能拿旧快照画）。
   // 不 await：切屏不该等一个 IPC 往返才完成，区块自己会随后填上。
   openPetSection().catch((err) => console.error('桌宠区块加载失败', err));
+
+  // 外观那一组也回填一遍：它和上面那张表单不是一套数据（读的是 state.settings
+  // 里的 chatFontSize / chatBoldColor / chatBackground），进屏时得自己刷一次。
+  renderAppearanceForm();
 
   // 焦点落在页头那颗「返回」上：键盘（Esc / Tab）有个明确的落点。
   //

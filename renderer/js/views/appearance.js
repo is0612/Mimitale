@@ -7,11 +7,17 @@
 //  实现上都是往 <html> 上写 CSS 变量，样式表里用 var() 取 ——
 //  这样换主题、换背景都不用重写一套规则。
 //
+//  2026-10-12 深夜：这一块从**顶栏弹窗**搬进了 设置 → 外观
+//  （视图六的 #sec-appearance；星宝：「把头部的外观加入到设置里，然后去掉头部的外观」）。
+//  搬家走的是「只挪容器、不碰 id」的办法，所以下面的接线**一行没改**，
+//  真正的差别只有两处：
+//    · 不再有 open / closeAppearanceModal —— 那是弹窗才有的东西；
+//    · renderAppearanceForm() 改成 export，由设置页在进这一屏 / 切到这一组时调。
+//
 //  入口层只从这儿取两个：
 //    · applyChatAppearance()  启动时把设置里的外观刷到 CSS 变量上
-//    · closeAppearanceModal() 全局 Esc 处理器要按固定顺序关弹窗 ——
-//                             那是一条链，留在入口层，这里只提供「关这一个」
-//  其余（打开、回填、落盘、选图、滑块）都由 initAppearance() 内部接线。
+//    · renderAppearanceForm() 设置页切到「外观」那一组时回填控件
+//  其余（落盘、选图、滑块、配色、明暗）都由 initAppearance() 内部接线。
 // ============================================================================
 
 import { api } from '../core/api.js';
@@ -86,8 +92,14 @@ export function syncRangeFill(input) {
   input.style.setProperty('--range-fill', `${pct}%`);
 }
 
-/** 外观面板里各控件的当前值（从内存里的设置读，不读 DOM —— 打开时要用它回填） */
-function renderAppearanceForm() {
+/**
+ * 外观那一组控件的当前值（从内存里的设置读，不读 DOM）。
+ *
+ * ⚠️ 2026-10-12 深夜起是 **export** 的：这一块搬进设置页之后，
+ * 「什么时候回填」不再由这里决定 —— views/settings.js 在进设置页 /
+ * 切到「外观」那一组时会调它（见 initSettings 里那两处调用）。
+ */
+export function renderAppearanceForm() {
   const s = state.settings || {};
 
   const size = Number(s.chatFontSize);
@@ -196,25 +208,14 @@ function normalizeHexColor(text) {
   return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(t) ? t.toLowerCase() : null;
 }
 
-function openAppearanceModal() {
-  renderAppearanceForm();
-  el.appearanceModal.classList.remove('hidden');
-}
+// ⛔ openAppearanceModal / closeAppearanceModal 删于 2026-10-12 深夜：
+//    外观成了设置页里的一组，不再是弹窗 —— 「打开」= 切到那一组（走设置页自己的导航），
+//    「关闭」= 离开设置页。main.js Esc 链里那一段也一起摘了。
 
-export function closeAppearanceModal() {
-  el.appearanceModal.classList.add('hidden');
-  el.input.focus();
-}
-
-/** 绑定外观弹窗的所有事件（打开 / 关闭 / 配色 / 明暗 / 字号 / 加粗色 / 背景图） */
+/** 绑定外观那一组的所有控件（配色 / 明暗 / 字号 / 加粗色 / 背景图） */
 export function initAppearance() {
-  // 对话窗口外观：改完立即生效 + 落盘，所以没有「保存」按钮
-  el.btnAppearance.addEventListener('click', openAppearanceModal);
-  el.btnCloseAppearance.addEventListener('click', closeAppearanceModal);
-  el.btnCloseAppearance2.addEventListener('click', closeAppearanceModal);
-  el.appearanceModal.addEventListener('click', (event) => {
-    if (event.target === el.appearanceModal) closeAppearanceModal();
-  });
+  // 这一组**改完立即生效 + 落盘**，所以没有「保存」按钮
+  // （页头那颗「保存」管的是上面几组配置，不碰这里）。
 
   // 主题配色 / 明暗：整块界面的东西，放在弹窗最上面。
   // 用事件委托而不是逐个绑 —— 色点是三颗、以后加配色就有四颗，

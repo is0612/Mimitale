@@ -3569,11 +3569,14 @@ app.whenReady().then(async () => {
           //（只建空目录是认不到的，所以这里顺带确认下拉里不是「（没找到任何形象）」）
           document.querySelector('#s-pet-scale-field')?.scrollIntoView({ block: 'start' });
           await new Promise(r => setTimeout(r, 300));`,
-        // 外观弹窗：主题配色 + 明暗 + 聊天区那几样都在里面，
-        // 布局（色点会不会换行、分段按钮会不会被 grid 拉满）得靠图看
+        // 外观那一组（2026-10-12 深夜从顶栏弹窗搬进了设置页）：
+        // 主题配色 + 明暗 + 聊天区那几样都在这里，
+        // 布局（色点会不会换行、分段按钮会不会被 grid 拉满）得靠图看。
         appearance: `
-          document.querySelector('#btn-appearance')?.click();
-          await new Promise(r => setTimeout(r, 400));`,
+          document.querySelector('#btn-settings')?.click();
+          await new Promise(r => setTimeout(r, 700));
+          document.querySelector('.settings-nav-item[data-target="sec-appearance"]')?.click();
+          await new Promise(r => setTimeout(r, 300));`,
         panel: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);

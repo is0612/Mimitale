@@ -91,7 +91,7 @@ import {
   closePresetEditor
 } from './views/preset.js';
 import { initSettings, setEditingProvider, openSettings, leaveSettings, closePersonaDialog, expandSettingsSection } from './views/settings.js';
-import { initAppearance, applyChatAppearance, closeAppearanceModal } from './views/appearance.js';
+import { initAppearance, applyChatAppearance } from './views/appearance.js';
 import { initChatPad } from './views/chatPad.js';
 import { streamPainter, initStreamFollow } from './views/stream.js';
 import { initChatImages } from './views/chatImages.js';
@@ -418,10 +418,8 @@ function bindEvents() {
       leaveSettings();
       return;
     }
-    if (!el.appearanceModal.classList.contains('hidden')) {
-      closeAppearanceModal();
-      return;
-    }
+    // ⛔ 「外观弹窗」这一段 2026-10-12 深夜摘掉：外观搬进设置页（#sec-appearance）了，
+    //    它不再是压在设置之上的那一层 —— 在设置页里按 Esc 就走上面那条 leaveSettings()。
     // 剩下这三个以前漏在链外 —— 只开着它们的时候按 Esc 毫无反应，和别的弹窗行为不一致
     if (!el.wb.modal.classList.contains('hidden')) {
       closeWorldbooksModal();

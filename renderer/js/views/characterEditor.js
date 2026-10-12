@@ -1253,6 +1253,47 @@ export function currentEditorCharacter() {
   return editorCharacterById(editingCharacterId);
 }
 
+// ---------------------------------------------------------------------------
+//  开场白模板：一键填进「定场 → 登场 → 留个话头」三段骨架
+//
+//  这套骨架是从社区角色卡里归纳出来的（抽样 150 张开场白，约九成都是这个形状）：
+//  先用一两句把时间、地点、玩家此刻手上在做的事定住；再让角色带着一句**说出口的话**
+//  登场；最后把话头交出去 —— 停在只有玩家能接的地方（一个问题，或一个等着他的沉默）。
+//
+//  它只填空、不做创作：三段用 { } 圈起来当占位，用户一眼看得出哪段还没写。
+//  （注意是单花括号 —— 双花括号 {{user}} / {{char}} 才是会被替换的宏，别写混。）
+// ---------------------------------------------------------------------------
+const FIRST_MES_TEMPLATE = [
+  '{定场：时间 + 地点 + {{user}} 此刻正在做什么，一两句就够}',
+  '',
+  '{登场：{{char}} 的一个动作或神态，紧接着一句直接对 {{user}} 说出口的话}',
+  '',
+  '{话头：停在一个需要 {{user}} 回应的地方 —— 一个问题，或一个等着你的沉默}'
+].join('\n');
+
+/** 「套用开场白模板」：框里已经有内容就先问一句，别默默把用户写的东西冲掉 */
+async function applyFirstMesTemplate() {
+  const box = el.c.first;
+  if (!box) return;
+
+  if (box.value.trim()) {
+    const ok = await confirmDialog({
+      title: '套用开场白模板',
+      message: '开场白里已经有内容，套用模板会把它覆盖掉。',
+      confirmText: '覆盖',
+      danger: true
+    });
+    if (!ok) return;
+  }
+
+  box.value = FIRST_MES_TEMPLATE;
+  // 字数角标挂在 charForm 的 input 委托上（见 initCharacterEditor），
+  // 直接赋 value 不触发事件 —— 手动派一个，让角标和自动增高自己刷。
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  box.focus();
+  box.setSelectionRange(box.value.length, box.value.length);
+}
+
 /** 绑编辑器自己的所有按钮。rerender 由入口层注入 */
 export function initCharacterEditor(injected) {
   actions = { rerender: () => {}, ...(injected || {}) };
@@ -1297,6 +1338,9 @@ export function initCharacterEditor(injected) {
 
   // 剧情选项的开关：只切配置区的显示，值在保存时才写回角色卡
   if (el.c.optionsOn) el.c.optionsOn.addEventListener('change', renderOptionsConfig);
+
+  // 「套用开场白模板」：把「定场 → 登场 → 留个话头」三段骨架填进开场白框
+  if (el.c.btnFirstTemplate) el.c.btnFirstTemplate.addEventListener('click', applyFirstMesTemplate);
 
   // 字数角标：手动输入时刷新（回填路径在 fillCharForm 里统一刷过）
   el.charForm.addEventListener('input', (event) => {

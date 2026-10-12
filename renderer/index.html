@@ -37,7 +37,7 @@
       <div id="convo-list" class="convo-list" role="list"></div>
 
       <!-- 底部 6 颗入口。⚠️ 文字包在 .foot-label 里是**为了收起态**：
-           收成 52px 图标轨时只藏这层文字、图标留着（稿子屏 2 就是这样）。
+           收成 56px 图标轨时只藏这层文字、图标留着（稿子屏 2 就是这样）。
            文字直接裸在 button 里就没法单独隐藏，只能整颗 display:none。 -->
       <div class="sidebar-foot">
         <button id="btn-chars" class="btn btn-ghost btn-block" data-icon="users" aria-label="打开角色库"><span class="foot-label">角色库</span></button>
@@ -97,13 +97,17 @@
           <!-- 顶栏这三颗改成**图标按钮**（设计稿：26×26、方角、深底细描边）——
                标题下面多出一行元信息之后，三个文字按钮会把顶栏挤成两行。
                可发现性交给 title，鼠标停一下就知道是什么。 -->
-          <button id="btn-appearance" class="topbar-icon" data-icon="palette" type="button"
-                  title="外观：主题配色 / 明暗 / 字号 / 加粗色 / 背景图" aria-label="打开对话窗口外观设置"></button>
-          <!-- ⛔ 顶栏那颗「对话宽度」+ 它的弹层（#pad-pop）**2026-10-12 晚去掉**了
-               （星宝：「头部的对话区宽度可以去掉，因为聊天框里已经可以调宽度了」）。
-               现在调宽度只有**消息区两侧那两根抓手**一个入口，拖的时候会浮出
-               「左内缩 224px · 可拖动」那个小标签把准确值报给你。
-               顺带把顶栏从 4 颗图标收回 3 颗（外观 / 视角 / ⋯）。 -->
+          <!-- 2026-10-12 深夜（星宝：「把头部的外观加入到设置里，然后去掉头部的外观，把记忆放出来」）：
+               ① 外观那颗**撤掉** —— 整块搬进了 设置 → 外观（视图六的第 6 组）；
+               ② 空出来的位置给「记忆」：它原来压在「⋯」菜单里，
+                  「这一局记住了什么」是这几个里最常点的一项，值得占一颗。
+               徽标 #memory-count 挂在右上角（.memory-badge 的 .topbar-icon 那一版）。 -->
+          <button id="btn-memory" class="topbar-icon" data-icon="bookmark" type="button"
+                  title="记忆：这一局记住了什么" aria-label="打开记忆管理">
+            <span id="memory-count" class="memory-badge hidden"></span>
+          </button>
+          <!-- ⛔ 顶栏那颗「外观」2026-10-12 深夜去掉（搬进设置页），
+               data-icon="palette" 的图标定义留在 ui/icons.js（设置导航那一组要用）。 -->
           <button id="btn-perspective" class="topbar-icon" data-icon="eye" type="button"
                   title="视角：叙述模式 / 推进节奏 / GM 模式" aria-label="打开视角设置"></button>
           <!-- 其余几项收进「⋯」：一排七八个按钮把标题挤成竖排了。
@@ -111,11 +115,11 @@
                菜单的开关逻辑在 js/ui/menu.js，菜单项自己的事件还在原来各处绑。 -->
           <div class="menu-wrap">
             <button id="btn-more" class="btn btn-ghost btn-sm menu-toggle topbar-icon" type="button"
-                    aria-label="更多操作" aria-haspopup="menu" aria-expanded="false">
-              <span id="more-dot" class="more-dot hidden" aria-hidden="true"></span>⋯
-            </button>
+                    aria-label="更多操作" aria-haspopup="menu" aria-expanded="false">⋯</button>
             <div id="topbar-more" class="menu-pop hidden" role="menu" aria-label="更多操作">
-              <button id="btn-memory" class="menu-item" type="button" role="menuitem">记忆<span id="memory-count" class="memory-badge hidden"></span></button>
+              <!-- 「记忆」2026-10-12 深夜从这里**提到顶栏**了（星宝：「把记忆放出来」）——
+                   它现在是 .topbar-actions 里那颗 data-icon="bookmark" 的图标按钮。
+                   别在菜单里再放一颗：同一个 id 的按钮不能有两份。 -->
               <button id="btn-copy-all" class="menu-item" type="button" role="menuitem">复制全文</button>
               <button id="btn-export-convo" class="menu-item" type="button" role="menuitem">导出</button>
               <!-- 排查用：把最近几次真正发出去的请求原样摊开。
@@ -802,6 +806,26 @@
               </span>
             </button>
 
+            <!-- 外观：2026-10-12 深夜从**顶栏那颗调色盘**搬进来的（星宝：
+                 「把头部的外观加入到设置里，然后去掉头部的外观」）。
+                 内容原样搬自 #appearance-modal，id 全保留 —— views/appearance.js
+                 只认 id，接线一行没改。 -->
+            <button class="settings-nav-item" type="button" data-target="sec-appearance">
+              <span class="settings-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="13.5" cy="6.5" r=".5" />
+                  <circle cx="17.5" cy="10.5" r=".5" />
+                  <circle cx="8.5" cy="7.5" r=".5" />
+                  <circle cx="6.5" cy="12.5" r=".5" />
+                  <path d="M12 2a10 10 0 0 0 0 20 2.5 2.5 0 0 0 2.5-2.5c0-.7-.3-1.3-.7-1.8-.4-.4-.7-1-.7-1.7a2.5 2.5 0 0 1 2.5-2.5H17a5 5 0 0 0 5-5c0-3.6-4.5-6-10-6Z" />
+                </svg>
+              </span>
+              <span class="settings-nav-text">
+                <span class="settings-nav-title">外观</span>
+                <span class="settings-nav-desc">配色、明暗与字号</span>
+              </span>
+            </button>
+
             <button class="settings-nav-item" type="button" data-target="pet-section">
               <span class="settings-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1096,6 +1120,104 @@
           </span>
         </section>
 
+        <!-- 外观：2026-10-12 深夜从**顶栏弹窗**（#appearance-modal）搬进设置页。
+             两档东西，搬过来一点没变：
+               ① 主题配色 + 明暗 —— 整个界面都跟着变（侧栏、按钮、所有弹窗）
+               ② 正文字号 / 加粗色 / 背景图 —— 只管聊天区怎么显示
+             都不碰发给 AI 的内容，改完**立即生效**（页头那颗「保存」管的是上面那几组配置）。
+             ⚠️ 所有 id 都是原样搬的：views/appearance.js 只认 id、不认容器，所以那边
+                只删掉了「弹窗开关」那三行，其余接线一行没动。 -->
+        <section class="panel-section" id="sec-appearance">
+          <div class="section-head">
+            <span class="section-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="13.5" cy="6.5" r=".5" />
+                <circle cx="17.5" cy="10.5" r=".5" />
+                <circle cx="8.5" cy="7.5" r=".5" />
+                <circle cx="6.5" cy="12.5" r=".5" />
+                <path d="M12 2a10 10 0 0 0 0 20 2.5 2.5 0 0 0 2.5-2.5c0-.7-.3-1.3-.7-1.8-.4-.4-.7-1-.7-1.7a2.5 2.5 0 0 1 2.5-2.5H17a5 5 0 0 0 5-5c0-3.6-4.5-6-10-6Z" />
+              </svg>
+            </span>
+            <span class="section-heading">
+              <span class="section-title">外观</span>
+              <span class="section-desc">主题和明暗管整个界面，下面几样只管聊天区</span>
+            </span>
+          </div>
+
+          <!-- 管整个界面的两样并成一行两栏（原来是弹窗里怕它长出可视区才这么排，
+               搬进设置页之后这一屏更宽，两栏也更宽敞）。 -->
+          <div class="appearance-global">
+            <div class="field field-stack">
+              <span class="field-label">主题配色</span>
+              <!-- 四选一。原来是左上角一颗「循环」按钮：点一下换下一套，
+                   想知道「一共有几套、现在在哪套」只能一路点下去。 -->
+              <div id="appearance-accents" class="accent-swatches" role="radiogroup" aria-label="主题配色">
+                <button class="accent-swatch" type="button" data-accent="amber" role="radio" aria-checked="false" title="琥珀灯">
+                  <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">琥珀灯</span>
+                </button>
+                <button class="accent-swatch" type="button" data-accent="pink" role="radio" aria-checked="false" title="草莓奶昔">
+                  <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">草莓奶昔</span>
+                </button>
+                <button class="accent-swatch" type="button" data-accent="blue" role="radio" aria-checked="false" title="苏打气泡">
+                  <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">苏打气泡</span>
+                </button>
+                <button class="accent-swatch" type="button" data-accent="matcha" role="radio" aria-checked="false" title="抹茶奶绿">
+                  <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">抹茶奶绿</span>
+                </button>
+              </div>
+              <span class="field-help">整个界面的主色调。</span>
+            </div>
+
+            <div class="field field-stack">
+              <span class="field-label">明暗</span>
+              <div id="appearance-modes" class="seg-group" role="radiogroup" aria-label="明暗">
+                <button class="seg-btn" type="button" data-mode="light" role="radio" aria-checked="false">白天</button>
+                <button class="seg-btn" type="button" data-mode="dark" role="radio" aria-checked="false">夜间</button>
+              </div>
+              <span class="field-help">和配色是两回事，各挑各的。</span>
+            </div>
+          </div>
+
+          <hr class="appearance-divider" />
+
+          <label class="field field-stack">
+            <span class="field-label">正文字号</span>
+            <div class="appearance-row">
+              <input id="appearance-fontsize" type="range" min="12" max="22" step="1" aria-label="正文字号" />
+              <span id="appearance-fontsize-value" class="appearance-value">14px</span>
+            </div>
+            <span class="field-help">聊天内容的字体大小（12–22px）。标题、表格、心理/旁白会跟着一起缩放。</span>
+          </label>
+
+          <div class="field field-stack">
+            <span class="field-label">加粗字的颜色</span>
+            <div class="appearance-row">
+              <input id="appearance-boldcolor" type="color" value="#409eff" aria-label="选择加粗字颜色" />
+              <input id="appearance-boldcolor-text" type="text" spellcheck="false"
+                     placeholder="留空 = 跟随主题配色。也可以自己填 #e06c75" aria-label="加粗字颜色（十六进制）" />
+              <button id="btn-boldcolor-reset" class="btn btn-ghost btn-sm" type="button">默认</button>
+            </div>
+            <span class="field-help">
+              回复里 <code>**加粗**</code> 的是<b>角色说出口的台词</b>，默认用<b>主题配色</b>显示 ——
+              一眼分得清哪句是谁说的。想换别的颜色就在这里填（填了就覆盖，不再跟随配色）。<br />
+              <code>==高亮==</code> 有自己的样式（主题色 + 底色），不受这里影响。
+            </span>
+          </div>
+
+          <div class="field field-stack">
+            <span class="field-label">对话窗口背景图</span>
+            <div class="appearance-row">
+              <button id="btn-pick-bg" class="btn btn-ghost btn-sm" type="button">选择图片</button>
+              <button id="btn-clear-bg" class="btn btn-ghost btn-sm" type="button">清除</button>
+            </div>
+            <div id="appearance-bg-preview" class="appearance-bg-preview hidden"></div>
+            <span class="field-help">
+              铺在消息区（气泡是实心的，所以文字照样清楚）。<br />
+              图片会先压到最长边 1920 再存进设置文件，只保存在你自己电脑上。
+            </span>
+          </div>
+        </section>
+
         <!-- 桌宠：桌面上那个独立的小窗口。
              它是**另一扇窗口**，不是这里的预览 —— 这里的控件负责改它的设置、
              看它的记忆、试它的人格。改完即时生效（不用点保存），
@@ -1376,6 +1498,12 @@
                 </button>
               </span>
               <textarea id="c-desc" rows="5" spellcheck="false" placeholder="这个角色是谁、长什么样、有什么经历……&#10;可以用 {{char}} 表示角色自己，{{user}} 表示你。"></textarea>
+              <span class="field-help">
+                想一句话把角色立住，可以在最前面加一行 <code>((…))</code>，
+                里面按 <b>动机 → 障碍 → 代价 → 奖励</b> 写全。
+                例：<code>((她察觉你在撩她，因此讨厌你；但你要是真能动摇她，她会极度顺从。))</code><br />
+                障碍写成「玩家本人」的话，你一出现故事就结束了 —— 让障碍落在角色自己身上。
+              </span>
             </label>
 
             <label class="field field-stack" for="c-personality">
@@ -1417,7 +1545,21 @@
                   </svg>
                 </button>
               </span>
+              <!-- 开场白骨架：一键填进「定场 → 登场 → 留个话头」三段。
+                   这套骨架是从社区卡的写法里归纳的（150 张开场白里约九成都是这个形状），
+                   文案在 characterEditor.js 的 FIRST_MES_TEMPLATE。 -->
+              <div class="field-template-bar">
+                <button id="btn-first-template" class="btn btn-ghost btn-sm" type="button"
+                        title="把开场白的骨架填进输入框（已有内容会先问一句）">套用开场白模板</button>
+                <span class="field-template-hint">定场 · 登场 · 留个话头</span>
+              </div>
               <textarea id="c-first" rows="3" spellcheck="false" placeholder="第一句话。绑定角色时如果对话还是空的，会自动作为角色的开场消息插入。"></textarea>
+              <span class="field-help">
+                骨架三段：<b>定场</b>（时间 / 地点 / {{user}} 正在做什么）→ <b>登场</b>（{{char}} 的动作或神态 + 一句说出口的话）
+                → <b>话头</b>（停在一个需要 {{user}} 回应的地方）。<br />
+                最后一段别写满 —— <b>给出去的话语权越明确，第一轮越好接</b>。
+                同一张卡可以多写几条不同状态的开场白（干活 / 闲暇 / 压力下 / 剧情后期）。
+              </span>
             </label>
 
             <label class="field field-stack" for="c-example">
@@ -1707,6 +1849,10 @@
             <div class="wb-entry-head">
               <span class="field-label">条目</span>
               <span id="wb-entry-count" class="wb-count"></span>
+              <!-- 世界书条目模板：一键种入世界模拟类卡最常用的四条骨架。
+                   文案在 worldbook.js 的 WB_ENTRY_TEMPLATE。 -->
+              <button id="btn-wb-entry-template" class="btn btn-ghost btn-sm" type="button"
+                      title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</button>
             </div>
             <div id="wb-entry-list" class="wb-entry-list"></div>
           </div>
@@ -2045,112 +2191,11 @@
     </div>
   </div>
 
-  <!-- ================= 外观 =================
-       两档东西：
-         ① 主题配色 + 明暗 —— 整个界面都跟着变（侧栏、按钮、所有弹窗）
-         ② 字号 / 加粗色 / 背景图 —— 只管聊天区怎么显示
-       都不碰发给 AI 的内容，改完立即生效。 -->
-  <div id="appearance-modal" class="modal hidden">
-    <div class="modal-card appearance-card" role="dialog" aria-modal="true" aria-labelledby="appearance-title">
-      <header class="modal-head">
-        <div class="modal-heading">
-          <h2 id="appearance-title">外观</h2>
-          <p class="modal-sub">主题和明暗管整个界面，下面三样只管聊天区。都不影响发给 AI 的内容</p>
-        </div>
-        <button id="btn-close-appearance" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭外观设置">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
-      </header>
-
-      <div class="modal-body">
-        <!-- 管整个界面的两样并成一行两栏：单栏堆着的话弹窗会长出可视区，
-             底部那几样得滚动才看得见。 -->
-        <div class="appearance-global">
-          <div class="field field-stack">
-            <span class="field-label">主题配色</span>
-            <!-- 四选一（2026-10-12 加「琥珀灯」并设为默认）。原来是左上角一颗
-                 「循环」按钮：点一下换下一套，想知道「一共有几套、现在在哪套」
-                 只能一路点下去。 -->
-            <div id="appearance-accents" class="accent-swatches" role="radiogroup" aria-label="主题配色">
-              <!-- ⚠️ 名字要包在 .accent-label 里：设计稿（切片 A）是「只有选中的那颗
-                   带文字」，未选中的只留一个色点 —— 四套排一行，一眼扫得完。
-                   文字直接裸在按钮里就没法单独隐藏了。 -->
-              <button class="accent-swatch" type="button" data-accent="amber" role="radio" aria-checked="false" title="琥珀灯">
-                <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">琥珀灯</span>
-              </button>
-              <button class="accent-swatch" type="button" data-accent="pink" role="radio" aria-checked="false" title="草莓奶昔">
-                <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">草莓奶昔</span>
-              </button>
-              <button class="accent-swatch" type="button" data-accent="blue" role="radio" aria-checked="false" title="苏打气泡">
-                <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">苏打气泡</span>
-              </button>
-              <button class="accent-swatch" type="button" data-accent="matcha" role="radio" aria-checked="false" title="抹茶奶绿">
-                <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">抹茶奶绿</span>
-              </button>
-            </div>
-            <span class="field-help">整个界面的主色调。</span>
-          </div>
-
-          <div class="field field-stack">
-            <span class="field-label">明暗</span>
-            <div id="appearance-modes" class="seg-group" role="radiogroup" aria-label="明暗">
-              <button class="seg-btn" type="button" data-mode="light" role="radio" aria-checked="false">白天</button>
-              <button class="seg-btn" type="button" data-mode="dark" role="radio" aria-checked="false">夜间</button>
-            </div>
-            <span class="field-help">和配色是两回事，各挑各的。</span>
-          </div>
-        </div>
-
-        <hr class="appearance-divider" />
-
-        <label class="field field-stack">
-          <span class="field-label">正文字号</span>
-          <div class="appearance-row">
-            <input id="appearance-fontsize" type="range" min="12" max="22" step="1" aria-label="正文字号" />
-            <span id="appearance-fontsize-value" class="appearance-value">14px</span>
-          </div>
-          <span class="field-help">聊天内容的字体大小（12–22px）。标题、表格、心理/旁白会跟着一起缩放。</span>
-        </label>
-
-        <div class="field field-stack">
-          <span class="field-label">加粗字的颜色</span>
-          <div class="appearance-row">
-            <input id="appearance-boldcolor" type="color" value="#409eff" aria-label="选择加粗字颜色" />
-            <input id="appearance-boldcolor-text" type="text" spellcheck="false"
-                   placeholder="留空 = 跟随主题配色。也可以自己填 #e06c75" aria-label="加粗字颜色（十六进制）" />
-            <button id="btn-boldcolor-reset" class="btn btn-ghost btn-sm" type="button">默认</button>
-          </div>
-          <span class="field-help">
-            回复里 <code>**加粗**</code> 的是<b>角色说出口的台词</b>，默认用<b>主题配色</b>显示 ——
-            一眼分得清哪句是谁说的。想换别的颜色就在这里填（填了就覆盖，不再跟随配色）。<br />
-            <code>==高亮==</code> 有自己的样式（主题色 + 底色），不受这里影响。
-          </span>
-        </div>
-
-        <div class="field field-stack">
-          <span class="field-label">对话窗口背景图</span>
-          <div class="appearance-row">
-            <button id="btn-pick-bg" class="btn btn-ghost btn-sm" type="button">选择图片</button>
-            <button id="btn-clear-bg" class="btn btn-ghost btn-sm" type="button">清除</button>
-          </div>
-          <div id="appearance-bg-preview" class="appearance-bg-preview hidden"></div>
-          <span class="field-help">
-            铺在消息区（气泡是实心的，所以文字照样清楚）。<br />
-            图片会先压到最长边 1920 再存进设置文件，只保存在你自己电脑上。
-          </span>
-        </div>
-      </div>
-
-      <footer class="modal-foot">
-        <span class="foot-hint">改完立即生效，不用点保存</span>
-        <div class="foot-actions">
-          <button id="btn-close-appearance-2" class="btn btn-ghost" type="button">关闭</button>
-        </div>
-      </footer>
-    </div>
-  </div>
+  <!-- ⛔ 外观弹窗（#appearance-modal）2026-10-12 深夜**删除** ——
+       整块内容搬进了 设置 → 外观（#sec-appearance，视图六里）。
+       这一批同时摘掉了：顶栏那颗 #btn-appearance、dom.js 里的
+       btnAppearance / appearanceModal / btnCloseAppearance / btnCloseAppearance2 四个引用、
+       以及 main.js Esc 链里「先关外观弹窗」那一段。 -->
 
   <!-- ================= 记忆管理弹窗 ================= -->
   <div id="memory-modal" class="modal hidden">

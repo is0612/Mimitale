@@ -465,7 +465,8 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  /* 3 → 6：条目高从 34 涨到 60 之后，3px 的行距会让它们糊成一片。 */
+  gap: 6px;
   margin: 0 -4px;
   padding: 0 4px;
 }
@@ -498,20 +499,25 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
-/* 会话条目左边的方角小图：稿子 2:24 是 **20×20、圆角 3**。
-   ⚠️ 原来是 38px 圆 —— 那张卡是按「两行条目 + 大圆头像」排的；条目并成一行、
-   条目高只有 34 之后，38 的头像会把行高顶到 54，一屏少放两条会话。
+/* 会话条目左边的方角小图。
+   稿子 2:24 画的是 20×20 圆角 3（「一行条目 + 小头像」的紧凑列表），
+   但 2026-10-12 深夜星宝要的是「一眼认人」：**48×48**，条目跟着长到 60 高。
+   两次改动方向相反，不是打架 —— 稿子是「信息密度」优先，这次是「认人」优先。
    ⚠️ 这里**不许写 background** —— `.g1`~`.g6` 是同优先级，写了会盖掉按人配的渐变。 */
 .convo-avatar {
-  flex: 0 0 20px;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-sm);
+  /* 20 → 48（星宝 2026-10-12 深夜：「最近会话的会话图片太小了，大约 48px」）。
+     20 是设计稿 2:24 那个数的口径 —— 但稿子里条目是**紧凑列表**，
+     而这一版要的是「一眼认人」：头像大到能看清立绘，条目跟着长高（34 → 60）。
+     ⚠️ 条目高度是 min-height 不是 height，头像再大也不会被裁。 */
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
   overflow: hidden;
   color: var(--on-accent);
-  font-size: 11px;
+  font-size: 20px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -583,14 +589,15 @@ body {
    2026-10-12 我给它们加过 1px 描边，那是**看低分辨率缩略图看出来的**，
    拿节点数据一对就露馅了。 */
 .sidebar-foot .btn {
-  height: 28px;
-  padding: 0 7px;
-  gap: 5px;
-  /* ⚠️ 11px 不是随手写的：一行 66.67px 里要塞下 `pad 7 + 图标 13 + gap + 文字 + pad 7`，
-     「角色库」三个字在 11.5px 下是 34.5px → 7+13+5+34.5+7 = 66.5，**刚好卡在边界上**，
-     换个字体/缩放就折成「角…」。11px 留出余量，跟稿子（≈11px）也一致。
-     ⚠️ 别用 `min-width: 0` 去救它 —— 那只会把文字截成省略号（看着像功能坏了）。 */
-  font-size: 11px;
+  /* 侧栏 280→300 之后每列 ~89px，这组数才放得下：
+     `pad 9 + 图标 18 + gap 7 + 「角色库」14px(42px) + pad 9 = 85 ≤ 89`。
+     ⚠️ 别再退回 280 / 232 —— 280 每列 82 就只剩 4px 余量、字一旦加粗就折成「角…」；
+        232 那边每列只有 66px，11px 的「角色库」正好卡在边界上
+        （2026-10-12 踩过，别用 min-width:0 去救，那只会变省略号）。 */
+  height: 36px;
+  padding: 0 9px;
+  gap: 7px;
+  font-size: 14px;
   justify-content: flex-start;
   white-space: nowrap;
   overflow: hidden;
@@ -602,7 +609,7 @@ body {
   color: var(--text);
   background: var(--bg-item, var(--bg-card));
 }
-.sidebar-foot .btn svg { flex: 0 0 13px; width: 13px; height: 13px; opacity: 0.75; }
+.sidebar-foot .btn svg { flex: 0 0 18px; width: 18px; height: 18px; opacity: 0.75; }
 /* 收起态要单独藏的那层文字（见下面的 .sidebar.collapsed）。
    ⚠️ 不给 min-width:0 / text-overflow —— 一旦允许收缩，三列里塞不下的那颗就会
    变成「角…」（2026-10-12 踩过）。宁可让它撑破那 1px，也别把字吃了。 */
@@ -750,14 +757,16 @@ body {
    （2026-10-12 右栏的 .cast-card-avatar 就是这么栽的，见那条注释）。 */
 .topbar-avatar {
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
+  /* 26 → 34（星宝 2026-10-12 深夜：「顶部的图标也小了」）。
+     顶栏本来就是给这一颗留的呼吸位，34 不会把它顶高 —— .topbar 的高度由标题那两行决定。 */
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius);
   display: grid;
   place-items: center;
   overflow: hidden;
   color: var(--on-accent);
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -850,15 +859,23 @@ body {
 .menu-toggle { position: relative; }
 
 /* 「⋯」上的小圆点：菜单里藏着东西（比如压了几段记忆）时提醒一下，收起来就看不见了 */
-.more-dot {
+/* 顶栏那颗「记忆」上的角标（2026-10-12 深夜记忆从「⋯」菜单提到顶栏）。
+   原来是「⋯」上的一个小圆点（.more-dot，随这次改动作废删掉了）——
+   现在直接显示**条数**：这一局压了几段剧情，一眼看得见。
+   ⚠️ 位置是负的：按钮只有 32×32，14px 的角标让它压出框一点点。
+   外圈那道光晕（box-shadow）是按钮底色，不然压在图标上糊成一团。 */
+.topbar-icon .memory-badge {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
+  top: -6px;
+  right: -6px;
+  margin-left: 0;
+  min-width: 15px;
+  padding: 0 3px;
+  font-size: 9.5px;
+  line-height: 15px;
+  vertical-align: 0;
   box-shadow: 0 0 0 2px var(--bg-side);
+  pointer-events: none;
 }
 
 .menu-pop {
@@ -921,7 +938,8 @@ body {
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: inherit;
-  font-size: 12px;
+  /* 12 → 13：顶栏那几颗图标 26 → 32 之后，这颗实心白块上的字小一号会显得别扭。 */
+  font-size: 13px;
   /* 顶栏那一行里只有它是「实心的白块」，稍微加粗一点才压得住 */
   font-weight: 500;
   cursor: pointer;
@@ -3130,15 +3148,18 @@ body {
   overflow: hidden;            /* 卡头底色要贴住圆角，否则四角会露出直角 */
 }
 
-/* 「套用互动模板」那一行：按钮 + 一句说明，贴在属性卡头上方 */
-.attr-template-bar {
+/* 「套用互动模板」那一行：按钮 + 一句说明，贴在属性卡头上方。
+   开场白那一行（「套用开场白模板」）用的是同一套排布，所以两个类名都挂上。 */
+.attr-template-bar,
+.field-template-bar {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 8px;
 }
 
-.attr-template-hint {
+.attr-template-hint,
+.field-template-hint {
   font-size: 12px;
   color: var(--text-dim);
 }
@@ -4425,6 +4446,10 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   padding: 12px 12px 0;
 }
 
+/* 「套用模板」那颗按钮：这一行是 baseline 对齐的（为了跟条目数对齐），
+   按钮挂上去会歪，所以单独居中并推到最右。 */
+.wb-entry-head .btn { align-self: center; margin-left: auto; }
+
 .wb-entry-head .field-label { padding-top: 0; }
 
 .wb-entries-title { display: flex; flex-direction: column; gap: 4px; }
@@ -4754,8 +4779,9 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   align-items: center;
   gap: 10px;
   margin: 0 14px 10px;
-  /* 稿子 2:113 = h34：7px 上下内边距 + 20px 方角头像 = 34（原来 7px + 34px 圆头像 = 48） */
-  padding: 7px 12px;
+  /* 稿子 2:113 = h34（7px 内边距 + 20px 方角头像）。
+     2026-10-12 深夜头像 20 → 28，这条跟着涨到 46（9 + 28 + 9）。 */
+  padding: 9px 12px;
   border: 0;
   /* ⚠️ 方角通栏，不是 12px 圆角 —— 12px 是「大圆角时代」的漏网（跟 .btn 那次同一类）。 */
   border-radius: var(--radius);
@@ -4815,13 +4841,15 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
    ⚠️ 这里**不许写 background** —— `.g1`~`.g6` 是同优先级，写了会盖掉 entityTone 的按人配色。 */
 .panel-avatar {
   flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
+  /* 20 → 28（星宝 2026-10-12 深夜：「在场角色的图标也小了」）。
+     入口条跟着涨到 46 高（见 .panel-box 的 padding）。 */
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   color: var(--on-accent);
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1;
   display: inline-flex;
@@ -6383,7 +6411,9 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .cast-panel {
-  flex: 0 0 264px;
+  /* 264 → 280 → 300：**始终跟左栏等宽**（星宝 2026-10-12 晚：侧栏加宽，右栏一起走）。
+     两边同屏时一宽一窄会立刻看出来，所以这里不许单独改。 */
+  flex: 0 0 300px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -6502,7 +6532,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   padding: 10px;
 }
 
-/* 一个在场角色 = 一块。全空的时候整栏收起来（.hidden），不占那 264px。 */
+/* 一个在场角色 = 一块。全空的时候整栏收起来（.hidden），不占那 280px。 */
 .cast-card {
   flex: 0 0 auto;
   display: flex;
@@ -6528,15 +6558,16 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
    写这条时 `notes-ui.md` 已经明令过「avatar 规则里一律不许写 background」。
    （`.panel-avatar` / `.sc-avatar` / `.convo-avatar` / `.topbar-avatar` 都遵守了。） */
 .cast-card-avatar {
-  flex: 0 0 26px;
-  width: 26px;
-  height: 26px;
+  /* 26 → 32（同批：在场角色这几处的图标一起放大）。 */
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius);
   overflow: hidden;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--on-accent);
 }
@@ -6633,11 +6664,15 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 /* ---- 顶栏图标按钮（设计稿：26×26、方角、深底 + 细描边）----
-   可发现性交给 title —— 这三颗不写文字，是为了给标题下面那行元信息腾地方。 */
+   可发现性交给 title —— 这几颗不写文字，是为了给标题下面那行元信息腾地方。
+   2026-10-12 深夜 26 → **32**（星宝：「顶部的图标也小了」）。
+   32 仍然小于顶栏的 min-height 48，所以顶栏高度一点不变。 */
 .topbar-icon {
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
+  /* relative：顶上那颗「记忆」的角标（.memory-badge）要靠它定位。 */
+  position: relative;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6651,8 +6686,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 .topbar-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 17px;
+  height: 17px;
 }
 
 .topbar-icon:hover,
@@ -6855,8 +6890,13 @@ body.pad-dragging {
 .sidebar {
   /* position: relative 是给那颗收起按钮当定位基准的 */
   position: relative;
-  width: 232px;
-  flex: 0 0 232px;
+  /* 232 → 280（星宝 2026-10-12 晚）→ **300**（同一天深夜里他又说「有些地方有点小」）。
+     底部入口是**保持 3 列**、还把图标和字都放大一档的那一头，所以宽度得跟着让：
+     280 每列 ~82px，只够「pad 8 + 图标 16 + gap 6 + 13px 的『角色库』(39) + pad 8 = 77」；
+     这一版图标 18、字 14px（「角色库」≈42）→ 需要 ~85px，列宽 89 才不折行。
+     ⚠️ 别再退回 232 —— 那边每列只有 66px，光 11px 的「角色库」就卡在边界上。右栏同步 300。 */
+  width: 300px;
+  flex: 0 0 300px;
   padding: 12px 10px;
   gap: 10px;
 }
@@ -6867,8 +6907,8 @@ body.pad-dragging {
   top: 14px;
   right: 8px;
   z-index: 2;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6877,7 +6917,7 @@ body.pad-dragging {
   border-radius: var(--radius-sm);
   background: none;
   color: var(--text-faint);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   cursor: pointer;
 }
@@ -6893,10 +6933,13 @@ body.pad-dragging {
    ⚠️ 那 6 颗在稿子里是**在顶部**（紧跟品牌块），不是留在底部 ——
       所以收起态要用 order 把它们挪上去，并把 .sidebar-foot 从 3 列网格改成 1 列。 */
 .sidebar.collapsed {
-  width: 52px;
-  flex: 0 0 52px;
+  /* 52 → 56 → **60**：图标放到 20px、品牌方块 28px、会话会徽 28px 之后，
+     56 的窄条只剩 40px 内容区，28px 的方块加 8px 边距就顶满了；60 留出 44px
+     （左右各 8 padding），图标居中才不贴边。 */
+  width: 60px;
+  flex: 0 0 60px;
   padding: 10px 8px 12px;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* 收起态藏掉的都是展开态才成立的东西：新对话按钮 / 名字 / 版本号 / 列表标题 / 列表本体。
@@ -6920,8 +6963,8 @@ body.pad-dragging {
 }
 
 .sidebar.collapsed .brand-dot {
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-sm);
 }
 
@@ -6931,10 +6974,10 @@ body.pad-dragging {
 .sidebar.collapsed .sidebar-toggle {
   position: static;
   order: 2;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   margin: 0 auto;
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .sidebar.collapsed .sidebar-foot {
@@ -6950,7 +6993,7 @@ body.pad-dragging {
 }
 
 .sidebar.collapsed .sidebar-foot .btn {
-  height: 30px;
+  height: 40px;
   padding: 0;
   justify-content: center;
 }
@@ -6959,7 +7002,13 @@ body.pad-dragging {
   display: none;
 }
 
+/* 收起态只剩图标，这一条才是这几颗真正的观感大小 ——
+   以前它只改 opacity，尺寸默默继承展开态的 13px，收起来就是一根细牙签。
+   2026-10-12 深夜：16→18→**20**（星宝「收起来的图标有点小」）。 */
 .sidebar.collapsed .sidebar-foot .btn svg {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
   opacity: 1;
 }
 
@@ -6974,11 +7023,12 @@ body.pad-dragging {
   display: grid;
   place-items: center;
   margin: auto auto 0;
-  width: 22px;
-  height: 22px;
+  /* 28 → 32：跟顶栏那颗（34）取齐，展开态列表里也是 48 的大头像了。 */
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius);
   overflow: hidden;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--on-accent);
 }
@@ -7002,17 +7052,20 @@ body.pad-dragging {
 }
 
 .brand {
-  gap: 8px;
-  /* 右边留 24px：那颗「收起侧栏」按钮是绝对定位在右上角的，
+  /* 2026-10-12 晚（星宝：「如我所书的标题和 logo 有点小」）：标记 16→20、名字 13→15。
+     同一天深夜里他又说了一次「还是小」，于是**再上一档**：标记 20→24、名字 15→17。
+     品牌行是这一栏的眼睛，比正文大一档才立得住；字数不宽（4 个字），17px 放得下。 */
+  gap: 11px;
+  /* 右边留 30px：那颗「收起侧栏」按钮是绝对定位在右上角的（宽 20 + right 8），
      不给它让位就会正好压在版本号「v1.0」上面。 */
-  padding: 4px 24px 4px 6px;
+  padding: 4px 30px 4px 6px;
 }
 
 /* 品牌标记：稿子是一个 16×16 的**方角琥珀块**。
    原来那个会呼吸的渐变圆点是「聊天软件」时期的符号，跟这套方角语言不搭。 */
 .brand-dot {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-sm);
   background: var(--accent);
   box-shadow: none;
@@ -7021,9 +7074,9 @@ body.pad-dragging {
 
 .brand-name {
   margin-right: auto;
-  font-size: 13px;
-  font-weight: 400;
-  letter-spacing: 0;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   /* ⚠️ 原来这行字是渐变填充（background-clip: text + text-fill-color: transparent）。
      光写 color 没用 —— -webkit-text-fill-color 的优先级比 color 高，
      必须把它显式改回实色，否则字还是渐变的（甚至可能整行看不见）。 */
@@ -7039,11 +7092,13 @@ body.pad-dragging {
    现在条目是深色底，光靠一点点底色差根本分不出哪条是当前。 */
 .convo-item {
   position: relative;
-  gap: 8px;
-  min-height: 34px;
-  padding: 7px;
+  gap: 10px;
+  /* 34 → 60：头像 20 → 48 之后，条目得跟着抬头（48 + 上下各 6）。
+     ⚠️ min-height 而不是 height —— 名字/时间换行或将来加第二行都不会被裁。 */
+  min-height: 60px;
+  padding: 6px;
   border-radius: var(--radius);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .convo-title {
@@ -7052,7 +7107,7 @@ body.pad-dragging {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .convo-item.active::before {
@@ -7061,7 +7116,8 @@ body.pad-dragging {
   left: 0;
   top: 50%;
   width: 2px;
-  height: 18px;
+  /* 18 → 28：条目从 34 长到 60 之后，这条选中标记也得跟着长，否则显得很短促。 */
+  height: 28px;
   border-radius: 1px;
   background: var(--accent);
   transform: translateY(-50%);
@@ -7070,7 +7126,7 @@ body.pad-dragging {
 /* 右端那个时间：今天给时刻、昨天给「昨天」、一周内给星期几、更早给日期 */
 .convo-time {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   user-select: none;

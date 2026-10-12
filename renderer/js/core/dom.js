@@ -97,9 +97,11 @@ export const el = {
   // 浮动状态卡的容器（铺满对话列、本身不挡鼠标，只有卡片实体可交互）
   stateCards: $('state-cards'),
   // 外观（主题配色 + 明暗管整个界面，字号 / 加粗色 / 背景图只管聊天区）
-  btnAppearance: $('btn-appearance'),
-  appearanceModal: $('appearance-modal'),
-  // 「主题配色」三选一：容器里是三个 [data-accent] 按钮，选中态由 ui/theme.js 刷
+  // ⛔ 2026-10-12 深夜：这一块从**顶栏弹窗**搬进了 设置 → 外观（#sec-appearance），
+  //    所以 btnAppearance / appearanceModal / btnCloseAppearance* 四个引用一起摘了
+  //    —— 它们对应的 DOM 已经不存在，留着只会是一堆 null（谁碰谁炸）。
+  //    下面这些控件 id **一个没变**，原样复用。
+  // 「主题配色」四选一：容器里是四个 [data-accent] 按钮，选中态由 ui/theme.js 刷
   appearanceAccents: $('appearance-accents'),
   // 「明暗」两态：容器里是两个 [data-mode] 按钮，同上
   appearanceModes: $('appearance-modes'),
@@ -119,8 +121,7 @@ export const el = {
   btnPickBg: $('btn-pick-bg'),
   btnClearBg: $('btn-clear-bg'),
   btnBoldColorReset: $('btn-boldcolor-reset'),
-  btnCloseAppearance: $('btn-close-appearance'),
-  btnCloseAppearance2: $('btn-close-appearance-2'),
+  // ⛔ btnCloseAppearance / btnCloseAppearance2 同上，随弹窗一起删了。
   // 编辑类弹窗头上的「放大」按钮：把**这个弹窗自己**铺满应用窗口（编辑时能多看见几行）。
   // ⚠️ 不是把窗口切成系统全屏（那版做过、已撤掉，见 ui/modalMax.js 顶部注释）。
   btnFsChars: $('btn-fs-chars'),
@@ -132,7 +133,8 @@ export const el = {
   btnMore: $('btn-more'),
   moreMenu: $('topbar-more'),
   // 「⋯」上的小圆点：菜单里藏着东西（比如有记忆摘要）时提示一下，不然收起来就看不见了
-  moreDot: $('more-dot'),
+  // ⛔ moreDot（「⋯」上那颗小圆点）2026-10-12 深夜删：它提示的是「菜单里有记忆」，
+  //    而记忆已经提到顶栏、改成自己的角标了（见 style.css 的 .topbar-icon .memory-badge）。
   // 「帮我想想」的建议条
   suggestStrip: $('suggest-strip'),
   suggestList: $('suggest-list'),
@@ -235,6 +237,7 @@ export const el = {
     personality: $('c-personality'),
     scenario: $('c-scenario'),
     first: $('c-first'),
+    btnFirstTemplate: $('btn-first-template'),
     example: $('c-example'),
     system: $('c-system'),
     post: $('c-post'),
@@ -351,6 +354,7 @@ export const el = {
     entryList: $('wb-entry-list'),
     btnPreview: $('btn-preview-wb'),
     btnNewEntry: $('btn-new-entry'),
+    btnEntryTemplate: $('btn-wb-entry-template'),
     btnExport: $('btn-export-wb'),
     btnDelBook: $('btn-del-worldbook'),
     charList: $('wb-char-list'),
