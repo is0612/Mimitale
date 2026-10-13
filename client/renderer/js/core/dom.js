@@ -127,10 +127,10 @@ export const el = {
   btnClearBg: $('btn-clear-bg'),
   btnBoldColorReset: $('btn-boldcolor-reset'),
   // ⛔ btnCloseAppearance / btnCloseAppearance2 同上，随弹窗一起删了。
-  // 编辑类弹窗头上的「放大」按钮：把**这个弹窗自己**铺满应用窗口（编辑时能多看见几行）。
+  // 剩下的编辑弹窗头上的「放大」按钮：把**这个弹窗自己**铺满应用窗口（编辑时能多看见几行）。
   // ⚠️ 不是把窗口切成系统全屏（那版做过、已撤掉，见 ui/modalMax.js 顶部注释）。
-  btnFsChars: $('btn-fs-chars'),
-  btnFsWorldbooks: $('btn-fs-worldbooks'),
+  // ⚠️ 角色卡 / 世界书那两颗 2026-10-13 撤了：两个编辑器从弹窗改成**页面**，
+  //    本来就占满主区域，没有「放大」这回事（和设置那颗一样）。
   btnFsPreset: $('btn-fs-preset'),
   // 视角设置
   btnPerspective: $('btn-perspective'),
@@ -176,14 +176,16 @@ export const el = {
   pickList: $('pick-list'),
   pickCancel: $('pick-cancel'),
   toast: $('toast'),
-  // 角色库
-  charsModal: $('chars-modal'),
+  // 角色编辑器（视图七：2026-10-13 从弹窗改成页面）
   charsTitle: $('chars-title'),
   charsSub: $('chars-sub'),
-  // 主区域的五个视图：聊天 / 角色列表页 / 世界书列表页 / 预设列表页 / 帮助页
+  // 主区域的七个视图：聊天 / 角色列表页 / 角色编辑页 / 世界书列表页 / 世界书编辑页
+  //                / 预设列表页 / 帮助页（设置页在下面单独一段）
   viewChat: $('view-chat'),
   viewChars: $('view-chars'),
+  viewCharEditor: $('view-char-editor'),
   viewWorldbooks: $('view-worldbooks'),
+  viewWbEditor: $('view-wb-editor'),
   viewPresets: $('view-presets'),
   viewHelp: $('view-help'),
   // 帮助页右上角「复制优化提示词」（文本在 views/help.js）
@@ -355,10 +357,10 @@ export const el = {
     btnDel: $('btn-del-preset')
   },
   // 世界书
+  // ⚠️ 编辑器本体（view-wb-editor）不在这里登记：它 2026-10-13 从弹窗改成了**页面**，
+  //    归上面那排视图（el.viewWbEditor）—— 这里剩下的都是编辑器**里面**的控件。
   wb: {
-    modal: $('worldbooks-modal'),
     btnClose: $('btn-close-worldbooks'),
-    btnClose2: $('btn-close-worldbooks-2'),
     btnImport: $('btn-import-lorebook'),
     btnNew: $('btn-new-worldbook'),
     entriesEmpty: $('wb-entries-empty'),

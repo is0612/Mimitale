@@ -711,7 +711,7 @@ await scenario('角色库：新建角色', async () => {
   const before = (await savedCharacters()).length;
 
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   check('标题是「新建角色」', byId('chars-title').textContent === '新建角色', byId('chars-title').textContent);
   check('保存前列表里没有多出卡片', $$('#char-page-grid .char-card').length === before);
   check('保存前「删除角色」是禁用的', byId('btn-del-char').disabled === true);
@@ -733,7 +733,7 @@ await scenario('角色库：新建角色', async () => {
   check('落盘的角色名正确', last.name === '冒烟测试角色', `落盘的是「${last.name}」`);
   check('落盘的描述正确', last.description === '这是冒烟测试写进去的描述', `落盘的是「${last.description}」`);
   // 新建的角色保存完就完事了：弹窗自己关掉，回到角色列表看新卡
-  check('保存后弹窗自己关掉（不用再点一次关闭）', !shown('#chars-modal'));
+  check('保存后弹窗自己关掉（不用再点一次关闭）', !shown('#view-char-editor'));
   check('保存后没有多问一句「放弃新建？」', !shown('#confirm-modal'));
 
   const card = $$('#char-page-grid .char-card')[0];
@@ -753,7 +753,7 @@ await scenario('角色库：放弃新建', async () => {
   const cardsBefore = $$('#char-page-grid .char-card').length;
 
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '半途而废');
 
   click('#btn-close-chars');
@@ -761,7 +761,7 @@ await scenario('角色库：放弃新建', async () => {
   check('确认框里带了刚输入的名字', byId('confirm-message').textContent.includes('半途而废'), byId('confirm-message').textContent);
 
   click('#confirm-ok');
-  await waitFor('编辑器关闭', () => !shown('#chars-modal'));
+  await waitFor('编辑器关闭', () => !shown('#view-char-editor'));
   await sleep(150);
 
   const after = (await savedCharacters()).length;
@@ -785,7 +785,7 @@ await scenario('角色编辑器：长文本框自动增高', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   const desc = byId('c-desc');
   const example = byId('c-example');
@@ -796,6 +796,9 @@ await scenario('角色编辑器：长文本框自动增高', async () => {
   //  （弹窗卡片 16、服务商卡 14、属性行 7、消息工具条 6……），
   //  而**整套冒烟在扫前扫后都是全绿** —— 一条断言都没守圆角。
   //  这里钉几个「一眼能看见的面」：计算样式必须等于 token，不是等于某个字面数字。
+  //  ⚠️ 取样点 2026-10-13 换过一次：角色编辑器从弹窗改成了页面，那张
+  //     `.modal-card` 已经不存在，改用编辑器里的「属性」卡片（同样一眼能看见、
+  //     同样必须读 token）。
   {
     const root = getComputedStyle(document.documentElement);
     const R = root.getPropertyValue('--radius').trim();
@@ -804,7 +807,7 @@ await scenario('角色编辑器：长文本框自动增高', async () => {
       const node = $(sel);
       return node ? getComputedStyle(node).borderTopLeftRadius : '(没有)';
     };
-    check('弹窗卡片圆角 = --radius（不是写死的 16）', radiusOf('#chars-modal .modal-card') === R, `${radiusOf('#chars-modal .modal-card')} vs ${R}`);
+    check('编辑器里的卡片圆角 = --radius（不是写死的 16）', radiusOf('.char-form .attr-panel') === R, `${radiusOf('.char-form .attr-panel')} vs ${R}`);
     check('通用输入框圆角 = --radius-sm', radiusOf('#c-name') === RSM, radiusOf('#c-name'));
   }
 
@@ -857,7 +860,7 @@ await scenario('角色编辑器：长文本框自动增高', async () => {
   click('#btn-close-chars');
   await waitFor('弹出放弃确认框', () => shown('#confirm-modal'));
   click('#confirm-ok');
-  await waitFor('编辑器关闭', () => !shown('#chars-modal'));
+  await waitFor('编辑器关闭', () => !shown('#view-char-editor'));
   await sleep(150);
 });
 
@@ -877,7 +880,7 @@ await scenario('角色编辑器：字数角标与放大编辑', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   const desc = byId('c-desc');
   const badge = byId('c-desc-count');
@@ -910,7 +913,7 @@ await scenario('角色编辑器：字数角标与放大编辑', async () => {
   big.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await sleep(80);
   check('Esc 收起了放大浮层', !document.querySelector('.char-expand'));
-  check('Esc 没有连编辑器一起关掉', shown('#chars-modal'));
+  check('Esc 没有连编辑器一起关掉', shown('#view-char-editor'));
   check('关掉浮层后主框内容还在', desc.value === '放大层里写的长内容', desc.value);
 
   // --- 再开一次，这次走「完成」按钮 ---
@@ -925,7 +928,7 @@ await scenario('角色编辑器：字数角标与放大编辑', async () => {
   click('#btn-close-chars');
   await waitFor('弹出放弃确认框', () => shown('#confirm-modal'));
   click('#confirm-ok');
-  await waitFor('编辑器关闭', () => !shown('#chars-modal'));
+  await waitFor('编辑器关闭', () => !shown('#view-char-editor'));
   await sleep(120);
 });
 
@@ -939,7 +942,7 @@ await scenario('角色编辑器：备选开场白增删改', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   const list = byId('c-alt-list');
   const badge = byId('c-alt-count');
@@ -988,7 +991,7 @@ await scenario('角色编辑器：备选开场白增删改', async () => {
   setValue('#c-name', NAME);
   setValue('#c-first', 'F-主开场白');
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(150);
 
   const saved = (await savedCharacters()).find((c) => c.name === NAME);
@@ -1024,7 +1027,7 @@ await scenario('角色库：编辑已有角色', async () => {
   check('有可编辑的卡片', cards.length > 0);
 
   click(buttonByText(cards[0], '编辑'));
-  await waitFor('编辑器打开', () => shown('#chars-modal'));
+  await waitFor('编辑器打开', () => shown('#view-char-editor'));
   check('编辑已有角色时标题是「编辑角色」', byId('chars-title').textContent === '编辑角色', byId('chars-title').textContent);
   check('「删除角色」按钮可用', byId('btn-del-char').disabled === false);
 
@@ -1082,7 +1085,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '属性测试角色');
   setValue('#c-desc', '属性测试角色的设定文本');
   setValue('#c-personality', '沉默寡言');
@@ -1252,7 +1255,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   check('下拉里选「未分组」就把它拿出来了', listedNames().join(',') === '好感度', JSON.stringify(listedNames()));
 
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(150);
 
   // 年龄/性别/种族已从编辑器移除（归入描述文字），但「身份四项流转」这条链路
@@ -3513,58 +3516,70 @@ await scenario('侧栏：入口网格与收起', async () => {
 
 // ---------------------------------------------------------------------------
 //  场景 15b：编辑类弹窗头上的「放大到窗口」按钮
-//  三个弹窗各一颗（角色卡 / 世界书 / 预设），行为一样：把**那个弹窗自己**
-//  铺满应用窗口（纯渲染层：给 .modal 挂 modal-max，CSS 撑满；不碰 BrowserWindow，
-//  所以这里没有假后端可验 —— 验的就是 class + 按钮状态）。
-//  ⚠️ 2026-10-09：设置那颗撤了 —— 设置从弹窗改成**页面**（视图六），
-//     它本来就占满整个窗口，没有「放大」这回事。
+//  行为：把**那个弹窗自己**铺满应用窗口（纯渲染层：给 .modal 挂 modal-max，
+//  CSS 撑满；不碰 BrowserWindow，所以这里没有假后端可验 —— 验的是
+//  class + 按钮状态）。
+//  ⚠️ 2026-10-09：设置那颗撤了 —— 设置从弹窗改成**页面**（视图六）。
+//  ⚠️ 2026-10-13：角色卡 / 世界书那两颗也撤了 —— 两个编辑器同样改成了**页面**
+//     （视图七 / 视图八），本来就占满主区域。**只剩预设还是弹窗**，所以这个场景
+//     现在只测它一颗，另外两头改成「不该再有放大按钮」的断言。
 //  ⚠️ 场景结束必须把弹窗都关掉、且不留 modal-max：后面的截图/布局断言
 //     都按「弹窗是正常大小」算，留着放大的状态会拍出一张铺满屏幕的图。
 // ---------------------------------------------------------------------------
 await scenario('编辑弹窗的放大按钮', async () => {
-  const ids = ['btn-fs-chars', 'btn-fs-worldbooks', 'btn-fs-preset'];
   const maxed = (id) => byId(id).classList.contains('modal-max');
-  check('三个编辑弹窗头上都有放大按钮', ids.every((id) => !!byId(id)));
+  check('预设头上那颗放大按钮还在', !!byId('btn-fs-preset'));
   check('设置那颗已经撤掉（它成了页面，没有「放大」这回事）', !byId('btn-fs-settings'));
+  check('角色卡那颗也撤了（编辑器成了页面）', !byId('btn-fs-chars'));
+  check('世界书那颗也撤了（编辑器成了页面）', !byId('btn-fs-worldbooks'));
 
-  // --- 开一下、放大、还原（拿世界书编辑器当样本）---
-  click('#btn-worldbooks');
-  await waitFor('切到世界书列表页', () => shown('#view-worldbooks'));
-  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书编辑器打开', () => shown('#worldbooks-modal'));
-  check('刚打开时不是放大状态', !maxed('worldbooks-modal'));
+  // --- 开一下、放大、还原（拿预设编辑器当样本）---
+  click('#btn-presets');
+  await waitFor('切到预设列表页', () => shown('#view-presets'));
+  click(buttonByText($$('#preset-page-grid .char-card')[0], '编辑'));
+  await waitFor('预设编辑器打开', () => shown('#preset-modal'));
+  check('刚打开时不是放大状态', !maxed('preset-modal'));
 
-  click('#btn-fs-worldbooks');
-  await waitFor('弹窗放大', () => maxed('worldbooks-modal'));
-  check('点一下把弹窗放大到窗口', maxed('worldbooks-modal'));
+  click('#btn-fs-preset');
+  await waitFor('弹窗放大', () => maxed('preset-modal'));
+  check('点一下把弹窗放大到窗口', maxed('preset-modal'));
   // 图标是「四角向外 / 向内」两张 SVG 二选一，只看 class 验不出来；
   // aria-pressed 和 title 是读屏 / 悬停唯一能读到的状态，必须跟着走。
-  check('放大后按钮标成「已按下」', byId('btn-fs-worldbooks').getAttribute('aria-pressed') === 'true');
-  check('放大后按钮改说「还原」', /还原/.test(byId('btn-fs-worldbooks').getAttribute('title') || ''));
+  check('放大后按钮标成「已按下」', byId('btn-fs-preset').getAttribute('aria-pressed') === 'true');
+  check('放大后按钮改说「还原」', /还原/.test(byId('btn-fs-preset').getAttribute('title') || ''));
 
-  click('#btn-fs-worldbooks');
-  await waitFor('弹窗还原', () => !maxed('worldbooks-modal'));
-  check('再点一下还原回正常大小', !maxed('worldbooks-modal'));
-  check('还原后按钮回到「未按下」', byId('btn-fs-worldbooks').getAttribute('aria-pressed') === 'false');
-
-  // --- 状态挂在各自的弹窗上：放大了世界书，别的不该跟着放大 ---
-  click('#btn-fs-worldbooks');
-  await waitFor('世界书再放大', () => maxed('worldbooks-modal'));
-  check('放大只作用于它自己那个弹窗', !maxed('chars-modal') && !maxed('preset-modal'));
+  click('#btn-fs-preset');
+  await waitFor('弹窗还原', () => !maxed('preset-modal'));
+  check('再点一下还原回正常大小', !maxed('preset-modal'));
+  check('还原后按钮回到「未按下」', byId('btn-fs-preset').getAttribute('aria-pressed') === 'false');
 
   // --- 关掉弹窗时把放大状态摘掉，下次打开别记住 ---
-  click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗关闭', () => !shown('#worldbooks-modal'));
-  check('关掉弹窗时放大状态被摘掉', !maxed('worldbooks-modal'));
+  click('#btn-fs-preset');
+  await waitFor('预设再放大', () => maxed('preset-modal'));
+  click('#btn-close-preset');
+  await waitFor('预设弹窗关闭', () => !shown('#preset-modal'));
+  check('关掉弹窗时放大状态被摘掉', !maxed('preset-modal'));
 
-  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书编辑器重开', () => shown('#worldbooks-modal'));
-  check('重新打开回到正常大小（不记住上次放大）', !maxed('worldbooks-modal'));
-  click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗再关', () => !shown('#worldbooks-modal'));
+  click(buttonByText($$('#preset-page-grid .char-card')[0], '编辑'));
+  await waitFor('预设编辑器重开', () => shown('#preset-modal'));
+  check('重新打开回到正常大小（不记住上次放大）', !maxed('preset-modal'));
+  click('#btn-close-preset');
+  await waitFor('预设弹窗再关', () => !shown('#preset-modal'));
 
-  check('收尾后没有任何弹窗还留着放大状态',
-    ['worldbooks-modal', 'chars-modal', 'preset-modal'].every((id) => !maxed(id)));
+  check('收尾后弹窗没有留着放大状态', !maxed('preset-modal'));
+
+  // --- 角色编辑器 / 世界书编辑器：换成「整页」之后不该再有任何 modal-max 的痕迹 ---
+  click('#btn-chars');
+  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  click(buttonByText($$('#char-page-grid .char-card')[0], '编辑'));
+  await waitFor('角色编辑页打开', () => shown('#view-char-editor'));
+  check(
+    '角色编辑页不是浮层（在文档流里，没有 z-index）',
+    getComputedStyle(byId('view-char-editor')).position !== 'fixed',
+    getComputedStyle(byId('view-char-editor')).position
+  );
+  click('#btn-close-chars');
+  await waitFor('回到角色库', () => shown('#view-chars'));
 });
 
 // ---------------------------------------------------------------------------
@@ -3582,7 +3597,7 @@ await scenario('导出', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click(buttonByText($$('#char-page-grid .char-card')[0], '编辑'));
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   // 先给它绑一本世界书再导出 —— 这样「导出的卡带不带 character_book」
   // 才验得到（宿主侧的 probeExports 会看导出的卡里有没有这本）。
@@ -3641,7 +3656,7 @@ await scenario('世界书：递归扫描', async () => {
   click('#btn-worldbooks');
   await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
   click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
   await sleep(150);
 
   click('#btn-preview-wb');
@@ -3667,7 +3682,7 @@ await scenario('世界书：新建条目', async () => {
   check('种子里那本世界书有卡片', $$('#wb-page-grid .char-card').length === 1);
 
   click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
 
   click('#btn-new-entry');
   setValue('#wb-e-title', '冒烟测试条目');
@@ -3738,7 +3753,7 @@ await scenario('世界书：新建条目', async () => {
 // ---------------------------------------------------------------------------
 await scenario('世界书：放弃未保存的改动', async () => {
   // 世界书弹窗还开着（上一条场景留下的）
-  check('世界书弹窗还开着', shown('#worldbooks-modal'));
+  check('世界书弹窗还开着', shown('#view-wb-editor'));
 
   setValue('#wb-name', '改了一半的名字');
   await sleep(120);
@@ -3750,14 +3765,14 @@ await scenario('世界书：放弃未保存的改动', async () => {
   check('有未保存的改动时关弹窗会问一句', shown('#confirm-modal'));
   click('#confirm-cancel');
   await sleep(120);
-  check('选「继续改」弹窗留着', shown('#worldbooks-modal'));
+  check('选「继续改」弹窗留着', shown('#view-wb-editor'));
   check('名字还是改了一半的那个', byId('wb-name').value === '改了一半的名字', byId('wb-name').value);
 
   // 再来一次，这回真的放弃
   click('#btn-close-worldbooks');
   await waitFor('再弹一次确认框', () => shown('#confirm-modal'));
   click('#confirm-ok');
-  await waitFor('世界书弹窗关闭', () => !shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
 
   const names = (await savedWorldbooks()).map((b) => b.name);
   check('放弃之后改的名字没落盘', !names.includes('改了一半的名字'), JSON.stringify(names));
@@ -3774,17 +3789,17 @@ await scenario('世界书：本书角色', async () => {
   click('#btn-worldbooks');
   await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
   click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
 
   click('#btn-new-wb-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   check('标题是「新建本书角色」', byId('chars-title').textContent === '新建本书角色', byId('chars-title').textContent);
 
   // 回归测试：角色编辑器必须盖在世界书弹窗上面（否则点了跟没反应一样）
   const cx = Math.floor(innerWidth / 2);
   const cy = Math.floor(innerHeight / 2);
   const top = document.elementFromPoint(cx, cy);
-  const where = top ? (top.closest('#chars-modal') ? 'chars' : top.closest('#worldbooks-modal') ? 'worldbooks' : 'other') : 'null';
+  const where = top ? (top.closest('#view-char-editor') ? 'chars' : top.closest('#view-wb-editor') ? 'worldbooks' : 'other') : 'null';
   check('编辑器没有被世界书弹窗盖住', where === 'chars', `最上层是 ${where}`);
 
   const before = ((await savedWorldbooks())[0].characters || []).length;
@@ -3818,7 +3833,7 @@ await scenario('世界书：本书角色', async () => {
   check('展开后副本还在', $('#wb-char-list').textContent.includes('冒烟NPC'), $('#wb-char-list').textContent);
 
   click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗关闭', () => !shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
 });
 
 // ---------------------------------------------------------------------------
@@ -3848,7 +3863,7 @@ await scenario('AI 生成角色：角色库', async () => {
   click(buttonByText($('.ai-gen-modal'), '开始生成'));
 
   // 生成完直接把字段填进角色编辑器草稿
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   // 解析失败时也会开草稿（把原文塞进描述），光看「有没有开」分不出成功和兜底 ——
   // 所以再看一眼描述框：兜底那份的标题一定是「未命名角色」。
   check('生成后打开的是新建草稿', byId('chars-title').textContent === '新建角色', byId('chars-title').textContent);
@@ -3898,14 +3913,14 @@ await scenario('AI 生成角色：背景/基调框', async () => {
   setValue('#ai-gen-brief', '现代都市的深夜便利店，安静、有点孤独');
   click(buttonByText($('.ai-gen-modal'), '开始生成'));
 
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   // 名字跟着「有没有基调」变 —— 还是「守夜人」就说明那段没拼进 system
   check('背景/基调确实拼进了提示词', byId('c-name').value === '便利店店员', byId('c-name').value);
 
   click('#btn-close-chars');
   await waitFor('弹出放弃确认框', () => shown('#confirm-modal'));
   click('#confirm-ok');
-  await waitFor('编辑器关闭', () => !shown('#chars-modal'));
+  await waitFor('编辑器关闭', () => !shown('#view-char-editor'));
 });
 
 // ---------------------------------------------------------------------------
@@ -3923,7 +3938,7 @@ await scenario('AI 生成角色：模型输出带围栏和废话', async () => {
   setValue('#ai-gen-prompt', '冒烟：烂JSON');
   click(buttonByText($('.ai-gen-modal'), '开始生成'));
 
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   check('带围栏的输出也能解析出角色', byId('c-name').value === '油烟贩子', byId('c-name').value);
   check('描述里没有残留的围栏标记', !byId('c-desc').value.includes('```'), byId('c-desc').value);
 
@@ -3931,7 +3946,7 @@ await scenario('AI 生成角色：模型输出带围栏和废话', async () => {
   click('#btn-close-chars');
   await waitFor('弹出放弃确认框', () => shown('#confirm-modal'));
   click('#confirm-ok');
-  await waitFor('编辑器关闭', () => !shown('#chars-modal'));
+  await waitFor('编辑器关闭', () => !shown('#view-char-editor'));
 });
 
 // ---------------------------------------------------------------------------
@@ -3945,7 +3960,7 @@ await scenario('AI 生成 NPC：依据世界书', async () => {
   click('#btn-worldbooks');
   await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
   click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
 
   check('世界书里有「AI 生成」按钮', !!byId('btn-ai-wb-char'));
 
@@ -3961,7 +3976,7 @@ await scenario('AI 生成 NPC：依据世界书', async () => {
   setValue('#ai-gen-prompt', '酒馆后厨的帮工');
   click(buttonByText($('.ai-gen-modal'), '开始生成'));
 
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   check('标题是「新建本书角色」', byId('chars-title').textContent === '新建本书角色', byId('chars-title').textContent);
   // 名字来自假后端的「带世界上下文」分支 —— 对不上就说明 system 里没带上这本书的设定
   check('生成时确实带上了这本书的上下文', byId('c-name').value === '后厨帮工', byId('c-name').value);
@@ -3978,7 +3993,7 @@ await scenario('AI 生成 NPC：依据世界书', async () => {
   check('副本保存后关闭不弹确认框', !shown('#confirm-modal'));
 
   click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗关闭', () => !shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
 });
 
 // ---------------------------------------------------------------------------
@@ -4102,7 +4117,7 @@ await scenario('角色卡：字段往返不丢', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   const NAME = '字段往返测试';
   setValue('#c-name', NAME);
@@ -4124,7 +4139,7 @@ await scenario('角色卡：字段往返不丢', async () => {
   setValue($$('#c-attr-list .attr-row')[0].querySelector('.attr-value'), '777');
 
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(150);
 
   // 身份三项走导入/数据层通道进来：验证 normalizeCharacter 白名单仍保留它们
@@ -4176,7 +4191,7 @@ await scenario('角色：头像和形象是两张图', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   const NAME = '双图测试角色';
   setValue('#c-name', NAME);
@@ -4241,7 +4256,7 @@ await scenario('角色：头像和形象是两张图', async () => {
   );
 
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(200);
 
   // --- 落盘：两张图是两个字段，都要留下 ---
@@ -4271,14 +4286,14 @@ await scenario('角色：头像和形象是两张图', async () => {
   click('#btn-chars');
   await waitFor('切回角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', OLD);
   click('#char-avatar');
   await waitFor('裁剪浮层弹出来了', () => !!byId('crop-layer'));
   click('#crop-ok');
   await waitFor('头像按 384 落进框里', () => { const i = byId('char-avatar').querySelector('img'); return !!i && i.naturalWidth === 384; });
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(200);
 
   const opened = (await savedCharacters()).find((c) => c.name === OLD);
@@ -4291,7 +4306,7 @@ await scenario('角色：头像和形象是两张图', async () => {
   if (!oldCard) return;
 
   click(buttonByText(oldCard, '编辑'));
-  await waitFor('编辑器打开', () => shown('#chars-modal'));
+  await waitFor('编辑器打开', () => shown('#view-char-editor'));
   check('老卡的形象框先沿用头像那张图', byId('char-portrait').classList.contains('is-inherited'));
 
   click('#char-avatar');
@@ -4323,7 +4338,7 @@ await scenario('角色属性：粘贴文本批量生成', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '粘贴测试角色');
 
   check('粘贴区一开始是收着的', !shown('#c-attr-paste'));
@@ -4370,7 +4385,7 @@ await scenario('角色属性：粘贴文本批量生成', async () => {
 
   // 存盘往返（顺带再验一次白名单没漏字段）
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(150);
 
   const saved = (await savedCharacters()).find((c) => c.name === '粘贴测试角色');
@@ -4392,7 +4407,7 @@ await scenario('角色属性：套用互动模板', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '模板测试角色');
 
   // 空卡还没有任何分组
@@ -4439,7 +4454,7 @@ await scenario('角色属性：套用互动模板', async () => {
 
   // 保存后落盘：类型/范围/hint/分组都在
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(150);
 
   const saved = (await savedCharacters()).find((c) => c.name === '模板测试角色');
@@ -4471,7 +4486,7 @@ await scenario('角色属性：分组标签栏', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '分组测试角色');
 
   const tabLabels = () => $$('#c-attr-tabs .attr-tab').map((b) => b.textContent);
@@ -4543,7 +4558,7 @@ await scenario('角色属性：分组标签栏', async () => {
   check('切回去还是那两行、顺序不变', listedNames().join(',') === '道具,上衣', JSON.stringify(listedNames()));
 
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(150);
 
   const saved = (await savedCharacters()).find((c) => c.name === '分组测试角色');
@@ -4576,7 +4591,7 @@ await scenario('角色属性：分组改名与解散', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '分组改名角色');
 
   const tabLabels = () => $$('#c-attr-tabs .attr-tab').map((b) => b.textContent);
@@ -4652,7 +4667,7 @@ await scenario('角色属性：分组改名与解散', async () => {
     escBox.value = '不该生效的名字';
     escBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await sleep(120);
-    check('改名时按 Esc 不会关掉角色编辑器', shown('#chars-modal'));
+    check('改名时按 Esc 不会关掉角色编辑器', shown('#view-char-editor'));
     check('改名时按 Esc 也不会连弹「放弃新建」确认框', !shown('#confirm-modal'));
     check('按 Esc 是「放弃改名」，名字没被改掉', tabLabels().some((t) => t.startsWith('心情')), JSON.stringify(tabLabels()));
   }
@@ -4693,7 +4708,7 @@ await scenario('角色属性：分组改名与解散', async () => {
 
   // --- 视图状态别跟着落盘 ---
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(150);
 
   const saved = (await savedCharacters()).find((c) => c.name === '分组改名角色');
@@ -4885,7 +4900,7 @@ await scenario('准备悬停验证', async () => {
   const beforeCards = $$('#char-page-grid .char-card').length;
 
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '悬停验证角色');
   click('#btn-save-char');
   await waitFor('卡片出现', () => $$('#char-page-grid .char-card').length === beforeCards + 1);
@@ -4977,7 +4992,7 @@ await scenario('角色：绑定自带的世界书', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   const NAME = '自带世界书测试';
   setValue('#c-name', NAME);
@@ -5026,7 +5041,7 @@ await scenario('角色：绑定自带的世界书', async () => {
   setChecked('#c-wb-enabled', true);
   await sleep(100);
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'), 8000);
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'), 8000);
   await sleep(200);
 
   const saved = (await savedCharacters()).find((c) => c.name === NAME);
@@ -5060,7 +5075,7 @@ await scenario('角色自带的世界书：顶部能看出生效', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   const NAME = '顶栏生效测试';
   setValue('#c-name', NAME);
   await sleep(80);
@@ -5073,7 +5088,7 @@ await scenario('角色自带的世界书：顶部能看出生效', async () => {
   click(target);
   await waitFor('清单里出现这本', () => $$('#c-wb-list .cwb-row').length === 1);
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'), 8000);
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'), 8000);
   await sleep(200);
 
   // 关掉编辑器，回聊天视图（关编辑器不会自动切页，得点会话）
@@ -5232,7 +5247,7 @@ await scenario('剧情选项', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   const NAME = '选项测试角色';
   setValue('#c-name', NAME);
@@ -5248,7 +5263,7 @@ await scenario('剧情选项', async () => {
   setValue('#c-options-hint', '语气轻松些，总有一条冒险的选择');
 
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'), 8000);
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'), 8000);
   await sleep(150);
 
   const saved = await savedCharacters();
@@ -5476,7 +5491,7 @@ await scenario('剧情选项：默认开、关掉要写 false', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   const NAME = '关掉选项的角色';
   setValue('#c-name', NAME);
@@ -5490,7 +5505,7 @@ await scenario('剧情选项：默认开、关掉要写 false', async () => {
   check('取消勾选后配置区收起来', !shown('#c-options-config'));
 
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'), 8000);
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'), 8000);
   await sleep(150);
 
   const saved = await savedCharacters();
@@ -6204,7 +6219,7 @@ await scenario('世界书：切书时旧表单不能盖住新书', async () => {
 
   // 打开种子里那本，改名「甲书」—— 故意**不保存**，留一份脏草稿
   click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
   await sleep(150);
   setValue('#wb-name', '甲书');
   await sleep(200);
@@ -6253,7 +6268,7 @@ await scenario('世界书：切书时旧表单不能盖住新书', async () => {
   );
 
   click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗关闭', () => !shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
   await sleep(400);
   const names = (await savedWorldbooks()).map((b) => b.name);
   check(
@@ -6276,12 +6291,12 @@ await scenario('世界书：卡片上删除', async () => {
 
   // 先造一本一次性的书，走真实的「新建 + 保存」
   click('#btn-new-worldbook');
-  await waitFor('世界书弹窗打开', () => shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
   setValue('#wb-name', '待删的临时世界');
   click('#btn-save-wb');
   await sleep(300);
   click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗关闭', () => !shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
   await sleep(200);
 
   const namesOnPage = () => $$('#wb-page-grid .char-card-name').map((n) => n.textContent);
@@ -7505,14 +7520,14 @@ await scenario('Esc 链与弹窗清理', async () => {
     click('#btn-worldbooks');
     await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
     click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-    await waitFor('世界书弹窗打开', () => shown('#worldbooks-modal'));
+    await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
   };
 
   // --- 三个以前漏掉的弹窗 ---
   await openBookEditor();
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  await waitFor('Esc 关掉世界书弹窗', () => !shown('#worldbooks-modal'));
-  check('Esc 关得掉世界书弹窗', !shown('#worldbooks-modal'));
+  await waitFor('Esc 关掉世界书弹窗', () => !shown('#view-wb-editor'));
+  check('Esc 关得掉世界书弹窗', !shown('#view-wb-editor'));
 
   await clickMoreItem('#btn-memory');
   await waitFor('记忆弹窗打开', () => shown('#memory-modal'));
@@ -7535,7 +7550,7 @@ await scenario('Esc 链与弹窗清理', async () => {
     return;
   }
   click(buttonByText(card, '编辑'));
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   click('#c-wb-add-btn');
   await waitFor('选书浮层出现', () => !!$('.cwb-picker'));
@@ -7544,13 +7559,13 @@ await scenario('Esc 链与弹窗清理', async () => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await waitFor('Esc 关掉选书浮层', () => !$('.cwb-picker'));
   check('Esc 关的是最上面那层选书浮层', !$('.cwb-picker'));
-  check('浮层下面的角色编辑器还开着（没被一起关掉）', shown('#chars-modal'));
+  check('浮层下面的角色编辑器还开着（没被一起关掉）', shown('#view-char-editor'));
 
   // --- 直接点 ✕ 关编辑器：残留的浮层也必须收掉 ---
   click('#c-wb-add-btn');
   await waitFor('选书浮层再次出现', () => !!$('.cwb-picker'));
   click('#btn-close-chars');
-  await waitFor('角色编辑器关闭', () => !shown('#chars-modal'));
+  await waitFor('角色编辑器关闭', () => !shown('#view-char-editor'));
   check('关编辑器时残留的选书浮层被一起收掉（没悬空）', !$('.cwb-picker'));
 
   // --- 删掉当前正在编辑的那本世界书：编辑器必须真的切到另一本 ---
@@ -7573,7 +7588,7 @@ await scenario('Esc 链与弹窗清理', async () => {
 
   // 关掉弹窗 —— 以前这一步会把残留的书名写进列表里第一本书
   click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗关闭', () => !shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
   await sleep(250);
 
   const namesAfter = (await savedWorldbooks()).map((w) => w.name);
@@ -7783,7 +7798,7 @@ await scenario('看图：灯箱缩放与关闭', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', NAME);
 
   click('#char-portrait');
@@ -7795,7 +7810,7 @@ await scenario('看图：灯箱缩放与关闭', async () => {
   });
 
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(200);
 
   const cardEl = $$('#char-page-grid .char-card').find(
@@ -8087,7 +8102,7 @@ await scenario('角色：表情图按回复关键词切换', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   const NAME = '表情测试角色';
   setValue('#c-name', NAME);
@@ -8109,11 +8124,15 @@ await scenario('角色：表情图按回复关键词切换', async () => {
   check('编辑器里有「管理表情图」入口', !!byId('btn-manage-expr'));
   click('#btn-manage-expr');
   await waitFor('表情弹窗打开了', () => shown('#expr-modal'));
-  // 它是从角色编辑器里点开的：层级必须高过角色编辑弹窗，否则整块被盖住，看着像没反应
+  // 它是从角色编辑**页**里点开的：必须是一层浮在页面之上的遮罩，否则整块被盖住，
+  // 看着像没反应。⚠️ 2026-10-13 起「角色编辑器」不再是定位元素（它成了页面、
+  // 没有 z-index），所以这条断言从「比大小」换成了「表情弹窗是 fixed 遮罩 +
+  // 编辑页在文档流里」—— 比的还是同一件事：谁在上面。
   check(
-    '表情弹窗压在角色编辑器之上',
-    Number(getComputedStyle(byId('expr-modal')).zIndex) > Number(getComputedStyle(byId('chars-modal')).zIndex),
-    `expr=${getComputedStyle(byId('expr-modal')).zIndex} chars=${getComputedStyle(byId('chars-modal')).zIndex}`
+    '表情弹窗是浮在编辑页之上的遮罩',
+    getComputedStyle(byId('expr-modal')).position === 'fixed'
+      && getComputedStyle(byId('view-char-editor')).position !== 'fixed',
+    `expr=${getComputedStyle(byId('expr-modal')).position} 编辑页=${getComputedStyle(byId('view-char-editor')).position}`
   );
   check('弹窗里有「添加表情」按钮', !!byId('btn-add-expr'));
   check('还没加表情时有一句提示', /还没有表情图/.test(byId('char-expr-list').textContent));
@@ -8153,7 +8172,7 @@ await scenario('角色：表情图按回复关键词切换', async () => {
   await waitFor('表情弹窗关掉了', () => !shown('#expr-modal'));
 
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(200);
 
   // --- 落盘 ---
@@ -8264,7 +8283,7 @@ await scenario('角色：表情图批量导入、默认脸与 emo 标签', async
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   const NAME = '批量表情测试角色';
   setValue('#c-name', NAME);
@@ -8332,7 +8351,7 @@ await scenario('角色：表情图批量导入、默认脸与 emo 标签', async
   await waitFor('表情弹窗关掉了', () => !shown('#expr-modal'));
 
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(200);
 
   const saved = (await savedCharacters()).find((c) => c.name === NAME);
@@ -9112,7 +9131,7 @@ await scenario('世界书：＋ 事件', async () => {
   click('#btn-worldbooks');
   await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
   click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#worldbooks-modal'));
+  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
 
   const before = $$('#wb-entry-list .wb-entry').length;
   click('#btn-wb-add-event');
@@ -9239,11 +9258,11 @@ await scenario('开场白：只有一条时不弹选择器', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#chars-modal'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', NAME);
   setValue('#c-first', '只有这一条开场白');
   click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#chars-modal'));
+  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(200);
 
   const card = $$('#char-page-grid .char-card').find((c) => c.textContent.includes(NAME));

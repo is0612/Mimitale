@@ -1,25 +1,30 @@
 // ---------------------------------------------------------------------------
-//  世界书编辑器（World Info / Lorebook）
+//  世界书编辑器（World Info / Lorebook）—— 视图八的本体
 //
 //  左栏选书，中栏列条目，右栏编辑。数据在主进程的 worldbooks.json。
 //  词条只由「会话绑定了哪本书」生效；每本书还能装若干角色副本（独立个体）。
 //
 //  「保存后才生效」：书名 / 开场白 / 条目全是**草稿**（wbDrafts，按书各存一份），
-//  改动只进内存里的那一份，点底部「保存」才写回 state.worldbooks 并落盘。
-//  没保存就关弹窗要问一句「放弃改动？」。角色副本不在此列 ——
+//  改动只进内存里的那一份，点页头「保存」才写回 state.worldbooks 并落盘。
+//  没保存就离开要问一句「放弃改动？」。角色副本不在此列 ——
 //  见 wbDrafts 上面那段注释。
+//
+//  ⚠️ 2026-10-13 从弹窗改成了**页面**（跟设置页 / 角色编辑器同一套路）：
+//     不再自己 add/remove `hidden`，改走 viewSwitch 的 showView('wbEditor')，
+//     离开时回到进来之前那一屏（世界书列表页）。所以没有遮罩了，
+//     也就没有「点空白处关闭」那件事（原来那个监听器已删）。
 //
 //  两处刻意的边界：
 //
 //   · 本书角色的「编辑 / 新建」要切角色编辑器的作用域（charEditorScope）
-//     再打开角色编辑器弹窗 —— 那是跨视图编排，由入口层通过 initWorldbook
+//     再切到角色编辑页 —— 那是跨视图编排，由入口层通过 initWorldbook
 //     注入四个动作（openInBook / draftInBook / releaseScope / stashDraft），
 //     本模块不向上 import 入口层，也不 import 角色编辑器。
 //
 //   · 「导入世界书」留在入口层（它要同时动角色库、世界书列表页和角色列表页），
 //     同样靠注入拿进来（importBooks）。
 //
-//  弹窗只在打开时渲染，不参与整体重绘，所以不向刷新总线登记 ——
+//  这一屏只在打开时渲染，不参与整体重绘，所以不向刷新总线登记 ——
 //  只做事件绑定（和 views/perspectiveUi.js 一样）。
 //
 //  只有「编辑某一本」这个入口动作（editWorldbookFromPage）例外：它要设
@@ -35,6 +40,7 @@ import { uid, now, activeConvo, safeFileName } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear } from '../ui/build.js';
+import { showView, currentViewName } from './viewSwitch.js';
 import { saveExport } from '../data/export.js';
 import { persistLibrary, persistConversations } from '../data/persist.js';
 import { seedWorldbookCharactersIntoConvos, syncCopyAttrsFromSource } from '../data/panel.js';
@@ -76,8 +82,7 @@ export function initWorldbook(opts = {}) {
 
   // --- 编辑器本体 ---
   el.wb.btnExport.addEventListener('click', exportWorldbook);
-  el.wb.btnClose.addEventListener('click', closeWorldbooksModal);
-  el.wb.btnClose2.addEventListener('click', closeWorldbooksModal);
+  el.wb.btnClose.addEventListener('click', leaveWorldbookEditor);
   el.wb.btnImport.addEventListener('click', importBooks);
   el.wb.btnNew.addEventListener('click', newWorldbook);
   el.wb.btnNewEntry.addEventListener('click', newEntry);
@@ -149,9 +154,8 @@ export function initWorldbook(opts = {}) {
     renderEntryList();
   });
 
-  el.wb.modal.addEventListener('click', (event) => {
-    if (event.target === el.wb.modal) closeWorldbooksModal();
-  });
+  // ⛔ 「点遮罩空白处关闭」那条 2026-10-13 删了：世界书编辑器现在是主区域里的一屏，
+  //    不是浮在上面的弹窗，没有遮罩可点。页头的「返回」和 Esc 管离开。
 }
 
 // ---------------------------------------------------------------------------
@@ -912,19 +916,30 @@ function openWorldbooksModal(targetId) {
   const wanted = typeof targetId === 'string' && targetId ? targetId : editingWorldbookId;
   const next = worldbookById(wanted) ? wanted : worldbooks().length ? worldbooks()[0].id : null;
 
+  // 记下来处：Esc / 页头「返回」/ 保存完都会回到它（弹窗时代是「关掉弹窗」，语义没变）。
+  // 已经在编辑页里就别覆盖，不然「返回」会在原地打转。
+  const from = currentViewName();
+  if (from !== 'wbEditor') editorReturnView = from;
+
   selectWorldbook(next);
   renderWorldbookChars();
 
-  el.wb.modal.classList.remove('hidden');
+  showView('wbEditor');
 }
 
+/** 进来之前停在哪一屏（离开世界书编辑器时回到它） */
+let editorReturnView = 'worldbooks';
+
 /**
- * 关世界书编辑器。导出是为了让入口层的 Esc 链统一关它（见 main.js）。
+ * 离开世界书编辑器。导出是为了让入口层的 Esc 链统一走它（见 main.js）。
  *
  * 「保存后才生效」的另一面是「不保存就会丢」，所以有草稿改动时先问一句。
- * 选「继续改」就直接返回，弹窗留着 —— 和角色编辑器放弃新建那个确认框同一个套路。
+ * 选「继续改」就直接返回，这一屏留着 —— 和角色编辑器放弃新建那个确认框同一个套路。
+ *
+ * 名字从 closeWorldbooksModal 改成了 leaveWorldbookEditor：弹窗改成页面之后，
+ * 「关掉」= 回到进来之前那一屏（跟设置页的 leaveSettings 对齐）。
  */
-export async function closeWorldbooksModal() {
+export async function leaveWorldbookEditor() {
   stashWorldbookName();
   stashEntryForm();
 
@@ -950,11 +965,12 @@ export async function closeWorldbooksModal() {
   el.wb.entriesWrap.classList.add('hidden');
   showEntryForm(false);
 
-  el.wb.modal.classList.add('hidden');
+  showView(editorReturnView === 'wbEditor' ? 'worldbooks' : editorReturnView);
   renderWorldbookChars();
   renderDirtyHint();
-  // 列表页可能还开着（编辑完回来看得到最新状态）。放掉草稿之后要重画一次 ——
-  // 没保存的东西不该留在卡片上（本来也没露过头，这里是给「新建又放弃」收尾）。
+  // 列表页马上就该看到最新状态（showView('worldbooks') 本身会重画一次，
+  // 但回到别的屏时不会）—— 没保存的东西本来也没在外面的卡片上露过头，
+  // 这里是给「新建又放弃」收尾。
   renderWorldbookPage();
 }
 

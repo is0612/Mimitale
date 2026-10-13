@@ -1884,16 +1884,15 @@ body {
 }
 
 /* 弹窗之间的层级。
-   同 z-index 的定位元素按 DOM 顺序叠：角色编辑弹窗在 DOM 里排在「世界书」弹窗
-   前面，而它正是从世界书里点「编辑 / ＋ 新建」打开的 —— 不单独抬高一层，
-   编辑表单就会被世界书弹窗盖住，点了跟没反应一样。
-   确认框永远在最上面：它会盖在角色编辑器上问「放弃新建？」。 */
-#chars-modal { z-index: 60; }
-/* 角色编辑器字段多，比别的弹窗宽一档，内容才不显得挤 */
-#chars-modal .modal-card { max-width: 820px; }
+   同 z-index 的定位元素按 DOM 顺序叠。
+   ⚠️ 角色编辑器 / 世界书编辑器 2026-10-13 改成**页面**（视图七 / 视图八）之后，
+      它们不再是定位元素、也不再有 z-index —— 那两条 `#chars-modal {...}` 一起删了。
+      好处之一：以前「从世界书弹窗里点编辑，角色编辑器要抬到 60 才盖得住」
+      那种层级账，现在从结构上就没有了（同一时刻主区域只显示一屏）。
+      表情图弹窗（65）仍然从角色编辑页里弹出来 —— 它要盖住底下的页面，所以留着。 */
 /* 表情图弹窗是从角色编辑器里点出来的，跟 AI 生成同一档：
-   压在角色编辑器（60）之上、确认框（70）之下。缺了这条会退回 .modal 的 50，
-   弹窗就被角色编辑器整个盖住。 */
+   压在角色编辑页之上、确认框（70）之下。缺了这条会退回 .modal 的 50，
+   弹窗就被页面内容整个盖住。 */
 #expr-modal { z-index: 65; }
 #confirm-modal { z-index: 70; }
 /* 人设弹窗是从**设置页**里点「编辑…」打开的（设置 2026-10-09 起是视图、不再是弹窗，
@@ -2344,21 +2343,16 @@ body {
 
 /* ------------------------------ 角色库 ------------------------------ */
 
-/* 角色编辑弹窗：里面只有表单，角色列表在 #view-chars 那个页面里 */
-.chars-card { max-width: 780px; }
+/* 角色编辑页：里面只有表单，角色列表在 #view-chars 那一页里。
 
-.modal-body.chars-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  gap: 0;
-  padding: 0;
-  overflow: hidden;
-  min-height: 0;
-}
+   ⚠️ 2026-10-13：编辑器从**弹窗**改成了**页面**（视图七），所以这里没有
+   `.chars-card` / `.modal-body.chars-body` 那两层壳了 —— 它不再居中限宽、
+   也不再是滚动的卡片。现在的位置是「.view（flex 竖排）→ .char-main（滚动）」，
+   所以 .char-main 要自己占满剩下的高度（见下面的 flex: 1 1 auto）。 */
 
-/* 角色编辑表单 */
+/* 角色编辑表单：整页里唯一会滚的那块 */
 .char-main {
+  flex: 1 1 auto;
   padding: 20px 24px 24px;
   overflow-y: auto;
   min-height: 0;
@@ -2405,13 +2399,31 @@ body {
   color: var(--text-faint);
 }
 
-.page-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+/* align-items:center 是给「页头里除了按钮还放了别的东西」留的
+   （世界书编辑页的「有未保存的改动」小胶囊、角色编辑页将来可能加的提示）——
+   默认的 stretch 会把它抻成一整条色块。 */
+.page-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 
 .page-body {
   flex: 1 1 auto;
   overflow-y: auto;
   padding: 20px 24px 28px;
   min-height: 0;
+}
+
+/* 页面底部条：和弹窗底（.modal-foot）长得一样 —— 弹窗改成页面之后由它接管。
+   角色编辑页 / 世界书编辑页用它装「数据存在哪」那行提示 + 不好放页头的动作
+   （导出 / 删除）。弹窗那套 .modal-foot 原样不动，两边互不影响。
+   ⚠️ padding 左右跟 .page-head / .page-body 对齐（24px），不然页脚会缩一截。 */
+.page-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--foot-bg);
 }
 
 /* ------------------------------ 设置页（视图六） ------------------------------ */
@@ -2971,9 +2983,10 @@ body {
 .char-form { display: flex; flex-direction: column; }
 
 /* ⚠️ 这一条是「长文本框自动增高」能生效的前提，别删。
-   .char-form 是 flex 列，而它的祖先链上有一层定高的网格行
-   （.modal-body.chars-body 的 grid-template-rows: minmax(0, 1fr)），
-   于是每个字段都被当成 flex item 用默认的 flex-shrink:1 往下压 ——
+   .char-form 是 flex 列，祖先链上有一层定高的容器（弹窗时代是
+   .modal-body.chars-body 的 grid-template-rows: minmax(0, 1fr)；
+   2026-10-13 改成页面之后换成「.view → .char-main 一路 flex: 1 1 auto + min-height: 0」，
+   高度照样是定死的），于是每个字段都被当成 flex item 用默认的 flex-shrink:1 往下压 ——
    压到底就撞在 .char-form textarea 的 min-height: 84px 上。
    表现是：JS 把 height 写成 334px（inline style 确实写进去了），
    浏览器算出来的却是 84px，而且怎么等都等不出来（不是 transition 的问题）。
@@ -3152,8 +3165,8 @@ body {
 
 .char-expand-btn:hover { color: var(--text); background: var(--bg-input); }
 
-/* 放大编辑浮层：挂在 body 上、盖在角色编辑弹窗之上（chars-modal 是 60，
-   确认框 70 —— 本来就该压着编辑器、又被确认框压着）。 */
+/* 放大编辑浮层：挂在 body 上、盖在角色编辑**页**之上（页面在文档流里、没有 z-index，
+   浮层 65 稳稳压住它；确认框 70 —— 本来就该压着编辑页、又被确认框压着）。 */
 .char-expand {
   position: fixed;
   inset: 0;
@@ -4601,16 +4614,15 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text-faint);
 }
 
-/* 世界书编辑器：左条目列表 / 右条目编辑。选书和游玩在世界书列表页。
-   这个弹窗里条目内容是要长时间写的正文，所以给它比通用弹窗更高的高度，
-   窄屏下再退回跟别的弹窗一致（见文件末尾的窄屏规则）。 */
-.worldbook-card {
-  max-width: 1080px;
-  height: 94vh;
-  max-height: 94vh;
-}
+/* 世界书编辑页：左条目列表 / 右条目编辑。选书和游玩在世界书列表页。
+   条目内容是要长时间写的正文，所以这一屏整体铺满主区域（弹窗时代是
+   「比通用弹窗更宽更高」的 1080×94vh，现在没有那个限制了）。
 
-.modal-body.worldbook-body {
+   ⚠️ 2026-10-13 从弹窗改成页面（视图八）：`.worldbook-card` 那层壳删了，
+   `.modal-body.worldbook-body` 随之改名 `.worldbook-body` —— 里面的
+   两栏网格是原样的，只是外面少了两层（遮罩 + 卡片）。 */
+.worldbook-body {
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: 268px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
@@ -4963,15 +4975,15 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text-faint);
 }
 
-/* 窗口窄时，世界书编辑器从「左右两栏」退成上下 */
+/* 窗口窄时，世界书编辑页从「左右两栏」退成上下 */
 @media (max-width: 900px) {
-  .modal-body.worldbook-body {
+  .worldbook-body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
 
-  /* 竖排之后每一块都很挤，94vh 反而不好用，退回和普通弹窗一样高 */
-  .worldbook-card { height: auto; max-height: 86vh; }
+  /* 竖排之后每一块都很挤；编辑页本来就铺满主区域，这里只把正文框收矮一点
+     （弹窗时代那两条 height / max-height 随 .worldbook-card 一起删了）。 */
   .wb-form textarea { min-height: 150px; }
 
   /* 条目列表挪到编辑区上面，用行的形式排 */
@@ -5498,7 +5510,9 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 }
 
 /* 编辑弹窗头上的「放大到窗口」按钮：只显示「点了会变成什么」的那个图标
-   （正常大小 → 展开图标；已放大 → 还原图标），跟原来那颗昼夜按钮同一个套路。 */
+   （正常大小 → 展开图标；已放大 → 还原图标），跟原来那颗昼夜按钮同一个套路。
+   ⚠️ 2026-10-13 起只剩预设一个弹窗还有这颗按钮：设置（2026-10-09）、角色卡 /
+      世界书（2026-10-13）先后从弹窗改成**页面**，本来就占满主区域。 */
 .fs-btn .icon-restore { display: none; }
 .modal-max .fs-btn .icon-expand { display: none; }
 .modal-max .fs-btn .icon-restore { display: block; }
@@ -5508,22 +5522,21 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
    去掉、卡片撑满，就等于「这个弹窗占了整个应用窗口」—— 不动 BrowserWindow。
 
    ⚠️ 四个尺寸一个都不能漏（width / max-width / height / max-height）。
-   只清 max-* 是不够的，因为各弹窗自己把 width / height 写死过：
-     · `#preset-modal .modal-card { width: min(720px, 94vw) }` → 光清 max-width，它还是 720px 宽
-     · `.worldbook-card { height: 94vh }`                    → 光清 max-height，它只长到 94vh
-   （这两条正好就是「预设宽度没满 / 世界书高度没满」两个反馈。）
+   只清 max-* 是不够的，因为各弹窗自己把 width / height 写死过
+   （`#preset-modal .modal-card { width: min(720px, 94vw) }` → 光清 max-width，
+   它还是 720px 宽；世界书当年是 `.worldbook-card { height: 94vh }`，那个弹窗
+   2026-10-13 已改成页面，这条只留作历史）。
    height 给 auto 而不是 100%：让下面的 align-items:stretch 说了算，
    这样 max-height 那条 transition 能把它一路顺下来，不会「宽度在动、高度啪一下跳」。
 
-   ⚠️ `#chars-modal …` / `#preset-modal …` 那两支是 **id 选择器**，权重比
-   `.modal.modal-max …` 高 —— 不把 id 带进选择器里，整条规则对它们无效。 */
+   ⚠️ `#preset-modal …` 那一支是 **id 选择器**（还有各弹窗自己写的 max-width），
+   权重比 `.modal.modal-max …` 高 —— 不把 id 带进选择器里，整条规则对它们无效。 */
 .modal.modal-max {
   padding: 0;
   align-items: stretch;
 }
 
 .modal.modal-max .modal-card,
-#chars-modal.modal-max .modal-card,
 #preset-modal.modal-max .modal-card {
   width: 100%;
   max-width: 100%;

@@ -4,6 +4,61 @@
 
 ---
 
+## 2026-10-13 第十六批：角色卡 / 世界书的编辑器从「弹窗」改成「整页」
+
+一句话：两个编辑器以前是**盖在界面上的弹窗**（字段一多就只能缩在 780 / 1080px 里来回滚，
+还要点「放大到窗口」才铺得开），现在跟**设置页**一个路子 —— 点卡片直接切进**主区域的一整屏**，
+页头左边标题、右边「返回 / 保存」，`Esc` 和「返回」是同一件事。
+
+### 一、用户看到的变化
+
+- 点角色卡片的「编辑 / ＋ 新建」→ **主区域整屏变成编辑器**（不再是浮层）。
+  页头：`返回` + `保存角色`；页脚：`导出` + `删除角色`（这两颗不好放页头）。
+  原来页脚那颗「保存角色」挪到了页头 —— 滚到哪儿都点得到。
+- 点世界书的「编辑」→ 同样整屏。页头：`返回` + `保存`，外加那面「有未保存的改动」小旗子
+  （原来挂在页脚）；页脚只剩 `导出`。
+- **「放大到窗口」按钮从这两个编辑器上撤掉了**：它们本来就占满主区域，没有「放大」这回事
+  （和当初设置页那颗一样）。只有**预设**还是弹窗，那颗按钮还留着。
+- 保存完新角色 / 放弃未保存改动 / 删除正在编辑的那一项 → 行为和以前一样，
+  只是落点从「弹窗消失」变成「回到进来那一屏」（角色库，或你进来的那个世界书编辑页）。
+
+### 二、结构上为什么这么改
+
+以前这里有一笔**层级账**：世界书编辑器在 DOM 里排在角色编辑器后面，
+「从世界书点编辑」时角色编辑器必须把 `z-index` 抬到 60 才盖得住，否则点了像没反应。
+改成页面之后，**同一时刻主区域只显示一屏**，这笔账从结构上没有了。
+
+- 新增两个视图：`#view-char-editor`（视图七）、`#view-wb-editor`（视图八），
+  和 `#view-chars` / `#view-worldbooks` / `#view-settings` 并列在 `.main` 里。
+  它们**没有侧边栏按钮**（是从列表页点卡片进来的），所以 `viewSwitch` 那张表里 `btn: null`。
+- 两个编辑器现在都记**来处**（`editorReturnView`），跟 `settings.js` 的 `returnView` 同一套路：
+  角色编辑页的来处可能是「角色库」，也可能是「世界书编辑页」—— 从哪儿进就回哪儿。
+- 弹窗那套壳（`.modal` / `.modal-card` / `.modal-body` / `.modal-head`）剥掉，
+  换成页面的三段：`.page-head` + 滚动区 + **新的 `.page-foot`**
+  （`.page-foot` 是新加的，长得跟 `.modal-foot` 一样；弹窗那套原样没动）。
+- 「点遮罩空白处关闭」这条监听器在两个模块里都删了 —— 页面没有遮罩。
+- `.char-main` / `.worldbook-body` 从「弹窗里的网格子项」改成「整页里的 flex 子项」
+  （各加一条 `flex: 1 1 auto`），里面的表单结构一行没动。
+
+### 三、跟着改的
+
+- `core/dom.js`：`charsModal` → 视图表里的 `viewCharEditor`；世界书那边删掉 `wb.modal`
+  （改用 `viewWbEditor`）；`btnFsChars` / `btnFsWorldbooks` / `btn-close-worldbooks-2` 三个登记项删掉。
+- `main.js`：Esc 链改成按**视图**判断（`el.viewCharEditor` / `el.viewWbEditor`）；
+  放大按钮的绑定只剩预设那一颗。
+- `ui/modalMax.js` 与 `style.css` 的 `#chars-modal*` 规则一并清掉（`.worldbook-card` 同理）。
+- `characterEditor.js` 的 `closeCharsModal` → `leaveCharacterEditor`、
+  `worldbook.js` 的 `closeWorldbooksModal` → `leaveWorldbookEditor`（跟 `leaveSettings` 对齐）。
+
+### 四、验证
+
+`npm run smoke` **1359/1359 通过、控制台报错 0**；`npm run audit`（dom-ids / buttons / imports）三项全干净。
+出图 `--shot=charEditorPage` / `--shot=wbEditorPage` 肉眼核对过新版式。
+原来那两张 `--shot=modalMax` / `--shot=modalMaxWorldbook` 换成了这两张
+（弹窗没了，要看的正是「整页铺满」这件事）。
+
+---
+
 ## 2026-10-13 第十五批：仓库结构升级 —— 客户端代码整体搬进 `client/`
 
 一句话：仓库根以前被客户端代码占满了（`main/` `renderer/` `preload*.js` `package.json` `node_modules/`），

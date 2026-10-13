@@ -96,26 +96,26 @@ app.whenReady().then(async () => {
   const win = await openWindow();
   log('[启动] 磁盘 characters =', diskChars(), '| worldbooks =', diskBooks());
 
-  // --- A. 编辑弹窗里「删除角色」------------------------------------------
+  // --- A. 角色编辑页里「删除角色」----------------------------------------
   const A = await win.webContents.executeJavaScript(`(async () => {
     const nap = (ms) => new Promise(r => setTimeout(r, ms));
     document.querySelector('#btn-chars').click(); await nap(400);
     const card = document.querySelector('#char-page-grid .char-card');
     const edit = Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
     edit.click(); await nap(500);
-    if (document.querySelector('#chars-modal').classList.contains('hidden')) return { ok:false, why:'编辑器没打开' };
+    if (document.querySelector('#view-char-editor').classList.contains('hidden')) return { ok:false, why:'编辑器没打开' };
     const del = document.querySelector('#btn-del-char');
     if (!del || del.disabled) return { ok:false, why:'删除按钮不可用' };
     del.click(); await nap(400);
     const m = document.querySelector('#confirm-modal');
     if (!m || m.classList.contains('hidden')) return { ok:false, why:'确认框没出现' };
     document.querySelector('#confirm-ok').click(); await nap(900);
-    return { ok:true, modalHidden: document.querySelector('#chars-modal').classList.contains('hidden'),
+    return { ok:true, editorHidden: document.querySelector('#view-char-editor').classList.contains('hidden'),
              cards: document.querySelectorAll('#char-page-grid .char-card').length };
   })()`);
-  log('[A 编辑弹窗删角色]', JSON.stringify(A), '→ 磁盘 =', diskChars());
+  log('[A 角色编辑页删角色]', JSON.stringify(A), '→ 磁盘 =', diskChars());
 
-  // --- B. 世界书编辑器里「删除本书」--------------------------------------
+  // --- B. 世界书编辑页里「删除本书」--------------------------------------
   const B = await win.webContents.executeJavaScript(`(async () => {
     const nap = (ms) => new Promise(r => setTimeout(r, ms));
     const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i += 1) { if (fn()) return true; await nap(100); } return false; };
@@ -125,8 +125,8 @@ app.whenReady().then(async () => {
     const card = document.querySelector('#wb-page-grid .char-card');
     const edit = Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
     edit.click();
-    await until(() => !document.querySelector('#worldbooks-modal').classList.contains('hidden'), 3000);
-    if (document.querySelector('#worldbooks-modal').classList.contains('hidden')) return { ok:false, why:'编辑器没打开' };
+    await until(() => !document.querySelector('#view-wb-editor').classList.contains('hidden'), 3000);
+    if (document.querySelector('#view-wb-editor').classList.contains('hidden')) return { ok:false, why:'编辑器没打开' };
     const btn = document.querySelector('#btn-del-worldbook');
     if (!btn) return { ok:false, why:'找不到删除本书按钮' };
     btn.click(); await nap(400);
@@ -135,9 +135,9 @@ app.whenReady().then(async () => {
     document.querySelector('#confirm-ok').click(); await nap(1200);
     return { ok:true, left: document.querySelectorAll('#wb-page-grid .char-card').length };
   })()`);
-  log('[B 世界书编辑器删本书]', JSON.stringify(B), '→ 磁盘 =', diskBooks());
+  log('[B 世界书编辑页删本书]', JSON.stringify(B), '→ 磁盘 =', diskBooks());
 
-  // --- C. 关弹窗之后再确认一次磁盘 ---------------------------------------
+  // --- C. 离开编辑器之后再确认一次磁盘 -----------------------------------
   await win.webContents.executeJavaScript(`(async () => {
     const nap = (ms) => new Promise(r => setTimeout(r, ms));
     const x = document.querySelector('#btn-close-worldbooks'); if (x) x.click();

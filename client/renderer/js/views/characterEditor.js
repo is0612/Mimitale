@@ -1,24 +1,32 @@
 'use strict';
 
 // ============================================================================
-//  views/characterEditor.js —— 角色编辑器（弹窗本体）
+//  views/characterEditor.js —— 角色编辑器（视图七的本体）
 //
-//  一个弹窗编辑「一张角色卡」，两处复用：
+//  一屏编辑「一张角色卡」，两处复用：
 //    · 作用域 'library'    改的是角色库里的角色
 //    · 作用域 'worldbook'  改的是当前世界书里的那个独立副本（不动角色库）
 //  所以这里所有读写都走 editorCharacterById() —— 同一套表单才能编辑两份数据。
 //
 //  「新建角色」是个**草稿**：它先只活在编辑器里，不进任何列表、也不写磁盘，
-//  点了「保存角色」才真正被创建（commitCharDraft）。关掉编辑器就等于放弃。
+//  点了「保存角色」才真正被创建（commitCharDraft）。离开编辑器就等于放弃。
+//
+//  ⚠️ 2026-10-13 从弹窗改成了**页面**（跟设置页同一套路）：不再是自己 add/remove
+//     `hidden`，而是走 viewSwitch 的 showView('charEditor')，离开时回到进来之前
+//     那一屏（角色库，或从世界书编辑器点进来时的那一屏）。所以：
+//       · 「关掉」= leaveCharacterEditor()，语义和步骤都没变，只是最后一步从
+//         「藏起弹窗」换成了「切回上一屏」；
+//       · 没有遮罩了，也就没有「点空白处关闭」那件事（原来那个监听器已删）。
 //
 //  表单里的改动是「读的时候填进去、保存/切走的时候收回来」（fillCharForm /
-//  stashCharForm）—— 中途不写回角色卡，所以填到一半关掉不会留下半个改动。
+//  stashCharForm）—— 中途不写回角色卡，所以填到一半离开不会留下半个改动。
 //
 //  属性区（字段类型 / 范围 / 分组 / 批量粘贴）搬去了 views/charAttributes.js，
 //  它接收本模块的草稿数组（传引用），保存时由本模块一起写回角色卡。
 //
 //  表情图（几十条的大列表）也搬出去、并单独做了个弹窗：views/charExpressions.js。
 //  它同样接收本模块的草稿数组（charExpressions），角色编辑器里只留一行入口 + 已设条数。
+//  （那个弹窗是**真的**弹窗 —— 它盖在编辑页上，不改。）
 //
 //  入口层只从这儿取六样东西：
 //    openCharacterEditor / startCharacterDraftInBook / releaseEditorScope /
@@ -32,6 +40,7 @@ import { uid, now } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { button, h, clear } from '../ui/build.js';
+import { showView, currentViewName } from './viewSwitch.js';
 import { MAX_PANEL_FIELDS } from '../data/panel.js';
 import { MAX_EXPRESSIONS } from '../data/expressions.js';
 import {
@@ -304,11 +313,17 @@ function isCharDraft() {
 }
 
 // ---------------------------------------------------------------------------
-//  打开 / 关闭
+//  打开 / 离开
 // ---------------------------------------------------------------------------
 
+/**
+ * 进来之前停在哪一屏。离开时（返回 / Esc / 保存完自动走）都回到它 ——
+ * 弹窗时代这三件事都是「关掉弹窗」，语义没变，只是落点从「弹窗消失」变成「切回那一屏」。
+ */
+let editorReturnView = 'chars';
+
 function openCharsModal() {
-  // 弹窗现在只是「编辑某一个角色」的表单，没有列表了。
+  // 编辑器现在只是「编辑某一个角色」的表单，没有列表了。
   // 谁打开它谁负责先设好 editingCharacterId / charEditorScope。
   // 编辑器的入口指向了别的角色，说明「新建」那个草稿已经被放弃了，顺手清掉。
   if (charDraft && editingCharacterId !== charDraft.character.id) discardCharDraft();
@@ -324,9 +339,14 @@ function openCharsModal() {
     current = editorCharacterById(editingCharacterId);
   }
 
-  // 先让弹窗可见再填表：fillCharForm 最后会量文本框高度，
+  // 记下来处。已经在编辑页里就别覆盖 —— 那样「返回」会原地打转，
+  // 而这时真正的来处（角色库 / 世界书编辑器）正是该回去的地方。
+  const from = currentViewName();
+  if (from !== 'charEditor') editorReturnView = from;
+
+  // 先让这一屏可见再填表：fillCharForm 最后会量文本框高度，
   // 而隐藏状态下（display:none）量什么都是 0。
-  el.charsModal.classList.remove('hidden');
+  showView('charEditor');
 
   if (current) {
     fillCharForm(current);
@@ -356,18 +376,25 @@ function updateCharEditorScopeUi() {
     } else {
       el.charsSub.textContent = inBook
         ? `这本书里的独立副本，改它不影响角色库${book ? ` · ${book.name}` : ''}`
-        : '改完记得点右下角「保存角色」';
+        : '改完记得点右上角「保存角色」';
     }
   }
 }
 
-export async function closeCharsModal() {
-  // 放大浮层还开着的话先收掉 —— 它挂在 body 上，编辑器关了它就悬空了
+/**
+ * 离开编辑器：回到进来之前那一屏。
+ *
+ * 页头的「返回」、Esc、保存完自动走，三条路都走它 —— 在弹窗时代这三件事
+ * 都是「关掉弹窗」。保存、删除、导出之后也调它，所以名字从 closeCharsModal
+ * 改成了 leaveCharacterEditor（跟设置页的 leaveSettings 对齐）。
+ */
+export async function leaveCharacterEditor() {
+  // 放大浮层还开着的话先收掉 —— 它挂在 body 上，编辑页走了它就悬空了
   closeExpandLayer();
-  // 表情弹窗同理：它挂在 body 上、盖着编辑器，编辑器关了不能留着
+  // 表情弹窗同理：它挂在 body 上、盖着编辑页，编辑页走了不能留着
   closeCharExpressionsEditor();
 
-  // 新建的角色还没保存：关掉就等于放弃，先问一句，免得辛苦填的设定白写
+  // 新建的角色还没保存：离开就等于放弃，先问一句，免得辛苦填的设定白写
   if (isCharDraft()) {
     const typed = el.c.name.value.trim();
     const ok = await confirmDialog({
@@ -380,18 +407,18 @@ export async function closeCharsModal() {
   }
 
   // 草稿从没进过任何列表，丢掉它不用刷新界面
-  // 选书浮层也要一起收掉：它挂在 body 上、z-index 还比编辑器高，
-  // 不收就成了悬在屏幕上的孤儿，而且它盖着编辑器，用户连关闭按钮都点不到。
+  // 选书浮层也要一起收掉：它挂在 body 上、z-index 还比编辑页高，
+  // 不收就成了悬在屏幕上的孤儿。
   closeWorldbookPicker();
   discardCharDraft();
-  el.charsModal.classList.add('hidden');
-  el.input.focus();
+  // 回到来处；来处是聊天就回聊天（那种情况只可能从别处被程序调起来）
+  showView(editorReturnView === 'charEditor' ? 'chars' : editorReturnView);
 }
 
 /** 底部提示：跟着编辑器作用域变，免得不知道改的是哪一份 */
 function charFootHintText(character) {
   // 还没保存的新角色没什么来源好说的，先提醒它还不存在
-  if (isCharDraft()) return '还没保存 · 点右下角「保存角色」才会创建这个角色';
+  if (isCharDraft()) return '还没保存 · 点右上角「保存角色」才会创建这个角色';
   if (charEditorScope === 'worldbook') return '改的是世界书里的副本，角色库里的那个角色不受影响';
   if (!character) return '角色卡只保存在你自己电脑上';
   if (character.source === 'png') return '来自酒馆 PNG 角色卡';
@@ -1013,9 +1040,13 @@ function startCharDraft(preset) {
   charDraft = { character, scope, bookId: book ? book.id : null };
   editingCharacterId = character.id;
 
-  // 先让弹窗可见再填表：fillCharForm 最后会量文本框高度，
+  // 同样要记来处（这条路上「保存角色」是终点，走的时候会回到它）
+  const from = currentViewName();
+  if (from !== 'charEditor') editorReturnView = from;
+
+  // 先让这一屏可见再填表：fillCharForm 最后会量文本框高度，
   // 而隐藏状态下（display:none）量什么都是 0。
-  el.charsModal.classList.remove('hidden');
+  showView('charEditor');
   fillCharForm(character);
   updateCharEditorScopeUi();
 
@@ -1081,8 +1112,8 @@ async function saveCharacter() {
     return;
   }
 
-  // 新建的角色：点「保存角色」就是这件事的终点 —— 弹窗直接关掉，回到角色列表 /
-  // 世界书编辑器看新卡。改已有的角色则留在弹窗里（多半还要接着改别的字段）。
+  // 新建的角色：点「保存角色」就是这件事的终点 —— 直接离开编辑页，回到角色列表 /
+  // 世界书编辑器看新卡。改已有的角色则留在这一页里（多半还要接着改别的字段）。
   if (creating) {
     renderCharacterPage();
     actions.rerender();
@@ -1092,11 +1123,11 @@ async function saveCharacter() {
       renderWorldbookPage();
     }
     // 写盘失败就别报「已创建」—— 提示已经由 persistCharacters 弹过了，
-    // 弹窗也留着，用户能直接再点一次「保存角色」重试。
+    // 页面也留着，用户能直接再点一次「保存角色」重试。
     if (!(await persistCharacters())) return;
     showToast(`角色「${character.name}」已创建`, 'ok');
     // 草稿已经提交（charDraft 清空），这里不会再弹「放弃新建？」那个确认框
-    await closeCharsModal();
+    await leaveCharacterEditor();
     return;
   }
 
@@ -1196,12 +1227,13 @@ export async function deleteCharacterById(id, scope) {
     return;
   }
 
-  // 编辑器如果正开在这个角色上，就没有可编辑的对象了 —— 关掉它。
-  // （从卡片删的时候编辑器根本没开，这一段会跳过。）
+  // 编辑器如果正开在这个角色上，就没有可编辑的对象了 —— 离开它。
+  // （从卡片删的时候编辑器根本没开，这一段会跳过 —— 那个判据以前是「弹窗还开着吗」，
+  //  现在是「主区域停在这一屏吗」，同一个意思。）
   // 放在写盘成功之后：失败时角色还在，编辑器不该被关掉。
   if (editingCharacterId === character.id) {
     editingCharacterId = null;
-    if (!el.charsModal.classList.contains('hidden')) closeCharsModal();
+    if (currentViewName() === 'charEditor') await leaveCharacterEditor();
   }
 
   persistConversations(0);
@@ -1437,7 +1469,7 @@ function onAltListInput(event) {
 export function initCharacterEditor(injected) {
   actions = { rerender: () => {}, ...(injected || {}) };
 
-  el.btnCloseChars.addEventListener('click', closeCharsModal);
+  el.btnCloseChars.addEventListener('click', leaveCharacterEditor);
   el.btnNewChar.addEventListener('click', newCharacter);
   // 角色列表页的「AI 生成」：作用域同样钉死在角色库，生成结果落到编辑器草稿。
   // 这里直接调 aiGen 的入口 —— 生成弹窗怎么开是它自己的事，没必要经入口层转一手：
@@ -1503,9 +1535,8 @@ export function initCharacterEditor(injected) {
     openExpandLayer(textarea, label);
   });
 
-  el.charsModal.addEventListener('click', (event) => {
-    if (event.target === el.charsModal) closeCharsModal();
-  });
+  // ⛔ 「点遮罩空白处关闭」那一条 2026-10-13 删了：编辑页没有遮罩这回事
+  //    （它现在是主区域里的一屏，不是浮在上面的弹窗）。页头的「返回」和 Esc 管离开。
 
   // 属性区的按钮（分组标签栏是渲染时就带的）
   initCharAttrsUi({ getList: () => charAttrs });

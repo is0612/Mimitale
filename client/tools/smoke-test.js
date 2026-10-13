@@ -4060,9 +4060,10 @@ app.whenReady().then(async () => {
           $('#btn-clear-portrait')?.classList.remove('hidden');
           await nap(200);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
-        // 弹窗「放大到窗口」：卡片该铺满整个内容区（1440×900）—— 四条边贴到窗口边、
-        // 圆角和描边都没了、内部该滚的还在自己滚。这种「整页感」只有图看得出来。
-        modalMax: `
+        // 角色编辑页（视图七）：整个主区域就是表单。
+        // ⚠️ 2026-10-13 起它是**页面**不再是弹窗，所以这里没有「点放大」那一步 ——
+        //    要看的正是「它本来就铺满主区域」这件事（页头 / 滚动区 / 页脚三段）。
+        charEditorPage: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
@@ -4072,12 +4073,10 @@ app.whenReady().then(async () => {
           const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (btn) btn.click();
           await nap(600);
-          $('#btn-fs-chars')?.click();
-          await nap(400);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
-        // 同上，但换成世界书编辑器 —— 它自己把卡片写成 `height: 94vh`，
-        // 「放大高度没铺满」就是这么来的，单独留一张盯着高度。
-        modalMaxWorldbook: `
+        // 世界书编辑页（视图八）：左条目列表 / 右条目编辑，两栏各自铺满这一屏的高度。
+        // 同样不再有「放大」那一步 —— 它自己就占满主区域。
+        wbEditorPage: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
@@ -4087,8 +4086,6 @@ app.whenReady().then(async () => {
           const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (btn) btn.click();
           await nap(650);
-          $('#btn-fs-worldbooks')?.click();
-          await nap(400);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 同上，换成预设编辑器 —— 它的卡片是 `width: min(720px, 94vw)`，
         // 「放大宽度没铺满」就是这么来的，单独留一张盯着宽度。

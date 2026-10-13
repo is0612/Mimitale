@@ -28,13 +28,17 @@ import { renderPresetPage } from './presetList.js';
 /** 当前主区域显示的是哪个视图 */
 let currentView = 'chat';
 
-const VIEWS = ['chat', 'chars', 'worldbooks', 'presets', 'help', 'settings'];
+const VIEWS = ['chat', 'chars', 'charEditor', 'worldbooks', 'wbEditor', 'presets', 'help', 'settings'];
 
 /** 「哪一屏对应哪个容器、哪个侧栏按钮」—— 加视图只要往这张表里加一行 */
 const VIEW_PARTS = [
   { name: 'chat', view: 'viewChat', btn: null },
   { name: 'chars', view: 'viewChars', btn: 'btnChars' },
+  // 编辑器也是视图，只是侧边栏上没有自己那颗按钮 —— 它们是从角色库 / 世界书
+  // 点卡片进来说的（2026-10-13 从弹窗改成页面，跟设置页一个路子）。
+  { name: 'charEditor', view: 'viewCharEditor', btn: null },
   { name: 'worldbooks', view: 'viewWorldbooks', btn: 'btnWorldbooks' },
+  { name: 'wbEditor', view: 'viewWbEditor', btn: null },
   { name: 'presets', view: 'viewPresets', btn: 'btnPresets' },
   // 帮助页是纯静态文本，没有 render 函数，只在这里登记显隐和高亮
   { name: 'help', view: 'viewHelp', btn: 'btnHelp' },

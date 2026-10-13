@@ -106,13 +106,13 @@ import {
   openWorldbookEditor,
   renderWorldbookChars,
   closeWorldbookCharPicker,
-  closeWorldbooksModal,
+  leaveWorldbookEditor,
   stashWorldbookForm
 } from './views/worldbook.js';
 import {
   initCharacterEditor,
   openCharacterEditor,
-  closeCharsModal,
+  leaveCharacterEditor,
   closeWorldbookPicker,
   isWorldbookPickerOpen,
   startCharacterDraftInBook,
@@ -332,13 +332,13 @@ function bindEvents() {
     }
   });
 
-  // 三个编辑弹窗头上的「放大」：把**那个弹窗**铺满应用窗口，再点还原。
+  // 编辑弹窗头上的「放大」：把**那个弹窗**铺满应用窗口，再点还原。
   // 传的是按钮本身（模块靠 closest('.modal') 找到它所属的弹窗），所以各弹窗互不影响。
   // 逐个绑而不是循环数组 —— tools/audit-buttons.js 是按「el.xxx 后面同一行有没有
   // addEventListener」查漏绑的，写成数组它会把这几个全报成没绑。
-  // （设置那颗 2026-10-09 撤了：它从弹窗改成**页面**，本来就占满整个窗口。）
-  el.btnFsChars.addEventListener('click', () => toggleModalMax(el.btnFsChars));
-  el.btnFsWorldbooks.addEventListener('click', () => toggleModalMax(el.btnFsWorldbooks));
+  // （设置那颗 2026-10-09 撤了、角色卡 / 世界书那两颗 2026-10-13 撤了：
+  //  它们都从弹窗改成了**页面**，本来就占满整个窗口，没有「放大」这回事。
+  //  只剩预设还是弹窗。）
   el.btnFsPreset.addEventListener('click', () => toggleModalMax(el.btnFsPreset));
 
   el.input.addEventListener('input', autoGrowInput);
@@ -402,8 +402,10 @@ function bindEvents() {
       closeWorldbookPicker();
       return;
     }
-    if (!el.charsModal.classList.contains('hidden')) {
-      closeCharsModal();
+    // 角色编辑器 2026-10-13 起也是**页面**（视图七）而不是弹窗：在里面按 Esc
+    // = 回到进来之前那一屏，和页头那颗「返回」同一个动作（跟下面的设置页一样）。
+    if (!el.viewCharEditor.classList.contains('hidden')) {
+      leaveCharacterEditor();
       return;
     }
     // 人设弹窗是从设置里开的、压在设置之上，所以先关它 ——
@@ -421,8 +423,9 @@ function bindEvents() {
     // ⛔ 「外观弹窗」这一段 2026-10-12 深夜摘掉：外观搬进设置页（#sec-appearance）了，
     //    它不再是压在设置之上的那一层 —— 在设置页里按 Esc 就走上面那条 leaveSettings()。
     // 剩下这三个以前漏在链外 —— 只开着它们的时候按 Esc 毫无反应，和别的弹窗行为不一致
-    if (!el.wb.modal.classList.contains('hidden')) {
-      closeWorldbooksModal();
+    // ⚠️ 世界书编辑器 2026-10-13 起同样从弹窗变成了**页面**（视图八），判据跟着换。
+    if (!el.viewWbEditor.classList.contains('hidden')) {
+      leaveWorldbookEditor();
       return;
     }
     if (!el.pr.modal.classList.contains('hidden')) {
