@@ -1,0 +1,198 @@
+/* ==========================================================================
+   基础层：重置 + 全站共用的零件。
+   顶栏、页脚、品牌标识各自的样式留在自己的组件里，这里只放「谁都可能用到」的。
+   ========================================================================== */
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* ------------------------------ 环境光 ------------------------------ */
+/* 一盏吊灯挂在页面右上方，边缘被压暗。
+   是整个页面唯一的大面积「光」，其余地方的亮都从它派生。 */
+.lamp {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(880px 520px at 72% -6%, rgba(232, 184, 75, 0.13), transparent 64%),
+    radial-gradient(1100px 700px at 8% 108%, rgba(232, 184, 75, 0.05), transparent 60%);
+}
+/* 场地边缘压暗，把视线收进中间 */
+.lamp::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(140% 100% at 50% 40%, transparent 42%, rgba(0, 0, 0, 0.55) 100%);
+}
+/* 木吧台的横向细纹。极低对比 —— 是「质感」而不是「图案」，
+   一旦看得出来是条纹就过了。 */
+.grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 96px),
+    repeating-linear-gradient(0deg,  rgba(255, 255, 255, 0.010) 0 1px, transparent 1px 240px);
+}
+
+/* ------------------------------ 版心 ------------------------------ */
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 var(--gut);
+  position: relative;
+  z-index: 1;
+}
+
+a { color: inherit; text-decoration: none; }
+
+:focus-visible {
+  outline: 2px solid var(--lamp);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+::selection { background: var(--lamp-a35); color: var(--text); }
+
+/* 行内代码（正文里的标识符、路径、命令）。
+   ⚠️ 刻意用中性底而不是琥珀底 —— 这页面的琥珀很珍贵，它留给
+   「品牌 / 强调 / 灯」三件事；代码标识归入工具语汇，中性最像工具，也最不抢戏。 */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+/* ------------------------------ 品牌符号 ------------------------------ */
+/* 一个 24px 方角琥珀块 —— 直接来自客户端 .brand-dot。
+   它在全站充当「一盏灯」：每个小节标题前挂一盏，是页面唯一的重复装饰。
+   （真正的 logo 是圆形徽标，见 components/BrandMark.vue；
+     这个方块是装饰语汇，不承担「标识」的职责。） */
+.lampblock {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--lamp);
+  flex: none;
+  display: block;
+}
+.lampblock--sm { width: 16px; height: 16px; border-radius: 2px; }
+
+/* ------------------------------ 按钮 ------------------------------ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 11px 20px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.18s var(--ease), border-color 0.18s var(--ease),
+              transform 0.18s var(--ease), color 0.18s var(--ease);
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--lamp);
+  color: var(--on-lamp);
+}
+.btn-primary:hover {
+  background: var(--lamp-hi);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  border-color: var(--border-hi);
+  color: var(--text);
+  background: transparent;
+}
+.btn-ghost:hover { border-color: var(--lamp-a35); color: var(--lamp-hi); }
+.btn-sm { padding: 8px 15px; font-size: 13px; }
+.btn .arw { transition: transform 0.18s var(--ease); }
+.btn:hover .arw { transform: translateX(3px); }
+
+/* ------------------------------ 通用小节 ------------------------------ */
+section { position: relative; }
+
+.sec {
+  padding: var(--s9) 0 0;
+}
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: var(--s3);
+}
+.sec-kicker {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--lamp);
+  text-transform: uppercase;
+}
+h2 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(28px, 3.6vw, 40px);
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  margin: 0 0 var(--s4);
+  text-wrap: balance;
+}
+.sec-sub {
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--text-dim);
+  max-width: 640px;
+  margin: 0 0 var(--s7);
+}
+.sec-sub strong { color: var(--text); font-weight: 600; }
+
+/* 锚点跳转别被贴顶的顶栏盖住（顶栏高 62px，留一点余量） */
+section[id] { scroll-margin-top: calc(var(--topbar-h) + 14px); }
+
+/* ------------------------------ 入场动效 ------------------------------ */
+/* 进入视口时浮起。规则在 composables/useRise.ts 里统一挂，
+   同一父容器里的兄弟依次延迟 —— 所以这里只有起止两态。 */
+.rise {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+}
+.rise.in { opacity: 1; transform: none; }
+
+/* ------------------------------ 响应式 ------------------------------ */
+@media (max-width: 860px) {
+  :root { --gut: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .rise { opacity: 1; transform: none; transition: none; }
+  * { transition-duration: 0.01ms !important; }
+}

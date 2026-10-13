@@ -1,0 +1,59 @@
+/* ==========================================================================
+   设计令牌 —— 逐字沿用 client/renderer/style.css 的 [data-theme='dark']。
+   官网和客户端是同一个东西，这件事在代码层面就该是真的：
+   底色、琥珀、边框不重算、不调色，直接搬。
+
+   三条自我约束（防「AI 味」，来自方向稿 A）：
+   ① 只有一种暖色（琥珀）。不用紫蓝渐变、不用第二强调色。
+   ② 圆角 4px 封顶。这是工具感的地基，大圆角会立刻变成另一类产品。
+   ③ 光是有来源的（像灯），不是无意义的 glow。
+   ========================================================================== */
+:root {
+  /* 表面 */
+  --bg:         #101113;
+  --bg-side:    #16181b;
+  --bg-card:    #1b1e22;
+  --bg-band:    #191c21;
+  --bg-input:   #1e2126;
+  --bg-item:    #23262b;
+  --border:     #2a2e34;
+  --border-hi:  #3a3f46;
+
+  /* 文字 */
+  --text:       #e4e7ea;
+  --text-dim:   #9aa1a9;
+  --text-faint: #7d848c;
+
+  /* 琥珀灯（夜间档 accent） */
+  --lamp:       #e8b84b;
+  --lamp-hi:    #f2ce74;
+  --lamp-lo:    #c99a33;
+  --on-lamp:    #0e1216;
+  --lamp-a08:   rgba(232, 184, 75, 0.08);
+  --lamp-a14:   rgba(232, 184, 75, 0.14);
+  --lamp-a22:   rgba(232, 184, 75, 0.22);
+  --lamp-a35:   rgba(232, 184, 75, 0.35);
+
+  --ok:         #7fd6a8;
+
+  --radius:     4px;
+  --radius-sm:  3px;
+
+  /* 字体三分工：衬线立骨（招牌 / 标题）、无衬线干活（正文）、等宽记数（编号 / 命令） */
+  --font-serif: Georgia, "Songti SC", "Source Han Serif SC", "SimSun", serif;
+  --font-ui:    "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --font-mono:  "JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+
+  /* 版心 */
+  --wrap: 1140px;
+  --gut: 28px;
+
+  /* 流式间距刻度（4px 基准，但节奏不平铺 —— 大段之间留得开，小元素之间收得紧） */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 72px; --s9: 112px;
+
+  /* 顶栏高度：锚点跳转要避开它，见 base.css 的 scroll-margin-top */
+  --topbar-h: 62px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);   /* ease-out-quart */
+}

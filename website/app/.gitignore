@@ -1,0 +1,12 @@
+# 依赖（仓库根的 .gitignore 也罩得住，这里再写一遍，是为了这个目录单独拷走时仍然成立）
+node_modules/
+
+# 构建产物（部署时把 dist/ 整个传到服务器）
+dist/
+
+# Vite 的本地缓存
+.vite/
+
+# 安装包：默认进版本库（体积大的话，取消下面这行的注释即可）。
+# 注意这跟构建无关 —— 不管忽不忽略，Vite 都会把 public/downloads/ 拷进 dist/。
+# /public/downloads/*.exe
