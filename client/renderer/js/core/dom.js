@@ -363,8 +363,11 @@ export const el = {
     btnClose: $('btn-close-worldbooks'),
     btnImport: $('btn-import-lorebook'),
     btnNew: $('btn-new-worldbook'),
-    entriesEmpty: $('wb-entries-empty'),
-    entriesWrap: $('wb-entries-wrap'),
+    // ⚠️ 这两个 2026-10-13 改过名（原 entriesEmpty / entriesWrap）：
+    //    编辑器改成「本书设置 / 条目列表 / 条目编辑」三栏之后，「没选书」的占位
+    //    和「整本书的表单」那层壳都跟条目无关了，旧名里那个 entries 会误导下一位。
+    bookEmpty: $('wb-book-empty'),
+    bookWrap: $('wb-book-wrap'),
     name: $('wb-name'),
     opening: $('wb-opening'),
     entryCount: $('wb-entry-count'),

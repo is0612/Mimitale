@@ -3718,6 +3718,35 @@ await scenario('世界书：新建条目', async () => {
   check('条目数挂在标题旁边（不再挂在书名下面）',
     $('.wb-entry-head .wb-count') === byId('wb-entry-count'));
 
+  // --- 布局：本书设置 / 条目列表 / 条目编辑 三栏 ---
+  // 2026-10-13 之前书级设置和条目列表挤在同一个 268px 里，条目卡被压得只露三四张。
+  // 这里钉住「谁在哪一栏」+「编辑区是不是最宽的那个」，免得以后有人挪回去。
+  const wbRect = (sel) => $(sel).getBoundingClientRect();
+  check('左半边是「本书设置 + 条目列表」并排的两栏',
+    getComputedStyle($('.wb-book-wrap')).gridTemplateColumns.split(/\s+/).length === 2,
+    getComputedStyle($('.wb-book-wrap')).gridTemplateColumns);
+  check('本书设置栏在条目列表左边',
+    wbRect('.wb-book').right <= wbRect('.wb-entries').left + 1,
+    `书设置右缘 ${Math.round(wbRect('.wb-book').right)} / 条目列表左缘 ${Math.round(wbRect('.wb-entries').left)}`);
+  check('条目编辑区比条目列表宽（它才是主工作区）',
+    wbRect('.wb-main').width > wbRect('.wb-entries').width,
+    `编辑 ${Math.round(wbRect('.wb-main').width)} vs 列表 ${Math.round(wbRect('.wb-entries').width)}`);
+  check('书名 / 开场白 / 本书角色 都搬进了「本书设置」栏',
+    $('.wb-book').contains(byId('wb-name')) &&
+    $('.wb-book').contains(byId('wb-opening')) &&
+    $('.wb-book').contains($('#wb-char-list').closest('.wb-chars')),
+    '三者里有一个不在 .wb-book 里');
+  check('条目列表栏里不再有书级字段',
+    !$('.wb-entries').contains(byId('wb-name')) && !$('.wb-entries').contains(byId('wb-opening')),
+    '书名 / 开场白还留在 .wb-entries 里');
+  check('导出 / 删除本书 收在书设置栏底部',
+    $('.wb-book-foot').contains(byId('btn-export-wb')) &&
+    $('.wb-book-foot').contains(byId('btn-del-worldbook')));
+  check('「＋ 条目」跟着条目列表走', $('.wb-entries').contains(byId('btn-new-entry')));
+  check('页脚只剩那行状态提示（导出搬进书设置栏了）',
+    !$('#view-wb-editor .page-foot').contains(byId('btn-export-wb')),
+    $('#view-wb-editor .page-foot').textContent.trim());
+
   // 两条新条目：删「甲」的时候不该把编辑焦点从「乙」抢走（× 上的 stopPropagation）
   click('#btn-new-entry');
   setValue('#wb-e-title', '甲条目');

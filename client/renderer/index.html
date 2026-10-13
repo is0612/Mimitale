@@ -671,75 +671,96 @@
         </header>
 
         <div class="worldbook-body">
-        <!-- 中：条目列表 -->
-        <section class="wb-entries">
-          <div id="wb-entries-empty" class="wb-empty">左边选一本书，或新建一本</div>
-          <div id="wb-entries-wrap" class="wb-entries-wrap hidden">
-            <div class="wb-entries-head">
-              <div class="wb-entries-title">
-                <input id="wb-name" type="text" spellcheck="false" placeholder="世界书名称" aria-label="世界书名称" />
-              </div>
-              <div class="wb-entries-actions">
-                <button id="btn-preview-wb" class="btn btn-ghost btn-sm" type="button">预览命中</button>
-                <button id="btn-new-entry" class="btn btn-ghost btn-sm" type="button">＋ 条目</button>
-                <button id="btn-del-worldbook" class="btn btn-danger btn-sm" type="button">删除本书</button>
+        <div id="wb-book-empty" class="wb-empty">左边选一本书，或新建一本</div>
+
+        <!-- 左半边是并排的两列（书设置 280 + 条目列表 268），一起包在 #wb-book-wrap 里 ——
+             两块都只在「选中了一本书」时出现，由 worldbook.js 的 selectWorldbook 一次开/关。
+             顺序 = 书 → 条目 → 该条目的内容，从左往右读。
+
+             ⚠️ 这两个 id 2026-10-13 之前叫 wb-entries-empty / wb-entries-wrap：
+             「整本书的表单」那层壳以前跟条目列表同处一栏，名字里还留着 entries。 -->
+        <div id="wb-book-wrap" class="wb-book-wrap hidden">
+
+        <!-- 左一栏：本书设置。放的全是「设一次就不动」的东西（书名 / 开场白 / 本书角色 /
+             预览 / 导出 / 删除本书）—— 它们以前和条目列表挤在同一个 268px 里，
+             条目卡被压得只露三四张，这才是「内容太多也乱」的来源。 -->
+        <section class="wb-book">
+          <div class="wb-book-title">本书设置</div>
+
+          <label class="field field-stack wb-book-name">
+            <span class="field-label">书名</span>
+            <input id="wb-name" type="text" spellcheck="false" placeholder="世界书名称" aria-label="世界书名称" />
+          </label>
+
+          <!-- 开场白：进这个世界时自动作为第一条消息 -->
+          <label class="field field-stack wb-opening">
+            <span class="field-label">开场白</span>
+            <textarea id="wb-opening" rows="3" spellcheck="false" placeholder="进这个世界时自动作为第一条消息。留空则让 AI 按设定现生成一段开局。"></textarea>
+          </label>
+
+          <!-- 本书角色：从角色库复制进来的独立副本。
+               和角色库里的那个角色互相独立，改哪边都不影响另一边。
+               它就是「这本书的 NPC 名单」—— 进世界时 GM 照着他们演，
+               勾了「显示状态」的还会出现在右栏头像条上。 -->
+          <div class="wb-chars">
+            <div class="wb-chars-head">
+              <!-- 标题整块就是折叠开关：一本酒馆书十来号 NPC，一排 chip 能把
+                   下面的东西挤没。收起只是 CSS 藏起来（DOM 还在），
+                   所以「＋ 新建」之后照样找得到 chip。 -->
+              <button id="btn-toggle-wb-chars" class="wb-chars-toggle" type="button" aria-expanded="true"
+                      title="本书角色 = 这本书的 NPC 名单：进世界时 GM 会照着他们演，勾了「显示状态」的会出现在右栏头像条上">
+                <span class="wb-caret" aria-hidden="true"></span>
+                <span class="field-label">本书角色</span>
+                <span id="wb-char-count" class="wb-count"></span>
+              </button>
+              <div class="wb-chars-actions">
+                <button id="btn-add-wb-chars" class="btn btn-ghost btn-sm" type="button">＋ 从角色库加入</button>
+                <button id="btn-ai-wb-char" class="btn btn-ghost btn-sm" type="button"
+                        title="按这本书的设定生成一个 NPC（酒馆的小二、咖啡店的老板娘这类），生成完可以自己改">AI 生成</button>
+                <button id="btn-new-wb-char" class="btn btn-ghost btn-sm" type="button">＋ 新建</button>
+                <button id="btn-sync-wb-attrs" class="btn btn-ghost btn-sm" type="button"
+                        title="按名字找角色库里同名的卡，把它的属性补进这里的副本（副本是快照，加进来之后角色库又补了属性的话，副本不会自己跟着变）">↻ 同步属性</button>
               </div>
             </div>
+            <div id="wb-char-list" class="wb-char-list"></div>
+          </div>
 
-            <!-- 本书角色：从角色库复制进来的独立副本。
-                 和角色库里的那个角色互相独立，改哪边都不影响另一边。
-                 它就是「这本书的 NPC 名单」—— 进世界时 GM 照着他们演，
-                 勾了「显示状态」的还会出现在右栏头像条上。 -->
-            <div class="wb-chars">
-              <div class="wb-chars-head">
-                <!-- 标题整块就是折叠开关：一本酒馆书十来号 NPC，一排 chip 能把
-                     下面的条目和开场白挤没。收起只是 CSS 藏起来（DOM 还在），
-                     所以「＋ 新建」之后照样找得到 chip。 -->
-                <button id="btn-toggle-wb-chars" class="wb-chars-toggle" type="button" aria-expanded="true"
-                        title="本书角色 = 这本书的 NPC 名单：进世界时 GM 会照着他们演，勾了「显示状态」的会出现在右栏头像条上">
-                  <span class="wb-caret" aria-hidden="true"></span>
-                  <span class="field-label">本书角色</span>
-                  <span id="wb-char-count" class="wb-count"></span>
-                </button>
-                <div class="wb-chars-actions">
-                  <button id="btn-add-wb-chars" class="btn btn-ghost btn-sm" type="button">＋ 从角色库加入</button>
-                  <button id="btn-ai-wb-char" class="btn btn-ghost btn-sm" type="button"
-                          title="按这本书的设定生成一个 NPC（酒馆的小二、咖啡店的老板娘这类），生成完可以自己改">AI 生成</button>
-                  <button id="btn-new-wb-char" class="btn btn-ghost btn-sm" type="button">＋ 新建</button>
-                  <button id="btn-sync-wb-attrs" class="btn btn-ghost btn-sm" type="button"
-                          title="按名字找角色库里同名的卡，把它的属性补进这里的副本（副本是快照，加进来之后角色库又补了属性的话，副本不会自己跟着变）">↻ 同步属性</button>
-                </div>
-              </div>
-              <div id="wb-char-list" class="wb-char-list"></div>
-            </div>
+          <div class="wb-book-actions">
+            <button id="btn-preview-wb" class="btn btn-ghost btn-sm" type="button">预览命中</button>
+          </div>
 
-            <!-- 开场白：进这个世界时自动作为第一条消息 -->
-            <label class="field field-stack wb-opening">
-              <span class="field-label">开场白</span>
-              <textarea id="wb-opening" rows="3" spellcheck="false" placeholder="进这个世界时自动作为第一条消息。留空则让 AI 按设定现生成一段开局。"></textarea>
-            </label>
-
-            <!-- 条目：标题和「开场白」一个样式。条目数原来挂在书名下面，
-                 看着像书名的注脚 —— 挪到它自己的标题旁边才对得上。 -->
-            <div class="wb-entry-head">
-              <span class="field-label">条目</span>
-              <span id="wb-entry-count" class="wb-count"></span>
-              <!-- 两颗按钮包一层：左栏只有 268px，「N 条条目 · M 条启用」长起来时
-                   这一行必须能换行，否则会被 overflow:hidden 直接切掉。 -->
-              <div class="wb-entry-actions">
-                <!-- 世界书条目模板：一键种入世界模拟类卡最常用的四条骨架。
-                     文案在 worldbook.js 的 WB_ENTRY_TEMPLATE。 -->
-                <button id="btn-wb-entry-template" class="btn btn-ghost btn-sm" type="button"
-                        title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</button>
-                <!-- 「＋ 事件」：一条一个事件、靠关键词激活（和上面那条常驻的「事件表」配套：
-                     前者给地图，后者给开关）。文案在 worldbook.js 的 WB_EVENT_CONTENT。 -->
-                <button id="btn-wb-add-event" class="btn btn-ghost btn-sm" type="button"
-                        title="新建一条「事件」条目：填上关键词，聊到就把这段演出来">＋ 事件</button>
-              </div>
-            </div>
-            <div id="wb-entry-list" class="wb-entry-list"></div>
+          <!-- 书级那两颗「进 / 出」：导出原在页脚、删除本书原挤在书名那一行 ——
+               都是这本书自己的事，收进这一栏底部（删除本书吸底，滚多远都点得到）。 -->
+          <div class="wb-book-foot">
+            <button id="btn-export-wb" class="btn btn-ghost btn-sm" type="button" title="导出成酒馆能直接导入的 JSON">导出</button>
+            <button id="btn-del-worldbook" class="btn btn-danger btn-sm" type="button">删除本书</button>
           </div>
         </section>
+
+        <!-- 左二栏：条目列表。高频 —— 每次进来都在点它，所以紧挨着编辑区。 -->
+        <section class="wb-entries">
+          <!-- 条目：标题和「开场白」一个样式。条目数原来挂在书名下面，
+               看着像书名的注脚 —— 挪到它自己的标题旁边才对得上。 -->
+          <div class="wb-entry-head">
+            <span class="field-label">条目</span>
+            <span id="wb-entry-count" class="wb-count"></span>
+            <!-- 这一栏 268px：三颗按钮正好一行放得下，放不下就靠 flex-wrap 折行，
+                 别被 overflow:hidden 切掉（这条从单栏时代就成立，别把列宽压到 268 以下）。 -->
+            <div class="wb-entry-actions">
+              <button id="btn-new-entry" class="btn btn-ghost btn-sm" type="button">＋ 条目</button>
+              <!-- 世界书条目模板：一键种入世界模拟类卡最常用的四条骨架。
+                   文案在 worldbook.js 的 WB_ENTRY_TEMPLATE。 -->
+              <button id="btn-wb-entry-template" class="btn btn-ghost btn-sm" type="button"
+                      title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</button>
+              <!-- 「＋ 事件」：一条一个事件、靠关键词激活（和上面那条常驻的「事件表」配套：
+                   前者给地图，后者给开关）。文案在 worldbook.js 的 WB_EVENT_CONTENT。 -->
+              <button id="btn-wb-add-event" class="btn btn-ghost btn-sm" type="button"
+                      title="新建一条「事件」条目：填上关键词，聊到就把这段演出来">＋ 事件</button>
+            </div>
+          </div>
+          <div id="wb-entry-list" class="wb-entry-list"></div>
+        </section>
+        </div><!-- /wb-book-wrap -->
 
         <!-- 右：条目编辑 -->
         <section class="wb-main">
@@ -836,11 +857,9 @@
         </section>
         </div><!-- /worldbook-body -->
 
+        <!-- 页脚只剩状态行：那两颗书级按钮（导出 / 删除本书）2026-10-13 收进左栏「本书设置」底部了。 -->
         <footer class="page-foot">
           <span id="wb-foot-hint" class="foot-hint">世界书只保存在你自己电脑上</span>
-          <div class="foot-actions">
-            <button id="btn-export-wb" class="btn btn-ghost btn-sm" type="button" title="导出成酒馆能直接导入的 JSON">导出</button>
-          </div>
         </footer>
       </section>
 

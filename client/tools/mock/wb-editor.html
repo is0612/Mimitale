@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Mimitale · 世界书编辑页 布局方案对比稿</title>
+<style>
+/* ==========================================================================
+   世界书编辑页 —— 三个「布局方向」对比静态稿。
+   只服务「出图给人看」，不参与构建，不改任何真实代码。
+
+   frame 固定 1440x900 = 真实窗口尺寸（main/window.js width/height）。
+   三个方向**共用同一套 token**（真实默认：夜间 + 琥珀灯）。
+   这次只比「结构」，颜色故意一个都不换 —— 颜色一变，评审就会被带跑。
+
+   三个方向 = 「书级信息（书名/开场白/本书角色/预览/导出/删除）」放哪：
+     A 右置 —— 条目列表 | 条目编辑 | 本书设置（三栏，编辑居中最大）
+     B 上提 —— 书信息压成页头下一条通栏带，主区回归「列表 | 编辑」双栏
+     C 左置 —— 本书设置 | 条目列表 | 条目编辑（书/条目彻底分区）
+
+   出图脚本：tools/mock/directions-shots.js --src=wb-editor.html --size=1440x900
+   ========================================================================== */
+
+*{box-sizing:border-box}
+/* 出图脚本截整个视口 → body 必须零留白，滚动条必须藏掉（占位会裁掉 frame 底部） */
+html{scrollbar-width:none}
+::-webkit-scrollbar{width:0;height:0}
+body{margin:0;padding:0;background:#8e8e8a;display:block}
+
+[data-dir]{
+  --font-ui:"Microsoft YaHei UI","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  --r:4px;
+
+  /* —— 真实默认配色：style.css [data-theme='dark'] + [data-accent='amber'][data-theme='dark'] —— */
+  --bg:#101113;          /* 主区底 */
+  --sheet:#16181b;       /* 面板 / 侧栏（probe 拿它当承载面算对比度） */
+  --sheet-2:#1b1e22;     /* 卡片 / 按钮 */
+  --band:#191c21;        /* 次级条 */
+  --item:#23262b;        /* 列表项选中 / 悬停 */
+  --input:#1e2126;       /* 输入底 */
+  --line:#2a2e34;
+  --line-soft:#1f2227;
+  --ink:#e4e7ea;
+  --ink-dim:#9aa1a9;
+  --ink-faint:#7d848c;
+  --accent:#e8b84b;
+  --accent-soft:rgba(232,184,75,.14);
+  --accent-line:rgba(232,184,75,.35);
+  --accent-faint:rgba(232,184,75,.25);
+  --on-accent:#0e1216;
+  --danger:#e06c75;
+  --danger-bg:#3a2226;
+  --danger-line:#5a3236;
+  --foot:#15171b;
+}
+
+/* ---------- frame ---------- */
+.frame{
+  width:1440px;height:900px;display:flex;overflow:hidden;position:relative;
+  background:var(--bg);color:var(--ink);
+  font-family:var(--font-ui);font-size:14px;line-height:1.6;
+}
+.frame *{min-width:0}
+.sp{flex:1}
+
+/* ==========================================================================
+   共用：侧栏（三方向一致，照真实 app 复刻）
+   ========================================================================== */
+.side{width:260px;flex:0 0 260px;background:var(--sheet);display:flex;flex-direction:column;padding:14px 12px 12px}
+.brand{display:flex;align-items:center;gap:8px;padding:2px 4px 14px}
+.brand-dot{width:22px;height:22px;flex:0 0 22px;border-radius:6px;background:var(--accent)}
+.brand-name{font-size:15px;font-weight:700;letter-spacing:.5px}
+.brand-ver{font-size:12px;color:var(--ink-faint);margin-left:auto}
+.btn-new{height:36px;border:0;border-radius:var(--r);background:var(--accent);color:var(--on-accent);
+  font-size:13px;font-weight:600;font-family:inherit;cursor:pointer}
+.convo-label{font-size:12px;color:var(--ink-faint);padding:16px 6px 6px}
+.convo{display:flex;align-items:center;gap:8px;height:34px;padding:0 8px;border-radius:var(--r);background:var(--item)}
+.convo-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.convo-time{font-size:12px;color:var(--ink-faint);margin-left:auto}
+.side-foot{margin-top:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:2px;
+  padding-top:12px;border-top:1px solid var(--line-soft)}
+.nav-btn{height:34px;border:0;border-radius:var(--r);background:transparent;color:var(--ink-dim);
+  font-size:12px;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px}
+.nav-btn::before{content:"";width:12px;height:12px;border:1.5px solid currentColor;border-radius:3px;opacity:.55}
+.nav-btn.on{color:var(--accent);background:var(--accent-soft)}
+
+/* ==========================================================================
+   共用：主区骨架
+   ========================================================================== */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.phead{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--line-soft)}
+.phead-l{display:flex;flex-direction:column;gap:2px;min-width:0}
+.ptitle{margin:0;font-size:18px;font-weight:700;line-height:1.3}
+.psub{margin:0;font-size:12px;color:var(--ink-faint)}
+.phead-r{display:flex;align-items:center;gap:8px;margin-left:auto}
+.pill{font-size:12px;color:var(--ink-faint);border:1px solid var(--line);border-radius:999px;
+  padding:3px 10px;white-space:nowrap}
+.pfoot{display:flex;align-items:center;gap:10px;padding:12px 22px;border-top:1px solid var(--line-soft);background:var(--foot)}
+.foot-hint{font-size:12px;color:var(--ink-faint)}
+
+/* ---------- 按钮 ---------- */
+.btn{height:30px;padding:0 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--sheet-2);
+  color:var(--ink);font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.btn.sm{height:28px;padding:0 10px;font-size:12px}
+.btn.full{width:100%}
+.btn-primary{background:var(--accent);color:var(--on-accent);border-color:transparent;font-weight:600}
+.btn-danger{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-line)}
+
+/* ==========================================================================
+   共用：条目列表（左栏）
+   ========================================================================== */
+.elist{display:flex;flex-direction:column;gap:8px;padding:12px 10px;min-height:0;border-right:1px solid var(--line-soft)}
+.elist-head{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.elist-actions{display:flex;gap:6px;margin-left:auto}
+.elist-scroll{flex:1;display:flex;flex-direction:column;gap:4px;overflow-y:auto;min-height:0}
+.entry{border:1px solid var(--line);background:var(--sheet);border-radius:var(--r);padding:8px 10px;
+  display:flex;flex-direction:column;gap:3px}
+.entry.on{background:var(--accent-soft);border-color:var(--accent-faint)}
+.entry-title{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
+.entry-del{margin-left:auto;border:0;background:transparent;color:var(--ink-faint);font-size:14px;
+  line-height:1;cursor:pointer;padding:0 2px}
+.entry-keys{font-size:12px;color:var(--ink-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.flabel{font-size:12px;font-weight:600;color:var(--ink-dim)}
+.count{font-size:12px;color:var(--ink-faint)}
+
+/* ==========================================================================
+   共用：条目编辑（中栏）
+   ========================================================================== */
+.edit{display:flex;flex-direction:column;gap:12px;padding:14px 18px;min-height:0;overflow-y:auto}
+.fld{display:flex;flex-direction:column;gap:5px}
+.fld.grow{flex:1 1 auto;min-height:0}
+.inp{height:32px;width:100%;border:1px solid var(--line);background:var(--input);color:var(--ink);
+  border-radius:var(--r);padding:0 10px;font-size:13px;font-family:inherit}
+.ta{width:100%;border:1px solid var(--line);background:var(--input);color:var(--ink);border-radius:var(--r);
+  padding:8px 10px;font-size:13px;font-family:inherit;line-height:1.6;resize:none}
+.fld.grow .ta{flex:1 1 auto;min-height:0}
+.ta-3{height:74px}
+.help{font-size:12px;color:var(--ink-faint);line-height:1.5}
+.help code{background:rgba(255,255,255,.08);border-radius:3px;padding:1px 4px;font-size:11px}
+.adv{height:32px;flex:0 0 32px;border:1px solid var(--line);background:var(--input);border-radius:var(--r);
+  padding:0 12px;display:flex;align-items:center;font-size:12px;color:var(--ink-dim)}
+.checks{display:flex;flex-direction:column;gap:8px}
+.check{display:flex;align-items:center;gap:8px}
+.check-t{font-size:13px}
+.check-d{font-size:12px;color:var(--ink-faint)}
+.tg{width:30px;height:18px;flex:0 0 30px;margin-left:auto;border-radius:9px;background:#34383e;position:relative}
+.tg.on{background:var(--accent)}
+.tg::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff}
+.tg.on::after{left:auto;right:2px}
+.edit-foot{display:flex;align-items:center;gap:10px;margin-top:auto;padding-top:4px}
+
+/* ==========================================================================
+   共用：本书设置（书级信息块）
+   ========================================================================== */
+.bset{display:flex;flex-direction:column;gap:10px;padding:14px;min-height:0;overflow-y:auto}
+.bset-title{font-size:12px;font-weight:600;color:var(--ink-dim)}
+.bset-seg{display:flex;align-items:center;gap:6px}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:flex;align-items:center;gap:5px;height:26px;padding:0 9px 0 4px;border:1px solid var(--line);
+  border-radius:999px;background:var(--sheet-2);font-size:12px}
+.chip-av{width:18px;height:18px;border-radius:50%;background:var(--item);border:1px solid var(--line)}
+.chip-actions{display:flex;flex-wrap:wrap;gap:6px}
+.bset-foot{display:flex;gap:8px;margin-top:auto;padding-top:8px}
+
+/* ==========================================================================
+   方向 A｜条目列表 | 条目编辑 | 本书设置
+   ========================================================================== */
+.la-body{flex:1;display:grid;grid-template-columns:236px minmax(0,1fr) 280px;min-height:0}
+.la-body .bset{border-left:1px solid var(--line-soft)}
+
+/* ==========================================================================
+   方向 B｜书信息上提成通栏带 + 列表 | 编辑 双栏
+   ========================================================================== */
+.lb-band{display:flex;align-items:center;gap:14px;padding:10px 22px;background:var(--band);
+  border-bottom:1px solid var(--line-soft)}
+.band-name{display:flex;align-items:center;gap:8px}
+.band-name .inp{width:180px;height:30px;background:transparent;border-color:transparent}
+.band-seg{display:flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--sheet);color:var(--ink);font-size:13px;font-family:inherit;cursor:pointer}
+.band-seg b{font-weight:700;color:var(--accent)}
+.caret{color:var(--ink-faint);font-size:11px}
+.lb-body{flex:1;display:grid;grid-template-columns:236px minmax(0,1fr);min-height:0}
+
+/* ==========================================================================
+   方向 C｜本书设置 | 条目列表 | 条目编辑
+   ========================================================================== */
+.lc-body{flex:1;display:grid;grid-template-columns:280px 236px minmax(0,1fr);min-height:0}
+.lc-body .bset{border-right:1px solid var(--line-soft)}
+</style>
+</head>
+<body>
+
+<div class="frame" data-dir="A" data-shot="A1-wb-editor"></div>
+<div class="frame" data-dir="B" data-shot="B1-wb-editor"></div>
+<div class="frame" data-dir="C" data-shot="C1-wb-editor"></div>
+
+<script>
+/* 三方向共用同一份侧栏 / 页头 / 条目列表 / 编辑表单 / 书设置 ——
+   保证「文案完全一致」，差异只落在结构。 */
+
+const SIDEBAR = `
+<div class="brand"><span class="brand-dot"></span><span class="brand-name">如我所书</span><span class="brand-ver">v1.0</span></div>
+<button class="btn-new">＋ 新对话</button>
+<div class="convo-label">最近会话</div>
+<div class="convo"><span class="convo-name">新 新对话</span><span class="convo-time">10:09</span></div>
+<div class="side-foot">
+  <button class="nav-btn">角色库</button>
+  <button class="nav-btn on">世界书</button>
+  <button class="nav-btn">预设</button>
+  <button class="nav-btn">帮助</button>
+  <button class="nav-btn">设置</button>
+  <button class="nav-btn">数据</button>
+</div>`;
+
+const HEAD = (pill) => `
+<header class="phead">
+  <div class="phead-l">
+    <h1 class="ptitle">世界书</h1>
+    <p class="psub">一条条目 = 一组关键词 + 一段设定；关键词命中才会注入提示词</p>
+  </div>
+  <div class="phead-r">
+    <span class="pill">${pill}</span>
+    <button class="btn sm">返回</button>
+    <button class="btn btn-primary sm">保存</button>
+  </div>
+</header>`;
+
+const ENTRIES = `
+<div class="elist-head">
+  <span class="flabel">条目</span><span class="count">7 条条目 · 6 条启用</span>
+  <div class="elist-actions"><button class="btn sm">套用模板</button><button class="btn sm">＋ 事件</button></div>
+</div>
+<div class="elist-scroll">
+  <div class="entry on"><div class="entry-title">世界总览<button class="entry-del">×</button></div><div class="entry-keys">奎法罗斯</div></div>
+  <div class="entry"><div class="entry-title">十二家族<button class="entry-del">×</button></div><div class="entry-keys">十二家族</div></div>
+  <div class="entry"><div class="entry-title">火种<button class="entry-del">×</button></div><div class="entry-keys">火种</div></div>
+  <div class="entry"><div class="entry-title">酒馆规则<button class="entry-del">×</button></div><div class="entry-keys">酒馆, 吧台, 老板娘</div></div>
+  <div class="entry"><div class="entry-title">天气<button class="entry-del">×</button></div><div class="entry-keys">下雨, 起雾, 入夜</div></div>
+  <div class="entry"><div class="entry-title">货币<button class="entry-del">×</button></div><div class="entry-keys">银币, 铜板</div></div>
+  <div class="entry"><div class="entry-title">无关条目<button class="entry-del">×</button></div><div class="entry-keys">完全没人提的词</div></div>
+</div>`;
+
+const EDITOR = `
+<label class="fld"><span class="flabel">条目名称</span><input class="inp" value="世界总览"></label>
+<label class="fld">
+  <span class="flabel">关键词</span><input class="inp" value="奎法罗斯">
+  <span class="help">对话里出现任意一个就注入。中文按子串匹配，英文按单词匹配。<br>写成 <code>/正则/</code> 也可以。勾选「常驻」则不需要关键词。</span>
+</label>
+<label class="fld grow"><span class="flabel">内容</span><textarea class="ta">奎法罗斯有十二家族。</textarea></label>
+<div class="adv">▸ 更多选项（插入顺序、概率、附加条件）</div>
+<div class="checks">
+  <label class="check"><span class="check-t">常驻条目</span><span class="check-d">不需要关键词，每轮都注入</span><span class="tg"></span></label>
+  <label class="check"><span class="check-t">递归</span><span class="check-d">命中后把正文也拿去做下一轮匹配</span><span class="tg"></span></label>
+  <label class="check"><span class="check-t">启用这条条目</span><span class="tg on"></span></label>
+</div>
+<div class="edit-foot"><button class="btn btn-danger sm">删除条目</button><span class="help">条目改动跟着整本书一起保存</span></div>`;
+
+const BSET = `
+<div class="bset-title">本书设置</div>
+<label class="fld"><span class="flabel">书名</span><input class="inp" value="冒烟测试世界"></label>
+<label class="fld"><span class="flabel">开场白</span><textarea class="ta ta-3">进这个世界时自动作为第一条消息。</textarea></label>
+<div class="bset-seg"><span class="flabel">本书角色</span><span class="count">3</span></div>
+<div class="chip-row"><span class="chip"><span class="chip-av"></span>艾琳</span><span class="chip"><span class="chip-av"></span>灰啄</span><span class="chip"><span class="chip-av"></span>老獾</span></div>
+<div class="chip-actions"><button class="btn sm">＋ 从角色库加入</button><button class="btn sm">AI 生成</button><button class="btn sm">＋ 新建</button><button class="btn sm">↻ 同步属性</button></div>
+<button class="btn sm full">预览命中</button>
+<div class="bset-foot"><button class="btn sm">导出</button><button class="btn btn-danger sm">删除本书</button></div>`;
+
+const frames = document.querySelectorAll('.frame');
+
+/* ---- 方向 A：条目列表 | 条目编辑 | 本书设置 ---- */
+frames[0].innerHTML = `<aside class="side">${SIDEBAR}</aside>
+<div class="main">${HEAD('布局方案 A · 书设置右置')}
+  <div class="la-body">
+    <section class="elist">${ENTRIES}</section>
+    <section class="edit">${EDITOR}</section>
+    <section class="bset">${BSET}</section>
+  </div>
+  <footer class="pfoot"><span class="foot-hint">世界书只保存在你自己电脑上</span></footer>
+</div>`;
+
+/* ---- 方向 B：书信息上提通栏带 + 列表 | 编辑 ---- */
+frames[1].innerHTML = `<aside class="side">${SIDEBAR}</aside>
+<div class="main">${HEAD('布局方案 B · 书设置上提')}
+  <div class="lb-band">
+    <label class="band-name"><span class="flabel">书名</span><input class="inp" value="冒烟测试世界"></label>
+    <button class="band-seg">本书角色 <b>3</b> <span class="caret">▾</span></button>
+    <button class="band-seg">开场白 <span class="caret">▾</span></button>
+    <span class="sp"></span>
+    <button class="btn sm">预览命中</button>
+    <button class="btn sm">导出</button>
+  </div>
+  <div class="lb-body">
+    <section class="elist">${ENTRIES}</section>
+    <section class="edit">${EDITOR}</section>
+  </div>
+  <footer class="pfoot"><span class="foot-hint">世界书只保存在你自己电脑上</span><span class="sp"></span><button class="btn btn-danger sm">删除本书</button></footer>
+</div>`;
+
+/* ---- 方向 C：本书设置 | 条目列表 | 条目编辑 ---- */
+frames[2].innerHTML = `<aside class="side">${SIDEBAR}</aside>
+<div class="main">${HEAD('布局方案 C · 书设置左置')}
+  <div class="lc-body">
+    <section class="bset">${BSET}</section>
+    <section class="elist">${ENTRIES}</section>
+    <section class="edit">${EDITOR}</section>
+  </div>
+  <footer class="pfoot"><span class="foot-hint">世界书只保存在你自己电脑上</span></footer>
+</div>`;
+</script>
+
+</body>
+</html>

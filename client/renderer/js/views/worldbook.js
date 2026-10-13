@@ -348,7 +348,7 @@ function currentEntry() {
 /** 把世界书表单里的内容写进草稿（书名 + 开场白）。不落盘，只改内存里的那一份 */
 function stashWorldbookName() {
   const draft = currentDraft();
-  if (!draft || el.wb.entriesWrap.classList.contains('hidden')) return;
+  if (!draft || el.wb.bookWrap.classList.contains('hidden')) return;
   draft.name = (el.wb.name.value.trim() || '未命名世界书').slice(0, 120);
   draft.opening = el.wb.opening.value.slice(0, 4000);
 }
@@ -503,8 +503,8 @@ function selectWorldbook(id) {
   editingWorldbookId = id;
   const book = currentWorldbook();
 
-  el.wb.entriesEmpty.classList.toggle('hidden', !!book);
-  el.wb.entriesWrap.classList.toggle('hidden', !book);
+  el.wb.bookEmpty.classList.toggle('hidden', !!book);
+  el.wb.bookWrap.classList.toggle('hidden', !book);
 
   if (!book) {
     editingEntryId = null;
@@ -962,7 +962,7 @@ export async function leaveWorldbookEditor() {
   //    selectWorldbook 会先 stash —— 表单可见就把这些「已放弃」的值又写进一份
   //    新草稿，再点保存就落盘了。两个 stash 都认「表单隐藏 → 不读」，收起即可；
   //    重新打开时 selectWorldbook 会按目标书把它们再亮出来、重填。
-  el.wb.entriesWrap.classList.add('hidden');
+  el.wb.bookWrap.classList.add('hidden');
   showEntryForm(false);
 
   showView(editorReturnView === 'wbEditor' ? 'worldbooks' : editorReturnView);

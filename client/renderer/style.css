@@ -4614,17 +4614,23 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text-faint);
 }
 
-/* 世界书编辑页：左条目列表 / 右条目编辑。选书和游玩在世界书列表页。
+/* 世界书编辑页：左半边两栏（本书设置 / 条目列表）+ 右边条目编辑。选书和游玩在世界书列表页。
    条目内容是要长时间写的正文，所以这一屏整体铺满主区域（弹窗时代是
    「比通用弹窗更宽更高」的 1080×94vh，现在没有那个限制了）。
 
    ⚠️ 2026-10-13 从弹窗改成页面（视图八）：`.worldbook-card` 那层壳删了，
-   `.modal-body.worldbook-body` 随之改名 `.worldbook-body` —— 里面的
-   两栏网格是原样的，只是外面少了两层（遮罩 + 卡片）。 */
+   `.modal-body.worldbook-body` 随之改名 `.worldbook-body`，当时里面的两栏网格是原样的。
+   ⚠️ 2026-10-13 第十七批：那一栏 268px 里同时装着「书级设置」和「条目列表」两类东西，
+   条目区被压到只剩 ~300px 高 —— 按「多久动一次」拆成两栏（本书设置 | 条目列表），
+   左边半边总宽 548 不变，右边条目编辑照旧吃掉剩下的全部宽度。 */
 .worldbook-body {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: 268px minmax(0, 1fr);
+  /* 左半边（本书设置 + 条目列表）当成一坨，宽度由 .wb-book-wrap 自己那两列决定 ——
+     548 = 280（本书设置）+ 268（条目列表）；右边条目编辑吃掉剩下的全部宽度。
+     ⚠️ 别在这里给左列写 minmax() 兜底：Grid 分配富余空间时会把两条列一起等比压扁，
+        「本书设置」会被压到没法用。窗口挤不下交给文末的媒体查询退回一栏。 */
+  grid-template-columns: 548px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
   padding: 0;
@@ -4632,26 +4638,82 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   min-height: 0;
 }
 
+/* 「整本书」那层壳：把书设置和条目列表并排捆在一起 —— 一起显示、一起隐藏
+   （worldbook.js 的 selectWorldbook 只开关这一层）。
+   它自己不画任何东西（没有底色、没有边框），只出两条列宽。
+   注意它**不参与** .worldbook-body 那张网格，是嵌在里面的另一张。
+
+   268 是条目列表的**老宽度**（弹窗时代左栏就是 268）—— 保留它，条目卡就和以前长得一样，
+   「＋ 条目 / 套用模板 / ＋ 事件」三颗也刚好排得下。
+   ⚠️ 本书设置那一栏别压到 280 以下：副本 chip 是「头像 + 名字 + 显示状态 + 编辑 + 移除」
+     挤在一行，光固定开销就 ~190px，剩下的才给名字 —— 272 的时候「冒烟NPC」就已经
+     被截成「冒烟N…」了。（顺带一提：老版左栏也是 268，六字名一样会截，这不是新毛病。） */
+.wb-book-wrap {
+  display: grid;
+  grid-template-columns: 280px 268px;
+  min-height: 0;
+}
+
+/* ------------------------------ 左一栏：本书设置 ------------------------------
+
+   放的全是**书级**的东西：书名 / 开场白 / 本书角色 / 预览命中 / 导出 / 删除本书 ——
+   清一色「设一次就不动」的低频操作。
+
+   2026-10-13 之前这五块和条目列表同处一个 268px 的栏里，条目卡被压得只露三四张 ——
+   「内容太多也乱」说的就是这里。把低频的和高频的分成两栏，是这次改版的全部理由。 */
+.wb-book {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* NPC 一多这一栏就长，让它自己滚 */
+  overflow-y: auto;
+  border-right: 1px solid var(--border-soft);
+}
+
+/* 这一栏的分组标题。和侧栏那种标签一个路子（小字 + 字距）——
+   一眼看出是「分组名」，不是某个字段的名字。 */
+.wb-book-title {
+  flex: 0 0 auto;
+  padding: 12px 12px 0;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+}
+
+/* 这一栏是上下叠的一列，块间距由各块自己的 padding 决定 ——
+   .field 那 20px 的 margin-bottom 在这儿只会叠出一片空白。 */
+.wb-book .field { margin-bottom: 0; }
+
+.wb-book-name { flex: 0 0 auto; padding: 10px 12px 0; }
+
+.wb-book-actions { flex: 0 0 auto; padding: 10px 12px 0; }
+
+/* 书级那两颗「进 / 出」（导出 / 删除本书）：吸在这一栏底部。
+   理由和 .wb-form-foot 一样 —— 以前它们跟着内容滚出屏幕就够不着了。
+   底色跟着页面底走，免得下面的字从它背后透上来。 */
+.wb-book-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-elev);
+}
+
 .wb-entries {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* 和右边条目编辑区之间的那条线（左边那条画在 .wb-book 上） */
   border-right: 1px solid var(--border-soft);
   overflow: hidden;
 }
 
-.wb-entries-wrap { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
-
-.wb-entries-head {
-  flex: 0 0 auto;
-  padding: 12px 12px 10px;
-  border-bottom: 1px solid var(--border-soft);
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-/* 开场白夹在「本书角色」和条目列表中间。
+/* 开场白（现在在「本书设置」栏里，书名下面）。
    它以前左右贴边（上下两块都有 12px 内边距），看着像漏了缩进；
    另外它是内容区不是空隙，别让 flex 把它压扁。 */
 .wb-opening { flex: 0 0 auto; padding: 10px 12px 0; }
@@ -4668,7 +4730,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   flex-wrap: wrap;
 }
 
-/* 「套用模板 / ＋ 事件」这一组：这一行是 baseline 对齐的（为了跟条目数对齐），
+/* 「＋ 条目 / 套用模板 / ＋ 事件」这一组：这一行是 baseline 对齐的（为了跟条目数对齐），
    按钮挂上去会歪，所以整组居中并推到最右。
    ⚠️ 按钮包在 .wb-entry-actions 里之后，`margin-left: auto` 要挂**那一层** ——
    还留在 `.btn` 上的话，组里第一颗也会被推到右边，和组内的 gap 叠成一个大空档。 */
@@ -4684,11 +4746,10 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .wb-entry-head .field-label { padding-top: 0; }
 
-.wb-entries-title { display: flex; flex-direction: column; gap: 4px; }
-.wb-entries-title input { min-height: 34px; font-size: var(--fs-sm); padding: 7px 11px; }
-.wb-count { font-size: var(--fs-xs); color: var(--text-faint); }
+/* 书名输入比别的字段高一点（它是这一栏里最常用的一颗输入框） */
+.wb-book-name input { min-height: 34px; font-size: var(--fs-sm); padding: 7px 11px; }
 
-.wb-entries-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.wb-count { font-size: var(--fs-xs); color: var(--text-faint); }
 
 .wb-entry-list { flex: 1 1 auto; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
 
@@ -4792,8 +4853,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .wb-form .field { grid-template-columns: 118px minmax(0, 1fr); column-gap: 12px; }
 .wb-form .field.field-stack { grid-template-columns: minmax(0, 1fr); }
 .wb-form .field-label { font-size: var(--fs-sm); }
-/* 书名那一行在 268px 的窄栏里，152px 的标签列会把输入框挤到只剩几十像素 */
-.wb-entries-title .field { grid-template-columns: minmax(0, 1fr); }
 
 .wb-checks { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 14px; }
 
@@ -4975,20 +5034,46 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text-faint);
 }
 
-/* 窗口窄时，世界书编辑页从「左右两栏」退成上下 */
-@media (max-width: 900px) {
-  .worldbook-body {
+/* 世界书编辑页的三列（本书设置 280 + 条目列表 236 + 条目编辑）在窄窗口里摆不下。
+   这时左半边**退回一栏**：本书设置在上、条目列表在下，编辑区把宽度拿回来。
+   阈值 1330 = 548（左半边）+ 520（编辑区能用的最小宽度）+ 260（侧栏）+ 余量。
+   ⚠️ 别改成「让两条列自己缩」—— 上面 .worldbook-body 那条注释写了为什么不行。 */
+@media (max-width: 1330px) {
+  .worldbook-body { grid-template-columns: 268px minmax(0, 1fr); }
+
+  .wb-book-wrap {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
 
-  /* 竖排之后每一块都很挤；编辑页本来就铺满主区域，这里只把正文框收矮一点
+  /* 收成一栏之后，书设置和条目列表之间改画横线 */
+  .wb-book {
+    border-right: none;
+    border-bottom: 1px solid var(--border-soft);
+    /* 别让「本书角色」一多就把下面的条目列表挤没 */
+    max-height: 300px;
+  }
+}
+
+/* 真机够不到这里（窗口 minWidth 1040，媒体查询看的是视口）——
+   纯兜底：整页变上下一条流，自己滚。 */
+@media (max-width: 900px) {
+  .worldbook-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    overflow-y: auto;
+  }
+
+  .wb-book-wrap { grid-template-rows: none; }
+  .wb-book { max-height: none; }
+
+  /* 编辑页本来就铺满主区域，这里只把正文框收矮一点
      （弹窗时代那两条 height / max-height 随 .worldbook-card 一起删了）。 */
   .wb-form textarea { min-height: 150px; }
 
-  /* 条目列表挪到编辑区上面，用行的形式排 */
-  .wb-entries { border-right: none; border-bottom: 1px solid var(--border-soft); max-height: 190px; }
-  .wb-entry-list { flex-direction: row; flex-wrap: wrap; }
+  /* 条目列表用行的形式排 */
+  .wb-entries { border-right: none; border-bottom: 1px solid var(--border-soft); }
+  .wb-entry-list { flex-direction: row; flex-wrap: wrap; max-height: 190px; }
   .wb-entry { flex: 0 0 auto; max-width: 200px; }
 }
 

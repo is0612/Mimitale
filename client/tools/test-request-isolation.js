@@ -141,14 +141,17 @@ section('③ 摘要的并发闸');
 section('④ 世界书编辑器：放弃改动后收起表单');
 {
   const src = stripComments(read('renderer/js/views/worldbook.js'));
-  const close = fnBody(src, 'closeWorldbooksModal');
+  // ⚠️ 函数 2026-10-13 从 closeWorldbooksModal 改名 leaveWorldbookEditor（弹窗改成页面）。
+  //    这里原来还按旧名找，fnBody 找不着 → 整节悄悄变成「空函数体」两条全红。
+  const close = fnBody(src, 'leaveWorldbookEditor');
   const discardAt = close.indexOf('discardDrafts()');
-  const hideWrapAt = close.search(/entriesWrap\.classList\.add\('hidden'\)/);
+  // ⚠️ 这层壳 2026-10-13 从 entriesWrap 改名 bookWrap（编辑器改成三栏了）
+  const hideWrapAt = close.search(/bookWrap\.classList\.add\('hidden'\)/);
   const hideFormAt = close.indexOf('showEntryForm(false)');
   ok(discardAt > 0 && hideWrapAt > discardAt, '放弃草稿之后收起书名表单（stashWorldbookName 才会早退）');
   ok(hideFormAt > discardAt, '放弃草稿之后收起条目表单（stashEntryForm 才会早退）');
   // 早退条件本身也钉住：要是哪天 stash 不再看「隐藏」，上面那两行就白收了
-  ok(/entriesWrap\.classList\.contains\('hidden'\)/.test(fnBody(src, 'stashWorldbookName')),
+  ok(/bookWrap\.classList\.contains\('hidden'\)/.test(fnBody(src, 'stashWorldbookName')),
     'stashWorldbookName 仍以「表单隐藏」为早退条件');
   ok(/form\.classList\.contains\('hidden'\)/.test(fnBody(src, 'stashEntryForm')),
     'stashEntryForm 仍以「表单隐藏」为早退条件');
