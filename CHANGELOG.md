@@ -4,6 +4,57 @@
 
 ---
 
+## 2026-10-13 第十五批：仓库结构升级 —— 客户端代码整体搬进 `client/`
+
+一句话：仓库根以前被客户端代码占满了（`main/` `renderer/` `preload*.js` `package.json` `node_modules/`），
+后台在 `admin/`，往后还要进**服务器端**和**手机端** —— 趁现在只有两个项目，先把客户端收进 `client/`。
+
+### 一、谁搬了，谁留下
+
+**进 `client/`**：`main.js`、`main/`、`renderer/`、`preload.js`、`preload-pet.js`、`assets/`、`tools/`、
+`package.json`、`package-lock.json`、`.npmrc`、`messages-utf8.txt`、`Start-Mimitale.ps1`、
+`Start-Mimitale.cmd`、`Diagnose.ps1`，以及运行时的 `data/`、`node_modules/`。
+
+**留在仓库根**：`admin/`、`部署/`、`桌宠/`、`CHANGELOG.md`、`使用说明.md`、`故事优化提示词.md`、`README.md`。
+
+全部走 `git mv`，文件历史连着走。
+
+### 二、为什么**一行代码都不用改**
+
+三处「找 app 根」的写法本来就是相对位置，工具和启动器跟着 app 一起搬家，相对层级不变：
+
+| 谁 | 怎么找 app 根 | 搬完还对不对 |
+| --- | --- | --- |
+| `tools/**` 里的测试与检查脚本 | `path.join(__dirname, '..')` | ✅ 同步平移一层 |
+| 两个启动器 | `$PSScriptRoot`（自身所在目录） | ✅ 自定位 |
+| `main/data-dir.js` 的「程序旁边」 | `app.getAppPath()` | ✅ 跟着程序走 |
+
+所以真正必须改的，只有**显式锚定仓库根**的那几处配置和文档。
+
+### 三、跟着改的
+
+- **`.gitignore` 六处锚点**：`/data/` → `/client/data/`、`tools/shots/` → `/client/tools/shots/`、
+  `assets/pet/*/build/` → `/client/assets/pet/*/build/`、`tools/` 下那几个便利脚本 → `/client/tools/...`、
+  `dist/` `out/` → `/client/...`。
+  ⚠️ 两条**故意保持不锚定**：`node_modules/`（要同时罩住 client 和 admin 两个项目的依赖）、
+  `角色卡/`（卡目录跟着程序走，宁可放宽匹配也不能漏掉一张私人卡）。
+- **`README.md`**：结构图拆成「仓库级 / `client/` 内部」两层并注明相对路径的根，命令前加 `cd client`。
+- **`使用说明.md`**：启动器改成 `client\Start-Mimitale.cmd`，手动启动与 `Diagnose.ps1` 的 `cd` 路径同步。
+
+### 四、验证
+
+`npm run smoke` **1357/1357 通过、控制台报错 0**；`npm run audit` 干净；`npm run test:pet` 96/96。
+`data/` 整体平移，移动前后逐文件比对**零差异**（聊天记录 / 角色卡 / 加密后的 API Key 都还在）。
+
+### 五、本机要做的一次性动作
+
+- ⚠️ **火绒白名单里的绝对路径变了**：`…\Mimitale\node_modules\electron\dist\electron.exe`
+  → `…\Mimitale\client\node_modules\electron\dist\electron.exe`，要重新加白，
+  否则「导出到桌面被系统拦」那个老毛病会回来。
+- 以后双击启动器请用 `client\Start-Mimitale.cmd`。
+
+---
+
 ## 2026-10-13 凌晨 第十四批：PNG 卡认全三种文本块（zTXt / iTXt）+ 专项测试
 
 一句话：导入侧**以前只认 tEXt**，别的工具写出来的卡会被读成「这张图里没有卡数据」。

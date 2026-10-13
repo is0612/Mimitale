@@ -104,6 +104,8 @@
 ### 运行
 
 ```bash
+cd client      # 客户端代码都在 client/ 里，先进去
+
 # 1. 装依赖（首次大约要下载 100MB 的 Electron 运行时）
 npm install
 
@@ -111,8 +113,8 @@ npm install
 npm start
 ```
 
-Windows 用户也可以直接**双击 `Start-Mimitale.cmd`**，它会自动检查环境、首次自动  
-`npm install`，并给出中文的错误提示。
+Windows 用户也可以直接**双击 `client\Start-Mimitale.cmd`**，它会自动检查环境、首次自动  
+`npm install`，并给出中文的错误提示。启动器靠**自身所在目录**定位，因此放在哪里都能用。
 
 ### 配置
 
@@ -147,6 +149,8 @@ Windows 用户也可以直接**双击 `Start-Mimitale.cmd`**，它会自动检�
 **这个项目没有构建步骤** —— 没有 webpack / vite / babel，`renderer/` 里的文件  
 是 Chromium 直接从磁盘加载的，改完刷新就是新的。
 
+> 下面这些命令都在 `client/` 目录下执行。
+
 ```bash
 npm run dev
 ```
@@ -170,8 +174,24 @@ npm run dev
 
 ## 项目结构
 
+这个仓库是**多个项目共处一库**：
+
 ```
-mimitale/
+Mimitale/
+├── client/          桌面客户端（Electron）—— 下面的结构图讲的就是它
+├── admin/           管理后台（Vue3 + Element Plus，独立 npm 项目，有自己的 package.json）
+├── 部署/            服务器选购与开箱清单、部署记录
+├── 桌宠/            桌宠设计记录
+├── CHANGELOG.md     变更记录
+├── 使用说明.md       面向用户的详细用法
+├── 故事优化提示词.md  帮助页那颗按钮复制的提示词（同一份）
+└── README.md
+```
+
+`client/` 内部 —— **下面出现的所有相对路径，根都是 `client/`**：
+
+```
+client/
 ├── main.js          Node.js 主进程（本地后端）：开窗口 + 注册 IPC
 ├── main/            主进程的模块（CommonJS，零构建）
 │   ├── characters.js      角色卡归一化（哪些字段会被存下来）
@@ -185,7 +205,6 @@ mimitale/
 │   └── request-log.js     「请求记录」：只存内存的环形缓冲，最近 20 条
 ├── preload.js       contextBridge 安全桥，把主进程能力暴露给页面
 ├── package.json
-├── 故事优化提示词.md  给 AI 的「帮我改角色卡 / 故事」提示词（帮助页那颗按钮复制的是同一份）
 ├── renderer/        前端（Chromium 页面）
 │   ├── index.html
 │   ├── style.css
@@ -211,8 +230,8 @@ mimitale/
 
 ### 自检工具
 
-这些都是**纯静态检查**，不需要起 Electron、不碰你的数据，几秒跑完。
-输出「(无)」= 没问题；有问题时退出码非 0，方便挂进脚本。
+以下命令都在 `client/` 目录下执行（先 `cd client`）。它们都是**纯静态检查**，
+不需要起 Electron、不碰你的数据，几秒跑完。输出「(无)」= 没问题；有问题时退出码非 0，方便挂进脚本。
 
 | 命令 | 抓什么 |
 | --- | --- |

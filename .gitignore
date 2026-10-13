@@ -1,23 +1,25 @@
 # 依赖
+# ⚠️ 这条**故意不带前导斜杠**：它要同时罩住 client/node_modules 和 admin/node_modules，
+#    锚定到某一层就会让另一个项目的依赖涌进版本库。
 node_modules/
 
 # 安装依赖时使用的本地缓存（沙箱/镜像安装会产生）
 .npm-cache/
 .electron-cache/
 
-# 打包输出（electron-builder 默认目录）
-dist/
-out/
+# 打包输出（electron-builder 默认目录，在 client/ 下）
+/client/dist/
+/client/out/
 
-# 程序旁边的数据目录（2026-10-08 起数据默认放这儿，见 main/data-dir.js）。
+# 程序旁边的数据目录（2026-10-08 起数据默认放这儿，见 client/main/data-dir.js）。
 # 角色卡 / 会话 / 世界书 / 预设 / 配置 / 向量缓存都是个人内容，一律不进版本库。
 # ⚠️ Chromium 的缓存不在这里（仍在 %APPDATA%），所以这里只有上面那几个 json。
-# 必须带**前导斜杠**锚定到仓库根：原来写的是 `data/`（不带斜杠），它会匹配
-# **任意层级**叫 data 的目录，把 `renderer/js/data/` 一起罩住了 —— 那里的文件
-# 早就被跟踪着，所以「改」还能提交，但**往里新加一个文件会静默漏掉**
-# （2026-10-08 踩到：`renderer/js/data/petContext.js` git 完全看不见，
-# 真提交上去就是「别人拉下来跑不起来」）。加斜杠只罩仓库根那个。
-/data/
+# 必须带**前导斜杠**锚定：原来写的是 `data/`（不带斜杠），它会匹配**任意层级**
+# 叫 data 的目录，把 `client/renderer/js/data/` 一起罩住了 —— 那里的文件早就被
+# 跟踪着，所以「改」还能提交，但**往里新加一个文件会静默漏掉**（2026-10-08 踩到：
+# `renderer/js/data/petContext.js` git 完全看不见，真提交上去就是「别人拉下来跑不起来」）。
+# 2026-10-13 客户端代码整体搬进 client/ 后，锚点跟着改到 `/client/data/`。
+/client/data/
 
 # 老位置（%APPDATA%\Mimitale）留下的数据文件，万一有人拷进项目目录也只挡一层
 config.json
@@ -27,6 +29,8 @@ characters.json
 # 角色卡目录：**仓库里不放任何卡**。这里只会有本机导入进来的卡
 # （自己玩的、别人的），属于个人内容而不是项目代码，所以整目录一律忽略，
 # 子目录也一起罩住。2026-10-07 起仓库不再自带样例卡，之前跟踪过的那几张已一并移除。
+# ⚠️ 故意不带前导斜杠（匹配任意层级）：卡目录跟着程序走，将来位置还可能变，
+#    漏掉一张卡 = 把别人的私人角色卡提交上去，宁可放宽也不要漏。
 # 万一确实要提交某一张：git add -f "角色卡/xxx.json"
 角色卡/
 
@@ -40,30 +44,31 @@ Thumbs.db
 .idea/
 
 # 冒烟测试的截图产物（--shot=<场景> 生成，用来肉眼核对界面）
-tools/shots/
+/client/tools/shots/
 
 # WorkBuddy 的会话记忆目录（不属于项目代码）
 .workbuddy/
 
 # 启动器留下的「这台机器沙箱起不来」标记（Start-Mimitale.ps1 写）。
 # 是本机环境状态，不是项目内容，不该进版本库。
+# ⚠️ 不带前导斜杠：标记写在**启动器所在的那个目录**，随启动器一起搬家。
 .mimitale-no-sandbox
 
 # tools/ 里的「双击入口」便利脚本：只是本机把测试 / 检查跑起来的外壳
 # （.cmd 入口 + .ps1 逻辑 + 中文提示词），不属于项目内容，不进版本库。
 # 它们的正文很短，打开就能看懂；换机器时照着重建即可。
-tools/run-smoke.cmd
-tools/run-smoke.ps1
-tools/messages-utf8.txt
-tools/check-imports.cmd
+/client/tools/run-smoke.cmd
+/client/tools/run-smoke.ps1
+/client/tools/messages-utf8.txt
+/client/tools/check-imports.cmd
 
 # 桌宠窗口截图：tools/pet/capture-pet-window.js 跑一次就生成，
 # 需要时重跑即可，没必要进版本库。
-tools/pet/pet-window.png
-tools/pet/pet-window-*.png
+/client/tools/pet/pet-window.png
+/client/tools/pet/pet-window-*.png
 
 # 形象包出图管线的中间产物。**母图真源进仓库**（assets/pet/<skin>/source/），
 # 但抠底结果 / 分区图 / 拆出来的临时部件都是可重跑的，不进库
 # （2026-10-09：上一版管线整个在仓库外，换台机器就蒸发了，所以管线代码进仓库、
 #  母图也进仓库，只把可重跑的中间物留在 build/）。
-assets/pet/*/build/
+/client/assets/pet/*/build/
