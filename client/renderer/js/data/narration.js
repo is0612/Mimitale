@@ -327,16 +327,14 @@ function paceRuleText(convo, isGm) {
 }
 
 /**
- * 单独输出「推进节奏」那一段。
+ * ⛔ 这里原来有一个 `paceInstruction(convo, isGm)` 导出 —— 「单独给普通聊天补一段
+ * 推进节奏」。2026-10-13 **删掉了**：纯聊天（「＋ 新对话」）现在整块不注入视角设置
+ * （来龙去脉见 data/messages.js 文件头），它没有调用方了。
  *
- * 扮演规则 / 主持规则里本来就带着它（见 roleplayRuleText / gmRuleText），
- * 但**普通聊天**（没绑卡、也没开 GM）那两段都不注入 —— 不单独补一次的话，
- * 视角弹窗里的「推进节奏」在普通聊天里就是死的：能选、能存、还会在标题旁显示标签，
- * 但一个字都不进提示词。2026-10-08 修的就是这个。
+ * 别因为「看着还有用」把它加回来 —— 它正是「新对话里 AI 自己编一个身份演起来」
+ * 的共犯之一。「推进节奏」现在唯一的落点是 roleplayRuleText / gmRuleText 内部
+ * 那次 paceRuleText()。
  */
-export function paceInstruction(convo, isGm) {
-  return paceRuleText(convo, isGm === true);
-}
 
 /**
  * 【人物的变化】—— 防「人设被玩家一句话翻过来」。

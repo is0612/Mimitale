@@ -27,10 +27,28 @@ import {
   recursiveDepthSetting
 } from './library.js';
 import { convoPanelFields, panelFieldOwner } from './panel.js';
+import { isGmMode } from './narration.js';
 
 /** {{user}} 的替换值（默认名；世界会话用玩家角色名覆盖） */
 export function userName() {
   return '你';
+}
+
+/**
+ * 「纯聊天」= 既没绑角色卡、也不是世界（GM）模式 —— 就是**跟模型聊天**。
+ *
+ * 这是「新对话」和「角色卡对话 / 世界」的分界线，**一个口径两处要用**：
+ *   · data/messages.js      —— 决定要不要注入「扮演那一套」（规则 / 世界书 / 面板 /
+ *                              剧情选项 / 表情 / 视角设置）
+ *   · views/perspectiveUi.js、views/header.js —— 决定视角弹窗里哪些控件该出现
+ *
+ * ⚠️ 两边各判各的就会出现「界面上有这个开关、提示词里却不认」的错位 ——
+ *    2026-10-08 修过的「叙述模式能选却不生效」就是那么来的。所以判定收在这一处。
+ *
+ * 纯读，不改 convo。
+ */
+export function isPlainChatConvo(convo) {
+  return !characterForConvo(convo) && !isGmMode(convo);
 }
 
 /**

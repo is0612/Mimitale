@@ -6,7 +6,8 @@
 //  头部那行 Meta 是「当前这一局到底怎么跑的」的唯一汇总处，只读不写：
 //    · 绑的角色 + 实际会用的服务商 / 模型
 //    · 这一局真正生效的世界书，并标出来源（会话绑的 / 角色自带的 / 被谁顶了）
-//    · 视角（GM、叙述模式、推进节奏），但只在偏离默认时才占位
+//    · 视角（GM、叙述模式、推进节奏），但只在偏离默认时才占位 ——
+//      纯聊天（「＋ 新对话」）没有叙述模式 / 推进节奏这回事，一个标签都不显示
 //    · 记忆压了几段 / 正在压
 //  所以它谁都不依赖，只依赖数据层 —— 也因此是「视角设置」「记忆」这些
 //  改了设置后想刷新头部的地方可以放心 import 的模块（单向，头部不认识任何视图）。
@@ -35,6 +36,7 @@ import {
   convoPaceMode,
   isGmMode
 } from '../data/narration.js';
+import { isPlainChatConvo } from '../data/cast.js';
 import { convoSummaries } from '../data/memory.js';
 import { onRefresh } from './refresh.js';
 
@@ -169,12 +171,18 @@ export function renderHeader() {
   // 视角：只在偏离默认（标准 + 一步一步 + 非 GM）时提示。
   // 2026-09-30 从 meta 那行文字里搬到了标题旁边的**小胶囊**（设计稿的 .pill-tag）——
   // 「这一局怎么跑的」和标题同级，混在服务商/模型那串信息里根本挑不出来。
+  //
+  // ⛔ 2026-10-13：纯聊天（「＋ 新对话」）**一个标签都不显示**。那两项对纯聊天已经
+  //    完全不生效（提示词不注入、视角弹窗里也不给，见 data/messages.js 文件头），
+  //    挂个「上帝视角」出来等于撒谎。
   const viewTags = [];
   if (isGmMode(convo)) viewTags.push('GM 模式');
-  const narrationMode = convoNarrationMode(convo);
-  if (narrationMode !== DEFAULT_NARRATION_MODE) viewTags.push(NARRATION_MODES[narrationMode].label);
-  const paceMode = convoPaceMode(convo);
-  if (paceMode !== DEFAULT_PACE_MODE) viewTags.push(PACE_MODES[paceMode].label);
+  if (!isPlainChatConvo(convo)) {
+    const narrationMode = convoNarrationMode(convo);
+    if (narrationMode !== DEFAULT_NARRATION_MODE) viewTags.push(NARRATION_MODES[narrationMode].label);
+    const paceMode = convoPaceMode(convo);
+    if (paceMode !== DEFAULT_PACE_MODE) viewTags.push(PACE_MODES[paceMode].label);
+  }
 
   // 胶囊的优先级：视角偏离 > 绑定角色身上第一个数值字段 > 不显示。
   // 视角排前面，因为它决定 AI 怎么说话（比某个数值更该被一眼看见）；

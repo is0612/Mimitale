@@ -404,8 +404,6 @@ body {
      ⚠️ 原来这里带着 macOS 的 "PingFang SC" —— Windows 上不存在，白占一格。 */
   font-family: var(--font-ui);
   font-size: var(--fs-sm);
-  /* 正文行距统一 1.6（原来是 1.65 这个孤例，别处还散着 1.55 / 1.85 / 1.9 / 1.45）。 */
-  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -436,20 +434,32 @@ body {
 /* ------------------------------ 侧边栏 ------------------------------ */
 
 .sidebar {
-  width: 260px;
-  flex: 0 0 260px;
+  /* position: relative 是给那颗收起按钮当定位基准的 */
+  position: relative;
+  /* 232 → 280（星宝 2026-10-12 晚）→ **300**（同一天深夜里他又说「有些地方有点小」）。
+     底部入口是**保持 3 列**、还把图标和字都放大一档的那一头，所以宽度得跟着让：
+     280 每列 ~82px，只够「pad 8 + 图标 16 + gap 6 + 13px 的『角色库』(39) + pad 8 = 77」；
+     这一版图标 18、字 14px（「角色库」≈42）→ 需要 ~85px，列宽 89 才不折行。
+     ⚠️ 别再退回 232 —— 那边每列只有 66px，光 11px 的「角色库」就卡在边界上。右栏同步 300。 */
+  width: 300px;
+  flex: 0 0 300px;
   background: var(--bg-side);
   display: flex;
   flex-direction: column;
-  padding: 16px 13px 13px;
-  gap: 12px;
+  padding: 12px 10px;
+  gap: 10px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 3px 5px 8px;
+  /* 2026-10-12 晚（星宝：「如我所书的标题和 logo 有点小」）：标记 16→20、名字 13→15。
+     同一天深夜里他又说了一次「还是小」，于是**再上一档**：标记 20→24、名字 15→17。
+     品牌行是这一栏的眼睛，比正文大一档才立得住；字数不宽（4 个字），17px 放得下。 */
+  gap: 12px;
+  /* 右边留 30px：那颗「收起侧栏」按钮是绝对定位在右上角的（宽 20 + right 8），
+     不给它让位就会正好压在版本号「v1.0」上面。 */
+  padding: 4px 30px 4px 6px;
 }
 
 /* ⛔ `.brand-dot` 的基础样式删于 2026-10-13 凌晨 —— **是合并，不是丢掉**：
@@ -460,14 +470,17 @@ body {
    ⚠️ `--brand-grad` / `--brand-glow` 先留在 :root 别删（.brand-name 那边还引用着）。 */
 
 .brand-name {
-  font-size: var(--fs-md);
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  background: var(--brand-grad);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
   margin-right: auto;
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  /* ⚠️ 原来这行字是渐变填充（background-clip: text + text-fill-color: transparent）。
+     光写 color 没用 —— -webkit-text-fill-color 的优先级比 color 高，
+     必须把它显式改回实色，否则字还是渐变的（甚至可能整行看不见）。 */
+  background: none;
+  -webkit-background-clip: border-box;
+  -webkit-text-fill-color: var(--text);
+  color: var(--text);
 }
 
 /* 品牌行右侧原来挂着配色/昼夜两颗图标，2026-10-08 挪进「外观」弹窗了，
@@ -493,16 +506,19 @@ body {
   padding: 0 4px;
 }
 
-/* ⚠️ 这条在文件末尾「2026-10-12 · 侧栏 + 输入区按设计稿对齐」那一段里**又被定义了一次**
-   （那边改了 gap / min-height / padding / font-size）。这是本项目 CSS 的结构，不是笔误：
-   基础段写「一套通用样子」，末尾覆盖层写「按设计稿对齐之后的样子」。
-   改这里的属性之前，先去末尾搜一遍同名选择器 —— 否则会出现「改了没反应」。 */
+/* 2026-10-13：原来末尾「侧栏 + 输入区按设计稿对齐」那一段里还有一条同名规则
+   （改 gap / min-height / padding / font-size），**已合并到这里** —— 现在全文件只此一处。 */
 .convo-item {
+  /* position: relative 是给「当前会话」那条 2×18 的琥珀竖线当定位基准的 */
+  position: relative;
   display: flex;
   align-items: center;
-  /* 8px：头像从 38 收到 20（稿子 2:24）之后，10px 会让文字离得太远 */
-  gap: 8px;
-  padding: 8px 9px;
+  gap: 10px;
+  /* 34 → 60（头像 48 时）→ **48**（2026-10-13 头像回到 36）。
+     条目高 = 头像 36 + 上下各 6。
+     ⚠️ min-height 而不是 height —— 名字/时间换行或将来加第二行都不会被裁。 */
+  min-height: 48px;
+  padding: 6px;
   border-radius: var(--radius);
   cursor: pointer;
   color: var(--text-dim);
@@ -547,7 +563,6 @@ body {
      而且不用再占白名单一个位子（不然「20px」会变成一条永远不会用到的豁免）。 */
   font-size: var(--fs-md);
   font-weight: 600;
-  line-height: 1;
   letter-spacing: 0.02em;
 }
 .convo-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
@@ -561,9 +576,10 @@ body {
 /* ⛔ `.convo-info` / `.convo-sub` 删于 2026-10-12 晚：会话项并成一行之后
    （头像 + 名字 + 时间），没人再产出这两层。 */
 
-/* ⚠️ 同上：`.convo-title` 在文件末尾的覆盖层里还有一条（那边只留了 font-size，
-   而且字号走的是 var(--fs-sm)）。改这条之前先去末尾搜一遍。 */
+/* 2026-10-13：末尾覆盖层里那条同名规则（只留了 font-size）**已合并到这里**。 */
 .convo-title {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: var(--fs-sm);
   font-weight: 600;
   white-space: nowrap;
@@ -579,7 +595,6 @@ body {
   color: var(--text-faint);
   cursor: pointer;
   font-size: var(--fs-md);
-  line-height: 1;
   padding: 2px 4px;
   border-radius: var(--radius);
 }
@@ -625,8 +640,8 @@ body {
         232 那边每列只有 66px，11px 的「角色库」正好卡在边界上
         （2026-10-12 踩过，别用 min-width:0 去救，那只会变省略号）。 */
   height: 36px;
-  padding: 0 9px;
-  gap: 7px;
+  padding: 0 10px;
+  gap: 8px;
   font-size: var(--fs-sm);
   justify-content: flex-start;
   white-space: nowrap;
@@ -670,7 +685,6 @@ body {
   border-radius: var(--radius);
   padding: 10px 16px;
   font-size: var(--fs-sm);
-  line-height: 1.3;
   font-family: inherit;
   font-weight: 400;
   cursor: pointer;
@@ -680,7 +694,7 @@ body {
 }
 
 .btn-block { width: 100%; }
-.btn-sm { padding: 6px 11px; font-size: var(--fs-xs); }
+.btn-sm { padding: 6px 12px; font-size: var(--fs-xs); }
 
 /* 主按钮：一层主色底 + 淡阴影，不描边（描边正是「鼓」的来源之一） */
 .btn-primary {
@@ -798,7 +812,6 @@ body {
   color: var(--on-accent);
   font-size: var(--fs-md);
   font-weight: 600;
-  line-height: 1;
   letter-spacing: 0.02em;
   user-select: none;
 }
@@ -822,7 +835,7 @@ body {
 .topbar-name {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -833,13 +846,12 @@ body {
    ⚠️ 圆角跟 --radius 走（方角），不是 999px 胶囊 —— 胶囊是上一版的语言。 */
 .pill-tag {
   flex: 0 0 auto;
-  padding: 1px 7px;
+  padding: 2px 8px;
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: var(--fs-xs);
   font-weight: 400;
-  line-height: 1.6;
   white-space: nowrap;
 }
 
@@ -878,7 +890,7 @@ body {
   flex: 0 0 14px;
   width: 14px;
   height: 14px;
-  margin-right: 5px;
+  margin-right: 6px;
   opacity: 0.85;
 }
 
@@ -900,10 +912,8 @@ body {
   right: -6px;
   margin-left: 0;
   min-width: 16px;
-  padding: 0 3px;
+  padding: 0 4px;
   font-size: var(--fs-xs);
-  /* 行高改成**相对值**：字会跟着 --ui-size 缩放，写死 15px 在「大」档会把字挤扁。 */
-  line-height: 1.35;
   vertical-align: 0;
   box-shadow: 0 0 0 2px var(--bg-side);
   pointer-events: none;
@@ -915,7 +925,7 @@ body {
   right: 0;
   z-index: 40;
   min-width: 156px;
-  padding: 5px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -930,14 +940,13 @@ body {
 .menu-pop .menu-item {
   display: flex;
   align-items: center;
-  padding: 7px 11px;
+  padding: 8px 12px;
   border: 0;
   border-radius: var(--radius);
   background: transparent;
   color: var(--text);
   font: inherit;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -1031,7 +1040,7 @@ body {
 .model-menu-group:first-child { padding-top: 4px; }
 
 /* 「（还没有模型）」这种占位：是提示不是选项，别让它看起来能点 */
-.model-menu-empty { padding: 7px 10px; font-size: var(--fs-sm); color: var(--text-faint); }
+.model-menu-empty { padding: 8px 10px; font-size: var(--fs-sm); color: var(--text-faint); }
 
 /* 选择器写成 .model-menu .model-menu-item —— 比通用按钮规则更具体，
    免得按按钮的样子被压回去（.menu-item 那边同理）。 */
@@ -1040,14 +1049,13 @@ body {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 8px 10px;
   border: 0;
   border-radius: var(--radius);
   background: transparent;
   color: var(--text);
   font: inherit;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   text-align: left;
   white-space: nowrap;
   cursor: pointer;
@@ -1139,7 +1147,7 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 /* 消息头：角色名（亮）+ 模型标签 + …… + 时间（右端）。
@@ -1185,21 +1193,20 @@ body {
    2026-10-12 去掉气泡时**故意保留了这个类名**，没有改名：
    它被 JS（流式输出的 chunkTarget、就地编辑、截断提示）和一堆断言按名字找，
    改名等于同时动三处，而这次要的只是「看起来没有气泡」。
-   所以这里把所有「气泡特征」逐个清掉，而不是删掉这个类 —— 见每行注释。 */
+
+   ⚠️ 2026-10-13：原来这里还挂着五条「把气泡特征清掉」的声明 ——
+   `border: none` / `border-radius: 0` / `background: none` / `box-shadow: none` /
+   `padding: 0`。它们是**去气泡那一步的残渣**：原来的 1px 描边、卡片实底、
+   11×15 内边距在去气泡时就已经从文件里删掉了，这几条等于把「本来就是初始值」的属性
+   再设一遍（一个 div 本来就没有边框、背景、投影、内边距）。
+   删之前用 `tools/css-diff.js` 验过：每个元素的 computed style **逐属性相同**。
+   别再按「保险起见」加回来 —— 想调外观就改下面还活着的这几条。 */
 .bubble {
-  border: none;        /* 原来是 1px 描边 */
-  border-radius: 0;    /* 原来是 --radius，两头还各有一个 6px 的方向角 */
-  background: none;    /* 原来是卡片色实底 —— 去气泡后不再需要底色 */
-  box-shadow: none;    /* 原来有一层很淡的投影，用来把白气泡从页底上浮起来 */
-  padding: 0;          /* 原来是 11px 15px —— 没有底了，内边距也就不需要 */
   overflow-wrap: break-word;
   word-break: break-word;
   user-select: text;
-  /* 字号来自「对话窗口」设置；里面的标题/表格/心理旁白都用 em 跟着缩。
-     行高 1.75：设计稿正文是 13px / 23px，正好对上，
-     而且字号调到 22px 时行高会跟着放大，不会挤成一片。 */
+  /* 字号来自「对话窗口」设置；里面的标题/表格/心理旁白都用 em 跟着缩。 */
   font-size: var(--chat-font-size, 13px);
-  line-height: 1.6;
 }
 
 /* 自己的消息靠右：头像换到右边（row-reverse）、**消息头也整体靠右**、正文右对齐。
@@ -1228,20 +1235,18 @@ body {
   white-space: pre-wrap;
 }
 
-/* AI 的回答：不加任何底，只把字号/行高继承给正文（排版见 .bubble） */
-.msg.assistant .bubble {
-  background: none;
-  border: none;
-  box-shadow: none;
-}
+/* AI 的回答**没有自己的外观**：正文直接铺在页底上，和用户那侧的区别只有对齐方向
+   （见上面 `.msg.user` 那几条）。排版继承自 `.bubble`。
+   ⚠️ 2026-10-13：这里原来挂着 `background / border / box-shadow: none` 三条 ——
+   那是 `.bubble` 总规则的复制品（去气泡后两边都是初始值），css-diff 验零差异后删掉。 */
 
 /* 出错的那条：**唯一保留「块」的一条**。
    去气泡是为了「正文直接铺在页底上」，但报错必须一眼看见 ——
    一抹底色比一行灰字可靠得多，所以这里有意不走「无气泡」那套。
    （设计稿没画出错态，这是按用途定的取舍。） */
 .msg.error .bubble {
-  padding: 10px 14px;   /* 上面那条总规则把 padding 清了，这里得补回来 */
-  border-radius: var(--radius);
+  padding: 10px 14px;   /* 全站唯一「有底块」的内边距，就这一处 */
+  border-radius: var(--radius);   /* 同理：唯一给 .bubble 圆角的地方 */
   background: var(--danger-bg);
   color: var(--danger-text);
   white-space: pre-wrap;
@@ -1281,7 +1286,7 @@ body {
   font-weight: 500;
   color: var(--accent);
   background: var(--accent-soft);
-  padding: 0 3px;
+  padding: 0 4px;
   border-radius: var(--radius-sm);
 }
 
@@ -1318,7 +1323,6 @@ body {
   color: var(--text);
   font-family: inherit;
   font-size: inherit;
-  line-height: 1.6;
   resize: vertical;
 }
 
@@ -1370,7 +1374,7 @@ body {
 .variant-nav {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
 /* 候选翻页在消息头里也用等宽字体，和相邻的时间是一套（设计稿 11px 等宽） */
@@ -1381,15 +1385,13 @@ body {
 }
 
 .variant-btn {
-  padding: 0 5px;
+  padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text-dim);
   font-family: inherit;
   font-size: var(--fs-xs);
-  /* 相对行高（原来写死 16px）：字跟着 --ui-size 走，固定值在大档会挤。 */
-  line-height: 1.35;
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s;
 }
@@ -1413,15 +1415,19 @@ body {
    去气泡之后正文整个铺在页底上，再来一层有色底纹就会和正文抢，
    而一根实心主色竖条已经足够把「这是内心活动」标出来。
    ⚠️ 字号用 em（0.92 × 13px = 12px，对上设计稿），别写死 px ——
-      正文调到 22px 时它还停在 12px 就不成比例了。 */
+      正文调到 22px 时它还停在 12px 就不成比例了。
+   ⚠️ 2026-10-13：下面两条里原来还各写着一条 `background: none` ——
+      它们是「从有底纹改成无底纹」那一步的残渣：原来那条主色底纹在改的时候
+      就从文件里撤掉了，留着等于把「本来就是初始值」的属性再设一遍。
+      这两个类**由 JS 动态加**（markdown 渲染心理/旁白块时），css-diff 剥掉
+      <script> 后测不到 —— 靠的是「全文件只有这两处定义它们、且没有别处给它们上背景」
+      这个静态事实。要做成带底纹的样子，重新加一条有值的就行。 */
 .bubble .msg-inner {
   margin: 8px 0;
   padding: 0 0 0 12px;
   border-left: 2px solid var(--accent);
-  background: none;
   color: var(--text-dim);
   font-size: 0.92em; /* 13px 正文 → 12px，同设计稿 */
-  line-height: 1.6;  /* 设计稿 12px / 19px */
 }
 
 /* 旁白 / 上帝视角：和心理描写**同一套画法**，只把竖条换成虚线、颜色退到中性 ——
@@ -1431,10 +1437,8 @@ body {
   margin: 8px 0;
   padding: 0 0 0 12px;
   border-left: 2px dashed var(--text-faint);
-  background: none;
   color: var(--text-dim);
   font-size: 0.92em;
-  line-height: 1.6;
 }
 
 /* 块内不再受段落间距影响 */
@@ -1448,7 +1452,7 @@ body {
   font-size: 0.89em; /* 12.5px */
   background: var(--code-bg);
   color: var(--code-text);
-  padding: 1px 5px;
+  padding: 2px 6px;
   border-radius: var(--radius-sm);
 }
 
@@ -1467,7 +1471,6 @@ body {
   background: transparent;
   padding: 0;
   font-size: 1em; /* 跟 pre 里的字号走 */
-  line-height: 1.6;
 }
 
 .bubble table {
@@ -1531,7 +1534,7 @@ body {
   font-size: var(--fs-xs);
   font-family: inherit;
   font-weight: 400;
-  padding: 3px 9px;
+  padding: 4px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.12s ease;
@@ -1555,20 +1558,20 @@ body {
   margin-top: 8px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
 /* 选项按钮的容器：点「换一批」时里面换成骨架屏 */
 .msg-options-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
 /* 换一批时的骨架屏：几条灰条占位，闪烁过渡，模型返回后被真按钮替换 */
 .msg-option-skeleton {
   height: 27px;
-  margin: 3px 6px;
+  margin: 4px 6px;
   border-radius: var(--radius-sm);
   background: linear-gradient(90deg, var(--border-soft) 25%, var(--bg-input) 37%, var(--border-soft) 63%);
   background-size: 400% 100%;
@@ -1616,7 +1619,6 @@ body {
   padding: 0 4px;
   font-size: var(--fs-xs);
   font-weight: 600;
-  line-height: 1;
   color: var(--accent);
   background: var(--accent-soft);
   border-radius: var(--radius);
@@ -1624,7 +1626,6 @@ body {
 
 .msg-option-btn .opt-text {
   white-space: normal;
-  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
@@ -1632,8 +1633,8 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 3px;
-  padding: 3px 6px 0;
+  margin-top: 4px;
+  padding: 4px 6px 0;
 }
 
 .msg-options-reroll,
@@ -1690,7 +1691,7 @@ body {
   display: inline-block;
   width: 2px;
   height: 15px;
-  margin-left: 3px;
+  margin-left: 4px;
   border-radius: 1px;
   background: var(--accent);
   vertical-align: text-bottom;
@@ -1726,29 +1727,38 @@ body {
 
 .composer {
   flex: 0 0 auto;
-  padding: 12px 20px 16px;
-  /* 不描边、不填底色：输入这一条自己靠白底 + 阴影浮在页底上（设计稿 .field 就是这逻辑），
-     少了上面那条分隔线，消息区和输入区反而分得更干净 */
+  /* 稿子这块是「方角 + 1px 描边 + 深底」的一整块，不是浮在页底上的白胶囊：
+     胶囊 + 阴影 + 860px 居中那套是上一版的语言。 */
+  /* ⚠️ position: relative 是给里头那两个 .pad-handle 当定位基准的
+     （拖动把手挂在输入区里，好跟着输入框的高度走 —— 输入框会 auto-grow）。
+     别删：删了把手会跑去找 .chat-col 定位，位置就飘到消息区中间去了。 */
+  position: relative;
+  /* 左右跟着「对话宽度」走 —— 输入框和消息区**一起缩**（2026-10-13 星宝要的：
+     「拖动输入框就可以调内缩，正好把输入框也缩小」）。
+     默认值和 .messages 一致（20px），这样输入框和正文左右对齐。
+     ⚠️ 和 .messages 共用同一对变量是**故意的**：两处各留各的就会「拖了只有一边动」。 */
+  padding: 10px var(--chat-pad-right, 20px) 12px var(--chat-pad-left, 20px);
 }
 
 .composer-box {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-end;
-  max-width: 860px;
-  margin: 0 auto;
-  /* 白底 + 一层淡阴影，不描边（设计稿的 .field）——
-     原来是浅色底 + 1px 边框，压在本身就很浅的页底上等于半透明，显脏 */
-  background: var(--bg-card);
-  box-shadow: var(--shadow-sm);
-  /* 24px：单行时看着接近胶囊，长到三四行也不会变成怪形状 */
+  /* 稿子这一块是**跟栏同宽**的（不再 860 居中），靠 1px 描边 + 深底跟页底分层 */
+  max-width: none;
+  margin: 0;
+  padding: 10px;
+  min-height: 64px;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 8px;
+  background: var(--bg-input);
+  box-shadow: none;
   transition: box-shadow 0.15s;
 }
 
-/* 聚焦不换边框色，把阴影压深一层（没有边框可换了） */
-.composer-box:focus-within { box-shadow: var(--shadow-lg); }
+/* ⛔ 基础段那条 `.composer-box:focus-within { box-shadow: var(--shadow-lg) }` 删于 2026-10-13 ——
+   被文件末尾那条（改边框色 + 阴影归零）**完全覆盖**，渲染上早就不生效，合并掉。
+   现在这个选择器只有末尾一处定义。查全部重复：node tools/audit-css-dup.js */
 
 /* ---------------------- 「帮我想想」的建议条 ---------------------- */
 
@@ -1761,36 +1771,47 @@ body {
 /* ⛔ `.suggest-head` 删于 2026-10-12 晚：那层包装 div 早从 index.html 拿掉了
    （建议条压成了一行），JS 只认 #suggest-strip / #suggest-list。 */
 
-.suggest-title { font-size: var(--fs-xs); color: var(--text-faint); }
+/* ⛔ 基础段那条 `.suggest-title` 删于 2026-10-13 —— 末尾覆盖层那条把它连同
+   `color` 一起重定义了，只有 `flex: 0 0 auto` 是新增的，已并进末尾那一处。 */
 
 .suggest-close {
+  /* 靠右端（建议条是一行：标题 → 胶囊 → 收起） */
+  flex: 0 0 auto;
+  margin-left: auto;
   border: none;
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
   font-size: var(--fs-xs);
-  line-height: 1;
-  padding: 3px 5px;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
 }
 
 .suggest-close:hover { color: var(--text); background: var(--bg-input); }
 
-.suggest-list { display: flex; flex-direction: column; gap: 6px; }
+/* ⚠️ flex-direction: column 是基础段留下的、末尾覆盖层**并没有改**它 —— 合并时不能丢。 */
+.suggest-list {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
 
 /* 每颗按钮左对齐、可以折行 —— 选项长短差别大，居中反而不好扫 */
 .suggest-btn {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 8px 11px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
   color: var(--text);
   font-family: inherit;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -1836,7 +1857,6 @@ body {
   color: var(--text);
   font-family: inherit;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   resize: none;
   outline: none;
   /* 必须显式写：通用 textarea 规则里有 min-height: 104px（给设置里的大文本框用的），
@@ -1859,8 +1879,10 @@ body {
 }
 
 .composer-hint {
-  max-width: 860px;
-  margin: 6px auto 0;
+  /* 跟输入框同宽，不居中 */
+  max-width: none;
+  margin: 0;
+  padding: 0 2px;
   display: flex;
   justify-content: space-between;
   font-size: var(--fs-xs);
@@ -1930,7 +1952,6 @@ body {
   min-height: 18px;
   margin: 0;
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
 }
 
@@ -1985,7 +2006,7 @@ body {
 }
 
 .modal-sub {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
   font-size: var(--fs-xs);
   color: var(--text-faint);
 }
@@ -2021,7 +2042,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 13px 20px;
+  padding: 14px 20px;
   border-top: 1px solid var(--border);
   background: var(--foot-bg);
 }
@@ -2062,7 +2083,6 @@ body {
 .confirm-body p {
   margin: 0;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   color: var(--text-dim);
   overflow-wrap: break-word;
 }
@@ -2090,7 +2110,6 @@ body {
 .pick-head p {
   margin: 0;
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-dim);
 }
 
@@ -2115,7 +2134,6 @@ body {
   color: var(--text);
   font-family: inherit;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   text-align: left;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
@@ -2177,7 +2195,7 @@ body {
    .panel-title，和「状态面板」那一组撞名了，两组规则互相覆盖
    （gap 10→8、margin-bottom 14→8、title 13→12.5px）。 */
 .panel-section {
-  padding: 16px 17px 17px;
+  padding: 16px 18px 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
@@ -2210,14 +2228,12 @@ body {
   font-weight: 600;
   color: var(--text);
   letter-spacing: 0.3px;
-  line-height: 1.6;
 }
 
 .section-desc {
   font-size: var(--fs-xs);
   color: var(--text-faint);
-  line-height: 1.6;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 
 /* --- 区块头部（图标 + 标题 + 一句话说明）---
@@ -2236,7 +2252,9 @@ body {
    这一段是**彻底没人引用的死规则**，而且里面还留着 999px 药丸圆角 ——
    留着只会让人以为「切换还是药丸」。 */
 
-.provider-add { margin-bottom: 12px; }
+/* ⛔ 基础段那条 `.provider-add { margin-bottom: 12px }` 删于 2026-10-13 ——
+   「设置页 · 卡片化控件」那一段里把它重定义成 `display: flex; gap: 8px; margin-bottom: 10px`，
+   基础段只剩个被覆盖的 margin-bottom，删掉。 */
 
 /* 「第三方模型提供商」展开的预设列表 */
 .provider-presets {
@@ -2251,7 +2269,7 @@ body {
 }
 
 .preset-chip {
-  padding: 6px 13px;
+  padding: 6px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
@@ -2298,7 +2316,7 @@ body {
 .persona-row-info {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -2307,7 +2325,6 @@ body {
 
 .persona-row-info .field-help {
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
   word-break: break-word;
 }
@@ -2324,7 +2341,6 @@ body {
 
 .persona-template-hint {
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
   flex: 1 1 220px;
   min-width: 0;
@@ -2421,7 +2437,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 13px 24px;
+  padding: 14px 24px;
   border-top: 1px solid var(--border);
   background: var(--foot-bg);
 }
@@ -2455,7 +2471,7 @@ body {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 9px 11px;
+  padding: 10px 12px;
   border: 0;
   border-radius: var(--radius);
   background: transparent;
@@ -2500,12 +2516,11 @@ body {
 
 .settings-nav-text { display: flex; flex-direction: column; min-width: 0; }
 
-.settings-nav-title { font-size: var(--fs-sm); font-weight: 600; line-height: 1.6; }
+.settings-nav-title { font-size: var(--fs-sm); font-weight: 600;}
 
 .settings-nav-desc {
   font-size: var(--fs-xs);
   color: var(--text-faint);
-  line-height: 1.6;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2547,10 +2562,6 @@ body {
   margin-bottom: 0;
 }
 
-.settings-content > .panel-section {
-  width: 100%;
-}
-
 /* 2026-10-10：这里**不再套卡片**（去掉 .panel-section 自带的白底 + 边框 + 圆角）。
    一次只显示一组，右栏整块本来就是「当前这一页内容」，
    再包一层卡片等于多套一个壳：外层卡片边界 + 内层头部两重框，看着啰嗦。
@@ -2558,6 +2569,7 @@ body {
    ⚠️ 只改这一屏里的（.settings-content >），基础 .panel-section 别动 ——
       「记忆 → 存档点」那种静态区块还在用它。 */
 .settings-content > .panel-section {
+  width: 100%;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -2664,7 +2676,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 13px 14px;
+  padding: 14px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
@@ -2699,10 +2711,9 @@ body {
   color: var(--accent);
   font-size: var(--fs-sm);
   font-weight: 700;
-  line-height: 1;
 }
 
-.provider-card-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.provider-card-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 auto; }
 
 .provider-card-name {
   font-size: var(--fs-sm);
@@ -2745,13 +2756,12 @@ body {
    空着的时候不占位 —— :empty 一挡，没有统计的分组不会多出一道空隙。 */
 .section-stat {
   flex: 0 0 auto;
-  padding: 3px 10px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
   font-size: var(--fs-xs);
   font-weight: 600;
-  line-height: 1.6;
   white-space: nowrap;
 }
 .section-stat:empty { display: none; }
@@ -2779,7 +2789,6 @@ body {
 .page-empty-hint {
   margin: 10px 0 0;
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
 }
 
@@ -2828,8 +2837,7 @@ body {
   color: var(--text-faint);
   cursor: pointer;
   font-size: var(--fs-md);
-  line-height: 1;
-  padding: 2px 5px;
+  padding: 2px 6px;
   border-radius: var(--radius);
   transition: opacity 0.12s ease;
 }
@@ -2878,7 +2886,7 @@ body {
    账号头像是圆的，卡上的人设图是**竖版方角**：圆形会把一张立绘裁掉大半。 */
 #char-page-grid .char-card {
   align-items: stretch;
-  gap: 9px;
+  gap: 10px;
   padding: 10px 10px 12px;
 }
 
@@ -3151,7 +3159,6 @@ body {
   background: none;
   color: var(--text-faint);
   font-size: var(--fs-sm);
-  line-height: 1;
   opacity: 0.45;
   cursor: pointer;
   transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
@@ -3221,7 +3228,6 @@ body {
   border-radius: 0;
   resize: none;               /* 高度由卡片定，不需要把手 */
   font-size: var(--fs-sm);
-  line-height: 1.6;           /* 长文在里面写，行距放松一点 */
   box-shadow: none;
 }
 
@@ -3243,7 +3249,6 @@ body {
 /* 脚部那条说明不在 .field 里，通用的 .field > .field-help 管不到它，得自带样式 */
 .char-expand-foot .field-help {
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
 }
 
@@ -3276,7 +3281,7 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
-.crop-heading { display: flex; flex-direction: column; gap: 3px; }
+.crop-heading { display: flex; flex-direction: column; gap: 4px; }
 .crop-title { font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
 .crop-hint { font-size: var(--fs-xs); color: var(--text-faint); }
 
@@ -3327,7 +3332,7 @@ body {
   width: 16px;
   height: 16px;
   /* 让 16px 的拇指在 6px 的轨道上居中：(6 - 16) / 2 */
-  margin-top: -5px;
+  margin-top: -4px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid var(--bg-elev);
@@ -3391,7 +3396,7 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding: 8px 9px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--th-bg);    /* 再压一档，和卡身分开 */
 }
@@ -3400,14 +3405,13 @@ body {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
   font-size: var(--fs-xs);
-  line-height: 1;
-  padding: 5px 9px;
+  padding: 6px 10px;
   border-radius: 999px;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
@@ -3431,8 +3435,7 @@ body {
    同一级注意力；但它又是判断「有没有填漏」的依据，所以也不能省。 */
 .attr-tab-count {
   font-size: var(--fs-xs);
-  line-height: 1;
-  padding: 2px 5px;
+  padding: 2px 6px;
   border-radius: 999px;
   background: var(--code-bg);
   color: var(--text-faint);
@@ -3458,7 +3461,7 @@ body {
   flex: 0 0 auto;
   width: 86px;
   min-height: 26px;
-  padding: 3px 10px;
+  padding: 4px 10px;
   font-size: var(--fs-xs);
   border-radius: 999px;
   border: 1px dashed var(--border-hover);
@@ -3495,7 +3498,6 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-size: var(--fs-sm);
-  line-height: 1;
   padding: 2px 10px;
   border-radius: 999px;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -3519,8 +3521,8 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 9px;
-  padding: 8px 9px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
@@ -3538,7 +3540,7 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 28px;
-  padding: 4px 9px;
+  padding: 4px 10px;
   font-size: var(--fs-sm);
   border-radius: var(--radius-sm);
 }
@@ -3546,7 +3548,7 @@ body {
 .attr-group-edit .btn { flex: 0 0 auto; }
 
 /* 卡身：当前这一组的字段列表 + 加字段那一行 */
-.attr-body { padding: 9px 9px 10px; }
+.attr-body { padding: 10px 10px 10px; }
 
 /* 属性行的名字列宽。展开区（.attr-more）要靠它算左缩进，
    所以定成变量 —— 直接写死 76 和 84 的话，改了名字列宽缩进就悄悄错位。 */
@@ -3554,7 +3556,7 @@ body {
   --attr-name-w: 76px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 /* 空组得有话可说 —— 刚建的分组点进去是一片空白，看着像坏了，
@@ -3573,7 +3575,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 3px 4px;
+  padding: 4px 4px;
   border-radius: var(--radius-sm);
   transition: background 0.15s;
 }
@@ -3597,7 +3599,7 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 28px;
-  padding: 4px 9px;
+  padding: 4px 10px;
   font-size: var(--fs-sm);
   border-radius: var(--radius-sm);
 }
@@ -3607,7 +3609,7 @@ body {
   flex: 0 0 auto;
   width: 64px;
   min-height: 28px;
-  padding: 2px 5px;
+  padding: 2px 6px;
   font-size: var(--fs-xs);
   border-radius: var(--radius-sm);
   color: var(--text-dim);
@@ -3622,8 +3624,7 @@ body {
   color: var(--text-faint);
   cursor: pointer;
   font-size: var(--fs-xs);
-  line-height: 1;
-  padding: 7px 8px;
+  padding: 8px 8px;
   border-radius: var(--radius-sm);
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
@@ -3646,7 +3647,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 1px 0 3px calc(var(--attr-name-w, 76px) + 8px);
+  margin: 2px 0 4px calc(var(--attr-name-w, 76px) + 8px);
   padding-left: 10px;
   border-left: 2px solid var(--border);
 }
@@ -3671,7 +3672,7 @@ body {
   flex: 0 0 auto;
   width: 64px;
   min-height: 26px;
-  padding: 3px 7px;
+  padding: 4px 8px;
   font-size: var(--fs-xs);
   border-radius: var(--radius-sm);
 }
@@ -3681,7 +3682,7 @@ body {
   width: 100%;
   min-width: 0;
   min-height: 26px;
-  padding: 3px 8px;
+  padding: 4px 8px;
   font-size: var(--fs-xs);
   border-radius: var(--radius-sm);
 }
@@ -3698,7 +3699,7 @@ body {
   min-width: 0;
   width: auto;
   min-height: 26px;
-  padding: 3px 8px;
+  padding: 4px 8px;
   font-size: var(--fs-xs);
   border-radius: var(--radius-sm);
 }
@@ -3718,7 +3719,7 @@ body {
 .attr-add-row {
   display: flex;
   gap: 6px;
-  margin-top: 7px;
+  margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed var(--border);
 }
@@ -3730,7 +3731,7 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 30px;
-  padding: 5px 10px;
+  padding: 6px 10px;
   font-size: var(--fs-sm);
   border-radius: var(--radius-sm);
 }
@@ -4009,7 +4010,6 @@ body {
   background: transparent;
   color: var(--text-faint);
   font-size: var(--fs-xs);
-  line-height: 1;
   cursor: pointer;
 }
 
@@ -4027,7 +4027,6 @@ body {
   background: transparent;
   color: var(--text-faint);
   font-size: var(--fs-sm);
-  line-height: 1;
   cursor: pointer;
 }
 
@@ -4049,7 +4048,7 @@ body {
 .char-advanced,
 .wb-advanced {
   margin-top: 2px;
-  padding: 11px 14px;
+  padding: 12px 14px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   background: var(--bg-side);
@@ -4077,7 +4076,7 @@ body {
 .wb-advanced[open] > summary::before { content: "▾ "; }
 
 .char-advanced[open] > summary,
-.wb-advanced[open] > summary { margin-bottom: 13px; color: var(--text); }
+.wb-advanced[open] > summary { margin-bottom: 14px; color: var(--text); }
 
 .char-advanced .field:last-child,
 .wb-advanced .field:last-child { margin-bottom: 0; }
@@ -4119,22 +4118,20 @@ body {
 
 /* 标签顶部留白，让它和输入框里的文字在同一水平线上 */
 .field-label {
-  padding-top: 11px;
+  padding-top: 12px;
   font-size: var(--fs-sm);
   color: var(--text);
-  line-height: 1.6;
 }
 
 /* 说明文字跨到右侧控件那一列，左边缘和输入框对齐 */
 .field > .field-help {
   grid-column: 2;
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
 }
 
 /* 上下排列的字段（人设那种，标签在上面） */
-.field.field-stack { grid-template-columns: minmax(0, 1fr); row-gap: 7px; }
+.field.field-stack { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
 .field.field-stack > .field-help { grid-column: 1; }
 .field.field-stack > .field-label { padding-top: 0; }
 
@@ -4160,7 +4157,7 @@ body {
 
 .field-grid .field {
   grid-template-columns: minmax(0, 1fr);
-  row-gap: 7px;
+  row-gap: 8px;
   margin-bottom: 0;
 }
 
@@ -4195,9 +4192,8 @@ select {
   color: var(--text);
   font-family: inherit;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   /* 左右各留 14px，文字不再贴边 */
-  padding: 11px 14px;
+  padding: 12px 14px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -4237,7 +4233,6 @@ input::placeholder, textarea::placeholder { color: var(--text-faint); }
 textarea {
   min-height: 104px;
   resize: vertical;
-  line-height: 1.6;
   padding: 10px 14px;
 }
 
@@ -4260,12 +4255,11 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   justify-content: space-between;
   gap: 14px;
   padding: 14px 16px;
-  margin-bottom: 9px;
+  margin-bottom: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
   font-size: var(--fs-sm);
-  line-height: 1.6;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -4321,17 +4315,16 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 /* 勾选项的两行文字：小标题 + 说明。
    开关挪到右边之后，文字块自己吃掉剩余宽度（flex:1），说明才不会被压成挤牙膏。 */
-.check-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; gap: 3px; }
+.check-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; gap: 4px; }
 .check-title {
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text-dim);
-  line-height: 1.6;
   transition: color 0.15s;
 }
 .check:hover .check-title,
 .check:has(input:checked) .check-title { color: var(--text); }
-.check-desc { font-size: var(--fs-xs); color: var(--text-faint); line-height: 1.6; }
+.check-desc { font-size: var(--fs-xs); color: var(--text-faint);}
 /* 说明里的 <b> 是重点（「每续一次会多花一次钱」这种），别让它跟正文一样淡 */
 .check-desc b { color: var(--text-dim); font-weight: 600; }
 
@@ -4390,11 +4383,11 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   }
   .foot-actions { justify-content: flex-end; }
 
-  .field { grid-template-columns: minmax(0, 1fr); row-gap: 7px; }
+  .field { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
   .field > .field-help { grid-column: 1; }
   .field > .field-label { padding-top: 0; }
 
-  .field-grid { grid-template-columns: minmax(0, 1fr); row-gap: 15px; }
+  .field-grid { grid-template-columns: minmax(0, 1fr); row-gap: 16px; }
 }
 
 /* 窄窗口：角色列表页的标题栏换上下排，按钮不跟标题挤在一行 */
@@ -4422,7 +4415,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
      不肯换行，「本书角色」四个字被挤成一列竖排，末尾的「↻ 同步属性」还被裁掉半颗。 */
   flex-direction: column;
   align-items: stretch;
-  gap: 7px;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
@@ -4479,7 +4472,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .wb-char-chip {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   padding: 4px 6px 4px 4px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -4518,9 +4511,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   flex: 0 0 auto;
   border: 0;
   background: none;
-  padding: 2px 5px;
+  padding: 2px 6px;
   font-size: var(--fs-xs);
-  line-height: 1.3;
   color: var(--text-faint);
   cursor: pointer;
   border-radius: var(--radius-sm);
@@ -4534,7 +4526,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   font-size: var(--fs-xs);
   color: var(--text-faint);
   cursor: pointer;
@@ -4555,8 +4547,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .wb-picker-row {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 10px;
+  gap: 10px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
@@ -4747,7 +4739,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .wb-entry-head .field-label { padding-top: 0; }
 
 /* 书名输入比别的字段高一点（它是这一栏里最常用的一颗输入框） */
-.wb-book-name input { min-height: 34px; font-size: var(--fs-sm); padding: 7px 11px; }
+.wb-book-name input { min-height: 34px; font-size: var(--fs-sm); padding: 8px 12px; }
 
 .wb-count { font-size: var(--fs-xs); color: var(--text-faint); }
 
@@ -4756,7 +4748,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .wb-entry {
   position: relative;
   /* 右侧留出 × 的位置，常驻 / 停用那两个徽章不会被压在它下面 */
-  padding: 7px 26px 7px 9px;
+  padding: 8px 26px 8px 10px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -4784,7 +4776,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: none;
   color: var(--text-faint);
   font-size: var(--fs-sm);
-  line-height: 1;
   opacity: 0.45;
   cursor: pointer;
   transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
@@ -4815,14 +4806,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .wb-badge {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
-  padding: 1px 5px;
+  padding: 2px 6px;
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
 }
 
 .wb-entry-keys {
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: var(--fs-xs);
   color: var(--text-faint);
   overflow: hidden;
@@ -4841,7 +4832,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   min-height: 160px;
 }
 
-.wb-main { padding: 15px 16px; overflow-y: auto; min-height: 0; }
+.wb-main { padding: 16px 16px; overflow-y: auto; min-height: 0; }
 
 /* 让条目表单撑满右栏，内容框跟着变高 */
 .wb-form { display: flex; flex-direction: column; min-height: 100%; }
@@ -4876,7 +4867,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .wb-form-foot-hint {
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
   text-align: right;
 }
@@ -4887,7 +4877,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   font-size: var(--fs-xs);
   color: var(--accent);
   background: var(--accent-soft);
-  padding: 3px 9px;
+  padding: 4px 10px;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -4914,7 +4904,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .preset-sampling > summary {
   cursor: pointer;
-  padding: 11px 0;
+  padding: 12px 0;
   font-size: var(--fs-sm);
   font-weight: 550;
   color: var(--text);
@@ -4965,8 +4955,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .preset-pick-row {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 9px;
+  gap: 10px;
+  padding: 8px 10px;
   border-radius: var(--radius);
   cursor: pointer;
   transition: background 0.12s ease;
@@ -4986,7 +4976,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .preset-pick-text {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;   /* 让长名字能触发下面 name 的省略号 */
 }
 
@@ -5001,7 +4991,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 「可全局」徽标：提醒这条在没手动配过的会话里会自动带上 */
 .preset-pick-badge {
   flex: none;
-  padding: 1px 6px;
+  padding: 2px 6px;
   border-radius: 999px;
   font-size: var(--fs-xs);
   font-weight: 550;
@@ -5011,9 +5001,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 /* 状态说明：「跟随全局」还是「这一场单独配置」—— 用户得知道自己处在哪一档 */
 .preset-pick-state {
-  padding: 5px 9px 1px;
+  padding: 6px 10px 2px;
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
 }
 
@@ -5022,14 +5011,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 /* 绑着但已被删/停用的条目：只是提示，不是错误，用警示黄而不是红 */
 .preset-pick-gone {
-  padding: 5px 9px 1px;
+  padding: 6px 10px 2px;
   font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
 .preset-pick-empty {
   margin: 0;
-  padding: 10px 9px;
+  padding: 10px 10px;
   font-size: var(--fs-sm);
   color: var(--text-faint);
 }
@@ -5097,8 +5086,11 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   gap: 10px;
   margin: 0 14px 10px;
   /* 稿子 2:113 = h34（7px 内边距 + 20px 方角头像）。
-     2026-10-12 深夜头像 20 → 28，这条跟着涨到 46（9 + 28 + 9）。 */
-  padding: 9px 12px;
+     2026-10-12 深夜头像 20 → 28，这条跟着涨到 48（10 + 28 + 10）。
+     ⚠️ 2026-10-13：内边距原来是 **9px**（奇数），「边距奇数统一归偶」之后成了 10px，
+        于是条高 46 → **48**。增长量是那次规范化的必然结果（9 只能变 8 或 10），
+        冒烟里那条断言跟着改了 —— 不是回归。 */
+  padding: 10px 12px;
   border: 0;
   /* ⚠️ 方角通栏，不是 12px 圆角 —— 12px 是「大圆角时代」的漏网（跟 .btn 那次同一类）。 */
   border-radius: var(--radius);
@@ -5159,7 +5151,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .panel-avatar {
   flex: 0 0 auto;
   /* 20 → 28（星宝 2026-10-12 深夜：「在场角色的图标也小了」）。
-     入口条跟着涨到 46 高（见 .panel-box 的 padding）。 */
+     入口条跟着涨到 **48** 高（见 .panel-box 的 padding —— 那里记了 46 → 48 的原因）。 */
   width: 28px;
   height: 28px;
   padding: 0;
@@ -5168,7 +5160,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--on-accent);
   font-size: var(--fs-md);
   font-weight: 600;
-  line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5221,8 +5212,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 11px;
+  gap: 10px;
+  padding: 10px 12px;
   cursor: grab;
   user-select: none;
 }
@@ -5263,7 +5254,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: rgba(0, 0, 0, 0.55);
   color: var(--on-accent);
   font-size: var(--fs-xs);
-  line-height: 1.6;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5314,16 +5304,16 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   font: inherit;
 }
 
-.sc-edit { font-size: var(--fs-xs); padding: 3px 7px; }
+.sc-edit { font-size: var(--fs-xs); padding: 4px 8px; }
 .sc-edit:hover { background: var(--accent-soft); color: var(--accent); }
 
 /* 展开 / 收起：和「编辑」一样是**纯文字**（设计稿的 .cc-tog 没有底色）。
    原来给了一层主色浅底，是为了在收起的卡上一眼看出能点 —— 但一排卡片头上
    挂三块浅色小方块，正是「不够扁平」的来源；改成 hover 变主色，够用了。 */
-.sc-toggle { font-size: var(--fs-xs); padding: 3px 4px; }
+.sc-toggle { font-size: var(--fs-xs); padding: 4px 4px; }
 .sc-toggle:hover { color: var(--accent); }
 
-.sc-close { width: 20px; height: 20px; font-size: var(--fs-xs); line-height: 1; }
+.sc-close { width: 20px; height: 20px; font-size: var(--fs-xs);}
 .sc-close:hover { background: var(--danger-bg); color: var(--danger); }
 
 .sc-body {
@@ -5349,7 +5339,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--accent);
   letter-spacing: 0.12em;
   padding-bottom: 0;
-  margin: 11px 0 9px;
+  margin: 12px 0 10px;
 }
 
 .sc-body > .sc-group-title:first-child { margin-top: 2px; }
@@ -5360,7 +5350,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px 8px;
+  gap: 4px 8px;
   padding: 0;
   margin-bottom: 6px;
 }
@@ -5410,7 +5400,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   min-width: 0;
   width: auto;
   min-height: 26px;
-  padding: 3px 7px;
+  padding: 4px 8px;
   font-size: var(--fs-sm);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -5435,7 +5425,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   cursor: pointer;
   border-radius: var(--radius-sm);
   font-size: var(--fs-xs);
-  line-height: 1;
 }
 
 .sc-del:hover { background: var(--danger-bg); color: var(--danger); }
@@ -5444,7 +5433,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .sc-add-btn {
   flex: 0 0 auto;
-  padding: 5px 11px;
+  padding: 6px 12px;
   font-size: var(--fs-xs);
   /* 不描边：主色浅底已经够说明「这颗能点」（卡片里其它按钮全是纯文字） */
   border: 0;
@@ -5463,8 +5452,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text-faint);
   cursor: pointer;
   font-size: var(--fs-xs);
-  line-height: 1;
-  padding: 3px 4px;
+  padding: 4px 4px;
   border-radius: var(--radius-sm);
   opacity: 0;
   transition: opacity 0.15s;
@@ -5510,7 +5498,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   align-items: center;
   gap: 8px;
   height: 34px;
-  padding: 0 13px;
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg-card);
@@ -5680,7 +5668,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   width: 16px;
   height: 16px;
   /* 让 16px 的拇指在 6px 的轨道上居中：(6 - 16) / 2 */
-  margin-top: -5px;
+  margin-top: -4px;
   border-radius: 50%;
   background: var(--accent);
   /* 外面套一圈面板底色，拇指看起来就是「浮」在轨道上的 */
@@ -5776,7 +5764,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .requests-empty {
   margin: 8px 0 0;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   color: var(--text-faint);
 }
 
@@ -5784,9 +5771,9 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .requests-item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   width: 100%;
-  padding: 9px 11px;
+  padding: 10px 12px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
@@ -5832,7 +5819,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   white-space: nowrap;
 }
 
-.requests-item-preview { font-size: var(--fs-sm); line-height: 1.6; color: var(--text); }
+.requests-item-preview { font-size: var(--fs-sm); color: var(--text);}
 .requests-item-stats { font-size: var(--fs-xs); color: var(--text-faint); }
 
 .requests-detail {
@@ -5871,7 +5858,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text-dim);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: var(--fs-xs);
-  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -5881,15 +5867,13 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 顶栏「记忆」按钮上的段数角标 */
 .memory-badge {
   display: inline-block;
-  margin-left: 5px;
+  margin-left: 6px;
   min-width: 16px;
   padding: 0 4px;
   border-radius: 999px;
   background: var(--accent);
   color: var(--on-accent);
   font-size: var(--fs-xs);
-  /* 相对行高（原来写死 15px），理由同顶栏那颗角标。 */
-  line-height: 1.35;
   text-align: center;
   vertical-align: 1px;
 }
@@ -5900,7 +5884,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   display: flex;
   flex-wrap: wrap;
   gap: 6px 14px;
-  padding: 9px 11px;
+  padding: 10px 12px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   background: var(--bg-side);
@@ -5918,7 +5902,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: var(--radius);
   text-align: center;
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
 }
 
@@ -5927,7 +5910,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .memory-card .memory-card-meta { font-size: var(--fs-xs); color: var(--text-faint); }
 
 .modal-body .memory-card {
-  padding: 11px 13px;
+  padding: 12px 14px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   background: var(--bg-card);
@@ -5946,11 +5929,10 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 /* 摘要正文：保留换行和空行 */
 .memory-card-text {
-  padding: 9px 11px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--bg-side);
   font-size: var(--fs-sm);
-  line-height: 1.6;
   color: var(--text-dim);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -5963,7 +5945,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   min-height: 170px;
   box-sizing: border-box;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   resize: vertical;
 }
 
@@ -5979,7 +5960,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 角色编辑器里那一块：清单 + 绑定按钮 + 开关 */
 .char-worldbook-box {
   margin: 4px 0 14px;
-  padding: 11px 13px;
+  padding: 12px 14px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   background: var(--bg-side);
@@ -5990,19 +5971,19 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 9px;
+  margin-bottom: 10px;
 }
 
 .cwb-head .field-label { padding-top: 0; }
 
-.cwb-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.cwb-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .cwb-empty { margin: 0; }
 
 .cwb-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 9px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
@@ -6028,8 +6009,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text-faint);
   cursor: pointer;
   font-size: var(--fs-xs);
-  line-height: 1;
-  padding: 3px 5px;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
 }
 
@@ -6078,7 +6058,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   min-height: 0;
 }
 
@@ -6088,7 +6068,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   gap: 10px;
   width: 100%;
   text-align: left;
-  padding: 9px 11px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
@@ -6158,7 +6138,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   justify-content: center;
   gap: 10px;
   max-width: 92vw;
-  padding: 7px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg-elev);
@@ -6228,7 +6208,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   max-width: 780px;
   margin: 0 auto;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   color: var(--text-dim);
 }
 
@@ -6245,7 +6224,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-left: 3px solid var(--accent);
   color: var(--text);
   font-size: var(--fs-sm);
-  line-height: 1.6;
 }
 .help-doc .help-lead b { color: var(--accent); }
 
@@ -6297,7 +6275,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   justify-content: center;
   min-width: 30px;
   height: 22px;
-  padding: 0 7px;
+  padding: 0 8px;
   border-radius: var(--radius-sm);
   background: var(--accent-soft-strong);
   color: var(--accent);
@@ -6325,7 +6303,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border: 1px solid var(--border);
   background: var(--bg-card);
 }
-.help-doc .help-box > p { margin: 0; font-size: var(--fs-sm); line-height: 1.6; }
+.help-doc .help-box > p { margin: 0; font-size: var(--fs-sm);}
 .help-doc .help-box-head {
   margin: 0 0 8px;
   font-size: var(--fs-xs);
@@ -6418,7 +6396,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .help-doc .help-tag {
   display: inline-block;
   margin: 0 6px;
-  padding: 1px 7px;
+  padding: 2px 8px;
   border-radius: var(--radius-sm);
   background: var(--accent-soft-strong);
   color: var(--accent);
@@ -6493,14 +6471,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   font-weight: 600;
   color: var(--text);
 }
-.help-doc .help-trouble-item p { margin: 0 0 6px; font-size: var(--fs-sm); line-height: 1.6; }
+.help-doc .help-trouble-item p { margin: 0 0 6px; font-size: var(--fs-sm);}
 .help-doc .help-trouble-item p:last-child { margin-bottom: 0; }
 .help-doc .help-why,
 .help-doc .help-fix {
   display: inline-block;
   min-width: 44px;
   margin-right: 6px;
-  padding: 1px 6px;
+  padding: 2px 6px;
   border-radius: var(--radius-sm);
   font-size: var(--fs-xs);
   font-weight: 700;
@@ -6515,7 +6493,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   padding-top: 16px;
   border-top: 1px solid var(--border);
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
 }
 .help-doc .help-credit p { margin: 0 0 6px; }
@@ -6553,7 +6530,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   align-items: center;
   gap: 8px;
   width: auto;
-  padding: 7px 13px;
+  padding: 8px 14px;
   margin-bottom: 0;
   border-radius: 999px;
   font-size: var(--fs-sm);
@@ -6625,7 +6602,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: var(--radius-sm);
   background: var(--bg-input);
   font-size: var(--fs-sm);
-  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--text-dim);
@@ -6652,15 +6628,14 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   border-radius: var(--radius-sm);
   background: var(--pre-bg);
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-dim);
 }
 
 .pet-memory-item {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 7px 10px;
+  gap: 4px;
+  padding: 8px 10px;
   border: 1px solid var(--border-soft);
   border-left: 3px solid var(--border-hover);
   border-radius: var(--radius-sm);
@@ -6696,7 +6671,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: transparent;
   color: var(--text-faint);
   font-size: var(--fs-sm);
-  line-height: 1;
   cursor: pointer;
   transition: background .12s, color .12s;
 }
@@ -6713,7 +6687,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .pet-memory-text {
   font-size: var(--fs-sm);
-  line-height: 1.6;
   color: var(--text);
   word-break: break-word;
 }
@@ -6784,7 +6757,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   color: var(--text-faint);
   font-family: inherit;
   font-size: var(--fs-xs);
-  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6828,7 +6800,6 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: none;
   color: var(--text-faint);
   font-size: var(--fs-sm);
-  line-height: 1;
   cursor: pointer;
 }
 
@@ -6858,7 +6829,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 10px;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -6924,7 +6895,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .cast-fields {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .cast-field {
@@ -7036,9 +7007,69 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
    它只匹配会话**标题**、不搜消息正文，做了一半不如不做；
    真要做就做全局搜索（标题 + 正文），那时这里再建新的一套。 */
 
-/* ---- 消息区两侧的宽度抓手（设计稿：16×16 方角小把手，贴在消息流左右）----
-   常态很淡，鼠标进消息区 / 拖拽时才亮起来 —— 它是常驻的可拖元素，
-   但没必要一直在正文两边晃。 */
+/* ---- 对话列两侧的**侧栏收放**把手（2026-10-13）----
+   垂直居中那颗就是它（当天晚些从「靠上」挪到中间的 —— 星宝：「边缘放收栏要在中间」）。
+   调内缩的 .pad-handle 在**输入框两侧**（挂在 .composer 里），两者一高一低、不会撞。
+   区分手段：位置（中 / 底）、箭头（‹ › vs 宽度图标）、光标（pointer vs col-resize）。
+   ⚠️ 别再往这两处挪来挪去 —— 换位置时 CSS 和 index.html 的注释要一起改。 */
+.rail-handle {
+  position: absolute;
+  z-index: 20;
+  width: 16px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /* 里头的箭头是**文字字符**（‹ ›），不是 SVG —— 尺寸走字号 token，跟界面缩放一起变。
+     ⚠️ 别改成 SVG 图标：`iconSvg` 那套画在 24×24 上、是给 14px 以上用的细线，
+     缩进这个方块只剩三四个像素（2026-10-13 试过「分栏框」和 polyline 箭头两种，
+     出图放大 4 倍都糊成一个点）—— 细节见 index.html 里把手那段注释。 */
+  font-size: var(--fs-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  /* ⚠️ 比 .pad-handle 亮一档（--text-dim，不是 --text-faint）：
+     它是个**开关**，得让人一眼看见「这儿能点」；pad-handle 是拖动用的，
+     安静一点没关系 —— 2026-10-13 出图时发现 faint 在深底上糊成一个点。 */
+  color: var(--text-dim);
+  cursor: pointer;
+  /* 跟 .pad-handle 同档透明度：常驻但别抢正文
+     （0.45 在深底上几乎看不见，出图时差点被当成「没渲染出来」） */
+  opacity: 0.8;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.rail-handle:hover {
+  opacity: 1;
+  color: var(--accent);
+  border-color: var(--accent-border-soft);
+}
+
+.rail-handle:focus-visible {
+  outline: none;
+  opacity: 1;
+  box-shadow: var(--focus-ring);
+}
+
+.rail-handle[data-side='left'] {
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.rail-handle[data-side='right'] {
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* ---- 输入框两侧的宽度抓手（设计稿：16×16 方角小把手）----
+   **拖它 = 改对话区左右内缩**，消息区和输入框**一起缩**。
+   常态很淡，鼠标靠上去 / 拖拽时才亮起来 —— 它是常驻的可拖元素，但没必要一直晃。
+   ⚠️ 2026-10-13 从「消息区两侧」挪到「输入框两侧」（那两根竖线让给了侧栏收放把手）。
+      位置一变，拖动时那条虚线（.pad-guide）的竖直范围也得跟着改，见 views/chatPad.js。 */
 .pad-handle {
   position: absolute;
   z-index: 20;
@@ -7080,7 +7111,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .pad-badge {
   position: absolute;
   z-index: 21;
-  padding: 3px 7px;
+  padding: 4px 8px;
   border: 1px solid var(--accent-border-soft);
   border-radius: var(--radius-sm);
   background: var(--bg-card);
@@ -7091,8 +7122,9 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   pointer-events: none;
 }
 
-/* 抓手贴在消息流左右两侧的中间高度。挂在 .chat-col 上（它是 position:relative），
-   ⚠️ 不能挂进 .messages —— 那个容器 overflow-y:auto，绝对定位的把手会跟着正文一起滚走。 */
+/* 抓手挂在**输入区**里（.composer 是 position:relative），垂直居中于输入区 ——
+   输入框会 auto-grow，挂在 .chat-col 上写死 top/bottom 对不准。
+   ⚠️ 别挂进 .messages：那个容器 overflow-y:auto，绝对定位的把手会跟着正文一起滚走。 */
 .pad-handle[data-side='left'] {
   left: 4px;
   top: 50%;
@@ -7206,37 +7238,15 @@ body.pad-dragging {
    260px 宽的侧栏、渐变品牌字、圆头像圆角 12 的会话项、860px 居中的胶囊输入框。
    这一块只做「把语言换过来」，不动任何结构（除了会话项那一行）。
 
-   ⚠️⚠️ **开始改这一块之前先读这段：本段是「覆盖层」。**
-   下面这些选择器在文件**前面已经有基础定义**了 —— 同一个选择器两处定义，
-   改样式时**两处都得看**，否则会出现「改了没反应」（不报错、测试也不红）：
+   ✅ 2026-10-13：这一段**曾经是「覆盖层」** —— 同一个选择器在文件前面还有一份基础定义，
+      改样式时两处都得看，否则会出现「改了没反应」（不报错、测试也不红）。
+      那一批重复已经**全部合并回前面各自的段落**，现在全文件只剩 `.brand-dot` /
+      `.suggest-strip` 这两处是「基础定义已删、只此一处」的历史遗留（各自就地留了说明）。
+      `node tools/audit-css-dup.js` 现在报 **0 个重复**。
 
-       node tools/audit-css-dup.js        ← 列出当前所有重复 + 后一处重定义了哪些属性
-
-   （2026-10-13 凌晨那次的结果：全文件 14 个重复，其中只有 `.brand-dot` / `.suggest-strip`
-     是「前一处被**完全**覆盖」—— 那两个的基础定义已就地删掉，并留了说明。
-     其余 12 个是「补充 + 覆盖」混着（前一处还有独有属性），**硬合并会有视觉风险**
-     —— 那种要逐条比对 + 出图核对，留着单独一批做。所以这里保留两处 + 这条索引。）
-
-   本段覆盖到的：.sidebar · .brand · .brand-dot · .brand-name · .convo-item ·
-                .convo-title · .composer · .composer-box · .suggest-strip ·
-                .suggest-close · .composer-hint
-   不在本段、但也是两处定义的有：.settings-content > .panel-section · .char-portrait · select
+   合并的判据**不是**肉眼核对，是「渲染结果逐属性完全相同」：
+       node tools/css-diff.js <改之前.css> <改之后.css>     ← 逐个元素比 computed style
    ========================================================================== */
-
-/* ---- 侧栏 ---- */
-.sidebar {
-  /* position: relative 是给那颗收起按钮当定位基准的 */
-  position: relative;
-  /* 232 → 280（星宝 2026-10-12 晚）→ **300**（同一天深夜里他又说「有些地方有点小」）。
-     底部入口是**保持 3 列**、还把图标和字都放大一档的那一头，所以宽度得跟着让：
-     280 每列 ~82px，只够「pad 8 + 图标 16 + gap 6 + 13px 的『角色库』(39) + pad 8 = 77」；
-     这一版图标 18、字 14px（「角色库」≈42）→ 需要 ~85px，列宽 89 才不折行。
-     ⚠️ 别再退回 232 —— 那边每列只有 66px，光 11px 的「角色库」就卡在边界上。右栏同步 300。 */
-  width: 300px;
-  flex: 0 0 300px;
-  padding: 12px 10px;
-  gap: 10px;
-}
 
 /* 收起 / 展开按钮：常态在品牌行右端，收起后挪到窄条正中间 */
 .sidebar-toggle {
@@ -7255,7 +7265,6 @@ body.pad-dragging {
   background: none;
   color: var(--text-faint);
   font-size: var(--fs-sm);
-  line-height: 1;
   cursor: pointer;
 }
 
@@ -7388,16 +7397,6 @@ body.pad-dragging {
   border-radius: var(--radius);
 }
 
-.brand {
-  /* 2026-10-12 晚（星宝：「如我所书的标题和 logo 有点小」）：标记 16→20、名字 13→15。
-     同一天深夜里他又说了一次「还是小」，于是**再上一档**：标记 20→24、名字 15→17。
-     品牌行是这一栏的眼睛，比正文大一档才立得住；字数不宽（4 个字），17px 放得下。 */
-  gap: 11px;
-  /* 右边留 30px：那颗「收起侧栏」按钮是绝对定位在右上角的（宽 20 + right 8），
-     不给它让位就会正好压在版本号「v1.0」上面。 */
-  padding: 4px 30px 4px 6px;
-}
-
 /* 品牌标记：稿子是一个 16×16 的**方角琥珀块**。
    原来那个会呼吸的渐变圆点是「聊天软件」时期的符号，跟这套方角语言不搭。 */
 .brand-dot {
@@ -7409,44 +7408,9 @@ body.pad-dragging {
   animation: none;
 }
 
-.brand-name {
-  margin-right: auto;
-  font-size: var(--fs-lg);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  /* ⚠️ 原来这行字是渐变填充（background-clip: text + text-fill-color: transparent）。
-     光写 color 没用 —— -webkit-text-fill-color 的优先级比 color 高，
-     必须把它显式改回实色，否则字还是渐变的（甚至可能整行看不见）。 */
-  background: none;
-  -webkit-background-clip: border-box;
-  -webkit-text-fill-color: var(--text);
-  color: var(--text);
-}
-
-/* 会话项：稿子是「头像 + 名字 + 时间」一行、高 34、方角 4 */
 /* 当前会话：左边一条 2×18 的琥珀竖线（稿子里的选中标记）。
    上一版把它去掉了 —— 那时候条目是白底卡片，靠底色 + 阴影就够；
    现在条目是深色底，光靠一点点底色差根本分不出哪条是当前。 */
-.convo-item {
-  position: relative;
-  gap: 10px;
-  /* 34 → 60（头像 48 时）→ **48**（2026-10-13 头像回到 36）。
-     条目高 = 头像 36 + 上下各 6。
-     ⚠️ min-height 而不是 height —— 名字/时间换行或将来加第二行都不会被裁。 */
-  min-height: 48px;
-  padding: 6px;
-  border-radius: var(--radius);
-  font-size: var(--fs-sm);
-}
-
-.convo-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-sm);
-}
 
 .convo-item.active::before {
   content: '';
@@ -7468,25 +7432,6 @@ body.pad-dragging {
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   user-select: none;
-}
-
-/* ---- 输入区 ----
-   稿子这块是「方角 + 1px 描边 + 深底」的一整块，不是浮在页底上的白胶囊：
-   胶囊 + 阴影 + 860px 居中那套是上一版的语言。 */
-.composer {
-  padding: 10px 14px 12px;
-}
-
-.composer-box {
-  max-width: none;
-  margin: 0;
-  gap: 8px;
-  padding: 10px;
-  min-height: 64px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-input);
-  box-shadow: none;
 }
 
 .composer-box:focus-within {
@@ -7513,7 +7458,7 @@ body.pad-dragging {
 /* 建议条：一行放下「标题 → 胶囊 → 收起」 */
 .suggest-strip {
   max-width: none;
-  margin: 0 0 9px;
+  margin: 0 0 10px;
   padding: 0;
   border: none;
   border-radius: 0;
@@ -7529,27 +7474,6 @@ body.pad-dragging {
   color: var(--text-faint);
 }
 
-.suggest-list {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.suggest-close {
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-
-/* 底部那行提示：跟输入框同宽，不居中 */
-.composer-hint {
-  max-width: none;
-  margin: 0;
-  padding: 0 2px;
-}
-
 /* ---- 生成参数（右侧那一栏的**第二个页签**）----
    ⚠️ 2026-10-12 晚：它原来是独立的浮层 #gen-drawer（320px、盖住右栏、还把对话列挤窄 264）。
    现在它是右栏里的一个页签，所以宽度、底色、边框全都不归它管 —— 只排内容。
@@ -7560,7 +7484,7 @@ body.pad-dragging {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 10px;
   padding: 10px 12px;
 }
 
@@ -7634,7 +7558,6 @@ body.pad-dragging {
 .gen-hint {
   margin: 0 0 8px;
   font-size: var(--fs-xs);
-  line-height: 1.6;
   color: var(--text-faint);
 }
 

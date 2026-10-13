@@ -39,24 +39,39 @@ function normalize(sel) {
     .join(', ');
 }
 
-/** 收集顶层规则（行首不缩进、行尾 {），@media 内部那些缩进的规则天然被跳过 */
-const rules = [];
-for (let i = 0; i < lines.length; i += 1) {
-  const line = lines[i];
-  if (!/^\S/.test(line) || !line.trim().endsWith('{')) continue;
-  const rawSel = line.replace(/\{\s*$/, '').trim();
-  if (!rawSel || rawSel.startsWith('@')) continue; // @media / @keyframes / @font-face
-
-  const decls = [];
-  let j = i + 1;
-  for (; j < lines.length; j += 1) {
-    const l = lines[j];
-    if (/^\}/.test(l)) break;
-    const t = l.trim();
-    if (t) decls.push(t.replace(/;$/, ''));
+/** 收集顶层规则。
+ *
+ *  ⚠️ 2026-10-13 修：**不能只认「选择器独占一行、行尾就是 `{`」的写法**。
+ *  本项目里大量小规则是**单行**写的（`.suggest-title { font-size: …; }`、
+ *  `.composer-box:focus-within { box-shadow: …; }`），旧版把这些**全漏了** ——
+ *  于是 `.suggest-title` / `.suggest-list` / `.composer-box:focus-within` 这几对
+ *  「基础段 + 覆盖层」的重复一直没被列出来，报告里那个「12 个」是**偏小**的。
+ *  现在改成先扫一遍括号深度，再逐个匹配叶子规则块。
+ */
+const depthAt = new Int32Array(src.length + 1);
+{
+  let d = 0;
+  for (let i = 0; i < src.length; i += 1) {
+    depthAt[i] = d;
+    if (src[i] === '{') d += 1;
+    else if (src[i] === '}') d -= 1;
   }
-  rules.push({ rawSel, key: normalize(rawSel), line: i + 1, decls });
-  i = j;
+  depthAt[src.length] = d;
+}
+
+const rules = [];
+const RULE_RE = /([^{}]+)\{([^{}]*)\}/g;
+let m;
+while ((m = RULE_RE.exec(src))) {
+  const braceAt = m.index + m[1].length;      // 这个规则的 `{` 在原文的位置
+  if (depthAt[braceAt] !== 0) continue;        // @media / @keyframes 里面的不算「顶层」
+  const rawSel = m[1].trim().replace(/\s+/g, ' ');
+  if (!rawSel || rawSel.startsWith('@')) continue;
+
+  const lead = m[1].search(/\S/);
+  const selAt = m.index + (lead === -1 ? 0 : lead);
+  const decls = m[2].split(';').map((t) => t.trim()).filter(Boolean);
+  rules.push({ rawSel, key: normalize(rawSel), line: src.slice(0, selAt).split('\n').length, decls });
 }
 
 const byKey = new Map();

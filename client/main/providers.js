@@ -438,10 +438,14 @@ function normalizeSettings(saved) {
   // 消息区的左右内边距。夹取而不是「不合法就退回默认」：
   // 这两个值只影响显示，但被夹到边界比整个跳回默认更不容易让人困惑 ——
   // 拖到头就是头，不应该忽然弹回 20。
+  // 下限 12（2026-10-13，星宝：「拖动的边距最小值设为 12px」）：太小正文会贴住窗口边；
   // 上限 360：再大消息区就窄得没法读了（1440 宽的窗口，两侧各 360 只剩 470）。
+  // ⚠️ 渲染层 views/appearance.js 里的 CHAT_PAD_MIN / CHAT_PAD_MAX 是同一套值 ——
+  //    这里是主进程，import 不到它，**改一处必须手改另一处**。
+  //    两边各夹一次是故意的：手改 config.json 能绕过「保存」那条路。
   for (const key of ['chatPadLeft', 'chatPadRight']) {
     const n = Number(raw[key]);
-    s[key] = Number.isFinite(n) ? Math.min(360, Math.max(0, Math.round(n))) : DEFAULT_SETTINGS[key];
+    s[key] = Number.isFinite(n) ? Math.min(360, Math.max(12, Math.round(n))) : DEFAULT_SETTINGS[key];
   }
 
   // 角色「属性」的快捷候选词（commonAttributes）：功能本身 2026-10-09 删了 ——

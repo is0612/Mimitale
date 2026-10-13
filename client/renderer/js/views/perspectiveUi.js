@@ -32,6 +32,7 @@ import {
   convoPaceMode,
   isGmMode
 } from '../data/narration.js';
+import { isPlainChatConvo } from '../data/cast.js';
 import { renderHeader } from './header.js';
 
 /**
@@ -148,12 +149,31 @@ function openPerspectiveModal() {
     return;
   }
 
+  // 纯聊天（没绑角色卡、也不是世界模式）= 就是跟模型聊天，**没有「演」这回事**。
+  // 所以叙述模式和推进节奏这两组在这里直接不出现 —— 提示词里也不注入它们
+  // （见 data/messages.js 文件头 2026-10-13 那一段）。
+  // ⚠️ 藏起来不是“眼不见为净”：留着才是 bug —— 能选、能存、顶栏还显示标签，
+  //    对模型却一个字都不影响（2026-10-08 修过一次「叙述模式好像有 bug」，就是它）。
+  const plain = isPlainChatConvo(convo);
+
   el.pNarration.value = convoNarrationMode(convo);
   el.pPace.value = convoPaceMode(convo);
   el.pGm.checked = isGmMode(convo);
+  setFieldVisible(el.pNarration, !plain);
+  setFieldVisible(el.pPace, !plain);
   fillPresetList(convo);
 
   el.perspectiveModal.classList.remove('hidden');
+}
+
+/**
+ * 把某个控件所在的**整组**（`label.field`）显示 / 隐藏。
+ *
+ * 找容器用 closest，不在 index.html 上加新 id —— 分组只是视觉上的，DOM 结构不用动。
+ */
+function setFieldVisible(input, visible) {
+  const field = input && typeof input.closest === 'function' ? input.closest('.field') : null;
+  if (field) field.classList.toggle('hidden', !visible);
 }
 
 /** 关视角弹窗。导出是为了让入口层的 Esc 链统一关它（见 main.js） */

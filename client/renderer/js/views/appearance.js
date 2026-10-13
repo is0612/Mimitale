@@ -59,6 +59,11 @@ const UI_FONT_DEFAULT = 'default';
 //    已经搬到 views/chatPad.js，两边必须同一个上限 —— 别再各写一份。
 export const CHAT_PAD_DEFAULT = 20;
 export const CHAT_PAD_MAX = 360;
+// 下限 12（2026-10-13，星宝：「拖动的边距最小值设为 12px」）。
+// 原来是 0 —— 拖到头正文会**紧贴窗口边缘**，看着像没排过版。
+// ⚠️ 主进程 main/providers.js 存盘时也夹同一个下限；它在主进程里，import 不到这里，
+//    那份数值得**手动对齐**（两边都夹一次是故意的：手改 config.json 能绕过保存那条路）。
+export const CHAT_PAD_MIN = 12;
 // 读不到主题色时给色盘一个兜底值（正常情况走 currentAccentHex()）
 const BOLD_COLOR_FALLBACK = '#409eff';
 
@@ -101,7 +106,9 @@ export function applyChatAppearance() {
   // 夹取放在这里再做一遍（主进程已经夹过）：手改过的 config.json 可能绕过保存那条路。
   for (const [key, cssVar] of [['chatPadLeft', '--chat-pad-left'], ['chatPadRight', '--chat-pad-right']]) {
     const n = Number(s[key]);
-    const v = Number.isFinite(n) ? Math.min(CHAT_PAD_MAX, Math.max(0, Math.round(n))) : CHAT_PAD_DEFAULT;
+    const v = Number.isFinite(n)
+      ? Math.min(CHAT_PAD_MAX, Math.max(CHAT_PAD_MIN, Math.round(n)))
+      : CHAT_PAD_DEFAULT;
     root.style.setProperty(cssVar, `${v}px`);
   }
 

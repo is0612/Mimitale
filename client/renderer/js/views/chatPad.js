@@ -18,8 +18,11 @@
 //  ⚠️ 左右**各写各的键**。用户明确要求过「不要一调节就左右两边一起收缩」——
 //     动左边时右边那个值连读都不会被读到，这是它和「一个对称宽度滑块」的全部区别。
 //
-//  ⚠️ 抓手挂在 .chat-col 上（它是 position:relative），**不能**挂进 .messages ——
+//  ⚠️ 抓手挂在 **.composer** 上（它是 position:relative），**不能**挂进 .messages ——
 //     那个容器 overflow-y:auto，绝对定位的把手会跟着正文一起滚走。
+//     ⚠️ 也**不能**改回挂在 .chat-col 上：输入框会 auto-grow，写死 top/bottom 对不准。
+//     （2026-10-13 从「消息区两侧」挪到「输入框两侧」—— 那两根竖线让给了侧栏收放把手，
+//       见 index.html 里 .rail-handle 那两段注释。）
 // ============================================================================
 
 import { el } from '../core/dom.js';
@@ -29,7 +32,8 @@ import {
   applyChatAppearance,
   persistAppearance,
   CHAT_PAD_DEFAULT,
-  CHAT_PAD_MAX
+  CHAT_PAD_MAX,
+  CHAT_PAD_MIN
 } from './appearance.js';
 
 const KEYS = { left: 'chatPadLeft', right: 'chatPadRight' };
@@ -38,11 +42,12 @@ const KEYS = { left: 'chatPadLeft', right: 'chatPadRight' };
 function padValue(side) {
   const n = Number((state.settings || {})[KEYS[side]]);
   if (!Number.isFinite(n)) return CHAT_PAD_DEFAULT;
-  return Math.min(CHAT_PAD_MAX, Math.max(0, Math.round(n)));
+  return Math.min(CHAT_PAD_MAX, Math.max(CHAT_PAD_MIN, Math.round(n)));
 }
 
+/** 拖动中的实时值也夹同一套边界 —— 下限 12，往内拖到底也不会贴边（见 CHAT_PAD_MIN） */
 function clamp(px) {
-  return Math.min(CHAT_PAD_MAX, Math.max(0, Math.round(px)));
+  return Math.min(CHAT_PAD_MAX, Math.max(CHAT_PAD_MIN, Math.round(px)));
 }
 
 /** 只改内存里的值 + 立刻重刷 CSS 变量：拖动过程中的预览，不落盘 */
@@ -96,8 +101,14 @@ function showGuide(side, px) {
   const guide = guideFor(side);
   if (!msgs || !guide) return;
 
-  guide.style.top = `${msgs.offsetTop}px`;
-  guide.style.height = `${msgs.offsetHeight}px`;
+  // 竖直范围：**从消息区顶一直到对话列底**（消息区 + 输入区）。
+  // ⚠️ 2026-10-13 起内缩对两者都生效（.messages 和 .composer 吃同一对变量）——
+  //    只画消息区那段会让人以为「输入框不会动」，拖完发现它也跟着缩，就突兀了。
+  const col = msgs.parentElement; // .chat-col
+  const top = msgs.offsetTop;
+  const height = col ? col.clientHeight - top : msgs.offsetHeight;
+  guide.style.top = `${top}px`;
+  guide.style.height = `${height}px`;
   if (side === 'left') {
     guide.style.left = `${px}px`;
     guide.style.right = 'auto';

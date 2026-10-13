@@ -202,20 +202,40 @@ function bindEvents() {
     }
   }
 
-  // 侧栏收起 / 展开。收成 44px 的窄条，点同一颗（这时是 ›）回来 ——
+  // 侧栏收起 / 展开。收成窄条，点同一颗（这时是 ›）回来 ——
   // 跟右侧在场角色那栏同一个套路，收起来和展开在同一个位置。
-  if (el.btnSidebarToggle) {
-    el.btnSidebarToggle.addEventListener('click', () => {
-      const bar = el.btnSidebarToggle.parentElement;
-      if (!bar) return;
-      const collapsed = bar.classList.toggle('collapsed');
-      const btn = el.btnSidebarToggle;
+  //
+  // ⚠️ 2026-10-13：对话列**左边缘那颗靠上的把手**（#rail-handle-left）是同一个动作的
+  //    第二个入口。两个入口必须走同一个函数 —— 各写一份的下场是「用把手收起来了、
+  //    栏内那颗还写着 ‹」，两处显示对不上。
+  const applySidebarCollapsed = () => {
+    const collapsed = !!(el.sidebar && el.sidebar.classList.contains('collapsed'));
+    const btn = el.btnSidebarToggle;
+    if (btn) {
       btn.textContent = collapsed ? '›' : '‹';
       btn.title = collapsed ? '展开侧栏' : '收起侧栏';
       btn.setAttribute('aria-label', collapsed ? '展开侧栏' : '收起侧栏');
       btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    });
-  }
+    }
+    // 箭头跟着状态翻（跟栏内那颗「‹」用同一个字符 = 同一个动作）。
+    // ⚠️ 是**文字字符**不是 SVG 图标 —— 为什么不用 iconSvg，见 index.html 那段注释。
+    const handle = el.railHandleLeft;
+    if (handle) {
+      handle.textContent = collapsed ? '›' : '‹';
+      handle.title = collapsed ? '展开侧栏' : '收起侧栏';
+      handle.setAttribute('aria-label', handle.title);
+      handle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
+  };
+
+  const toggleSidebar = () => {
+    if (!el.sidebar) return;
+    el.sidebar.classList.toggle('collapsed');
+    applySidebarCollapsed();
+  };
+
+  if (el.btnSidebarToggle) el.btnSidebarToggle.addEventListener('click', toggleSidebar);
+  if (el.railHandleLeft) el.railHandleLeft.addEventListener('click', toggleSidebar);
 
   // 「＋ 新对话」= 直接建一个空白会话并切到聊天屏。
   // 想跟某个角色聊，去角色库点卡片上的「聊天」—— 那条路会自己建会话并绑角色。

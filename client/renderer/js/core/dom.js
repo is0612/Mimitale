@@ -13,6 +13,9 @@ export const el = {
   // 会话列表头上的分组标签（「最近 · 5」，条数由 renderConvoList 填）
   convoCap: $('convo-cap'),
   // 左栏收起 / 展开（收成 52px 图标轨，点同一颗回来）
+  // 左栏本身（收起态是它身上的 .collapsed）+ 栏内那颗「‹」。
+  // 边缘把手（#rail-handle-left）也改这两个东西，见 main.js 里 toggleSidebar。
+  sidebar: $('sidebar'),
   btnSidebarToggle: $('btn-sidebar-toggle'),
   // 图标轨最下面那颗：当前会话的头像（只在收起态显示，由 renderConvoList 填）
   railAvatar: $('rail-avatar'),
@@ -115,6 +118,10 @@ export const el = {
   // 对话区宽度：⛔ 顶栏那颗按钮 + 它的弹层（#pad-pop / 两根滑块）2026-10-12 晚**去掉了**
   // （星宝：「聊天框里已经可以调宽度了」）。现在只剩消息区两侧的抓手。
   // ⚠️ 左右是**两个独立的元素**，不是同一个控件的两处引用：用户要的就是「改一边另一边不动」。
+  // 侧栏收放把手（对话列左右边缘、靠上那颗）
+  railHandleLeft: $('rail-handle-left'),
+  railHandleRight: $('rail-handle-right'),
+  // 对话区左右内缩的拖动抓手（垂直居中那颗）
   padHandleLeft: $('pad-handle-left'),
   padHandleRight: $('pad-handle-right'),
   // 拖动时那条虚线（落在「松开后会到的地方」，由 chatPad.js 定位）

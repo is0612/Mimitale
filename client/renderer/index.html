@@ -9,7 +9,7 @@
 <body>
   <div class="app">
     <!-- ================= 左侧边栏 ================= -->
-    <aside class="sidebar">
+    <aside id="sidebar" class="sidebar">
       <!-- 品牌区只留标记 + 名字。配色方案和夜间模式原来在这挂了两颗图标，
            现在挪进「外观」弹窗（顶栏那颗按钮）—— 那里才是「改外观」的地方，
            而且弹窗里能用文字写清楚每套配色叫什么，图标只能靠猜。 -->
@@ -167,23 +167,42 @@
           <span id="hint-text">Enter 发送 · Shift + Enter 换行</span>
           <span id="usage-text"></span>
         </div>
+
+        <!-- 对话区宽度抓手：贴在**输入框两侧**，拖动改左右内缩
+             （2026-10-13 从消息区两侧挪下来的 —— 那两根竖线现在归侧栏收放）。
+             挂在 .composer 里而不是 .chat-col 上，是为了让它自动跟着输入区的高度走：
+             输入框会随内容变高（auto-grow），写死在 .chat-col 上的 top/bottom 对不准。
+             ⚠️ 它是调内缩的**唯一**入口 —— 顶栏那颗「对话宽度」按钮和它的弹层
+                2026-10-12 就删掉了（理由：「聊天框里已经能调宽度了」）。
+             拖它改的是「这一列左右留多少白」：**消息区和输入框一起缩**
+             （两者都吃 --chat-pad-left/right），所以输入框会跟着一起变窄。 -->
+        <button id="pad-handle-left" class="pad-handle" data-side="left" type="button"
+                title="拖动调节左侧内缩" aria-label="拖动调节对话区左侧内缩"></button>
+        <button id="pad-handle-right" class="pad-handle" data-side="right" type="button"
+                title="拖动调节右侧内缩" aria-label="拖动调节对话区右侧内缩"></button>
       </footer>
 
       <!-- 浮动的状态卡容器：铺满整个对话列但本身不挡鼠标（pointer-events:none），
            只有卡片实体可交互。卡片是绝对定位的，位置由 stateCard.js 算。 -->
       <div id="state-cards" class="state-cards"></div>
 
-      <!-- 对话区宽度抓手：贴在消息流左右两侧，拖动改内缩。
-           和顶栏那颗「对话宽度」按钮是同一份设置的两个入口 ——
-           抓手是「直接拖」，弹层是「填一个准确值」，都要有。 -->
-      <button id="pad-handle-left" class="pad-handle" data-side="left" type="button"
-              title="拖动调节左侧内缩" aria-label="拖动调节对话区左侧内缩"></button>
-      <button id="pad-handle-right" class="pad-handle" data-side="right" type="button"
-              title="拖动调节右侧内缩" aria-label="拖动调节对话区右侧内缩"></button>
+      <!-- 侧栏收放把手：**垂直居中**那颗（2026-10-13 晚从「靠上」挪到中间的 ——
+           星宝：「边缘放收栏要在中间」）。调内缩的那颗在**输入框两侧**
+           （见 .composer 里那两个 .pad-handle），一个在中间、一个在底部，不会撞。
+           左把手管左栏（绑在 main.js）、右把手管右栏（绑在 views/castPanel.js）；
+           右栏是条件出现的，它不显示时右把手跟着一起藏。
+           ⚠️ 箭头用**文字字符**（‹ ›）而不是 SVG 图标：`iconSvg` 那套画在 24×24 上、
+              是给 14px 以上用的细线，缩进 16×26 的把手方块里只剩三四个像素 ——
+              2026-10-13 试过「分栏框」和 polyline 箭头两种，出图放大 4 倍都糊成一个点。
+              文字字形在小尺寸下清楚，而且跟栏内那两颗「‹」是同一套语言。 -->
+      <button id="rail-handle-left" class="rail-handle" data-side="left" type="button"
+              title="收起侧栏" aria-label="收起侧栏" aria-expanded="true">‹</button>
+      <button id="rail-handle-right" class="rail-handle" data-side="right" type="button"
+              title="收起这一栏" aria-label="收起这一栏" aria-expanded="true">›</button>
 
       <!-- 拖动宽度时那条虚线：画在「松开后会落到哪」的位置上，拖到哪儿看见哪儿。
-           竖直范围跟着消息区（由 chatPad.js 算 top/height）—— 不跟着的话它会穿过
-           顶栏和输入框，看着像页面裂了一道。 -->
+           竖直范围由 chatPad.js 算 —— 从消息区顶一直到对话列底（消息区 + 输入区都要缩，
+           只画消息区那段会让人以为输入框不动）。 -->
       <div id="pad-guide-left" class="pad-guide hidden" aria-hidden="true"></div>
       <div id="pad-guide-right" class="pad-guide hidden" aria-hidden="true"></div>
 

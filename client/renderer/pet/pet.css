@@ -131,7 +131,6 @@ body {
 .sprite-empty-hint {
   font-size: 11px;
   color: rgba(60, 55, 80, 0.7);
-  line-height: 1.6;
 }
 
 /* ---------------------------------------------------------------------------
@@ -244,8 +243,6 @@ body {
   /* 固定字号 —— 气泡是"要说给人看的话"，不跟宠物一起缩 */
   font-size: var(--bubble-font);
   font-family: var(--bubble-font-family);
-  /* 1.6 → 1.7：圆体字形偏矮胖，行距松一点才不挤 */
-  line-height: 1.7;
   letter-spacing: 0.02em;
   word-break: break-word;
   /* 逐句冒出来时淡入 + 轻微上移（节奏由 pet.js 的 lineTimer 控制） */
@@ -271,7 +268,7 @@ body {
   display: inline-block;
   width: 6px;
   height: 12px;
-  margin-left: 3px;
+  margin-left: 4px;
   vertical-align: -1px;
   background: var(--accent);
   border-radius: 3px;

@@ -1469,8 +1469,11 @@ await scenario('属性：从角色卡种到状态面板', async () => {
       `${r(more)}×${h(more)} border=${c(more, 'borderTopWidth')}`
     );
 
-    // 在场角色条：稿子 2:113 高 34、2:118 头像 20 —— 2026-10-12 深夜头像 20 → 28、条高 → 46
-    check('在场角色条高 46（放大后）', h(byId('panel-box')) === 46, String(h(byId('panel-box'))));
+    // 在场角色条：稿子 2:113 高 34、2:118 头像 20 —— 2026-10-12 深夜头像 20 → 28、条高 → 46。
+    // ⚠️ 2026-10-13 起是 **48**：.panel-box 的内边距原来是 9px（奇数），
+    //    「边距奇数统一归偶」（见 tools/audit-spacing.js）之后成了 10px，
+    //    条高 = 10 + 头像 28 + 10。**这是那次规范化的必然结果，不是回归。**
+    check('在场角色条高 48（放大后）', h(byId('panel-box')) === 48, String(h(byId('panel-box'))));
     const panelAv = $('#panel-cast .panel-avatar');
     check(
       '入口条头像 28×28 方角 r=4（放大后）',
@@ -2678,6 +2681,43 @@ await scenario('默认人设：只进通用对话，不漏进世界模式和角�
       '通用对话：仍然不带扮演 / 主持规则',
       !plainOut.includes('【扮演规则】') && !plainOut.includes('【主持规则】')
     );
+
+    // --- 3b) 纯聊天不带「视角设置」（2026-10-13 加）---
+    //
+    // 真 bug：新会话生下来就带着 narrationMode='standard' + paceMode='step' 两个**默认值**，
+    // 而叙述模式 / 推进节奏当时对普通聊天**也注入** —— 于是「＋ 新对话」拿到的 system 里
+    // 有一整套舞台指示（写环境、写动作、「一轮里至少要有一句角色直接说出口的话」），
+    // 模型没有身份，就自己编一个演起来（用户报的现场：新对话里 AI 自己坐在地毯上修台灯）。
+    // 默认人设里那句「像跟朋友聊天那样自然、不要写成报告」压不住它 —— 那两段排在后面，
+    // 离生成位置更近。
+    //
+    // 这里**故意把档位设成偏离默认**（上帝视角 + 快节奏）再验：存着也不许注入 ——
+    // 光验默认值是不够的，那种写法「手动改过一档就漏」。
+    const plainViewOut = blob(
+      messagesMod.buildApiMessages({ ...plainConvo, narrationMode: 'god', paceMode: 'brisk' }, '', '')
+    );
+    check(
+      '通用对话：不带【叙述要求】（会话上存着「上帝视角」也不注入）',
+      !plainViewOut.includes('【叙述要求】'),
+      plainViewOut.slice(0, 120)
+    );
+    check(
+      '通用对话：不带【推进节奏】（会话上存着「快节奏」也不注入）',
+      !plainViewOut.includes('【推进节奏】'),
+      plainViewOut.slice(0, 120)
+    );
+
+    // --- 3c) 反面：角色卡会话的视角设置一个字都不许少（别修反了）---
+    check(
+      '角色卡：叙述模式照常注入',
+      cardOut.includes('【叙述要求】'),
+      cardOut.slice(0, 120)
+    );
+    check(
+      '角色卡：推进节奏照常注入（由【扮演规则】内部带出来）',
+      cardOut.includes('【推进节奏】'),
+      cardOut.slice(0, 120)
+    );
   } finally {
     stateMod.state.settings = savedSettings;
     stateMod.state.characters = backupChars;
@@ -3121,6 +3161,13 @@ await scenario('对话宽度：左右各管各的（拖动抓手）', async () =
   const padL = () => Math.round(parseFloat(getComputedStyle(msgs).paddingLeft));
   const padR = () => Math.round(parseFloat(getComputedStyle(msgs).paddingRight));
 
+  // ⚠️ 2026-10-13 起内缩对**输入框**也生效（.composer 和 .messages 吃同一对变量 ——
+  //    星宝：「拖动输入框就可以调内缩，正好把输入框也缩小」）。
+  //    两边必须同步：各留各的就会「拖了只有一边动」。
+  const composer = document.querySelector('.composer');
+  const composerPadL = () => Math.round(parseFloat(getComputedStyle(composer).paddingLeft));
+  const composerPadR = () => Math.round(parseFloat(getComputedStyle(composer).paddingRight));
+
   // 拖某个抓手 dx 像素（正数往右）。mid 在「按住且已移动」那一刻跑，用来验拖动中的态。
   const drag = async (handle, dx, mid) => {
     const b = handle.getBoundingClientRect();
@@ -3164,6 +3211,11 @@ await scenario('对话宽度：左右各管各的（拖动抓手）', async () =
   check('拖动时浮出「左内缩 NNpx」小标签', !!(midOk && midOk.badge), JSON.stringify(midOk));
   check('拖左边真的把左内缩改了', padL() === targetL, `期望 ${targetL}，实际 ${padL()}`);
   check('拖左边时右边没跟着动', padR() === startR, `右边从 ${startR} 变成了 ${padR()}`);
+  check(
+    '输入框的左内缩同步跟着变（拖的就是它旁边那颗把手）',
+    composerPadL() === targetL,
+    `期望 ${targetL}，输入框实际 ${composerPadL()}`
+  );
   check('松手后虚线收起来', !shown('#pad-guide-left'));
   check('松手后小标签也收起来', !shown('.pad-badge'));
 
@@ -3186,8 +3238,10 @@ await scenario('对话宽度：左右各管各的（拖动抓手）', async () =
   );
 
   // --- 拖到头会夹在边界上，不该把人卡住 ---
+  // ⚠️ 2026-10-13：下限从 0 提到 **12**（星宝：「拖动的边距最小值设为 12px」）——
+  //    往内拖到底不再贴边。这两条跟着改口径，别照着 0 改回去。
   await drag(handleL, -9999);
-  check('往左拖过头会夹在 0（贴边）', padL() === 0, String(padL()));
+  check('往左拖过头会夹在下限 12（不贴边）', padL() === 12, String(padL()));
   await drag(handleL, 9999);
   check('往右拖过头会夹在上限 360', padL() === 360, String(padL()));
 
@@ -3195,6 +3249,13 @@ await scenario('对话宽度：左右各管各的（拖动抓手）', async () =
   await drag(handleL, -(360 - startL));
   await drag(handleR, targetR - startR);
   check('复原后左右都回到原值', padL() === startL && padR() === startR, `${padL()} / ${padR()}`);
+
+  // 输入框和消息区必须**始终同步**（内缩对两者都生效，各留各的就会「拖了只有一边动」）
+  check(
+    '输入框的内缩和消息区一致',
+    composerPadL() === padL() && composerPadR() === padR(),
+    `输入框 ${composerPadL()}/${composerPadR()} vs 消息区 ${padL()}/${padR()}`
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -3311,10 +3372,43 @@ await scenario('右栏：在场角色 / 生成参数 两个页签', async () => 
   check('点回「在场角色」页签能回去', shown('#cast-panel-body') && !shown('#gen-body'));
   check('回去之后对话列宽度还是没变', colWidth() === before, `${before} → ${colWidth()}`);
 
+  // --- 右边缘那颗把手：跟栏头那颗是**同一个动作的两个入口**（2026-10-13 加的）---
+  // 守两件事：点它能收放右栏；两个入口的 title 永远一致（各写一份就会对不上）。
+  const railR = byId('rail-handle-right');
+  check('右边缘有侧栏收放把手', !!railR);
+  // ⚠️ 查**字符**不查 svg：箭头是文字（‹ ›）不是 SVG 图标 ——
+  //    iconSvg 那套画在 24×24 上，缩进 16×26 的把手方块里会糊成一个点
+  //    （2026-10-13 试过「分栏框」和 polyline 两种，出图放大 4 倍都看不出形状）。
+  check('右把手画着收起箭头（›）', !!railR && railR.textContent.trim() === '›', railR ? JSON.stringify(railR.textContent) : '(没有)');
+  check(
+    '右栏可见时右把手也露着',
+    !!railR && !railR.classList.contains('hidden'),
+    railR ? railR.className : '(没有)'
+  );
+
   // 收起的右栏被「⋯ → 生成参数」叫醒时，应该顺手展开（不然只看见一条窄条）
   click('#btn-cast-collapse');
   await sleep(200);
   check('右栏能收成窄条', byId('cast-panel').classList.contains('collapsed'));
+  check(
+    '用栏头收起后，右把手也改口说「展开」',
+    !!railR && /展开/.test(railR.title),
+    railR ? railR.title : '(没有)'
+  );
+
+  click('#rail-handle-right');
+  await sleep(200);
+  check('点右把手能把右栏收回来', !byId('cast-panel').classList.contains('collapsed'));
+  check(
+    '用把手展开后，栏头那颗也改口说「收起」',
+    /收起/.test(byId('btn-cast-collapse').title),
+    byId('btn-cast-collapse').title
+  );
+
+  // 复原成「收起」—— 下面那条「⋯ → 生成参数会顺手展开」还要用这个前提
+  click('#rail-handle-right');
+  await sleep(200);
+
   click('#btn-more');
   await sleep(250);
   click('#btn-gen-params');
@@ -3511,6 +3605,40 @@ await scenario('侧栏：入口网格与收起', async () => {
     await sleep(150);
     check('再点一下展开', !sidebar.classList.contains('collapsed'), sidebar.className);
     check('展开后又回到 300', Math.round(sidebar.getBoundingClientRect().width) === 300);
+  }
+
+  // --- 左边缘那颗把手：同一个动作的第二个入口（2026-10-13 加的）---
+  const railL = byId('rail-handle-left');
+  check('左边缘有侧栏收放把手', !!railL);
+  // 同右把手：箭头是**文字字符**，不是 SVG（理由见那条断言）
+  check('左把手画着收起箭头（‹）', !!railL && railL.textContent.trim() === '‹', railL ? JSON.stringify(railL.textContent) : '(没有)');
+
+  // ⚠️ 两种把手靠**高度**分工：收放那颗垂直居中（.rail-handle，top 50%）、
+  //    调内缩那颗在输入框两侧（.pad-handle，挂在 .composer 里，所以贴着底）。
+  //    这条守的就是「别哪天被谁挪到同一高度」—— 真挪到一起，光看外观没人分得清谁是谁。
+  //    （2026-10-13 晚从「靠上 / 居中」换成了「居中 / 靠底」，星宝要的。）
+  const padHandleL = byId('pad-handle-left');
+  if (railL && padHandleL) {
+    const railTop = Math.round(railL.getBoundingClientRect().top);
+    const padTop = Math.round(padHandleL.getBoundingClientRect().top);
+    check('收放把手在调内缩把手**上面**（两颗靠位置分工）', railTop < padTop, `收放 ${railTop} vs 内缩 ${padTop}`);
+  }
+
+  if (railL && toggle) {
+    click('#rail-handle-left');
+    await sleep(160);
+    check('点把手能收起左栏', sidebar.classList.contains('collapsed'), sidebar.className);
+    check(
+      '用把手收起后，栏内那颗也改口成「›」（两个入口显示一致）',
+      toggle.textContent.trim() === '›',
+      JSON.stringify(toggle.textContent)
+    );
+    check('把手自己的 title 也跟着改成「展开」', /展开/.test(railL.title), railL.title);
+
+    click('#rail-handle-left');
+    await sleep(160);
+    check('再点把手能展开', !sidebar.classList.contains('collapsed'), sidebar.className);
+    check('栏内那颗回到「‹」', toggle.textContent.trim() === '‹', JSON.stringify(toggle.textContent));
   }
 });
 
@@ -7802,13 +7930,17 @@ await scenario('规则段：段落之间不粘连', async () => {
     JSON.stringify(soloRule.slice(soloRule.indexOf('【标重点】'), soloRule.indexOf('【标重点】') + 260))
   );
 
-  // 普通聊天用的节奏段（paceInstruction）：它是**单独可注入**的，
-  // 否则「推进节奏」在没绑卡的会话里就是个死设置。
-  const plainPace = mod.paceInstruction({ paceMode: 'brisk' }, false);
+  // 推进节奏现在的**唯一落点**是角色卡规则内部（roleplayRuleText / gmRuleText）。
+  // 原来它还能单独注入（paceInstruction），拿来补「普通聊天」那一档 —— 2026-10-13
+  // 那个导出连同纯聊天的注入一起删了（纯聊天里根本不该有「推进节奏」这回事）。
+  // 这里钉住「随卡注入」这条路别断。
+  const soloPace = mod.roleplayRuleText('测试角色', '测试玩家', { paceMode: 'brisk' });
   check(
-    'paceInstruction 能单独给出节奏段（普通聊天靠它）',
-    plainPace.includes('【推进节奏】') && plainPace.includes('多推进一些情节') && !/\{[a-zA-Z]+\}/.test(plainPace),
-    JSON.stringify(plainPace.slice(0, 80))
+    '推进节奏随角色卡规则注入（切到快节奏档能换文案）',
+    soloPace.includes('【推进节奏】') &&
+      soloPace.includes('多推进一些情节') &&
+      !/\{[a-zA-Z]+\}/.test(soloPace),
+    JSON.stringify(soloPace.slice(soloPace.indexOf('【推进节奏】'), soloPace.indexOf('【推进节奏】') + 80))
   );
 });
 

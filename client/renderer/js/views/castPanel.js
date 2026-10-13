@@ -157,16 +157,38 @@ export function showRailTab(tab) {
   refreshAll();
 }
 
-/** 收起按钮的字 / title / aria 跟着 collapsed 走（两个入口都要用，抽出来） */
+/**
+ * 右栏「收放」那两处 chrome 跟着 `collapsed` 走：栏头那颗「›」+ 对话列右边缘的把手。
+ *
+ * ⚠️ 两个入口（栏头按钮 / 边缘把手）改的是同一份状态，显示也就在这一处同步 ——
+ *    各写一份的下场是「用把手收起来了、栏头那颗还写着 ›」。
+ * ⚠️ 别在 `if (!panel) return` 之后再加提前 return：即使栏头那颗不见了（不该发生），
+ *    把手也得刷上。
+ */
 function syncCollapseBtn() {
   const panel = el.castPanel;
-  const btn = el.btnCastCollapse;
-  if (!panel || !btn) return;
+  if (!panel) return;
   const collapsed = panel.classList.contains('collapsed');
-  btn.textContent = collapsed ? '‹' : '›';
-  btn.title = collapsed ? '展开这一栏' : '收起这一栏';
-  btn.setAttribute('aria-label', collapsed ? '展开右侧面板' : '收起右侧面板');
-  btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+
+  if (el.btnCastCollapse) {
+    const btn = el.btnCastCollapse;
+    btn.textContent = collapsed ? '‹' : '›';
+    btn.title = collapsed ? '展开这一栏' : '收起这一栏';
+    btn.setAttribute('aria-label', collapsed ? '展开右侧面板' : '收起右侧面板');
+    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
+
+  // 箭头跟着状态翻（跟栏头那颗「›」同一个字符 = 同一个动作）。
+  // ⚠️ 是**文字字符**不是 SVG 图标 —— 为什么不用 iconSvg，见 index.html 里把手那段注释。
+  // ⚠️ 变量别叫 `h`：本文件顶部 import 了 build.js 的 `h()` 建节点函数，同名会遮蔽它
+  //    （现在这个函数里不用 `h()`，但埋着给以后的人踩）。
+  if (el.railHandleRight) {
+    const handle = el.railHandleRight;
+    handle.textContent = collapsed ? '‹' : '›';
+    handle.title = collapsed ? '展开这一栏' : '收起这一栏';
+    handle.setAttribute('aria-label', handle.title);
+    handle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
 }
 
 export function renderCastPanel() {
@@ -205,6 +227,9 @@ export function renderCastPanel() {
   // 0 个人时也不该被藏掉（否则从「⋯」点进来什么都看不见）。
   const show = !!convo && (entities.length > 0 || books.length > 0 || charBooks.length > 0 || genTab);
   panel.classList.toggle('hidden', !show);
+  // 右把手跟着整栏一起显隐：没栏可收的时候，它不该自己杵在正文右边。
+  // （左把手不用管 —— 左栏是常驻的，永远有得收。）
+  if (el.railHandleRight) el.railHandleRight.classList.toggle('hidden', !show);
   if (!show) return;
 
   if (el.castPanelCount) el.castPanelCount.textContent = String(entities.length);
@@ -275,14 +300,17 @@ export function initCastPanel() {
 
   // 收起 / 展开。
   // ⚠️ 这颗按钮在 2026-10-12 之前**只是画在那儿**，点了没反应（星宝点了才发现）。
-  //    收起后收成 34px 的窄条，点同一颗按钮回来 —— 收起和展开在同一个位置，
+  //    收起后收成窄条，点同一颗按钮回来 —— 收起和展开在同一个位置，
   //    不用去别处找「怎么把它打开」。
-  if (el.btnCastCollapse) {
-    el.btnCastCollapse.addEventListener('click', () => {
-      const panel = el.castPanel;
-      if (!panel) return;
-      panel.classList.toggle('collapsed');
-      syncCollapseBtn();
-    });
-  }
+  //
+  // ⚠️ 2026-10-13：对话列**右边缘那颗靠上的把手**（#rail-handle-right）是同一个动作的
+  //    第二个入口。两个入口必须走同一个函数，否则两处的字 / title 会对不上。
+  const togglePanel = () => {
+    if (!el.castPanel) return;
+    el.castPanel.classList.toggle('collapsed');
+    syncCollapseBtn();
+  };
+
+  if (el.btnCastCollapse) el.btnCastCollapse.addEventListener('click', togglePanel);
+  if (el.railHandleRight) el.railHandleRight.addEventListener('click', togglePanel);
 }

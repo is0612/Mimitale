@@ -20,8 +20,24 @@
 //  ⚠️ 「默认人设」只管默认对话：进世界（GM）时角色卡字段本来就全跳过，若还把人设
 //  塞进去，GM 会拿它当自己的身份，跟世界书 / 主持规则拧在一起（用户报过这个）。
 //
-//  默认聊天只带人设、历史、摘要、日期和用户选定的预设及视角设置；
-//  扮演 / GM 规则、世界书、玩家角色、面板、剧情选项和表情仅用于角色或世界模式。
+//  默认聊天（「＋ 新对话」建出来的那条）只带人设、历史、摘要、日期和用户自己选的预设
+//  —— 就是「跟模型聊天」，跟 chat.deepseek.com 上一样，不演任何东西。
+//  扮演 / GM 规则、世界书、玩家角色、面板、剧情选项、表情**和视角设置**
+//  （叙述模式 / 推进节奏）仅用于角色卡或世界模式。
+//
+//  ⛔ 2026-10-13：叙述模式 / 推进节奏**也从默认聊天里摘掉了**。
+//  它们原先是「普通聊天也注入」（2026-10-08 为了修「视角弹窗能选却不生效」放开的），
+//  结果新会话生下来就带着 narrationMode='standard' + paceMode='step' 两个**默认值**，
+//  于是「＋ 新对话」拿到的 system 里有一整套舞台指示：「对话、动作、神态，连同环境
+//  （光、气味、声音）都融在里面往下写」「一轮里至少要有一句角色直接说出口的话」
+//  「别整轮都是动作和神态 —— 一个沉默的角色，玩家是在看哑剧」。
+//  模型没有身份，又必须写环境、写动作、说台词，就**自己现编一个身份和一个场景演起来**
+//  （用户报的现场：新对话里 AI 自己坐在地毯上修台灯）。默认人设里写「像跟朋友聊天那样
+//  自然、不要写成报告」也压不住 —— 那两段排在它后面，离生成位置更近。
+//
+//  正确修法不是「注入但设个默认档」，而是**默认聊天里根本没有这两项**：
+//  提示词不注入（下面），视角弹窗里也不给（见 views/perspectiveUi.js）。
+//  想扮演就去角色库建角色卡对话 / 去世界书「游玩」—— 那才是「玩」的入口。
 // ============================================================================
 
 import { state } from '../core/state.js';
@@ -38,12 +54,12 @@ import {
   gmRuleText,
   isGmMode,
   narrationInstruction,
-  paceInstruction,
   playerOwnershipReminder,
   roleplayRuleText
 } from './narration.js';
 import { optionsInstruction } from './suggestions.js';
 import {
+  isPlainChatConvo,
   convoPlayer,
   convoUserName,
   userName,
@@ -289,11 +305,12 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   // 进了世界的会话用玩家自己创建的角色名，其它会话用设置里的名字
   const me = convoUserName(convo);
   const gmMode = isGmMode(convo);
-  // 「默认对话」= 既没绑角色卡、也不是世界模式 —— 那就是**跟 AI 模型聊天**，
-  // 不是扮演酒馆里的某个角色。这种会话只带人设和聊天记录，应用不再往里塞
-  // 酒馆那一套（扮演规则 / 世界书 / 状态面板 / 剧情选项 / 表情标签）：
-  // 人设是自己写的、自足的，多叠一层规则只会跟它打架。
-  const plainChat = !character && !gmMode;
+  // 「纯聊天」= 既没绑角色卡、也不是世界模式 —— 那就是**跟模型聊天**，不是扮演。
+  // 判定收在 cast.js 的 isPlainChatConvo 里（视角弹窗、顶栏标签也用同一份，口径只有一处）。
+  // 这种会话只带人设、历史、摘要、日期和预设；酒馆那一套（扮演 / GM 规则、世界书、
+  // 玩家角色、面板、剧情选项、表情、叙述模式、推进节奏）一个字都不注入 ——
+  // 人设是自己写的、自足的，多叠一层只会跟它打架（见文件头 2026-10-13 那一段）。
+  const plainChat = isPlainChatConvo(convo);
 
   // 助手那侧叫什么名字：绑卡用卡名，「默认对话」用人设里配的名字。
   // ⚠️ 世界模式（GM）**没有「某个人」**，不取人设名 —— 否则那段「默认人设」
@@ -379,17 +396,18 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   if (cast) parts.push(cast);
 
   // 叙述模式：决定要不要写心理 / 旁白，以及用什么标记（标记对上渲染样式）。
-  // ⚠️ 2026-10-08：**普通聊天也注入了**（以前整块挡掉）。原来挡住它的理由是
-  // 「标准档是给写小说的」，但视角弹窗对普通聊天照样开放、选完还会在标题旁
-  // 显示「上帝视角」这类标签 —— 能选、能存、有标签，却一个字不进提示词，
-  // 那才是 bug（用户报的「叙述模式好像有 bug」就是它）。现在选了就生效。
-  const narration = narrationInstruction(convo);
-  if (narration) parts.push(narration);
+  // ⛔ 纯聊天**不注入**（2026-10-13，见文件头那一段）。
+  // 2026-10-08 曾经为了修「视角弹窗能选却不生效」把它放开给普通聊天 —— 那个修法
+  // 修出了新问题（新对话里 AI 自己编身份演起来）。现在改成**入口也不给**：
+  // 弹窗对纯聊天不显示这两项（views/perspectiveUi.js），所以「能选却不生效」不会复发。
+  if (!plainChat) {
+    const narration = narrationInstruction(convo);
+    if (narration) parts.push(narration);
+  }
 
-  // 推进节奏：扮演 / 主持规则里本来就带了一段（roleplayRuleText / gmRuleText），
-  // 但普通聊天那两段都不注入 —— 所以得在这里单独补，否则「推进节奏」这一档
-  // 在普通聊天里是死的（同上）。
-  if (plainChat) parts.push(paceInstruction(convo, false));
+  // 推进节奏：扮演 / 主持规则（roleplayRuleText / gmRuleText）内部本来就带了一段，
+  // 以前是「普通聊天那两段都不注入，所以这里单独补一次」。现在纯聊天整块不注入，
+  // 于是这一档的落点只剩规则内部那一次 —— 这里不再需要补。
 
   if (settings.showDate !== false) {
     const today = new Date().toLocaleDateString('zh-CN', {
