@@ -124,6 +124,23 @@ function hideGuides() {
   if (el.padGuideRight) el.padGuideRight.classList.add('hidden');
 }
 
+// 拖动时让抓手按钮**跟着虚线走**：虚线落在当前内缩值 px 上，抓手就骑到同一处，
+// 手按着的按钮和它要落到的位置在一条直线上，不会出现「虚线在正文里、按钮钉在边缘」的割裂。
+// 抓手宽 16px，减 8 让它**中心**对齐 0 宽的虚线（而不是左边缘贴线）。
+// 基准说明：.chat-col 无 padding、.composer 是它贴边的直接子元素且无 border，
+// 所以抓手相对 .composer 的 left/right 和虚线相对 .chat-col 的 left/right 是同一把尺，直接赋值即对齐。
+function moveHandleTo(handle, side, px) {
+  if (!handle) return;
+  const offset = px - 8;
+  if (side === 'left') {
+    handle.style.left = `${offset}px`;
+    handle.style.right = 'auto';
+  } else {
+    handle.style.right = `${offset}px`;
+    handle.style.left = 'auto';
+  }
+}
+
 // ---------------------------------------------------------------------------
 //  抓手
 // ---------------------------------------------------------------------------
@@ -154,6 +171,7 @@ function bindHandle(handle, side) {
     document.body.classList.add('pad-dragging');
     showBadge(side, startPad);
     showGuide(side, startPad);
+    moveHandleTo(handle, side, startPad);
   });
 
   handle.addEventListener('pointermove', (event) => {
@@ -164,6 +182,7 @@ function bindHandle(handle, side) {
     preview(side, px);
     showBadge(side, px);
     showGuide(side, px);
+    moveHandleTo(handle, side, px);
   });
 
   const finish = () => {
@@ -174,6 +193,9 @@ function bindHandle(handle, side) {
     hideGuides();
     // 只在松手时落盘一次（拖动过程中每帧写配置是没有必要的）
     const px = padValue(side);
+    // 松手后抓手**停在新内缩线上**（跟虚线同一处），而不是弹回 CSS 的 4px 贴边 ——
+    // 抓手代表的就是「正文从这里缩进去」的那条边界，它该一直骑在那条线上。
+    moveHandleTo(handle, side, px);
     Promise.resolve(persistAppearance({ [KEYS[side]]: px })).catch(() => {});
   };
 
@@ -186,4 +208,9 @@ function bindHandle(handle, side) {
 export function initChatPad() {
   bindHandle(el.padHandleLeft, 'left');
   bindHandle(el.padHandleRight, 'right');
+  // 初始也把抓手摆到当前内缩线上：CSS 只给了 4px 的贴边默认值，
+  // 但内缩值（默认 20px）和它错开 —— 不摆一次，进软件第一眼抓手就骑在错误的位置，
+  // 拖一下才「跳」到正确线上。
+  moveHandleTo(el.padHandleLeft, 'left', padValue('left'));
+  moveHandleTo(el.padHandleRight, 'right', padValue('right'));
 }
