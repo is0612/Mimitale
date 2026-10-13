@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:;" />
   <title>如我所书</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -20,7 +20,7 @@
               title="收起侧栏" aria-label="收起侧栏" aria-expanded="true">‹</button>
 
       <div class="brand">
-        <span class="brand-dot"></span>
+        <img class="brand-logo" src="assets/brand-logo.png" alt="" draggable="false" />
         <span class="brand-name">如我所书</span>
         <!-- 版本号从主进程启动参数递进来（preload 的 appVersion）。
              拿不到就整个不显示 —— 不留一个光秃秃的「v」。 -->

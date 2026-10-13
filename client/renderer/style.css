@@ -7314,6 +7314,11 @@ body.pad-dragging {
   border-radius: var(--radius-sm);
 }
 
+.sidebar.collapsed .brand-logo {
+  width: 28px;
+  height: 28px;
+}
+
 /* 展开按钮：⚠️ 稿子的图标轨里**没画**这一颗（它只有品牌块 + 6 颗图标 + 会话头像），
    但没有它就出不去。放在品牌块正下方做一颗很淡的箭头，不抢图标轨的节奏。
    （展开态它在右上角；收起态改成参与 flex 流 —— 绝对定位会和品牌方块叠在一起。） */
@@ -7406,6 +7411,20 @@ body.pad-dragging {
   background: var(--accent);
   box-shadow: none;
   animation: none;
+}
+
+/* 品牌区 logo（2026-10-13）：替换掉原来的琥珀方块 .brand-dot。
+   真源是 图片/logo.jpg（1040×1040 深蓝底），这里用的是预裁好圆角的
+   assets/brand-logo.png（48px 原图，24px 显示，2x 清晰）。
+   深蓝底在深色主题下几乎融进侧栏，浅色主题下是一块圆角深蓝小标 —— 有意保留，
+   不抠透明（发光的星/月边缘抠出来会毛）。 */
+.brand-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex: 0 0 auto;
+  user-select: none;
 }
 
 /* 当前会话：左边一条 2×18 的琥珀竖线（稿子里的选中标记）。

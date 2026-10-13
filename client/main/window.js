@@ -100,6 +100,9 @@ function createWindow() {
     useContentSize: true,
     backgroundColor: (WINDOW_BG[accent] || WINDOW_BG[ACCENTS[0]])[theme],
     title: '如我所书',
+    // 窗口 / 任务栏图标。图标真源在 图片/logo.jpg（1040×1040 深蓝底），
+    // 这里用的是 client/assets/icon.ico（16~256 七档尺寸），由脚本一次性生成。
+    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),

@@ -67,6 +67,22 @@ Thumbs.db
 /client/tools/pet/pet-window.png
 /client/tools/pet/pet-window-*.png
 
+# CSP 图片加载的一次性探针（2026-10-13 验证 img-src file: 用的），
+# 依赖能起 electron 的环境，验证完即可删，不进版本库。
+/client/tools/csp-probe.js
+
+# 2026-10-13 项目搬进 client/ 后，仓库根留下的**旧副本**（原路径的残留）。
+# 新位置已由上面的 /client/... 规则罩住；这里把根目录的旧路径也罩住，
+# 免得 GitHub Desktop 的变更清单被 70 个「搬家残影」刷屏。
+# 确认 client/ 里跑得好之后，这些旧目录可以整个删掉。
+/data/
+/tools/shots/
+/tools/pet/
+/tools/run-smoke.cmd
+/tools/run-smoke.ps1
+/tools/messages-utf8.txt
+/tools/check-imports.cmd
+
 # 形象包出图管线的中间产物。**母图真源进仓库**（assets/pet/<skin>/source/），
 # 但抠底结果 / 分区图 / 拆出来的临时部件都是可重跑的，不进库
 # （2026-10-09：上一版管线整个在仓库外，换台机器就蒸发了，所以管线代码进仓库、
