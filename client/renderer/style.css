@@ -462,11 +462,10 @@ body {
   padding: 4px 30px 4px 6px;
 }
 
-/* ⛔ `.brand-dot` 的基础样式删于 2026-10-13 凌晨 —— **是合并，不是丢掉**：
-   这一条（11px 的渐变小圆点）的六条声明（width / height / border-radius /
-   background / box-shadow / animation）已经被文件末尾「侧栏 + 输入区按设计稿对齐」
-   那一段里的 **24px 方角琥珀块**逐条覆盖，渲染上早就不生效，留着只让人多翻一遍。
-   现在 .brand-dot 只有末尾那一处定义。查全部重复：node tools/audit-css-dup.js
+/* ⛔ `.brand-dot` 整条已于 2026-10-13 晚删净 —— 它先是基础样式在当天凌晨被合并掉
+   （11px 渐变小圆点的六条声明被文件末尾那处 24px 方角琥珀块逐条覆盖），之后品牌区
+   又整体换成了图片 `.brand-logo`，选择器再无任何引用，于是末尾那处也一并清掉。
+   查全部重复：node tools/audit-css-dup.js
    ⚠️ `--brand-grad` / `--brand-glow` 先留在 :root 别删（.brand-name 那边还引用着）。 */
 
 .brand-name {
@@ -6189,7 +6188,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .lightbox-hint { font-size: var(--fs-xs); color: var(--text-faint); }
 
 @media (prefers-reduced-motion: reduce) {
-  .modal, .modal-card, .brand-dot, .waiting::after,
+  .modal, .modal-card, .waiting::after,
   .msg-option-skeleton, .msg.illustrating .bubble { animation: none; }
   .btn, .icon-btn, .mini-btn, .modal-card, .check, .check-title,
   input, textarea, select,
@@ -7240,8 +7239,9 @@ body.pad-dragging {
 
    ✅ 2026-10-13：这一段**曾经是「覆盖层」** —— 同一个选择器在文件前面还有一份基础定义，
       改样式时两处都得看，否则会出现「改了没反应」（不报错、测试也不红）。
-      那一批重复已经**全部合并回前面各自的段落**，现在全文件只剩 `.brand-dot` /
-      `.suggest-strip` 这两处是「基础定义已删、只此一处」的历史遗留（各自就地留了说明）。
+      那一批重复已经**全部合并回前面各自的段落**，现在全文件只剩 `.suggest-strip`
+      这一处是「基础定义已删、只此一处」的历史遗留（就地留了说明）；
+      另一处 `.brand-dot` 已于 2026-10-13 晚整条删净（品牌区换成了 .brand-logo）。
       `node tools/audit-css-dup.js` 现在报 **0 个重复**。
 
    合并的判据**不是**肉眼核对，是「渲染结果逐属性完全相同」：
@@ -7306,12 +7306,6 @@ body.pad-dragging {
   padding: 2px 0 8px;
   /* 稿子 y=36 那条通栏分隔线（品牌块下沿） */
   border-bottom: 1px solid var(--border);
-}
-
-.sidebar.collapsed .brand-dot {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
 }
 
 .sidebar.collapsed .brand-logo {
@@ -7402,18 +7396,9 @@ body.pad-dragging {
   border-radius: var(--radius);
 }
 
-/* 品牌标记：稿子是一个 16×16 的**方角琥珀块**。
-   原来那个会呼吸的渐变圆点是「聊天软件」时期的符号，跟这套方角语言不搭。 */
-.brand-dot {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  box-shadow: none;
-  animation: none;
-}
-
-/* 品牌区 logo（2026-10-13）：替换掉原来的琥珀方块 .brand-dot。
+/* 品牌区 logo（2026-10-13）：替换掉原来的琥珀方块 `.brand-dot`。
+   ⛔ 那条 `.brand-dot`（24px 方角琥珀块）已于 2026-10-13 晚随本次清理删净 ——
+   先是基础样式在当天凌晨被合并掉，之后品牌区整体换成图片、选择器再无引用。
    真源是 图片/logo.jpg（1040×1040 深蓝底），这里用的是预裁好圆角的
    assets/brand-logo.png（48px 原图，24px 显示，2x 清晰）。
    深蓝底在深色主题下几乎融进侧栏，浅色主题下是一块圆角深蓝小标 —— 有意保留，

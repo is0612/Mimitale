@@ -3558,13 +3558,17 @@ await scenario('侧栏：入口网格与收起', async () => {
     // --- 稿子屏 2 的图标轨：品牌方块 + 6 颗图标 + 最底下当前会话头像 ---
     // 这一节是 2026-10-12 晚补的：之前收起态是 `> *:not(.sidebar-toggle){display:none}`，
     // 收起来就是一根**空条**，而稿子那里是一整列图标。
-    const railDot = document.querySelector('.brand-dot');
+    // 2026-10-13 晚：品牌区那个琥珀方块 `.brand-dot` 已被图片 `.brand-logo` 取代
+    // （见 index.html 的品牌区 / style.css 的 .brand-logo）。断言原来还查 .brand-dot，
+    // 拿到 null 就一直白红一条 —— 功能是好的，过时的是选择器。
+    // 28px 这条尺寸要求没变（.sidebar.collapsed .brand-logo 里钉着）。
+    const railMark = document.querySelector('.brand-logo');
     check(
-      '收起后品牌方块还在，而且放大到 28（图标轨的唯一大块）',
-      !!railDot &&
-        Math.round(railDot.getBoundingClientRect().width) === 28 &&
-        getComputedStyle(railDot).display !== 'none',
-      railDot ? String(Math.round(railDot.getBoundingClientRect().width)) : '（没有）'
+      '收起后品牌标记还在，而且放大到 28（图标轨的唯一大块）',
+      !!railMark &&
+        Math.round(railMark.getBoundingClientRect().width) === 28 &&
+        getComputedStyle(railMark).display !== 'none',
+      railMark ? String(Math.round(railMark.getBoundingClientRect().width)) : '（没有）'
     );
     check(
       '收起后 6 颗入口图标都还在，只是文字藏了',
