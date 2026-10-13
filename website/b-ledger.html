@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>子夜酒馆 Nocturne Tavern — 一间只在深夜开门的酒馆</title>
+<meta name="description" content="本地运行的 AI 角色扮演客户端。导入酒馆角色卡，世界书按关键词命中注入，状态数值聊上百轮也不漂。没有服务器，数据只在你自己机器上。">
+<style>
+/* ==========================================================================
+   子夜酒馆 Nocturne Tavern — 官网 · 方向 B「羊皮账本 / Ledger」
+   
+   方向主张：酒馆是一本摊开的册子 —— 账簿、菜单、客人名录。
+     · 明暗立场：**浅色**（旧纸的暖米）
+     · 结构主张：**单栏纵长**，版心窄到 700px，两侧全是留白；章节号挂在版心外
+     · 字体角色：**全衬线**（正文也是衬线，像看书），等宽只留给极少数数字
+   
+   ⚠️ 与方向 A 的差别必须落在这三处上，否则只是「换个颜色的同一版」。
+   刻意避开：卡片堆、图标墙、圆角大按钮、无意义的渐变。
+   ========================================================================== */
+
+:root {
+  /* 纸 —— 旧账簿的暖米，不是纯白 */
+  --paper:     #efe6d5;
+  --paper-2:   #e8ddc9;   /* 略深：表头 / 块底 */
+  --paper-3:   #f7f1e6;   /* 更亮：浮起的一小块 */
+  --paper-deep:#e2d5bd;   /* 更深：底衬 */
+
+  /* 墨 */
+  --ink:       #2b231a;
+  --ink-dim:   #5c5142;
+  --ink-faint: #6f6455;
+
+  /* 账本的线 */
+  --rule:      #cfc0a5;
+  --rule-soft: #ded3bc;
+  --rule-hard: #b9a888;
+
+  /* 火漆印红 —— 全页唯一的彩色，只用在「印」和「强调」上 */
+  --seal:      #933021;
+  --seal-soft: rgba(147, 48, 33, 0.09);
+  --seal-line: rgba(147, 48, 33, 0.28);
+
+  /* 黄铜 —— 次要强调，用在编号和标识 */
+  --brass:     #7d5f26;
+
+  --radius:    3px;
+  --radius-sm: 2px;
+
+  --serif: Georgia, "Songti SC", "Source Han Serif SC", "SimSun", "Times New Roman", serif;
+  --mono:  "JetBrains Mono", Consolas, "Courier New", monospace;
+
+  --wrap: 700px;
+  --gut: 32px;
+
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 72px; --s9: 104px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  background: var(--paper-deep);
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.9;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* 纸的纤维：两层极淡的斜向纹理 + 两团不均匀的旧色。
+   看得出是「纸」，但看不出是「图案」。 */
+.paper-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    repeating-linear-gradient(96deg, rgba(120, 95, 55, 0.030) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(4deg, rgba(120, 95, 55, 0.022) 0 1px, transparent 1px 7px),
+    radial-gradient(60% 45% at 12% 8%, rgba(150, 118, 62, 0.10), transparent 60%),
+    radial-gradient(55% 40% at 88% 76%, rgba(150, 118, 62, 0.09), transparent 60%);
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 var(--gut);
+  position: relative;
+  z-index: 1;
+}
+
+a { color: inherit; text-decoration: none; }
+
+:focus-visible {
+  outline: 2px solid var(--seal);
+  outline-offset: 3px;
+}
+
+::selection { background: var(--seal-soft); color: var(--ink); }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.82em;
+  color: var(--ink);
+  background: rgba(120, 95, 55, 0.10);
+  border-bottom: 1px solid var(--rule-hard);
+  padding: 0 3px;
+  /* 路径 / 标识符不许从中间断开 —— 断成两行读起来像两个东西 */
+  white-space: nowrap;
+}
+
+/* ------------------------------ 印章 ------------------------------ */
+/* 全页唯一的彩色物件。中式藏书印：方角、朱红、微微歪着盖上去。 */
+.seal {
+  width: 58px;
+  height: 58px;
+  border-radius: 3px;
+  background: var(--seal);
+  color: var(--paper-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  transform: rotate(-4deg);
+  box-shadow: inset 0 0 0 2px rgba(247, 241, 230, 0.4);
+  flex: none;
+  /* 印泥边缘的毛糙感：一层极淡的红色晕开 */
+  position: relative;
+}
+.seal::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 4px;
+  background: var(--seal);
+  opacity: 0.13;
+  filter: blur(2px);
+  z-index: -1;
+}
+
+/* ------------------------------ 报头 ------------------------------ */
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(239, 230, 213, 0.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--rule-soft);
+  transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
+}
+.masthead.is-pinned {
+  border-bottom-color: var(--rule-hard);
+  background: rgba(239, 230, 213, 0.98);
+}
+.masthead .wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--s5);
+  height: 56px;
+  max-width: 1000px;
+}
+.mh-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-right: auto;
+}
+.mh-brand .cn {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+.mh-brand .en {
+  font-size: 11px;
+  font-family: var(--mono);
+  letter-spacing: 0.16em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+}
+.mh-nav { display: flex; gap: var(--s4); }
+.mh-nav a {
+  font-size: 14px;
+  color: var(--ink-dim);
+  border-bottom: 1px solid transparent;
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease);
+  padding-bottom: 1px;
+}
+.mh-nav a:hover { color: var(--seal); border-bottom-color: var(--seal-line); }
+
+/* ------------------------------ 题记 / Hero ------------------------------ */
+.hero { padding: var(--s9) 0 0; }
+
+.hero h1 {
+  font-size: clamp(32px, 5.4vw, 52px);
+  font-weight: 700;
+  line-height: 1.42;
+  letter-spacing: 0.03em;
+  margin: var(--s5) 0 0;
+  text-wrap: balance;
+}
+.hero h1 .sealword { color: var(--seal); }
+
+/* 题记：正文用衬线，字号比常规大一点，行距放到 2 —— 这是「书」的阅读节奏 */
+.epigraph {
+  font-size: 17px;
+  line-height: 2.05;
+  color: var(--ink-dim);
+  margin: var(--s5) 0 0;
+  padding-left: var(--s5);
+  border-left: 2px solid var(--rule-hard);
+}
+.epigraph b { color: var(--ink); font-weight: 700; }
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  margin-top: var(--s6);
+  align-items: center;
+}
+
+/* 按：这一版的按钮是「书页上的铅字」，不是圆角胶囊 */
+.btn {
+  display: inline-block;
+  font-family: var(--serif);
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  padding: 11px 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease),
+              border-color 0.2s var(--ease);
+}
+.btn:hover { background: var(--ink); color: var(--paper); }
+.btn-solid {
+  background: var(--seal);
+  border-color: var(--seal);
+  color: var(--paper-3);
+}
+.btn-solid:hover { background: #7b2619; border-color: #7b2619; color: var(--paper-3); }
+
+/* ------------------------------ 双线分隔（账本横线） ------------------------------ */
+.rule-double {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  height: 3px;
+  margin: var(--s7) 0 0;
+}
+.rule-thin {
+  border: 0;
+  border-top: 1px solid var(--rule-soft);
+  height: 0;
+  margin: var(--s6) 0;
+}
+
+/* ------------------------------ 账页：那晚的记录 ------------------------------ */
+.record {
+  margin-top: var(--s8);
+  background: var(--paper-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 30px -18px rgba(43, 35, 26, 0.45);
+  overflow: hidden;
+}
+.record-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s4);
+  padding: var(--s4) var(--s5);
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--rule);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--ink-dim);
+}
+.record-head .who { color: var(--ink); font-weight: 700; }
+.record-head .when {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+.record-body { padding: var(--s5) var(--s5) var(--s4); }
+.rl {
+  display: grid;
+  grid-template-columns: 66px 1fr;
+  gap: var(--s4);
+  padding: var(--s3) 0;
+  font-size: 16px;
+  line-height: 1.95;
+}
+.rl + .rl { border-top: 1px dotted var(--rule); }
+.rl .sp { color: var(--ink-faint); font-size: 14px; letter-spacing: 0.04em; }
+
+.record-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s5);
+  padding: var(--s4) var(--s5);
+  background: var(--paper-2);
+  border-top: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  letter-spacing: 0.03em;
+}
+.record-foot b { color: var(--seal); font-weight: 700; }
+.record-cap {
+  font-size: 13.5px;
+  color: var(--ink-faint);
+  margin: var(--s3) 0 0;
+  line-height: 1.85;
+}
+
+/* ------------------------------ 小节 ------------------------------ */
+.sec { padding: var(--s9) 0 0; position: relative; }
+
+/* 章节号挂在版心外面 —— 像一个边注。窄屏收进正文。
+   ⚠️ top 是相对 .wrap（它自己 position:relative）算的，不是相对 .sec ——
+   写成 `--s9 + 6px` 会让它掉到内容中间去（2026-10-13 踩到）。 */
+.sec-no {
+  position: absolute;
+  left: calc(-1 * var(--gut) - 60px);
+  top: 2px;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--ink-faint);
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+
+.sec-kicker {
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: var(--seal);
+  text-transform: uppercase;
+  font-family: var(--mono);
+  display: block;
+  margin-bottom: var(--s3);
+}
+.sec h2 {
+  font-size: clamp(24px, 3.2vw, 32px);
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  margin: 0 0 var(--s4);
+  text-wrap: balance;
+}
+.sec-lead {
+  font-size: 16px;
+  line-height: 2;
+  color: var(--ink-dim);
+  margin: 0 0 var(--s6);
+}
+.sec-lead b { color: var(--ink); font-weight: 700; }
+
+/* ------------------------------ 四则条目 ------------------------------ */
+/* 单栏里逐条排，靠「细横线 + 编号」分节，不靠卡片 —— 这就是账本的排法。 */
+.entries { border-top: 1px solid var(--rule); }
+.entry {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 0;
+  padding: var(--s5) 0;
+  border-bottom: 1px solid var(--rule-soft);
+  transition: background 0.25s var(--ease);
+}
+.entry:hover { background: rgba(147, 48, 33, 0.035); }
+.entry-no {
+  font-size: 15px;
+  color: var(--brass);
+  letter-spacing: 0.1em;
+  padding-top: 3px;
+}
+.entry h3 {
+  font-size: 19px;
+  font-weight: 700;
+  margin: 0 0 2px;
+  letter-spacing: 0.04em;
+}
+.entry .en {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: block;
+  margin-bottom: var(--s3);
+}
+.entry p {
+  font-size: 16px;
+  line-height: 1.95;
+  color: var(--ink-dim);
+  margin: 0;
+}
+.entry p b { color: var(--ink); font-weight: 700; }
+/* 引一句作者的话 —— 用左边一条朱线标出来，像批注 */
+.entry .gloss {
+  display: block;
+  margin-top: var(--s3);
+  padding-left: var(--s4);
+  border-left: 2px solid var(--seal-line);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.9;
+}
+
+/* ------------------------------ 长对话：三则 ------------------------------ */
+.three { margin-top: var(--s5); }
+.three > div {
+  padding: var(--s4) 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.three > div:first-child { border-top: 1px solid var(--rule); }
+.three .n {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  color: var(--seal);
+}
+.three h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: var(--s2) 0 var(--s2);
+  letter-spacing: 0.04em;
+}
+.three p {
+  font-size: 15.5px;
+  line-height: 1.95;
+  color: var(--ink-dim);
+  margin: 0;
+}
+
+/* ------------------------------ 名录：模型 ------------------------------ */
+.roster {
+  margin-top: var(--s4);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.roster-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s4);
+  padding: var(--s3) 0;
+}
+.roster-row + .roster-row { border-top: 1px solid var(--rule-soft); }
+.roster-row .nm { font-size: 16px; min-width: 200px; }
+.roster-row .dots {
+  flex: 1;
+  border-bottom: 1px dotted var(--rule-hard);
+  transform: translateY(-4px);
+}
+.roster-row .tag {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--seal);
+  letter-spacing: 0.04em;
+}
+
+/* ------------------------------ 桌宠 ------------------------------ */
+.pet-note {
+  margin-top: var(--s4);
+  padding: var(--s5);
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+.pet-note .said {
+  font-size: 19px;
+  line-height: 1.85;
+  letter-spacing: 0.03em;
+  margin: 0 0 var(--s3);
+}
+.pet-note .said::before { content: "「"; color: var(--seal); }
+.pet-note .said::after { content: "」"; color: var(--seal); }
+.pet-note .attr {
+  font-size: 13.5px;
+  color: var(--ink-faint);
+  margin: 0 0 var(--s4);
+}
+.pet-list { list-style: none; padding: 0; margin: 0; }
+.pet-list li {
+  font-size: 15.5px;
+  line-height: 1.95;
+  color: var(--ink-dim);
+  padding: 7px 0 7px 22px;
+  position: relative;
+}
+.pet-list li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--brass);
+}
+.pet-list li b { color: var(--ink); font-weight: 700; }
+
+/* ------------------------------ 隐私：对开的两页 ------------------------------ */
+.spread {
+  margin-top: var(--s4);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.spread > div { padding: var(--s5); }
+.spread > div + div { border-left: 1px solid var(--rule); }
+.spread .them { background: var(--paper-2); }
+.spread .us { background: var(--paper-3); }
+.spread h3 {
+  font-size: 13px;
+  font-family: var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin: 0 0 var(--s4);
+  color: var(--ink-faint);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.spread .us h3 { color: var(--seal); border-bottom-color: var(--seal-line); }
+.spread p {
+  font-size: 15px;
+  line-height: 1.95;
+  color: var(--ink-dim);
+  margin: 0 0 var(--s3);
+}
+.spread p b { color: var(--ink); font-weight: 700; }
+.spread .us p b { color: var(--seal); }
+.track {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 2.1;
+  color: var(--ink-dim);
+  margin: 0 0 var(--s4);
+  padding: var(--s3) var(--s4);
+  background: rgba(120, 95, 55, 0.07);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.track .to { color: var(--ink-faint); }
+.track .end { color: var(--seal); }
+
+/* ------------------------------ 工序单（快速开始） ------------------------------ */
+.recipe {
+  margin-top: var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-3);
+  overflow: hidden;
+}
+.recipe-head {
+  padding: var(--s3) var(--s5);
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px;
+  font-family: var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.recipe-body { padding: var(--s4) var(--s5) var(--s5); }
+.recipe-body .ln {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 2.2;
+  color: var(--ink-dim);
+}
+.recipe-body .ln b { color: var(--ink); font-weight: 400; }
+.recipe-body .ln .p { color: var(--seal); }
+.recipe-body .ln.cmt { color: var(--ink-faint); }
+.recipe-body .ln.out { color: var(--brass); }
+
+.steps { list-style: none; padding: 0; margin: var(--s6) 0 0; }
+.steps li {
+  position: relative;
+  padding: 0 0 var(--s5) 44px;
+  counter-increment: s;
+}
+.steps { counter-reset: s; }
+.steps li::before {
+  content: counter(s) ".";
+  position: absolute;
+  left: 0; top: 0;
+  font-size: 16px;
+  color: var(--seal);
+  letter-spacing: 0.04em;
+}
+.steps li b { display: block; font-size: 16.5px; margin-bottom: 2px; letter-spacing: 0.03em; }
+.steps li span { font-size: 15.5px; line-height: 1.95; color: var(--ink-dim); }
+.steps li:last-child { padding-bottom: 0; }
+
+/* ------------------------------ 落款 ------------------------------ */
+.colophon {
+  margin-top: var(--s9);
+  padding: var(--s7) 0 var(--s6);
+  border-top: 1px solid var(--rule);
+}
+.colophon .wrap { max-width: 1000px; }
+.colo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s7);
+  justify-content: space-between;
+}
+.colo-brand { max-width: 300px; }
+.colo-brand .cn { font-size: 20px; font-weight: 700; letter-spacing: 0.14em; }
+.colo-brand .en {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  display: block;
+  margin-top: 2px;
+}
+.colo-brand p { font-size: 14.5px; color: var(--ink-faint); margin: var(--s3) 0 0; line-height: 1.9; }
+.colo-links { display: flex; gap: var(--s7); flex-wrap: wrap; }
+.colo-col h4 {
+  font-size: 11.5px;
+  font-family: var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 var(--s3);
+  font-weight: 400;
+}
+.colo-col a {
+  display: block;
+  font-size: 15px;
+  color: var(--ink-dim);
+  padding: 3px 0;
+  border-bottom: 1px solid transparent;
+  transition: color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.colo-col a:hover { color: var(--seal); border-bottom-color: var(--seal-line); }
+.colo-bottom {
+  margin-top: var(--s7);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--rule-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+}
+
+/* ------------------------------ 入场 ------------------------------ */
+.rise {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.75s var(--ease), transform 0.75s var(--ease);
+}
+.rise.in { opacity: 1; transform: none; }
+
+/* ------------------------------ 响应式 ------------------------------ */
+@media (max-width: 1000px) {
+  .sec-no { position: static; writing-mode: horizontal-tb; display: block; margin-bottom: var(--s2); }
+  .mh-nav { display: none; }
+}
+@media (max-width: 760px) {
+  :root { --gut: 22px; --s9: 72px; }
+  body { font-size: 16px; }
+  .spread { grid-template-columns: 1fr; }
+  .spread > div + div { border-left: 0; border-top: 1px solid var(--rule); }
+  .rl { grid-template-columns: 1fr; gap: 2px; }
+  .rl .sp { font-size: 13px; }
+  .entry { grid-template-columns: 46px 1fr; }
+  .roster-row { flex-wrap: wrap; gap: var(--s2); }
+  .roster-row .dots { display: none; }
+  .record-head { flex-direction: column; gap: 2px; align-items: flex-start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .rise { opacity: 1; transform: none; transition: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="paper-grain" aria-hidden="true"></div>
+
+<!-- ============================ 报头 ============================ -->
+<header class="masthead" id="masthead">
+  <div class="wrap">
+    <a class="mh-brand" href="#top" aria-label="子夜酒馆 首页">
+      <span class="cn">子夜酒馆</span>
+      <span class="en">Nocturne Tavern</span>
+    </a>
+    <nav class="mh-nav" aria-label="主导航">
+      <a href="#pieces">四则</a>
+      <a href="#memory">长夜</a>
+      <a href="#pet">客人</a>
+      <a href="#privacy">账目</a>
+      <a href="#start">入门</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============================ 题记 ============================ -->
+<section class="hero">
+  <div class="wrap">
+    <div class="seal" aria-hidden="true">子夜</div>
+    <h1>一间只在<span class="sealword">深夜</span>开门的酒馆</h1>
+    <p class="epigraph">
+      本地运行的 AI 角色扮演客户端。直接导入酒馆（SillyTavern）的 PNG 角色卡，
+      世界书按关键词命中才注入，<b>状态数值聊上百轮也不会漂</b> ——
+      而聊天记录和 API Key，从始至终只待在你自己的机器上。
+    </p>
+
+    <div class="hero-actions">
+      <a class="btn btn-solid" href="#start">开门</a>
+      <a class="btn" href="#pieces">先翻翻看</a>
+    </div>
+
+    <hr class="rule-double">
+
+    <!-- 那晚的记录：这一版的「产品展示」就是一张账页，没有侧栏、没有面板 -->
+    <div class="record rise">
+      <div class="record-head">
+        <span><span class="who">银月酒馆 · 老板娘</span>　·　第二夜</span>
+        <span class="when">子夜 00:41　deepseek-chat</span>
+      </div>
+      <div class="record-body">
+        <div class="rl">
+          <span class="sp">我</span>
+          <span>擦干净杯子，靠到吧台上问她：今晚还有位置吗？</span>
+        </div>
+        <div class="rl">
+          <span class="sp">老板娘</span>
+          <span>她把抹布往肩上一搭，抬眼看你，指尖在吧台上敲了两下。<br>
+            「有——靠窗那张，一直是空的。」<br>
+            她顿了顿，又补了一句：「就是今晚，别坐那儿。」</span>
+        </div>
+      </div>
+      <div class="record-foot">
+        <span>好感 <b>62 → 66</b></span>
+        <span>警惕 28</span>
+        <span>醉意 15</span>
+        <span>世界书命中 3 条</span>
+      </div>
+    </div>
+    <p class="record-cap">
+      状态栏被程序单独收着，下一轮由它权威注入 —— 所以这一页翻到第一百张，数字也不会前后打架。
+    </p>
+  </div>
+</section>
+
+<!-- ============================ 四则 ============================ -->
+<section class="sec" id="pieces">
+  <div class="wrap">
+    <span class="sec-no">其一</span>
+    <span class="sec-kicker rise">Four pieces</span>
+    <h2 class="rise">角色卡管演谁，世界书管在哪儿<br>预设管怎么回，面板管记不记得住</h2>
+    <p class="sec-lead rise">
+      酒馆里该有的四件事，一件都不少；每件都按<b>能被程序接住</b>的方式重做了一遍 ——
+      模型说的话，能落成数据。
+    </p>
+
+    <div class="entries">
+      <article class="entry rise">
+        <div class="entry-no">其一</div>
+        <div>
+          <h3>角色卡</h3>
+          <span class="en">card</span>
+          <p>
+            直接导入酒馆的 <b>PNG 角色卡</b> —— 解析 PNG 里的 <code>tEXt</code> 数据块，
+            设定、头像、开场白、示例对话一起读进来；JSON 卡 v1 / v2 / v3 也认，
+            连把开场白塞进 <code>chat_history</code> 的变体都认。也可以从头手写一个。
+            <span class="gloss">示例对话会变成真正的 user / assistant 消息一起发出去 —— 扮演质量的差距就在这儿。</span>
+          </p>
+        </div>
+      </article>
+
+      <article class="entry rise">
+        <div class="entry-no">其二</div>
+        <div>
+          <h3>世界书</h3>
+          <span class="en">lorebook</span>
+          <p>
+            <b>关键词命中才注入</b>。一本书几百条设定，只有相关的那几条进上下文 ——
+            四两拨千斤。条目命中后正文还能再触发别的条目，一路连锁。
+            副关键词、选择性逻辑、概率、常驻、扫描深度都有。
+            <span class="gloss">「命中预览」会拿真实对话扫一遍，先告诉你这轮要注入哪几条，再发。</span>
+          </p>
+        </div>
+      </article>
+
+      <article class="entry rise">
+        <div class="entry-no">其三</div>
+        <div>
+          <h3>预设</h3>
+          <span class="en">preset</span>
+          <p>
+            叠在对话上的<b>一层指令</b> —— 管的不是「演谁」「在哪儿」，而是「怎么回」：
+            人称、句式、篇幅密度、用词禁区、固定称呼。一场可挂多条，各自成块依次拼进提示词。
+            <span class="gloss">说明与正文分离：说明只给人看，正文才进提示词。也能直接吃别人分享的预设。</span>
+          </p>
+        </div>
+      </article>
+
+      <article class="entry rise">
+        <div class="entry-no">其四</div>
+        <div>
+          <h3>状态面板</h3>
+          <span class="en">panel</span>
+          <p>
+            模型每轮输出的状态栏会被<b>解析出来单独保存</b>，下一轮由程序权威注入 ——
+            所以聊再多轮，数值也不会因为历史被截断而开始乱编。数值带范围，超出自动拉回；
+            字段能分组、能带变化规则，还能给每轮几个可点的剧情选项。
+            <span class="gloss">模型写 150/100，程序拉回 100/100 —— 不靠祈祷，靠代码。</span>
+          </p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 长夜 ============================ -->
+<section class="sec" id="memory">
+  <div class="wrap">
+    <span class="sec-no">其二</span>
+    <span class="sec-kicker rise">Long play</span>
+    <h2 class="rise">聊到第一百轮，它还记得开局</h2>
+    <p class="sec-lead rise">
+      长对话不丢前文，靠的是三件东西叠着用 —— 不是把历史一股脑塞进上下文，那既不省也不准。
+    </p>
+
+    <div class="three rise">
+      <div>
+        <span class="n">其一 · summary</span>
+        <h3>分段记忆摘要</h3>
+        <p>较早的对话压成摘要常驻在上下文里。聊多久，开局那一幕都还在。</p>
+      </div>
+      <div>
+        <span class="n">其二 · rag</span>
+        <h3>语义检索</h3>
+        <p>按「意思」把相关的旧内容和设定捞回来，不靠关键词字面命中。</p>
+      </div>
+      <div>
+        <span class="n">其三 · branch</span>
+        <h3>分支与存档点</h3>
+        <p>走岔了能整个退回来。想看看另一条路会怎样，不用重开一局。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 名录：模型 ============================ -->
+<section class="sec" id="models">
+  <div class="wrap">
+    <span class="sec-no">其三</span>
+    <span class="sec-kicker rise">Any model</span>
+    <h2 class="rise">哪家的模型都行，一个会话用一个</h2>
+    <p class="sec-lead rise">
+      内置 6 家国内常见平台的预设，点一下就能填好。其余平台 —— 豆包、硅基流动、千帆、
+      阶跃、星火、零一万物，以及境外的 —— 只要对方是 <b>OpenAI 兼容端点</b>，填个地址就能用。
+    </p>
+
+    <div class="roster rise">
+      <div class="roster-row"><span class="nm">DeepSeek</span><span class="dots"></span><span class="tag">已内置</span></div>
+      <div class="roster-row"><span class="nm">通义千问</span><span class="dots"></span><span class="tag">已内置</span></div>
+      <div class="roster-row"><span class="nm">Kimi</span><span class="dots"></span><span class="tag">已内置</span></div>
+      <div class="roster-row"><span class="nm">智谱 GLM</span><span class="dots"></span><span class="tag">已内置</span></div>
+      <div class="roster-row"><span class="nm">腾讯混元</span><span class="dots"></span><span class="tag">已内置</span></div>
+      <div class="roster-row"><span class="nm">MiniMax</span><span class="dots"></span><span class="tag">已内置</span></div>
+      <div class="roster-row"><span class="nm">任何 OpenAI 兼容端点</span><span class="dots"></span><span class="tag">自定义</span></div>
+    </div>
+    <p class="record-cap">
+      每个会话记着自己用的模型：银月酒馆用 deepseek-chat、跑团记录用 qwen-max、通用助手用 glm-5.3，
+      互不影响；每条回答上还会标明是哪个模型答的。API Key 用系统级
+      <code>safeStorage</code> 加密后落盘。
+    </p>
+  </div>
+</section>
+
+<!-- ============================ 客人：桌宠 ============================ -->
+<section class="sec" id="pet">
+  <div class="wrap">
+    <span class="sec-no">其四</span>
+    <span class="sec-kicker rise">Companion</span>
+    <h2 class="rise">它不是你的化身，是坐在旁边看你玩的小家伙</h2>
+
+    <div class="pet-note rise">
+      <p class="said">你俩又聊到后半夜了……</p>
+      <p class="attr">—— 它盯着屏幕，尾巴尖晃了一下</p>
+      <ul class="pet-list">
+        <li>看得见你们的对话，<b>有自己的性格</b>，每隔几轮会插一句进来。</li>
+        <li>有自己的记忆，也可以配自己的模型 —— 用便宜的那档跑就好。</li>
+        <li><b>永不进剧情，也不写进对话记录。</b>它只是坐在旁边看着。</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 账目：隐私 ============================ -->
+<section class="sec" id="privacy">
+  <div class="wrap">
+    <span class="sec-no">其五</span>
+    <span class="sec-kicker rise">No server</span>
+    <h2 class="rise">没有服务器，就没有「上传」这个词</h2>
+    <p class="sec-lead rise">
+      这个项目<b>没有任何后台</b>。主进程就是本地的 Node.js，跑在你自己的机器上。
+      这不是一句承诺，是它没有的东西 —— 想传也没地方传。
+    </p>
+
+    <div class="spread rise">
+      <div class="them">
+        <h3>一般的云端 AI</h3>
+        <p class="track">你的对话 <span class="to">→</span> 别人的服务器 <span class="to">→</span> 回来了</p>
+        <p>聊天记录、角色设定、你写的一切，都要先在别人的机器上落一次地。</p>
+        <p>换台电脑，得重新登录；服务下线，记录跟着一起走。</p>
+      </div>
+      <div class="us">
+        <h3>子夜酒馆</h3>
+        <p class="track">你的对话 <span class="to">→</span> <span class="end">本机 · 直连模型 API</span></p>
+        <p>只有发往你自己配置的模型接口那一次请求，别的什么都不经过第三方。</p>
+        <p><b>数据就在程序旁边</b>：整个 <code>data\</code> 文件夹拷走，记录、角色、世界书全跟着走 ——
+          换机器、放 U 盘、发给别人，都不用重新配置。</p>
+      </div>
+    </div>
+
+    <p class="record-cap" style="margin-top: var(--s4);">
+      页面本身被 CSP 锁死（<code>default-src 'none'</code>）—— 它连网络请求都发不出去。
+      所有系统能力都必须走进程间通信交给主进程。即使页面里被塞了恶意脚本，它也没办法把数据往外送。
+    </p>
+  </div>
+</section>
+
+<!-- ============================ 入门 ============================ -->
+<section class="sec" id="start">
+  <div class="wrap">
+    <span class="sec-no">其六</span>
+    <span class="sec-kicker rise">Get started</span>
+    <h2 class="rise">三步，点灯开门</h2>
+
+    <div class="recipe rise">
+      <div class="recipe-head">命令行</div>
+      <div class="recipe-body">
+        <div class="ln cmt"># 客户端代码都在 client/ 里，先进去</div>
+        <div class="ln"><span class="p">$</span> <b>cd client</b></div>
+        <div class="ln cmt"># 首次会下载约 100MB 的 Electron 运行时</div>
+        <div class="ln"><span class="p">$</span> <b>npm install</b></div>
+        <div class="ln"><span class="p">$</span> <b>npm start</b></div>
+        <div class="ln out">Electron 已就绪 —— 窗口打开了</div>
+      </div>
+    </div>
+
+    <ol class="steps rise">
+      <li>
+        <b>要有 Node.js 18+</b>
+        <span>Windows / macOS / Linux 都行。Windows 用户也可以直接双击
+        <code>client\Start-Mimitale.cmd</code>，它会自己检查环境、自动装依赖，出错时给中文提示。</span>
+      </li>
+      <li>
+        <b>填一次模型接口</b>
+        <span>启动后点左下角「设置」，从内置预设里挑一家填上 API Key。只填一次，
+        之后每个会话自己记着用哪家、哪个模型。</span>
+      </li>
+      <li>
+        <b>把角色卡拖进来</b>
+        <span>酒馆用的 PNG 卡直接导入，设定、头像、开场白、内嵌世界书一起到位。
+        然后就可以开始了 —— 从今晚，或者任意一个你想回的夜晚。</span>
+      </li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<!-- ============================ 落款 ============================ -->
+<footer class="colophon">
+  <div class="wrap">
+    <div class="colo-grid">
+      <div class="colo-brand">
+        <span class="cn">子夜酒馆</span>
+        <span class="en">Nocturne Tavern</span>
+        <p>一个跑在自己电脑上的桌面对话 AI。<br>角色扮演、世界书、状态面板 —— 都在本地。</p>
+      </div>
+      <div class="colo-links">
+        <div class="colo-col">
+          <h4>开始</h4>
+          <a href="#start">快速开始</a>
+          <a href="#pieces">功能介绍</a>
+          <a href="#privacy">数据与隐私</a>
+        </div>
+        <div class="colo-col">
+          <h4>深入</h4>
+          <a href="#memory">长对话记忆</a>
+          <a href="#models">模型接入</a>
+          <a href="#pet">桌宠</a>
+        </div>
+        <div class="colo-col">
+          <h4>文档</h4>
+          <a href="https://github.com" target="_blank" rel="noopener">GitHub 仓库</a>
+          <a href="#start">使用说明</a>
+          <a href="#start">变更记录</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="colo-bottom">
+      <span>MIT License · 子夜酒馆 Nocturne Tavern</span>
+      <span>本地运行 · 没有服务器 · 数据不出本机</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var bar = document.getElementById('masthead');
+  var onScroll = function () {
+    if (window.scrollY > 10) bar.classList.add('is-pinned');
+    else bar.classList.remove('is-pinned');
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+
+(function () {
+  var items = document.querySelectorAll('.rise');
+  if (!('IntersectionObserver' in window)) {
+    items.forEach(function (el) { el.classList.add('in'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      var el = e.target;
+      var sibs = Array.prototype.filter.call(el.parentNode.children, function (c) {
+        return c.classList && c.classList.contains('rise');
+      });
+      var i = sibs.indexOf(el);
+      el.style.transitionDelay = Math.min(i, 3) * 90 + 'ms';
+      el.classList.add('in');
+      io.unobserve(el);
+    });
+  }, { rootMargin: '0px 0px -12% 0px', threshold: 0.08 });
+  items.forEach(function (el) { io.observe(el); });
+})();
+</script>
+
+</body>
+</html>

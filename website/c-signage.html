@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>子夜酒馆 Nocturne Tavern — 一间只在深夜开门的酒馆</title>
+<meta name="description" content="本地运行的 AI 角色扮演客户端。导入酒馆角色卡，世界书按关键词命中注入，状态数值聊上百轮也不漂。没有服务器，数据只在你自己机器上。">
+<style>
+/* ==========================================================================
+   子夜酒馆 Nocturne Tavern — 官网 · 方向 C「招牌灯箱 / Signage」
+   
+   方向主张：酒馆是夜色里一块发光的招牌 —— 字号即设计，留白即体面。
+     · 明暗立场：**近黑 + 高对比**（比方向 A 更黑，光只从招牌来）
+     · 结构主张：**满宽条幅**，内容横贯整个视口，章节之间靠灯管横线切分
+     · 字体角色：**全无衬线**（标题粗、字距紧，数字用等宽），一个衬线字都不用
+   
+   ⚠️ 与 A / B 的差别必须落在「明暗 / 结构 / 字体」三处上。
+   这里唯一的彩色是招牌金；发光只用在一个地方 —— 招牌本身的灯管。
+   ========================================================================== */
+
+:root {
+  --void:    #08090a;   /* 夜 */
+  --void-2:  #0e1012;   /* 面板 */
+  --void-3:  #16181b;   /* 卡片 */
+  --line:    #24272b;
+  --line-hi: #3a3e43;
+
+  --white:   #f4f2ee;
+  --dim:     #a2a19c;
+  --faint:   #7a7975;   /* 黑底上 4.57:1，过 AA */
+
+  --glow:    #ffc857;   /* 招牌金 */
+  --glow-hi: #ffdd93;
+  --glow-a22: rgba(255, 200, 87, 0.22);
+  --glow-a14: rgba(255, 200, 87, 0.14);
+  --glow-a08: rgba(255, 200, 87, 0.08);
+
+  --radius:    2px;
+  --radius-sm: 2px;
+
+  --display: "Microsoft YaHei UI", "Microsoft YaHei", SimHei, "Segoe UI", system-ui, sans-serif;
+  --mono:    "JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+
+  --wrap: 1360px;      /* 满宽 —— 这是与 A（1140）和 B（700）最直观的差别 */
+  --gut: 40px;
+
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 40px; --s7: 64px; --s8: 96px; --s9: 152px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--void);
+  color: var(--white);
+  font-family: var(--display);
+  font-size: 16px;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* 招牌的光落在场地中央偏上，其余全黑 */
+.spot {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1000px 620px at 50% -8%, rgba(255, 200, 87, 0.11), transparent 62%),
+    radial-gradient(700px 460px at 88% 96%, rgba(255, 200, 87, 0.05), transparent 60%);
+}
+/* 四角压暗，把视线收进招牌 */
+.spot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(130% 100% at 50% 38%, transparent 46%, rgba(0, 0, 0, 0.6) 100%);
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 var(--gut);
+  position: relative;
+  z-index: 1;
+}
+
+a { color: inherit; text-decoration: none; }
+
+:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 3px;
+}
+
+::selection { background: var(--glow-a22); color: var(--white); }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  color: var(--white);
+  background: var(--void-3);
+  border: 1px solid var(--line);
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+}
+
+/* ------------------------------ 灯管 ------------------------------ */
+/* 全页唯一的发光元件。招牌的横管：两端收进黑暗，中段亮着。 */
+.tube {
+  height: 1px;
+  border: 0;
+  margin: 0;
+  background: linear-gradient(90deg,
+    transparent 0%, rgba(255, 200, 87, 0.5) 12%,
+    rgba(255, 200, 87, 0.5) 88%, transparent 100%);
+  box-shadow: 0 0 14px rgba(255, 200, 87, 0.32);
+}
+.tube--dim {
+  background: linear-gradient(90deg, transparent 0%, var(--line) 12%, var(--line) 88%, transparent 100%);
+  box-shadow: none;
+}
+
+/* ------------------------------ 顶栏 ------------------------------ */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(16px);
+  background: rgba(8, 9, 10, 0.6);
+  border-bottom: 1px solid transparent;
+  transition: background 0.3s var(--ease), border-color 0.3s var(--ease);
+}
+.topbar.is-pinned {
+  background: rgba(8, 9, 10, 0.92);
+  border-bottom-color: var(--line);
+}
+.topbar .wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--s6);
+  height: 64px;
+}
+.tb-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-right: auto;
+}
+/* 品牌标记：一小截竖着的灯管（不是 A 那个方角块） */
+.tb-tube {
+  width: 3px;
+  height: 22px;
+  border-radius: 2px;
+  background: var(--glow);
+  box-shadow: 0 0 10px rgba(255, 200, 87, 0.7), 0 0 22px rgba(255, 200, 87, 0.35);
+  flex: none;
+}
+.tb-brand .cn {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+}
+.tb-brand .en {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.tb-nav { display: flex; gap: var(--s5); }
+.tb-nav a {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dim);
+  transition: color 0.2s var(--ease);
+}
+.tb-nav a:hover { color: var(--glow); }
+
+/* ------------------------------ Hero ------------------------------ */
+.hero { padding: var(--s9) 0 0; text-align: center; }
+
+/* 招牌上的英文字：宽字距 + 灯管发光。全页只有这一处发光。 */
+.neon {
+  display: block;
+  font-family: var(--mono);
+  font-size: clamp(11px, 1.3vw, 15px);
+  letter-spacing: 0.66em;
+  text-transform: uppercase;
+  color: var(--glow);
+  text-indent: 0.66em;      /* 抵消字距在右侧多出来的一格，让它真正居中 */
+  text-shadow:
+    0 0 6px rgba(255, 200, 87, 0.7),
+    0 0 22px rgba(255, 200, 87, 0.45),
+    0 0 52px rgba(255, 200, 87, 0.25);
+  animation: flicker 9s infinite;
+}
+/* 旧招牌偶尔眨一下眼 —— 幅度刻意做得很小，是「旧」不是「故障」 */
+@keyframes flicker {
+  0%, 96.5%, 100% { opacity: 1; }
+  97.2% { opacity: 0.78; }
+  98%   { opacity: 0.94; }
+}
+
+.hero h1 {
+  font-size: clamp(38px, 8.6vw, 106px);
+  font-weight: 700;
+  line-height: 1.14;
+  letter-spacing: -0.01em;
+  margin: var(--s5) 0 0;
+  text-wrap: balance;
+}
+.hero h1 .lit {
+  color: var(--glow);
+  text-shadow: 0 0 60px rgba(255, 200, 87, 0.35);
+}
+
+.hero .lead {
+  font-size: clamp(15px, 1.25vw, 18px);
+  line-height: 1.95;
+  color: var(--dim);
+  max-width: 720px;
+  margin: var(--s6) auto 0;
+}
+.hero .lead b { color: var(--white); font-weight: 600; }
+
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  justify-content: center;
+  margin-top: var(--s7);
+}
+
+/* 招牌式的按钮：直角、宽字距的大写 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 15px 30px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-hi);
+  color: var(--white);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease),
+              color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+.btn:hover { border-color: var(--glow); color: var(--glow); box-shadow: 0 0 24px rgba(255, 200, 87, 0.2); }
+.btn-solid {
+  background: var(--glow);
+  border-color: var(--glow);
+  color: #0b0c0d;
+  font-weight: 700;
+}
+.btn-solid:hover { background: var(--glow-hi); border-color: var(--glow-hi); color: #0b0c0d; box-shadow: 0 0 36px rgba(255, 200, 87, 0.45); }
+
+/* ------------------------------ 满宽产品屏 ------------------------------ */
+.screen-zone { margin-top: var(--s8); position: relative; }
+
+.mock {
+  position: relative;
+  background: var(--void-2);
+  border-top: 1px solid var(--glow-a22);
+  border-bottom: 1px solid var(--glow-a22);
+  box-shadow:
+    0 0 60px rgba(255, 200, 87, 0.07),
+    0 -1px 0 rgba(255, 200, 87, 0.14) inset,
+    0 1px 0 rgba(255, 200, 87, 0.14) inset;
+  overflow: hidden;
+}
+.mock-chrome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px var(--gut);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.mock-chrome .pip { width: 8px; height: 8px; border-radius: 1px; background: var(--line-hi); }
+.mock-chrome .tag { margin-left: auto; color: var(--glow); }
+
+.mock-body {
+  display: grid;
+  grid-template-columns: 250px 1fr 280px;
+  height: 480px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.m-side {
+  background: var(--void);
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.m-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 15px 16px 14px 20px;
+}
+.m-brand i {
+  width: 3px; height: 18px; border-radius: 2px;
+  background: var(--glow);
+  box-shadow: 0 0 10px rgba(255, 200, 87, 0.6);
+  flex: none;
+}
+.m-brand span { font-size: 14px; font-weight: 700; letter-spacing: 0.16em; }
+.m-side-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 6px 20px 8px;
+}
+.m-convo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  margin: 1px 8px;
+  border-radius: var(--radius-sm);
+}
+.m-convo.on { background: var(--void-3); box-shadow: inset 2px 0 0 var(--glow); }
+.m-convo .ava {
+  width: 26px; height: 26px; border-radius: var(--radius-sm); flex: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #101214;
+}
+.g-amber { background: linear-gradient(135deg, #ffd9a8, #ffab5e); }
+.g-rose  { background: linear-gradient(135deg, #ffb0d0, #b98cff); }
+.g-mint  { background: linear-gradient(135deg, #b9f0d8, #5fd6a8); }
+.g-blue  { background: linear-gradient(135deg, #9fd4ff, #6aa8ff); }
+.m-convo .nm {
+  flex: 1; min-width: 0;
+  font-size: 12.5px; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.m-convo.on .nm { color: var(--white); }
+.m-convo .tm { font-family: var(--mono); font-size: 10px; color: var(--faint); flex: none; }
+.m-side-foot {
+  margin-top: auto;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+  display: flex;
+  justify-content: space-between;
+}
+
+.m-chat { display: flex; flex-direction: column; overflow: hidden; background: var(--void-2); }
+.m-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.m-head .charname { font-size: 13.5px; font-weight: 700; letter-spacing: 0.06em; }
+.m-head .tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+.m-head .model {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--glow);
+  border: 1px solid var(--glow-a22);
+  background: var(--glow-a08);
+  padding: 4px 11px;
+  border-radius: var(--radius-sm);
+}
+.m-msgs { padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+.msg .who {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 7px;
+  display: flex; align-items: center; gap: 8px;
+}
+.msg .who .p { width: 4px; height: 4px; border-radius: 50%; }
+.msg .who .p.me { background: #6aa8ff; }
+.msg .who .p.ai { background: var(--glow); box-shadow: 0 0 8px rgba(255, 200, 87, 0.8); }
+.msg.me .body { color: var(--dim); }
+.msg .body { line-height: 1.8; font-size: 13.5px; }
+.msg .body .act { color: var(--glow); }
+.msg .delta {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--glow);
+  background: var(--glow-a08);
+  border: 1px solid var(--glow-a22);
+  border-radius: var(--radius-sm);
+  padding: 0 6px;
+  margin-left: 4px;
+}
+.m-input {
+  margin: auto 24px 22px;
+  border: 1px solid var(--line);
+  background: var(--void-3);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex; align-items: center; gap: 10px;
+  color: var(--faint);
+  font-size: 12.5px;
+}
+.caret { width: 1.5px; height: 15px; background: var(--glow); animation: blink 1.1s steps(2, start) infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+.m-panel { background: var(--void); border-left: 1px solid var(--line); overflow: hidden; }
+.m-panel-head {
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.m-group { padding: 16px 20px 6px; }
+.m-group-t {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--glow);
+  margin-bottom: 12px;
+}
+.m-field { margin-bottom: 13px; }
+.m-field .k {
+  display: flex; justify-content: space-between;
+  font-size: 12px; color: var(--dim); margin-bottom: 6px;
+}
+.m-field .k b { color: var(--white); font-family: var(--mono); font-weight: 600; }
+.m-field .k .up { color: var(--glow); }
+.m-bar { height: 3px; background: var(--void-3); overflow: hidden; border-radius: 2px; }
+.m-bar i { display: block; height: 100%; background: var(--glow); border-radius: 2px; box-shadow: 0 0 8px rgba(255, 200, 87, 0.6); }
+.m-bar.is-cool i { background: #6aa8ff; box-shadow: none; }
+.m-text { font-size: 12px; color: var(--white); }
+.m-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.m-chips span {
+  font-size: 10.5px; color: var(--dim);
+  border: 1px solid var(--line); padding: 1px 7px; border-radius: var(--radius-sm);
+}
+
+/* 屏下那行等宽注脚 */
+.screen-cap {
+  padding: var(--s4) var(--gut) 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s5);
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.screen-cap b { color: var(--glow); font-weight: 400; }
+
+/* ------------------------------ 条幅（小节） ------------------------------ */
+.band { padding: var(--s9) 0 0; }
+
+.band-head { margin-bottom: var(--s7); }
+.band-no {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--glow);
+  display: block;
+  margin-bottom: var(--s4);
+}
+.band h2 {
+  font-size: clamp(28px, 4.4vw, 56px);
+  font-weight: 700;
+  line-height: 1.24;
+  letter-spacing: -0.015em;
+  margin: 0;
+  text-wrap: balance;
+}
+.band h2 .dim { color: var(--faint); }
+.band-lead {
+  font-size: clamp(15px, 1.2vw, 17px);
+  line-height: 1.9;
+  color: var(--dim);
+  max-width: 760px;
+  margin: var(--s5) 0 0;
+}
+.band-lead b { color: var(--white); font-weight: 600; }
+
+/* 满宽条目：左侧一个巨大编号，右侧内容  —— 就是「招牌条」的排法 */
+.slats { border-top: 1px solid var(--line); }
+.slat {
+  display: grid;
+  grid-template-columns: 160px 300px 1fr;
+  gap: var(--s6);
+  padding: var(--s7) 0;
+  border-bottom: 1px solid var(--line);
+  align-items: start;
+  transition: background 0.25s var(--ease);
+}
+.slat:hover { background: rgba(255, 200, 87, 0.02); }
+.slat-no {
+  font-size: 60px;
+  font-weight: 700;
+  line-height: 0.82;
+  letter-spacing: -0.05em;
+  color: var(--line-hi);
+  transition: color 0.3s var(--ease), text-shadow 0.3s var(--ease);
+}
+.slat:hover .slat-no { color: var(--glow); text-shadow: 0 0 40px rgba(255, 200, 87, 0.4); }
+.slat h3 {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  letter-spacing: 0.02em;
+}
+.slat .en {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--glow);
+}
+.slat p {
+  font-size: 15.5px;
+  line-height: 1.9;
+  color: var(--dim);
+  margin: 0;
+}
+.slat p b { color: var(--white); font-weight: 600; }
+.slat .gloss {
+  display: block;
+  margin-top: var(--s4);
+  padding-left: var(--s4);
+  border-left: 2px solid var(--glow-a22);
+  color: var(--white);
+  font-size: 14.5px;
+}
+
+/* ------------------------------ 三格（长对话） ------------------------------ */
+.tri { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.tri > div { background: var(--void-2); padding: var(--s6) var(--s6) var(--s7); }
+.tri .n {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  color: var(--glow);
+  display: block;
+  margin-bottom: var(--s5);
+}
+.tri h3 { font-size: 21px; font-weight: 700; margin: 0 0 var(--s3); letter-spacing: 0.02em; }
+.tri p { font-size: 15px; line-height: 1.9; color: var(--dim); margin: 0; }
+
+/* ------------------------------ 模型：横排大字 ------------------------------ */
+.model-wall {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s6);
+  align-items: baseline;
+  border-top: 1px solid var(--line);
+  padding-top: var(--s5);
+  margin-top: var(--s5);
+}
+.model-wall span {
+  font-size: clamp(20px, 2.6vw, 34px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--white);
+  line-height: 1.6;
+  transition: color 0.25s var(--ease);
+}
+.model-wall span:hover { color: var(--glow); }
+.model-wall span.plus { color: var(--faint); font-size: clamp(16px, 1.8vw, 22px); font-weight: 400; }
+.model-note {
+  margin: var(--s6) 0 0;
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--dim);
+  max-width: 760px;
+}
+.model-note b { color: var(--white); font-weight: 600; }
+
+/* ------------------------------ 桌宠 ------------------------------ */
+.petband { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s8); align-items: center; }
+.pet-say {
+  font-size: clamp(24px, 3.4vw, 42px);
+  font-weight: 700;
+  line-height: 1.34;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.pet-say em { color: var(--glow); font-style: normal; }
+.pet-points { list-style: none; padding: 0; margin: var(--s6) 0 0; }
+.pet-points li {
+  font-size: 15.5px;
+  line-height: 1.9;
+  color: var(--dim);
+  padding: 10px 0 10px 24px;
+  border-top: 1px solid var(--line);
+  position: relative;
+}
+.pet-points li:last-child { border-bottom: 1px solid var(--line); }
+.pet-points li::before {
+  content: "";
+  position: absolute; left: 0; top: 21px;
+  width: 8px; height: 2px; background: var(--glow);
+  box-shadow: 0 0 8px rgba(255, 200, 87, 0.6);
+}
+.pet-points li b { color: var(--white); font-weight: 600; }
+
+.pet-stage {
+  position: relative;
+  aspect-ratio: 1 / 0.9;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--void-2), var(--void));
+  overflow: hidden;
+}
+.pet-stage::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: radial-gradient(60% 40% at 50% 100%, rgba(255, 200, 87, 0.10), transparent 70%);
+}
+.pet-stage .floor {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: var(--line-hi);
+}
+.pet-bubble {
+  position: absolute; top: 16%; left: 9%;
+  max-width: 66%;
+  background: var(--void-3);
+  border: 1px solid var(--line-hi);
+  border-radius: var(--radius);
+  padding: 12px 15px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--white);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
+}
+.pet-bubble span {
+  display: block; margin-top: 5px;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint);
+}
+.pet-figure { position: absolute; right: 8%; bottom: 0; }
+
+/* ------------------------------ 隐私 ------------------------------ */
+.darkwall { border: 1px solid var(--line); }
+.darkwall-grid { display: grid; grid-template-columns: 1fr 1fr; }
+/* ⚠️ min-width: 0 是必须的，不是保险 —— grid 子项默认 min-width:auto，
+   会被下面那条 nowrap 的 .wire 撑开，窄屏直接横向溢出（2026-10-13 实测：
+   390px 下 scrollWidth 436 > 375）。给了它，.wire 才会老实走自己的横向滚动。 */
+.darkwall-col { padding: var(--s6); min-width: 0; }
+.darkwall-col.them { background: var(--void-2); border-right: 1px solid var(--line); }
+.darkwall-col.us { background: linear-gradient(180deg, var(--glow-a08), transparent 76%); }
+.darkwall-col h3 {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  margin: 0 0 var(--s5);
+  color: var(--faint);
+}
+.darkwall-col.us h3 { color: var(--glow); }
+.wire {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+  margin: 0 0 var(--s5);
+  padding: var(--s3) var(--s4);
+  background: var(--void);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.wire .to { color: var(--faint); }
+.wire .bad { color: #ffb4b0; }
+.wire .good { color: var(--glow); }
+.darkwall-col p { font-size: 14.5px; line-height: 1.9; color: var(--dim); margin: 0 0 var(--s3); }
+.darkwall-col p b { color: var(--white); font-weight: 600; }
+.darkwall-col.us p b { color: var(--glow); }
+.darkwall-foot {
+  border-top: 1px solid var(--line);
+  padding: var(--s5) var(--s6);
+  background: var(--void-2);
+  font-size: 13.5px;
+  line-height: 1.85;
+  color: var(--dim);
+}
+
+/* ------------------------------ 快速开始 ------------------------------ */
+.startband { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s8); align-items: stretch; }
+.term {
+  border: 1px solid var(--line);
+  background: #0a0b0c;
+  display: flex;
+  flex-direction: column;
+}
+.term-bar {
+  padding: var(--s3) var(--s5);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--faint);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.term-bar i {
+  width: 3px; height: 14px; border-radius: 2px;
+  background: var(--glow);
+  box-shadow: 0 0 10px rgba(255, 200, 87, 0.6);
+}
+.term-body { padding: var(--s5) var(--s6) var(--s6); font-family: var(--mono); font-size: 13px; line-height: 2.3; }
+.term-body .cmt { color: var(--faint); }
+.term-body .cmd { color: var(--white); }
+.term-body .cmd::before { content: "$ "; color: var(--glow); }
+.term-body .out { color: var(--glow); margin-top: var(--s2); }
+
+.bigsteps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+.bigsteps li {
+  position: relative;
+  padding: var(--s5) 0 var(--s5) 78px;
+  border-bottom: 1px solid var(--line);
+  counter-increment: s;
+}
+.bigsteps li:first-child { border-top: 1px solid var(--line); }
+.bigsteps li::before {
+  content: "0" counter(s);
+  position: absolute;
+  left: 0; top: var(--s5);
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--line-hi);
+  line-height: 1;
+}
+.bigsteps li b { display: block; font-size: 17px; font-weight: 700; margin-bottom: 4px; letter-spacing: 0.02em; }
+.bigsteps li span { font-size: 15px; line-height: 1.9; color: var(--dim); }
+
+/* ------------------------------ 页脚 ------------------------------ */
+.foot { margin-top: var(--s9); }
+.foot-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s8);
+  justify-content: space-between;
+  padding: var(--s8) 0 var(--s7);
+}
+.foot-brand { max-width: 340px; }
+.foot-brand .cn { font-size: 20px; font-weight: 700; letter-spacing: 0.2em; }
+.foot-brand .en {
+  display: block; margin-top: 3px;
+  font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.28em; text-transform: uppercase; color: var(--faint);
+}
+.foot-brand p { font-size: 14px; color: var(--faint); margin: var(--s4) 0 0; line-height: 1.85; }
+.foot-cols { display: flex; gap: var(--s8); flex-wrap: wrap; }
+.foot-col h4 {
+  font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.24em; text-transform: uppercase;
+  color: var(--faint); margin: 0 0 var(--s4); font-weight: 400;
+}
+.foot-col a {
+  display: block; font-size: 14.5px; color: var(--dim);
+  padding: 4px 0; transition: color 0.2s var(--ease);
+}
+.foot-col a:hover { color: var(--glow); }
+.foot-bottom {
+  border-top: 1px solid var(--line);
+  padding: var(--s5) 0 var(--s6);
+  display: flex; flex-wrap: wrap; gap: var(--s4);
+  justify-content: space-between;
+  font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* ------------------------------ 入场 ------------------------------ */
+.rise { opacity: 0; transform: translateY(16px); transition: opacity 0.8s var(--ease), transform 0.8s var(--ease); }
+.rise.in { opacity: 1; transform: none; }
+
+/* ------------------------------ 响应式 ------------------------------ */
+@media (max-width: 1200px) {
+  .mock-body { grid-template-columns: 220px 1fr 250px; height: 450px; }
+  .slat { grid-template-columns: 110px 240px 1fr; gap: var(--s5); }
+  .slat-no { font-size: 46px; }
+}
+@media (max-width: 960px) {
+  :root { --gut: 24px; --s9: 96px; }
+  .tb-nav { display: none; }
+  .mock-body { grid-template-columns: 190px 1fr; height: 420px; }
+  .m-panel { display: none; }
+  .tri { grid-template-columns: 1fr; }
+  .petband, .startband { grid-template-columns: 1fr; gap: var(--s6); }
+  .darkwall-grid { grid-template-columns: 1fr; }
+  .darkwall-col { padding: var(--s5); }
+  .darkwall-col.them { border-right: 0; border-bottom: 1px solid var(--line); }
+  .slat { grid-template-columns: 1fr; gap: var(--s3); }
+  .slat-no { font-size: 36px; }
+}
+@media (max-width: 620px) {
+  :root { --s8: 64px; --s9: 72px; }
+  .mock-body { grid-template-columns: 1fr; height: 400px; }
+  .m-side { display: none; }
+  .hero-cta .btn { flex: 1; }
+  .foot-cols { gap: var(--s6); }
+  .bigsteps li { padding-left: 60px; }
+  .bigsteps li::before { font-size: 24px; }
+  /* 手机上让数据流换行，别让人去横向拖一条 12px 的信息 */
+  .wire { white-space: normal; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .rise { opacity: 1; transform: none; transition: none; }
+  .neon { animation: none; }
+  .caret { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="spot" aria-hidden="true"></div>
+
+<!-- ============================ 顶栏 ============================ -->
+<header class="topbar" id="topbar">
+  <div class="wrap">
+    <a class="tb-brand" href="#top" aria-label="子夜酒馆 首页">
+      <span class="tb-tube" aria-hidden="true"></span>
+      <span class="cn">子夜酒馆</span>
+      <span class="en">Nocturne Tavern</span>
+    </a>
+    <nav class="tb-nav" aria-label="主导航">
+      <a href="#pieces">Pieces</a>
+      <a href="#memory">Memory</a>
+      <a href="#pet">Companion</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#start">Start</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============================ Hero ============================ -->
+<section class="hero">
+  <div class="wrap">
+    <span class="neon">Nocturne Tavern</span>
+    <h1>一间只在<span class="lit">深夜</span><br>开门的酒馆</h1>
+    <p class="lead">
+      本地运行的 AI 角色扮演客户端。直接导入酒馆（SillyTavern）的 PNG 角色卡，
+      世界书按关键词命中才注入，<b>状态数值聊上百轮也不会漂</b> ——
+      而聊天记录和 API Key，从始至终只待在你自己的机器上。
+    </p>
+    <div class="hero-cta">
+      <a class="btn btn-solid" href="#start">开门</a>
+      <a class="btn" href="#pieces">先翻翻看</a>
+    </div>
+  </div>
+
+  <!-- 满宽产品屏：直接嵌进黑底，上下各一条灯管 -->
+  <div class="screen-zone rise">
+    <div class="mock" role="img" aria-label="子夜酒馆客户端界面示意：左侧会话列表，中间对话，右侧状态面板">
+      <div class="mock-chrome">
+        <span class="pip"></span><span class="pip"></span><span class="pip"></span>
+        <span style="margin-left:12px">子夜酒馆 · 本地运行</span>
+        <span class="tag">无服务器</span>
+      </div>
+      <div class="mock-body">
+        <aside class="m-side">
+          <div class="m-brand"><i aria-hidden="true"></i><span>子夜酒馆</span></div>
+          <div class="m-side-label">Sessions</div>
+          <div class="m-convo on">
+            <span class="ava g-amber">银</span><span class="nm">银月酒馆 · 老板娘</span><span class="tm">10:41</span>
+          </div>
+          <div class="m-convo">
+            <span class="ava g-rose">露</span><span class="nm">露西娅</span><span class="tm">昨天</span>
+          </div>
+          <div class="m-convo">
+            <span class="ava g-mint">通</span><span class="nm">通用助手</span><span class="tm">周日</span>
+          </div>
+          <div class="m-convo">
+            <span class="ava g-blue">跑</span><span class="nm">跑团记录 · 第三夜</span><span class="tm">周六</span>
+          </div>
+          <div class="m-side-foot"><span>设置</span><span>帮助</span></div>
+        </aside>
+
+        <div class="m-chat">
+          <div class="m-head">
+            <span class="charname">银月酒馆 · 老板娘</span>
+            <span class="tag">世界书 ×3</span>
+            <span class="model">deepseek-chat</span>
+          </div>
+          <div class="m-msgs">
+            <div class="msg me">
+              <div class="who"><i class="p me"></i>我</div>
+              <div class="body">擦干净杯子，靠到吧台上问她：今晚还有位置吗？</div>
+            </div>
+            <div class="msg">
+              <div class="who"><i class="p ai"></i>老板娘</div>
+              <div class="body">
+                <span class="act">她把抹布往肩上一搭，抬眼看你，指尖在吧台上敲了两下。</span><br>
+                「有——靠窗那张，一直是空的。」<span class="delta">好感 62 → 66</span><br>
+                她顿了顿，又补了一句：「就是今晚，别坐那儿。」
+              </div>
+            </div>
+          </div>
+          <div class="m-input"><span>说点什么…</span><i class="caret" aria-hidden="true"></i></div>
+        </div>
+
+        <aside class="m-panel">
+          <div class="m-panel-head">状态面板</div>
+          <div class="m-group">
+            <div class="m-group-t">关系</div>
+            <div class="m-field">
+              <div class="k"><span>好感度</span><b>66 <span class="up">▲4</span></b></div>
+              <div class="m-bar"><i style="width:66%"></i></div>
+            </div>
+            <div class="m-field">
+              <div class="k"><span>警惕</span><b>28</b></div>
+              <div class="m-bar is-cool"><i style="width:28%"></i></div>
+            </div>
+          </div>
+          <div class="m-group">
+            <div class="m-group-t">当前</div>
+            <div class="m-field">
+              <div class="k"><span>醉意</span><b>15</b></div>
+              <div class="m-bar"><i style="width:15%"></i></div>
+            </div>
+            <div class="m-field">
+              <div class="k"><span>位置</span></div>
+              <div class="m-text">吧台 · 靠窗第二张空着</div>
+            </div>
+            <div class="m-field">
+              <div class="k"><span>随身</span></div>
+              <div class="m-chips"><span>铜钥匙</span><span>旧信</span></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="screen-cap">
+      <span>状态栏由程序权威注入 — <b>聊一百轮也不会漂</b></span>
+      <span>数据目录 · client\data\ · <b>不出本机</b></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 四件 ============================ -->
+<section class="band" id="pieces">
+  <div class="wrap">
+    <div class="band-head rise">
+      <span class="band-no">01 — 04 / FOUR PIECES</span>
+      <h2>角色卡管演谁，世界书管在哪儿<br><span class="dim">预设管怎么回，面板管记不记得住</span></h2>
+      <p class="band-lead">
+        酒馆里该有的四件事，一件都不少；每件都按<b>能被程序接住</b>的方式重做了一遍 ——
+        模型说的话，能落成数据。
+      </p>
+    </div>
+
+    <div class="slats">
+      <article class="slat rise">
+        <div class="slat-no">01</div>
+        <div>
+          <h3>角色卡</h3>
+          <span class="en">card</span>
+        </div>
+        <p>
+          直接导入酒馆的 <b>PNG 角色卡</b> —— 解析 PNG 里的 <code>tEXt</code> 数据块，
+          设定、头像、开场白、示例对话一起读进来；JSON 卡 v1 / v2 / v3 也认，
+          连把开场白塞进 <code>chat_history</code> 的变体都认。也可以从头手写一个。
+          <span class="gloss">示例对话会变成真正的 user / assistant 消息一起发出去 —— 扮演质量的差距就在这儿。</span>
+        </p>
+      </article>
+
+      <article class="slat rise">
+        <div class="slat-no">02</div>
+        <div>
+          <h3>世界书</h3>
+          <span class="en">lorebook</span>
+        </div>
+        <p>
+          <b>关键词命中才注入</b>。一本书几百条设定，只有相关的那几条进上下文 ——
+          四两拨千斤。条目命中后正文还能再触发别的条目，一路连锁。
+          副关键词、选择性逻辑、概率、常驻、扫描深度都有。
+          <span class="gloss">「命中预览」会拿真实对话扫一遍，先告诉你这轮要注入哪几条，再发。</span>
+        </p>
+      </article>
+
+      <article class="slat rise">
+        <div class="slat-no">03</div>
+        <div>
+          <h3>预设</h3>
+          <span class="en">preset</span>
+        </div>
+        <p>
+          叠在对话上的<b>一层指令</b> —— 管的不是「演谁」「在哪儿」，而是「怎么回」：
+          人称、句式、篇幅密度、用词禁区、固定称呼。一场可挂多条，各自成块依次拼进提示词。
+          <span class="gloss">说明与正文分离：说明只给人看，正文才进提示词。也能直接吃别人分享的预设。</span>
+        </p>
+      </article>
+
+      <article class="slat rise">
+        <div class="slat-no">04</div>
+        <div>
+          <h3>状态面板</h3>
+          <span class="en">panel</span>
+        </div>
+        <p>
+          模型每轮输出的状态栏会被<b>解析出来单独保存</b>，下一轮由程序权威注入 ——
+          所以聊再多轮，数值也不会因为历史被截断而开始乱编。数值带范围，超出自动拉回；
+          字段能分组、能带变化规则，还能给每轮几个可点的剧情选项。
+          <span class="gloss">模型写 150/100，程序拉回 100/100 —— 不靠祈祷，靠代码。</span>
+        </p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 长夜 ============================ -->
+<section class="band" id="memory">
+  <div class="wrap">
+    <div class="band-head rise">
+      <span class="band-no">05 / LONG PLAY</span>
+      <h2>聊到第一百轮，它还记得开局</h2>
+      <p class="band-lead">
+        长对话不丢前文，靠的是三件东西叠着用 —— 不是把历史一股脑塞进上下文，那既不省也不准。
+      </p>
+    </div>
+
+    <div class="tri rise">
+      <div>
+        <span class="n">01 / SUMMARY</span>
+        <h3>分段记忆摘要</h3>
+        <p>较早的对话压成摘要常驻在上下文里。聊多久，开局那一幕都还在。</p>
+      </div>
+      <div>
+        <span class="n">02 / RAG</span>
+        <h3>语义检索</h3>
+        <p>按「意思」把相关的旧内容和设定捞回来，不靠关键词字面命中。</p>
+      </div>
+      <div>
+        <span class="n">03 / BRANCH</span>
+        <h3>分支与存档点</h3>
+        <p>走岔了能整个退回来。想看看另一条路会怎样，不用重开一局。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 模型 ============================ -->
+<section class="band" id="models">
+  <div class="wrap">
+    <div class="band-head rise">
+      <span class="band-no">06 / ANY MODEL</span>
+      <h2>哪家的模型都行，<br>一个会话用一个</h2>
+    </div>
+
+    <div class="model-wall rise">
+      <span>DeepSeek</span>
+      <span>通义千问</span>
+      <span>Kimi</span>
+      <span>智谱 GLM</span>
+      <span>腾讯混元</span>
+      <span>MiniMax</span>
+      <span class="plus">+ 任何 OpenAI 兼容端点</span>
+    </div>
+
+    <p class="model-note rise">
+      内置 6 家国内常见平台的预设，点一下就能填好。其余平台 —— 豆包、硅基流动、千帆、阶跃、
+      星火、零一万物，以及境外的 —— 只要是 <b>OpenAI 兼容端点</b>，填个地址就能用。<br><br>
+      每个会话记着自己用的模型：银月酒馆用 <code>deepseek-chat</code>、跑团记录用
+      <code>qwen-max</code>、通用助手用 <code>glm-5.3</code>，互不影响；
+      每条回答上还会标明是哪个模型答的。API Key 用系统级 <code>safeStorage</code> 加密后落盘。
+    </p>
+  </div>
+</section>
+
+<!-- ============================ 桌宠 ============================ -->
+<section class="band" id="pet">
+  <div class="wrap">
+    <div class="band-head rise">
+      <span class="band-no">07 / COMPANION</span>
+    </div>
+
+    <div class="petband">
+      <div class="rise">
+        <p class="pet-say">它不是你的化身，<br>是坐在旁边看你玩的<em>小家伙</em>。</p>
+        <ul class="pet-points">
+          <li>看得见你们的对话，<b>有自己的性格</b>，每隔几轮会插一句进来。</li>
+          <li>有自己的记忆，也可以配自己的模型 —— 用便宜的那档跑就好。</li>
+          <li><b>永不进剧情，也不写进对话记录。</b>它只是坐在旁边看着。</li>
+        </ul>
+      </div>
+
+      <div class="pet-stage rise">
+        <div class="pet-bubble">
+          「你俩又聊到后半夜了……」
+          <span>它盯着屏幕，尾巴尖晃了一下</span>
+        </div>
+        <svg class="pet-figure" width="112" height="120" viewBox="0 0 112 120" fill="none" aria-hidden="true">
+          <path d="M82 96 C102 94 107 81 98 72" stroke="#3a3e43" stroke-width="8" stroke-linecap="round"/>
+          <path d="M32 100 C18 100 14 89 18 76 C23 60 32 51 46 49 C60 47 71 54 75 67 C79 82 75 100 62 100 Z" fill="#16181b" stroke="#3a3e43" stroke-width="2"/>
+          <path d="M32 53 L28 35 L45 46 Z" fill="#16181b" stroke="#3a3e43" stroke-width="2"/>
+          <path d="M61 49 L68 31 L77 48 Z" fill="#16181b" stroke="#3a3e43" stroke-width="2"/>
+          <circle cx="41" cy="68" r="3.8" fill="#ffc857"/>
+          <circle cx="59" cy="67" r="3.8" fill="#ffc857"/>
+          <path d="M48 79 q3 3.4 7 0" stroke="#7a7975" stroke-width="1.7" stroke-linecap="round" fill="none"/>
+        </svg>
+        <div class="floor"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 隐私 ============================ -->
+<section class="band" id="privacy">
+  <div class="wrap">
+    <div class="band-head rise">
+      <span class="band-no">08 / NO SERVER</span>
+      <h2>没有服务器，<br>就没有「上传」这个词</h2>
+      <p class="band-lead">
+        这个项目<b>没有任何后台</b>。主进程就是本地的 Node.js，跑在你自己的机器上。
+        这不是一句承诺，是它没有的东西 —— 想传也没地方传。
+      </p>
+    </div>
+
+    <div class="darkwall rise">
+      <div class="darkwall-grid">
+        <div class="darkwall-col them">
+          <h3>一般的云端 AI</h3>
+          <p class="wire">你的对话 <span class="to">──▶</span> <span class="bad">别人的服务器</span> <span class="to">──▶</span> 回来了</p>
+          <p>聊天记录、角色设定、你写的一切，都要先在别人的机器上落一次地。</p>
+          <p>换台电脑，得重新登录；服务下线，记录跟着一起走。</p>
+        </div>
+        <div class="darkwall-col us">
+          <h3>子夜酒馆</h3>
+          <p class="wire">你的对话 <span class="to">──▶</span> <span class="good">本机 · 直连模型 API</span></p>
+          <p>只有发往你自己配置的模型接口那一次请求，别的什么都不经过第三方。</p>
+          <p><b>数据就在程序旁边</b>：整个 <code>data\</code> 文件夹拷走，记录、角色、世界书全跟着走 ——
+            换机器、放 U 盘、发给别人，都不用重新配置。</p>
+        </div>
+      </div>
+      <div class="darkwall-foot">
+        页面本身被 CSP 锁死（<code>default-src 'none'</code>）—— 它连网络请求都发不出去。
+        所有系统能力都必须走进程间通信交给主进程。即使页面里被塞了恶意脚本，它也没办法把数据往外送。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 开始 ============================ -->
+<section class="band" id="start">
+  <div class="wrap">
+    <div class="band-head rise">
+      <span class="band-no">09 / GET STARTED</span>
+      <h2>三步，点灯开门</h2>
+    </div>
+
+    <div class="startband">
+      <div class="term rise">
+        <div class="term-bar"><i aria-hidden="true"></i><span>Terminal</span></div>
+        <div class="term-body">
+          <div class="cmt"># 客户端代码都在 client/ 里，先进去</div>
+          <div class="cmd">cd client</div>
+          <div class="cmt"># 首次会下载约 100MB 的 Electron 运行时</div>
+          <div class="cmd">npm install</div>
+          <div class="cmd">npm start</div>
+          <div class="out">Electron 已就绪 —— 窗口打开了</div>
+        </div>
+      </div>
+
+      <ol class="bigsteps rise">
+        <li>
+          <b>要有 Node.js 18+</b>
+          <span>Windows / macOS / Linux 都行。Windows 用户也可以直接双击
+          <code>client\Start-Mimitale.cmd</code>，它会自己检查环境、自动装依赖，出错时给中文提示。</span>
+        </li>
+        <li>
+          <b>填一次模型接口</b>
+          <span>启动后点左下角「设置」，从内置预设里挑一家填上 API Key。只填一次，
+          之后每个会话自己记着用哪家、哪个模型。</span>
+        </li>
+        <li>
+          <b>把角色卡拖进来</b>
+          <span>酒馆用的 PNG 卡直接导入，设定、头像、开场白、内嵌世界书一起到位。
+          然后就可以开始了 —— 从今晚，或者任意一个你想回的夜晚。</span>
+        </li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============================ 页脚 ============================ -->
+<footer class="foot">
+  <div class="wrap">
+    <hr class="tube">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <span class="cn">子夜酒馆</span>
+        <span class="en">Nocturne Tavern</span>
+        <p>一个跑在自己电脑上的桌面对话 AI。<br>角色扮演、世界书、状态面板 —— 都在本地。</p>
+      </div>
+      <div class="foot-cols">
+        <div class="foot-col">
+          <h4>开始</h4>
+          <a href="#start">快速开始</a>
+          <a href="#pieces">功能介绍</a>
+          <a href="#privacy">数据与隐私</a>
+        </div>
+        <div class="foot-col">
+          <h4>深入</h4>
+          <a href="#memory">长对话记忆</a>
+          <a href="#models">模型接入</a>
+          <a href="#pet">桌宠</a>
+        </div>
+        <div class="foot-col">
+          <h4>文档</h4>
+          <a href="https://github.com" target="_blank" rel="noopener">GitHub 仓库</a>
+          <a href="#start">使用说明</a>
+          <a href="#start">变更记录</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot-bottom">
+      <span>MIT License · Nocturne Tavern</span>
+      <span>本地运行 · 没有服务器 · 数据不出本机</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var bar = document.getElementById('topbar');
+  var onScroll = function () {
+    if (window.scrollY > 10) bar.classList.add('is-pinned');
+    else bar.classList.remove('is-pinned');
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+
+(function () {
+  var items = document.querySelectorAll('.rise');
+  if (!('IntersectionObserver' in window)) {
+    items.forEach(function (el) { el.classList.add('in'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      var el = e.target;
+      var sibs = Array.prototype.filter.call(el.parentNode.children, function (c) {
+        return c.classList && c.classList.contains('rise');
+      });
+      var i = sibs.indexOf(el);
+      el.style.transitionDelay = Math.min(i, 3) * 90 + 'ms';
+      el.classList.add('in');
+      io.unobserve(el);
+    });
+  }, { rootMargin: '0px 0px -12% 0px', threshold: 0.08 });
+  items.forEach(function (el) { io.observe(el); });
+})();
+</script>
+
+</body>
+</html>

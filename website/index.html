@@ -1,0 +1,1631 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>子夜酒馆 Nocturne Tavern — 一间只在深夜开门的酒馆</title>
+<meta name="description" content="本地运行的 AI 角色扮演客户端。导入酒馆角色卡，世界书按关键词命中注入，状态数值聊上百轮也不漂。没有服务器，数据只在你自己机器上。">
+<style>
+/* ==========================================================================
+   子夜酒馆 Nocturne Tavern — 官网
+   
+   视觉方向：「打烊前的酒馆」。
+   底色直接沿用客户端的夜间 6 级中性灰（不重算、不调色），
+   琥珀金也直接沿用夜间档的 --accent #e8b84b —— 官网和客户端是同一个东西，
+   这件事在代码层面就该是真的。
+   
+   三条自我约束（防「AI 味」）：
+   ① 只有一种暖色（琥珀）。不用紫蓝渐变、不用第二强调色。
+   ② 圆角 4px 封顶。这是工具感的地基，大圆角会立刻变成另一类产品。
+   ③ 光是有来源的（像灯），不是无意义的 glow。
+   ========================================================================== */
+
+/* ------------------------------ 设计令牌 ------------------------------ */
+:root {
+  /* 表面：与 client/renderer/style.css 的 [data-theme='dark'] 逐字一致 */
+  --bg:         #101113;
+  --bg-side:    #16181b;
+  --bg-card:    #1b1e22;
+  --bg-band:    #191c21;
+  --bg-input:   #1e2126;
+  --bg-item:    #23262b;
+  --border:     #2a2e34;
+  --border-hi:  #3a3f46;
+
+  /* 文字 */
+  --text:       #e4e7ea;
+  --text-dim:   #9aa1a9;
+  --text-faint: #7d848c;
+
+  /* 琥珀灯（夜间档 accent） */
+  --lamp:       #e8b84b;
+  --lamp-hi:    #f2ce74;
+  --lamp-lo:    #c99a33;
+  --on-lamp:    #0e1216;
+  --lamp-a14:   rgba(232, 184, 75, 0.14);
+  --lamp-a22:   rgba(232, 184, 75, 0.22);
+  --lamp-a35:   rgba(232, 184, 75, 0.35);
+  --lamp-a08:   rgba(232, 184, 75, 0.08);
+
+  --ok:         #7fd6a8;
+
+  --radius:     4px;
+  --radius-sm:  3px;
+
+  /* 字体三分工：衬线立骨（招牌 / 书）、无衬线干活（正文）、等宽记数（编号 / 命令） */
+  --font-serif: Georgia, "Songti SC", "Source Han Serif SC", "SimSun", serif;
+  --font-ui:    "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --font-mono:  "JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+
+  /* 版心 */
+  --wrap: 1140px;
+  --gut: 28px;
+
+  /* 流式间距刻度（4px 基准，但节奏不平铺 —— 大段之间留得开，小元素之间收得紧） */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 72px; --s9: 112px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);   /* ease-out-quart */
+}
+
+/* ------------------------------ 基础 ------------------------------ */
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* 环境光：一盏吊灯挂在页面右上方，边缘被压暗。
+   是整个页面唯一的大面积「光」，其余地方的亮都从它派生。 */
+.lamp {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(880px 520px at 72% -6%, rgba(232, 184, 75, 0.13), transparent 64%),
+    radial-gradient(1100px 700px at 8% 108%, rgba(232, 184, 75, 0.05), transparent 60%);
+}
+/* 场地边缘压暗，把视线收进中间 */
+.lamp::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(140% 100% at 50% 40%, transparent 42%, rgba(0, 0, 0, 0.55) 100%);
+}
+/* 木吧台的横向细纹。极低对比 —— 是「质感」而不是「图案」，
+   一旦看得出来是条纹就过了。 */
+.grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.5;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 96px),
+    repeating-linear-gradient(0deg,  rgba(255, 255, 255, 0.010) 0 1px, transparent 1px 240px);
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 var(--gut);
+  position: relative;
+  z-index: 1;
+}
+
+a { color: inherit; text-decoration: none; }
+
+:focus-visible {
+  outline: 2px solid var(--lamp);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+::selection { background: var(--lamp-a35); color: var(--text); }
+
+/* 行内代码（正文里的标识符、路径、命令）。
+   ⚠️ 刻意用中性底而不是琥珀底 —— 这页面的琥珀很珍贵，它留给
+   「品牌 / 强调 / 灯」三件事；代码标识归入工具语汇，中性最像工具，也最不抢戏。 */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+/* ------------------------------ 品牌符号 ------------------------------ */
+/* 一个 24px 方角琥珀块 —— 直接来自客户端 .brand-dot。
+   它在全站充当「一盏灯」：每个小节标题前挂一盏，是页面唯一的重复装饰。 */
+.lampblock {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--lamp);
+  flex: none;
+  display: block;
+}
+.lampblock--sm { width: 16px; height: 16px; border-radius: 2px; }
+
+/* ------------------------------ 顶部条 ------------------------------ */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(14px);
+  background: rgba(16, 17, 19, 0.66);
+  border-bottom: 1px solid transparent;
+  transition: background 0.3s var(--ease), border-color 0.3s var(--ease);
+}
+.topbar.is-pinned {
+  background: rgba(16, 17, 19, 0.9);
+  border-bottom-color: var(--border);
+}
+.topbar .wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--s5);
+  height: 62px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-right: auto;
+}
+.brand-name {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+.brand-latin {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  padding-left: 11px;
+  border-left: 1px solid var(--border);
+  line-height: 1;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.nav a {
+  font-size: 14px;
+  color: var(--text-dim);
+  padding: 7px 11px;
+  border-radius: var(--radius-sm);
+  transition: color 0.18s var(--ease), background 0.18s var(--ease);
+}
+.nav a:hover { color: var(--text); background: var(--bg-item); }
+
+/* ------------------------------ 按钮 ------------------------------ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 11px 20px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.18s var(--ease), border-color 0.18s var(--ease),
+              transform 0.18s var(--ease), color 0.18s var(--ease);
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--lamp);
+  color: var(--on-lamp);
+}
+.btn-primary:hover {
+  background: var(--lamp-hi);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  border-color: var(--border-hi);
+  color: var(--text);
+  background: transparent;
+}
+.btn-ghost:hover { border-color: var(--lamp-a35); color: var(--lamp-hi); }
+.btn-sm { padding: 8px 15px; font-size: 13px; }
+.btn .arw { transition: transform 0.18s var(--ease); }
+.btn:hover .arw { transform: translateX(3px); }
+
+/* ------------------------------ Hero ------------------------------ */
+.hero {
+  padding: 96px 0 0;
+  position: relative;
+}
+.hero .wrap { max-width: 1180px; }
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.09em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  padding: 6px 12px 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-side);
+}
+.eyebrow .pulse {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--lamp);
+  box-shadow: 0 0 0 3px var(--lamp-a14);
+}
+
+h1 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(38px, 6.2vw, 70px);
+  line-height: 1.12;
+  letter-spacing: 0.01em;
+  margin: var(--s5) 0 0;
+  text-wrap: balance;
+}
+/* 「酒馆」两字：灯正好打在它上面 ——
+   琥珀色的高亮铺在下三分之一（像荧光笔），外面再罩一圈很淡的光晕。
+   ⚠️ 别用 ::after + z-index:-1 去做这道底光：.wrap 有自己的 stacking context，
+   负 z 会被压到内容后面，等于白写（2026-10-13 实测那道光是「隐形」的）。 */
+h1 .lit {
+  color: var(--lamp);
+  background-image: linear-gradient(180deg, transparent 68%, var(--lamp-a22) 68%);
+  text-shadow: 0 0 46px rgba(232, 184, 75, 0.42);
+  padding: 0 0.02em 0.05em;
+}
+
+.lead {
+  font-size: clamp(16px, 1.45vw, 18px);
+  line-height: 1.85;
+  color: var(--text-dim);
+  max-width: 620px;
+  margin: var(--s5) 0 0;
+}
+.lead strong { color: var(--text); font-weight: 600; }
+
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-top: var(--s6);
+}
+
+/* Hero 下方那排事实条：用竖线切分，不用卡片 */
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-top: var(--s7);
+  border-top: 1px solid var(--border);
+  padding-top: var(--s4);
+}
+.facts div {
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 0 var(--s5) 0 0;
+  margin-right: var(--s5);
+  border-right: 1px solid var(--border);
+  line-height: 1.5;
+}
+.facts div:last-child { border-right: 0; margin-right: 0; padding-right: 0; }
+.facts b { color: var(--lamp); font-weight: 600; font-family: var(--font-mono); }
+
+/* ------------------------------ 产品界面模型 ------------------------------ */
+/* 用真实配色和真实布局在页面里重建一遍客户端 ——
+   比任何一张截图都更能说明「这东西长什么样」。 */
+.stage {
+  margin-top: var(--s8);
+  position: relative;
+}
+.stage::before {
+  content: "";
+  position: absolute;
+  /* ⚠️ 左右不要用负 inset —— 它会顶宽文档（1024px 实测多出 10px，
+     html 层面 scrollWidth 压不下去）。上下收窄已经够造出「灯洒下来」的形状。 */
+  inset: -8% 0 20%;
+  background: radial-gradient(60% 55% at 50% 30%, var(--lamp-a08), transparent 70%);
+  pointer-events: none;
+}
+
+.mock {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  overflow: hidden;
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+}
+.mock-chrome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-side);
+  border-bottom: 1px solid var(--border);
+}
+.mock-chrome .pip { width: 10px; height: 10px; border-radius: 2px; background: var(--border-hi); }
+.mock-chrome .addr {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-left: auto;
+  letter-spacing: 0.04em;
+}
+
+.mock-body {
+  display: grid;
+  grid-template-columns: 208px 1fr 236px;
+  height: 452px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* — 左栏 — */
+.m-side {
+  background: var(--bg-side);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.m-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 13px 12px 12px;
+}
+.m-brand span {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.m-side-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 8px 14px 5px;
+  letter-spacing: 0.08em;
+}
+.m-convo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  margin: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+.m-convo.on { background: var(--bg-item); }
+.m-convo .ava {
+  width: 26px; height: 26px; border-radius: var(--radius-sm); flex: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: #14161a;
+}
+.g-amber { background: linear-gradient(135deg, #ffd9a8, #ffab5e); }
+.g-rose  { background: linear-gradient(135deg, #ffb0d0, #b98cff); }
+.g-mint  { background: linear-gradient(135deg, #b9f0d8, #5fd6a8); }
+.g-blue  { background: linear-gradient(135deg, #9fd4ff, #6aa8ff); }
+.m-convo .meta { min-width: 0; flex: 1; }
+.m-convo .nm {
+  font-size: 12.5px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.m-convo.on .nm { color: var(--text); }
+.m-convo:not(.on) .nm { color: var(--text-dim); }
+.m-convo .tm { font-size: 10.5px; color: var(--text-faint); font-family: var(--font-mono); flex: none; }
+.m-side-foot {
+  margin-top: auto;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  display: flex;
+  justify-content: space-between;
+}
+
+/* — 中栏 — */
+.m-chat { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+.m-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.m-head .charname { font-size: 13px; font-weight: 600; color: var(--text); }
+.m-head .tag {
+  font-size: 10.5px; font-family: var(--font-mono);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+}
+.m-head .model {
+  margin-left: auto;
+  font-size: 11px; font-family: var(--font-mono);
+  color: var(--lamp);
+  border: 1px solid var(--lamp-a22);
+  background: var(--lamp-a08);
+  padding: 3px 9px;
+  border-radius: var(--radius-sm);
+}
+.m-msgs { padding: 14px 16px; display: flex; flex-direction: column; gap: 15px; overflow: hidden; }
+.msg .who {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.msg .who .pip { width: 5px; height: 5px; border-radius: 50%; }
+.msg .who .pip.me { background: #6aa8ff; }
+.msg .who .pip.ai { background: var(--lamp); }
+.msg.me .body { color: var(--text-dim); }
+.msg .body { color: var(--text); line-height: 1.75; }
+.msg .body .act { color: var(--lamp); }
+/* 数值变化就写在句子里 —— 这是这个产品最该被看见的一屏 */
+.msg .delta {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ok);
+  background: rgba(127, 214, 168, 0.1);
+  border: 1px solid rgba(127, 214, 168, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 0 5px;
+  margin-left: 3px;
+}
+.m-input {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  background: var(--bg-input);
+  margin: 12px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.caret {
+  width: 1.5px; height: 14px; background: var(--lamp);
+  animation: blink 1.1s steps(2, start) infinite;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* — 右栏：状态面板（产品的招牌功能） — */
+.m-panel {
+  background: var(--bg-side);
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+  padding-bottom: 12px;
+}
+.m-panel-head {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.m-group { padding: 11px 14px 4px; }
+.m-group-t {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--text-faint);
+  margin-bottom: 9px;
+}
+.m-field { margin-bottom: 11px; }
+.m-field .k {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-bottom: 5px;
+}
+.m-field .k b { color: var(--text); font-family: var(--font-mono); font-weight: 600; }
+.m-field .k .up { color: var(--ok); }
+.m-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-input);
+  overflow: hidden;
+}
+.m-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--lamp);
+}
+.m-bar.is-cool i { background: #6aa8ff; }
+.m-bar.is-ok i { background: var(--ok); }
+.m-text { font-size: 11.5px; color: var(--text); }
+.m-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+.m-chips span {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+/* 右栏底部：剧情选项（点一下当玩家回复发出去） */
+.m-opts { padding: 6px 14px 0; display: flex; flex-direction: column; gap: 6px; }
+.m-opt {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 9px;
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+.m-opt .n { font-family: var(--font-mono); color: var(--lamp); font-size: 10.5px; }
+.m-opt:hover { border-color: var(--lamp-a35); color: var(--text); }
+
+/* ------------------------------ 通用小节 ------------------------------ */
+section { position: relative; }
+
+.sec {
+  padding: var(--s9) 0 0;
+}
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: var(--s3);
+}
+.sec-kicker {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--lamp);
+  text-transform: uppercase;
+}
+h2 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(28px, 3.6vw, 40px);
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  margin: 0 0 var(--s4);
+  text-wrap: balance;
+}
+.sec-sub {
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--text-dim);
+  max-width: 640px;
+  margin: 0 0 var(--s7);
+}
+.sec-sub strong { color: var(--text); font-weight: 600; }
+/* 「多模型」那节的说明文字跟左列标签同处一块，下面收得比整段小节紧一档 */
+.models .sec-sub { margin-bottom: var(--s5); }
+
+/* ------------------------------ 四张牌 ------------------------------ */
+/* 刻意不用卡片：大衬线编号 + 细线分隔的「条目」，读起来像一份目录。
+   满页卡片的官网是最典型的 AI 味。 */
+.cards { border-top: 1px solid var(--border); }
+.card {
+  display: grid;
+  /* 编号 | 标题 | 描述。标题列给死宽度，否则它那三五个字会撑出一片空洞 */
+  grid-template-columns: 96px 220px minmax(0, 1fr);
+  gap: var(--s6);
+  padding: var(--s7) 0;
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+}
+.card-no {
+  font-family: var(--font-serif);
+  font-size: 44px;
+  line-height: 0.9;
+  color: var(--border-hi);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  transition: color 0.35s var(--ease);
+}
+.card:hover .card-no { color: var(--lamp); }
+.card-title {
+  font-family: var(--font-serif);
+  font-size: 23px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  letter-spacing: 0.01em;
+}
+.card-role {
+  font-size: 13px;
+  color: var(--lamp);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.card-desc {
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1.85;
+  margin: 0;
+  /* 收窄到约 42 字一行 —— 再宽右边缘就散了，也失去杂志式的留白 */
+  max-width: 620px;
+}
+.card-desc strong { color: var(--text); font-weight: 600; }
+.card-desc .quote {
+  display: block;
+  margin-top: var(--s4);
+  padding-left: 13px;
+  border-left: 2px solid var(--lamp-a35);
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ------------------------------ 长对话（三段式） ------------------------------ */
+.flow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.flow > div {
+  background: var(--bg-side);
+  padding: var(--s5) var(--s5) var(--s6);
+}
+.flow .n {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--lamp);
+  letter-spacing: 0.1em;
+  display: block;
+  margin-bottom: var(--s3);
+}
+.flow h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 var(--s2);
+  font-family: var(--font-ui);
+}
+.flow p {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin: 0;
+  line-height: 1.8;
+}
+
+/* ------------------------------ 多模型 ------------------------------ */
+.models {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: var(--s8);
+  align-items: center;
+}
+.pills { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.pill {
+  font-size: 13.5px;
+  color: var(--text);
+  border: 1px solid var(--border-hi);
+  background: var(--bg-side);
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  letter-spacing: 0.01em;
+}
+.pill.plus { border-style: dashed; color: var(--text-dim); }
+.pill-note {
+  font-size: 13.5px;
+  color: var(--text-faint);
+  margin-top: var(--s4);
+  line-height: 1.8;
+}
+/* 会话各自记模型的小示意 */
+.session-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-side);
+  padding: var(--s4);
+}
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+.session-row + .session-row { border-top: 1px solid var(--border-soft, var(--border)); }
+.session-row .nm { color: var(--text-dim); flex: 1; }
+.session-row .m {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--lamp);
+  border: 1px solid var(--lamp-a22);
+  background: var(--lamp-a08);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+.session-cap {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin: var(--s3) 0 0;
+  line-height: 1.7;
+}
+
+/* ------------------------------ 桌宠 ------------------------------ */
+.pet {
+  display: grid;
+  grid-template-columns: 1fr 0.85fr;
+  gap: var(--s8);
+  align-items: center;
+}
+.pet-quote {
+  font-family: var(--font-serif);
+  font-size: clamp(19px, 2.2vw, 25px);
+  line-height: 1.6;
+  color: var(--text);
+  border-left: 2px solid var(--lamp);
+  padding-left: var(--s5);
+  margin: 0 0 var(--s5);
+}
+.pet-points { list-style: none; padding: 0; margin: 0; }
+.pet-points li {
+  font-size: 15px;
+  color: var(--text-dim);
+  padding: 9px 0 9px 20px;
+  position: relative;
+  line-height: 1.7;
+}
+.pet-points li::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 17px;
+  width: 7px; height: 7px;
+  border-radius: 1px;
+  background: var(--lamp);
+  opacity: 0.7;
+}
+.pet-points li b { color: var(--text); font-weight: 600; }
+
+/* 桌宠示意：一块屏幕的一角，它坐在上面 */
+.pet-stage {
+  aspect-ratio: 1 / 0.86;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, var(--bg-side), var(--bg));
+  position: relative;
+  overflow: hidden;
+}
+.pet-stage::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: var(--border-hi);
+}
+.pet-bubble {
+  position: absolute;
+  top: 18%;
+  left: 8%;
+  max-width: 62%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius);
+  padding: 10px 13px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.65;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.pet-bubble span { color: var(--text-faint); font-size: 11px; display: block; margin-top: 4px; }
+.pet-figure { position: absolute; right: 9%; bottom: 0; }
+.pet-shadow {
+  position: absolute;
+  right: 11%;
+  bottom: 4px;
+  width: 84px; height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.6), transparent);
+}
+
+/* ------------------------------ 隐私对照 ------------------------------ */
+.privacy {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.privacy-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.privacy-col { padding: var(--s6); }
+.privacy-col.them { background: var(--bg-side); border-right: 1px solid var(--border); }
+.privacy-col.us { background: linear-gradient(180deg, var(--lamp-a08), transparent 70%); }
+.privacy-col h3 {
+  font-size: 13px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 0 0 var(--s5);
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.privacy-col.us h3 { color: var(--lamp); }
+.flowchart {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  margin-bottom: var(--s5);
+}
+.node {
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius-sm);
+  padding: 7px 11px;
+  color: var(--text-dim);
+  background: var(--bg);
+}
+.node.src { color: var(--text); }
+.node.cloud { border-color: #5a3236; color: #ffb4b0; background: #3a2226; }
+.node.local {
+  border-color: var(--lamp-a35);
+  color: var(--lamp);
+  background: var(--lamp-a08);
+}
+.arw-line { color: var(--text-faint); font-family: var(--font-mono); }
+.privacy-col p {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin: 0 0 var(--s3);
+  line-height: 1.8;
+}
+.privacy-col p b { color: var(--text); font-weight: 600; }
+.privacy-col.us p b { color: var(--lamp); }
+.privacy-foot {
+  border-top: 1px solid var(--border);
+  padding: var(--s5) var(--s6);
+  background: var(--bg-side);
+  font-size: 13.5px;
+  color: var(--text-dim);
+  line-height: 1.8;
+}
+
+/* ------------------------------ 快速开始 ------------------------------ */
+.start {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: var(--s7);
+  /* 不写 align-items —— 让终端框跟着右列拉伸到等高，底部齐平比飘着好看 */
+}
+.term {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #0c0e10;
+  overflow: hidden;
+}
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  background: var(--bg-side);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+}
+.term-body { padding: var(--s4) var(--s5) var(--s5); font-family: var(--font-mono); font-size: 13px; line-height: 2.1; }
+.term-body .cmt { color: var(--text-faint); }
+.term-body .cmd { color: var(--text); }
+.term-body .cmd::before { content: "$ "; color: var(--lamp); }
+/* 命令跑完回显的那几行 */
+.term-body .out { color: var(--text-dim); margin-top: var(--s2); }
+.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+.steps li {
+  position: relative;
+  padding: 0 0 var(--s5) 40px;
+  font-size: 15px;
+  color: var(--text-dim);
+  line-height: 1.75;
+  counter-increment: s;
+}
+.steps li::before {
+  content: counter(s, decimal-leading-zero);
+  position: absolute;
+  left: 0; top: 1px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--lamp);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  width: 26px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+}
+.steps li b { color: var(--text); font-weight: 600; display: block; margin-bottom: 2px; }
+.steps li:last-child { padding-bottom: 0; }
+
+/* ------------------------------ 页脚 ------------------------------ */
+footer {
+  margin-top: var(--s9);
+  border-top: 1px solid var(--border);
+  padding: var(--s7) 0 var(--s6);
+}
+.foot-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s7);
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.foot-brand { max-width: 320px; }
+.foot-brand .brand { margin-bottom: var(--s3); }
+.foot-brand p { font-size: 13.5px; color: var(--text-faint); margin: 0; line-height: 1.8; }
+.foot-cols { display: flex; gap: var(--s8); flex-wrap: wrap; }
+.foot-col h4 {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 0 0 var(--s3);
+  font-weight: 500;
+}
+.foot-col a {
+  display: block;
+  font-size: 14px;
+  color: var(--text-dim);
+  padding: 4px 0;
+  transition: color 0.18s var(--ease);
+}
+.foot-col a:hover { color: var(--lamp); }
+.foot-bottom {
+  margin-top: var(--s7);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+}
+
+/* ------------------------------ 入场动效 ------------------------------ */
+.rise {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+}
+.rise.in { opacity: 1; transform: none; }
+
+/* ------------------------------ 响应式 ------------------------------ */
+@media (max-width: 1080px) {
+  /* 高度别跟着栏宽一起缩 —— 右栏那三组字段的高度是死的，
+     缩到 430 会把最下面的「剧情选项」切掉 20px（1024px 实测） */
+  .mock-body { grid-template-columns: 190px 1fr 214px; height: 452px; }
+  .card { grid-template-columns: 84px 1fr; gap: var(--s5); }
+  .card-desc { grid-column: 2; }
+  .card-no { font-size: 36px; }
+  .models, .pet, .start { grid-template-columns: 1fr; gap: var(--s6); }
+  .pet-stage { order: -1; }
+}
+@media (max-width: 860px) {
+  :root { --gut: 20px; }
+  .nav { display: none; }
+  .hero { padding-top: 64px; }
+  .mock-body { grid-template-columns: 168px 1fr; height: 400px; }
+  .m-panel { display: none; }
+  .flow { grid-template-columns: 1fr; }
+  .privacy-grid { grid-template-columns: 1fr; }
+  .privacy-col.them { border-right: 0; border-bottom: 1px solid var(--border); }
+  .facts div { border-right: 0; padding: var(--s2) var(--s5) var(--s2) 0; }
+}
+@media (max-width: 620px) {
+  .mock-body { grid-template-columns: 1fr; height: 380px; }
+  .m-side { display: none; }
+  .card { grid-template-columns: 1fr; }
+  .card-desc { grid-column: 1; }
+  .card-no { font-size: 28px; }
+  .hero-cta .btn { flex: 1; }
+  .foot-cols { gap: var(--s6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .rise { opacity: 1; transform: none; transition: none; }
+  .caret { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="lamp" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ============================ 顶部条 ============================ -->
+<header class="topbar" id="topbar">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="子夜酒馆 首页">
+      <span class="lampblock" aria-hidden="true"></span>
+      <span class="brand-name">子夜酒馆</span>
+      <span class="brand-latin">Nocturne Tavern</span>
+    </a>
+    <nav class="nav" aria-label="主导航">
+      <a href="#pieces">功能</a>
+      <a href="#memory">长对话</a>
+      <a href="#pet">桌宠</a>
+      <a href="#privacy">隐私</a>
+      <a href="#start">快速开始</a>
+    </nav>
+    <a class="btn btn-primary btn-sm" href="#start">开始使用<span class="arw">→</span></a>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============================ Hero ============================ -->
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><i class="pulse"></i>本地运行 · 没有服务器 · MIT</span>
+
+    <h1>一间只在<span class="lit">深夜</span>开门的酒馆</h1>
+
+    <p class="lead">
+      本地运行的 AI 角色扮演客户端。直接导入酒馆（SillyTavern）的 PNG 角色卡，
+      世界书按关键词命中才注入，<strong>状态数值聊上百轮也不会漂</strong> ——
+      而聊天记录和 API Key，从始至终只待在你自己的机器上。
+    </p>
+
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#start">运行起来<span class="arw">→</span></a>
+      <a class="btn btn-ghost" href="#pieces">看看它有什么</a>
+    </div>
+
+    <div class="facts">
+      <div><b>零</b> 构建步骤</div>
+      <div><b>6</b> 家模型预设</div>
+      <div><b>PNG</b> 卡直接吃</div>
+      <div>数据 <b>不出本机</b></div>
+    </div>
+  </div>
+
+  <!-- 用真实配色重建的客户端界面 -->
+  <div class="wrap">
+    <div class="stage rise">
+      <div class="mock" role="img" aria-label="子夜酒馆客户端界面示意：左侧会话列表，中间对话，右侧状态面板">
+        <div class="mock-chrome">
+          <span class="pip"></span><span class="pip"></span><span class="pip"></span>
+          <span class="addr">子夜酒馆 · 本地</span>
+        </div>
+        <div class="mock-body">
+
+          <!-- 左栏 -->
+          <aside class="m-side">
+            <div class="m-brand">
+              <span class="lampblock lampblock--sm" aria-hidden="true"></span>
+              <span>子夜酒馆</span>
+            </div>
+            <div class="m-side-label">会话</div>
+            <div class="m-convo on">
+              <span class="ava g-amber">银</span>
+              <span class="meta"><span class="nm">银月酒馆 · 老板娘</span></span>
+              <span class="tm">10:41</span>
+            </div>
+            <div class="m-convo">
+              <span class="ava g-rose">露</span>
+              <span class="meta"><span class="nm">露西娅</span></span>
+              <span class="tm">昨天</span>
+            </div>
+            <div class="m-convo">
+              <span class="ava g-mint">通</span>
+              <span class="meta"><span class="nm">通用助手</span></span>
+              <span class="tm">周日</span>
+            </div>
+            <div class="m-convo">
+              <span class="ava g-blue">我</span>
+              <span class="meta"><span class="nm">跑团记录 · 第三夜</span></span>
+              <span class="tm">周六</span>
+            </div>
+            <div class="m-side-foot">
+              <span>设置</span><span>帮助</span>
+            </div>
+          </aside>
+
+          <!-- 中栏 -->
+          <div class="m-chat">
+            <div class="m-head">
+              <span class="charname">银月酒馆 · 老板娘</span>
+              <span class="tag">世界书 ×3</span>
+              <span class="model">deepseek-chat</span>
+            </div>
+            <div class="m-msgs">
+              <div class="msg me">
+                <div class="who"><i class="pip me"></i>我</div>
+                <div class="body">擦干净杯子，靠到吧台上问她：今晚还有位置吗？</div>
+              </div>
+              <div class="msg">
+                <div class="who"><i class="pip ai"></i>老板娘</div>
+                <div class="body">
+                  <span class="act">她把抹布往肩上一搭，抬眼看你，指尖在吧台上敲了两下。</span><br>
+                  「有——靠窗那张，一直是空的。」<span class="delta">好感 62 → 66</span><br>
+                  她顿了顿，又补了一句：「就是今晚，别坐那儿。」
+                </div>
+              </div>
+            </div>
+            <div class="m-input">
+              <span>说点什么…</span>
+              <i class="caret" aria-hidden="true"></i>
+            </div>
+          </div>
+
+          <!-- 右栏 -->
+          <aside class="m-panel">
+            <div class="m-panel-head">
+              <span class="lampblock lampblock--sm" aria-hidden="true"></span>状态面板
+            </div>
+            <div class="m-group">
+              <div class="m-group-t">关系</div>
+              <div class="m-field">
+                <div class="k"><span>好感度</span><b>66 <span class="up">▲4</span></b></div>
+                <div class="m-bar"><i style="width:66%"></i></div>
+              </div>
+              <div class="m-field">
+                <div class="k"><span>警惕</span><b>28</b></div>
+                <div class="m-bar is-cool"><i style="width:28%"></i></div>
+              </div>
+            </div>
+            <div class="m-group">
+              <div class="m-group-t">当前</div>
+              <div class="m-field">
+                <div class="k"><span>醉意</span><b>15</b></div>
+                <div class="m-bar is-ok"><i style="width:15%"></i></div>
+              </div>
+              <div class="m-field">
+                <div class="k"><span>位置</span></div>
+                <div class="m-text">吧台 · 靠窗第二张空着</div>
+              </div>
+              <div class="m-field">
+                <div class="k"><span>随身</span></div>
+                <div class="m-chips"><span>铜钥匙</span><span>旧信</span></div>
+              </div>
+            </div>
+            <div class="m-group">
+              <div class="m-group-t">剧情选项</div>
+            </div>
+            <div class="m-opts">
+              <div class="m-opt"><span class="n">1</span>追问为什么不能坐</div>
+              <div class="m-opt"><span class="n">2</span>偏要坐过去</div>
+            </div>
+          </aside>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 四张牌 ============================ -->
+<section class="sec" id="pieces">
+  <div class="wrap">
+    <div class="sec-head rise">
+      <span class="lampblock lampblock--sm" aria-hidden="true"></span>
+      <span class="sec-kicker">Four pieces</span>
+    </div>
+    <h2 class="rise">角色卡管演谁，世界书管在哪儿<br>预设管怎么回，面板管记不记得住</h2>
+    <p class="sec-sub rise">
+      酒馆里该有的四件事，一件都不少；每件都按<strong>能被程序接住</strong>的方式重做了一遍 ——
+      模型说的话，能落成数据。
+    </p>
+
+    <div class="cards">
+
+      <article class="card rise">
+        <div class="card-no">01</div>
+        <div>
+          <h3 class="card-title">角色卡</h3>
+          <div class="card-role">card</div>
+        </div>
+        <div>
+          <p class="card-desc">
+            直接导入酒馆的 <strong>PNG 角色卡</strong> —— 解析 PNG 里的 <code>tEXt</code> 数据块，
+            设定、头像、开场白、示例对话一起读进来；JSON 卡 v1 / v2 / v3 也认，
+            连把开场白塞进 <code>chat_history</code> 的变体都认。也可以从头手写一个。
+          </p>
+          <span class="quote">示例对话会变成真正的 user / assistant 消息一起发出去 —— 扮演质量的差距就在这儿。</span>
+        </div>
+      </article>
+
+      <article class="card rise">
+        <div class="card-no">02</div>
+        <div>
+          <h3 class="card-title">世界书</h3>
+          <div class="card-role">lorebook</div>
+        </div>
+        <div>
+          <p class="card-desc">
+            <strong>关键词命中才注入</strong>。一本书几百条设定，只有相关的那几条进上下文 ——
+            四两拨千斤。条目命中后正文还能再触发别的条目，一路连锁。
+            副关键词、选择性逻辑、概率、常驻、扫描深度都有。
+          </p>
+          <span class="quote">「命中预览」会拿真实对话扫一遍，先告诉你这轮要注入哪几条，再发。</span>
+        </div>
+      </article>
+
+      <article class="card rise">
+        <div class="card-no">03</div>
+        <div>
+          <h3 class="card-title">预设</h3>
+          <div class="card-role">preset</div>
+        </div>
+        <div>
+          <p class="card-desc">
+            叠在对话上的<strong>一层指令</strong> —— 管的不是「演谁」「在哪儿」，而是「怎么回」：
+            人称、句式、篇幅密度、用词禁区、固定称呼。一场可挂多条，各自成块依次拼进提示词。
+          </p>
+          <span class="quote">说明与正文分离：说明只给人看，正文才进提示词。也能直接吃别人分享的预设。</span>
+        </div>
+      </article>
+
+      <article class="card rise">
+        <div class="card-no">04</div>
+        <div>
+          <h3 class="card-title">状态面板</h3>
+          <div class="card-role">panel</div>
+        </div>
+        <div>
+          <p class="card-desc">
+            模型每轮输出的状态栏会被<strong>解析出来单独保存</strong>，下一轮由程序权威注入 ——
+            所以聊再多轮，数值也不会因为历史被截断而开始乱编。数值带范围，超出自动拉回；
+            字段能分组、能带变化规则，还能给每轮几个可点的剧情选项。
+          </p>
+          <span class="quote">模型写 150/100，程序拉回 100/100 —— 不靠祈祷，靠代码。</span>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 长对话 ============================ -->
+<section class="sec" id="memory">
+  <div class="wrap">
+    <div class="sec-head rise">
+      <span class="lampblock lampblock--sm" aria-hidden="true"></span>
+      <span class="sec-kicker">Long play</span>
+    </div>
+    <h2 class="rise">聊到第一百轮，它还记得开局</h2>
+    <p class="sec-sub rise">
+      长对话不丢前文，靠的是三件东西叠着用 —— 不是把历史一股脑塞进上下文，
+      那既不省也不准。
+    </p>
+
+    <div class="flow rise">
+      <div>
+        <span class="n">01 / SUMMARY</span>
+        <h3>分段记忆摘要</h3>
+        <p>较早的对话压成摘要常驻在上下文里。聊多久，开局那一幕都还在。</p>
+      </div>
+      <div>
+        <span class="n">02 / RAG</span>
+        <h3>语义检索</h3>
+        <p>按「意思」把相关的旧内容和设定捞回来，不靠关键词字面命中。</p>
+      </div>
+      <div>
+        <span class="n">03 / BRANCH</span>
+        <h3>分支与存档点</h3>
+        <p>走岔了能整个退回来。想看看另一条路会怎样，不用重开一局。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 多模型 ============================ -->
+<section class="sec" id="models">
+  <div class="wrap">
+    <div class="sec-head rise">
+      <span class="lampblock lampblock--sm" aria-hidden="true"></span>
+      <span class="sec-kicker">Any model</span>
+    </div>
+    <h2 class="rise">哪家的模型都行，一个会话用一个</h2>
+
+    <div class="models">
+      <div class="rise">
+        <p class="sec-sub">
+          内置 6 家国内常见平台的预设，点一下就能填好。其余平台 ——
+          豆包、硅基流动、千帆、阶跃、星火、零一万物，以及境外的 ——
+          只要对方是 <strong>OpenAI 兼容端点</strong>，填个地址就能用。
+        </p>
+        <div class="pills">
+          <span class="pill">DeepSeek</span>
+          <span class="pill">通义千问</span>
+          <span class="pill">Kimi</span>
+          <span class="pill">智谱 GLM</span>
+          <span class="pill">腾讯混元</span>
+          <span class="pill">MiniMax</span>
+          <span class="pill plus">+ 自定义 OpenAI 兼容</span>
+        </div>
+        <p class="pill-note">
+          API Key 用系统级 <code>safeStorage</code> 加密后落盘，
+          明面上不写进任何配置文件。
+        </p>
+      </div>
+
+      <div class="rise">
+        <div class="session-card">
+          <div class="session-row">
+            <span class="nm">银月酒馆 · 老板娘</span>
+            <span class="m">deepseek-chat</span>
+          </div>
+          <div class="session-row">
+            <span class="nm">跑团记录 · 第三夜</span>
+            <span class="m">qwen-max</span>
+          </div>
+          <div class="session-row">
+            <span class="nm">通用助手</span>
+            <span class="m">glm-5.3</span>
+          </div>
+        </div>
+        <p class="session-cap">
+          每个会话记着自己用的模型。在这边切了，那边一点不受影响；
+          每条回答上还会标明是哪个模型答的，方便一较高下。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 桌宠 ============================ -->
+<section class="sec" id="pet">
+  <div class="wrap">
+    <div class="sec-head rise">
+      <span class="lampblock lampblock--sm" aria-hidden="true"></span>
+      <span class="sec-kicker">Companion</span>
+    </div>
+
+    <div class="pet">
+      <div class="rise">
+        <p class="pet-quote">它不是你的化身，<br>是坐在旁边看你玩的小家伙。</p>
+        <ul class="pet-points">
+          <li>看得见你们的对话，<b>有自己的性格</b>，每隔几轮会插一句进来。</li>
+          <li>有自己的记忆，也可以配自己的模型 —— 用便宜的那档跑就好。</li>
+          <li><b>永不进剧情，也不写进对话记录。</b>它只是坐在旁边看着。</li>
+        </ul>
+      </div>
+
+      <div class="pet-stage rise">
+        <div class="pet-bubble">
+          「你俩又聊到后半夜了……」
+          <span>—— 它盯着屏幕，尾巴尖晃了一下</span>
+        </div>
+        <!-- 抽象的小生物：不指定物种，只给一个坐姿剪影 -->
+        <svg class="pet-figure" width="96" height="104" viewBox="0 0 96 104" fill="none" aria-hidden="true">
+          <!-- 尾巴 -->
+          <path d="M70 84 C88 82 92 70 84 62" stroke="#3a3f46" stroke-width="7" stroke-linecap="round"/>
+          <!-- 身体 -->
+          <path d="M28 88 C16 88 12 78 16 66 C20 52 28 44 40 42 C52 40 62 46 66 58 C70 72 66 88 54 88 Z" fill="#23262b" stroke="#3a3f46" stroke-width="2"/>
+          <!-- 耳朵 -->
+          <path d="M28 46 L24 30 L40 40 Z" fill="#23262b" stroke="#3a3f46" stroke-width="2"/>
+          <path d="M54 42 L60 26 L68 42 Z" fill="#23262b" stroke="#3a3f46" stroke-width="2"/>
+          <!-- 眼睛：两点琥珀，唯一发亮的地方 -->
+          <circle cx="36" cy="60" r="3.4" fill="#e8b84b"/>
+          <circle cx="52" cy="59" r="3.4" fill="#e8b84b"/>
+          <path d="M42 70 q2.5 3 6 0" stroke="#7d848c" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+        </svg>
+        <div class="pet-shadow"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 隐私 ============================ -->
+<section class="sec" id="privacy">
+  <div class="wrap">
+    <div class="sec-head rise">
+      <span class="lampblock lampblock--sm" aria-hidden="true"></span>
+      <span class="sec-kicker">No server</span>
+    </div>
+    <h2 class="rise">没有服务器，就没有「上传」这个词</h2>
+    <p class="sec-sub rise">
+      这个项目<strong>没有任何后台</strong>。主进程就是本地的 Node.js，跑在你自己的机器上。
+      这不是一句承诺，是它没有的东西 —— 想传也没地方传。
+    </p>
+
+    <div class="privacy rise">
+      <div class="privacy-grid">
+        <div class="privacy-col them">
+          <h3>一般的云端 AI</h3>
+          <div class="flowchart">
+            <span class="node src">你的对话</span>
+            <span class="arw-line">──▶</span>
+            <span class="node cloud">别人的服务器</span>
+            <span class="arw-line">──▶</span>
+            <span class="node">回来了</span>
+          </div>
+          <p>聊天记录、角色设定、你写的一切，都要先在别人的机器上落一次地。</p>
+          <p>换台电脑，得重新登录；服务下线，记录跟着一起走。</p>
+        </div>
+
+        <div class="privacy-col us">
+          <h3>子夜酒馆</h3>
+          <div class="flowchart">
+            <span class="node src">你的对话</span>
+            <span class="arw-line">──▶</span>
+            <span class="node local">本机 · 直连模型 API</span>
+          </div>
+          <p>只有发往你自己配置的模型接口那一次请求，别的什么都不经过第三方。</p>
+          <p><b>数据就在程序旁边</b>：整个 <code>data\</code> 文件夹拷走，记录、角色、世界书全跟着走 —— 换机器、放 U 盘、发给别人，都不用重新配置。</p>
+        </div>
+      </div>
+
+      <div class="privacy-foot">
+        页面本身被 CSP 锁死（<code>default-src 'none'</code>）—— 它连网络请求都发不出去。
+        所有系统能力都必须走进程间通信交给主进程。即使页面里被塞了恶意脚本，它也没办法把数据往外送。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 快速开始 ============================ -->
+<section class="sec" id="start">
+  <div class="wrap">
+    <div class="sec-head rise">
+      <span class="lampblock lampblock--sm" aria-hidden="true"></span>
+      <span class="sec-kicker">Get started</span>
+    </div>
+    <h2 class="rise">三步，点灯开门</h2>
+
+    <div class="start">
+      <div class="term rise">
+        <div class="term-bar">
+          <span class="lampblock lampblock--sm" aria-hidden="true"></span>
+          <span>终端</span>
+        </div>
+        <div class="term-body">
+          <div class="cmt"># 客户端代码都在 client/ 里，先进去</div>
+          <div class="cmd">cd client</div>
+          <div class="cmt"># 首次会下载约 100MB 的 Electron 运行时</div>
+          <div class="cmd">npm install</div>
+          <div class="cmd">npm start</div>
+          <div class="out">Electron 已就绪 —— 窗口打开了</div>
+        </div>
+      </div>
+
+      <ol class="steps rise">
+        <li>
+          <b>要有 Node.js 18+</b>
+          Windows / macOS / Linux 都行。Windows 用户也可以直接双击
+          <code>client\Start-Mimitale.cmd</code>，它会自己检查环境、自动装依赖，
+          出错时给中文提示。
+        </li>
+        <li>
+          <b>填一次模型接口</b>
+          启动后点左下角「设置」，从内置预设里挑一家填上 API Key。
+          只填一次，之后每个会话自己记着用哪家、哪个模型。
+        </li>
+        <li>
+          <b>把角色卡拖进来</b>
+          酒馆用的 PNG 卡直接导入，设定、头像、开场白、内嵌世界书一起到位。
+          然后就可以开始了 —— 从今晚，或者任意一个你想回的夜晚。
+        </li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ============================ 页脚 ============================ -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top">
+          <span class="lampblock" aria-hidden="true"></span>
+          <span class="brand-name">子夜酒馆</span>
+          <span class="brand-latin">Nocturne Tavern</span>
+        </a>
+        <p>一个跑在自己电脑上的桌面对话 AI。<br>角色扮演、世界书、状态面板 —— 都在本地。</p>
+      </div>
+
+      <div class="foot-cols">
+        <div class="foot-col">
+          <h4>开始</h4>
+          <a href="#start">快速开始</a>
+          <a href="#pieces">功能介绍</a>
+          <a href="#privacy">数据与隐私</a>
+        </div>
+        <div class="foot-col">
+          <h4>深入</h4>
+          <a href="#memory">长对话记忆</a>
+          <a href="#models">模型接入</a>
+          <a href="#pet">桌宠</a>
+        </div>
+        <div class="foot-col">
+          <h4>文档</h4>
+          <a href="https://github.com" target="_blank" rel="noopener">GitHub 仓库</a>
+          <a href="#start">使用说明</a>
+          <a href="#start">变更记录</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot-bottom">
+      <span>MIT License · 子夜酒馆 Nocturne Tavern</span>
+      <span>本地运行 · 没有服务器 · 数据不出本机</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// 顶栏：滚过一屏后压深底色 + 出底边线
+(function () {
+  var bar = document.getElementById('topbar');
+  var onScroll = function () {
+    if (window.scrollY > 12) bar.classList.add('is-pinned');
+    else bar.classList.remove('is-pinned');
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+
+// 入场：元素进入视口时浮起。用 stagger 让同一组依次出现。
+(function () {
+  var items = document.querySelectorAll('.rise');
+  if (!('IntersectionObserver' in window)) {
+    items.forEach(function (el) { el.classList.add('in'); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      var el = e.target;
+      // 同一父容器里的兄弟依次延迟
+      var sibs = Array.prototype.filter.call(el.parentNode.children, function (c) {
+        return c.classList && c.classList.contains('rise');
+      });
+      var i = sibs.indexOf(el);
+      el.style.transitionDelay = Math.min(i, 3) * 90 + 'ms';
+      el.classList.add('in');
+      io.unobserve(el);
+    });
+  }, { rootMargin: '0px 0px -12% 0px', threshold: 0.08 });
+  items.forEach(function (el) { io.observe(el); });
+})();
+</script>
+
+</body>
+</html>
