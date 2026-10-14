@@ -47,7 +47,7 @@ import {
   effectiveDialoguePresets,
   WORLDBOOK_SCAN_DEPTH
 } from './library.js';
-import { cleanAssistantText, convoFieldDisplayNames, formatPanelForPrompt, panelGroupNames, PANEL_PROMPT_REMINDER } from './panel.js';
+import { compileAssistantCleaner, convoFieldDisplayNames, formatPanelForPrompt, panelGroupNames, PANEL_PROMPT_REMINDER } from './panel.js';
 import { convoContextMessages, formatSummaryForPrompt, summarizedCount } from './memory.js';
 import {
   EMPHASIS_REMINDER,
@@ -460,9 +460,10 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   // 用本会话的已知字段名（显示名）来剥：正文里提到同名字样不会被误删。
   const panelFields = convoFieldDisplayNames(convo);
   const panelGroups = [...panelGroupNames(convo)];
+  const cleanHistoryText = compileAssistantCleaner(panelFields, panelGroups);
   for (const m of recent) {
     const raw = applyMacros(m.content, character, me, charMacro);
-    const text = m.role === 'assistant' ? cleanAssistantText(raw, panelFields, panelGroups) : raw;
+    const text = m.role === 'assistant' ? cleanHistoryText(raw) : raw;
 
     messages.push({ role: m.role, content: text });
   }

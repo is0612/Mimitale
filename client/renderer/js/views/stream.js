@@ -8,11 +8,10 @@
 //       之前限成 50ms（每秒 20 次），而模型每秒吐 20~60 个 token，
 //       于是每次重绘都攒下好几个字一起蹦出来 —— 就是「几个字几个字」的来源。
 //       每帧画（最多 60 次/秒）后，每个 token 到达后最多一帧就显示出来。
-//    2. 记住上次渲染出的 HTML，内容没变就完全不碰 DOM。
-//       rAF 在没有新 token 时也会继续触发，靠这个判断避免空转重排。
+//    2. push 按需调度一帧；相同文本跳过解析，相同 HTML 不碰 DOM。
+//       一帧内的多次 push 合并为最新文本，换目标时清除缓存。
 //    3. 只有真的重绘了才去滚动（见 scrollToBottom 的注释）。
-//  注：innerHTML 是整棵子树重建，但实测代价很小（几千字也就 1~2ms），
-//      60 次/秒完全撑得住；真正贵的是读 scrollHeight 触发的强制同步布局。
+//  注：innerHTML 会重建正文子树，长文本的实际代价需结合内容测量。
 //
 //  为什么单独一个模块：绘制（streamPainter）、滚动（scrollToBottom）、
 //  「用户在看历史就别拽他」这三件事同时被三处需要 ——
@@ -43,6 +42,7 @@ export const streamPainter = (() => {
   let node = null;
   let text = null;
   let lastHtml = null;
+  let lastText = null;
 
   function schedule() {
     if (rafId === null) rafId = requestAnimationFrame(paint);
@@ -51,8 +51,10 @@ export const streamPainter = (() => {
   function paint() {
     rafId = null;
     if (!node || text === null) return;
+    if (typeof text === 'string' && text === lastText) return;
 
     const html = renderMarkdown(text, { streaming: true });
+    lastText = text;
     if (html === lastHtml) return; // 没有新内容，不做任何 DOM 操作
 
     lastHtml = html;
@@ -66,6 +68,7 @@ export const streamPainter = (() => {
         // 换了目标节点，缓存作废
         node = target;
         lastHtml = null;
+        lastText = null;
       }
       text = value;
       schedule();
@@ -76,6 +79,7 @@ export const streamPainter = (() => {
       node = null;
       text = null;
       lastHtml = null;
+      lastText = null;
     }
   };
 })();

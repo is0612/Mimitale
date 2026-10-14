@@ -326,16 +326,17 @@ function extractPanelFromText(text, knownFields) {
   return found;
 }
 
-/**
- * 从一段文本里剥掉面板行。
- * 面板由程序权威注入，历史里再留一份只会白烧 token，还可能和注入值冲突。
- * 传了 knownFields 就只剥那些字段（正文里提到同名字样不会被误删）。
- */
-export function stripPanelLines(text, knownFields) {
+/** 单次调用内复用集合；空字段仍用 null，保留首轮只剥短值的猜测规则。 */
+function compileStripContext(fields, groups) {
+  const fieldSet = fields && fields.length ? new Set(fields) : null;
+  const groupSet = groups && groups.length ? new Set(groups) : null;
+  return { fieldSet, groupSet };
+}
+
+/** stripPanelLines 的集合版：判定逐行一致，仅复用编译好的 Set。 */
+function stripPanelLinesWith(text, known) {
   const source = String(text || '');
   if (!source.trim()) return source;
-
-  const known = knownFields && knownFields.length ? new Set(knownFields) : null;
 
   const out = source
     .split('\n')
@@ -356,6 +357,16 @@ export function stripPanelLines(text, knownFields) {
     });
 
   return collapseBlankLines(out.join('\n')).trim();
+}
+
+/**
+ * 从一段文本里剥掉面板行。
+ * 面板由程序权威注入，历史里再留一份只会白烧 token，还可能和注入值冲突。
+ * 传了 knownFields 就只剥那些字段（正文里提到同名字样不会被误删）。
+ */
+export function stripPanelLines(text, knownFields) {
+  const known = knownFields && knownFields.length ? new Set(knownFields) : null;
+  return stripPanelLinesWith(text, known);
 }
 
 /**
@@ -402,10 +413,9 @@ const STATUS_HEADER_RE = /^[\[【]\s*当前状态\s*[\]】]$/;
  * 都只剥 knownGroups 里列出的组名 —— 正文里「—— 他顿了顿 ——」这种破折号引语、
  * 或整行只有 `【别的什么】` 的引用，组名不在列表里，不会被误删。
  */
-function stripPanelGroupHeaders(text, knownGroups) {
+function stripPanelGroupHeadersWith(text, known) {
   const source = String(text || '');
   if (!source.trim()) return source;
-  const known = knownGroups && knownGroups.length ? new Set(knownGroups) : null;
   if (!known || !known.size) return source;
 
   const out = source.split('\n').filter((rawLine) => {
@@ -459,9 +469,15 @@ function stripStatusHeader(text) {
  * 正文里留着只会像漏网之鱼一样突兀地挂在那儿。
  */
 export function cleanAssistantText(text, panelFields, knownGroups) {
-  return stripEmoTags(
+  return compileAssistantCleaner(panelFields, knownGroups)(text);
+}
+
+/** 单次同步历史处理复用集合；原有文本清理顺序保持不变。 */
+export function compileAssistantCleaner(panelFields, knownGroups) {
+  const { fieldSet, groupSet } = compileStripContext(panelFields, knownGroups);
+  return (text) => stripEmoTags(
     stripStatusHeader(
-      stripOptionsLine(stripPanelGroupHeaders(stripPanelLines(text, panelFields), knownGroups))
+      stripOptionsLine(stripPanelGroupHeadersWith(stripPanelLinesWith(text, fieldSet), groupSet))
     )
   );
 }
