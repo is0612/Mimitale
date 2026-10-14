@@ -19,6 +19,38 @@ body {
   overflow-x: hidden;
 }
 
+/* ------------------------------ 夜空 ------------------------------ */
+/* 铺在一切之下的子夜深蓝 —— 品牌名里的「子夜」、logo 里那片星空，落在配色上就是它。
+   有了它，上面那盏琥珀灯才是「夜里的一盏灯」，而不是中性灰上悬着的一团亮。
+
+   ⚠️ 必须排在 .lamp 之前：两层都是 fixed + z-index:0，同层按 DOM 顺序叠，
+      夜空要在灯的下头。 */
+.night {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    /* 星：一共十来颗，集中在上半部，越往下越淡。
+       密度一旦上去就变成「星空壁纸」了 —— 1px 的点要「平时不太抢眼、
+       抬头的时候它在」。 */
+    radial-gradient(1.2px 1.2px at 13% 11%, rgba(198, 218, 255, 0.78), transparent 62%),
+    radial-gradient(1.1px 1.1px at 28% 6%,  rgba(198, 218, 255, 0.54), transparent 62%),
+    radial-gradient(1.3px 1.3px at 44% 14%, rgba(198, 218, 255, 0.66), transparent 62%),
+    radial-gradient(1.1px 1.1px at 61% 5%,  rgba(198, 218, 255, 0.48), transparent 62%),
+    radial-gradient(1.2px 1.2px at 77% 12%, rgba(198, 218, 255, 0.70), transparent 62%),
+    radial-gradient(1.1px 1.1px at 89% 7%,  rgba(198, 218, 255, 0.50), transparent 62%),
+    radial-gradient(1.1px 1.1px at 21% 24%, rgba(198, 218, 255, 0.42), transparent 62%),
+    radial-gradient(1.2px 1.2px at 52% 27%, rgba(198, 218, 255, 0.46), transparent 62%),
+    radial-gradient(1.1px 1.1px at 70% 22%, rgba(198, 218, 255, 0.40), transparent 62%),
+    radial-gradient(1.1px 1.1px at 36% 36%, rgba(198, 218, 255, 0.30), transparent 62%),
+    radial-gradient(1.1px 1.1px at 84% 34%, rgba(198, 218, 255, 0.26), transparent 62%),
+    /* 夜空本体：顶部是「地平线以上的天光」，往下沉进黑。
+       ⚠️ 顶部这一档要**看得出来是蓝的** —— 第一版整个画面只差 13 个蓝通道，
+          肉眼分辨不出改过什么。现在顶部 B−R = 39，是明确的夜空蓝，但仍压得很暗。 */
+    linear-gradient(180deg, #18273f 0%, #0d1628 40%, #0a1120 100%);
+}
+
 /* ------------------------------ 环境光 ------------------------------ */
 /* 一盏吊灯挂在页面右上方，边缘被压暗。
    是整个页面唯一的大面积「光」，其余地方的亮都从它派生。 */

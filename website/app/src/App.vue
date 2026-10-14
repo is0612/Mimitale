@@ -8,7 +8,10 @@ useRise()
 </script>
 
 <template>
-  <!-- 环境光 + 木吧台细纹：整页唯一的大面积「光」，其余亮部都从它派生 -->
+  <!-- 夜空 → 环境光 → 木吧台细纹：三层都是 fixed + z-index:0，按 DOM 顺序叠。
+       夜空必须排在灯前面，否则星星会飘到光上面去。
+       光只在「夜里」才成立 —— 这一层就是那个夜。 -->
+  <div class="night" aria-hidden="true"></div>
   <div class="lamp" aria-hidden="true"></div>
   <div class="grain" aria-hidden="true"></div>
 

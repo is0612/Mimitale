@@ -49,12 +49,15 @@ onBeforeUnmount(() => {
   top: 0;
   z-index: 20;
   backdrop-filter: blur(14px);
-  background: rgba(16, 17, 19, 0.66);
+  /* ⚠️ 这两个 alpha 底就是 tokens.css 的 --bg（子夜深蓝 #0b1226）本身 ——
+     必须同步，否则往下滚时顶栏和页面会裂成两块颜色。
+     2026-10-14 底色从 #101113 换成深蓝时，这里是最容易漏的一处。 */
+  background: rgba(11, 18, 38, 0.66);
   border-bottom: 1px solid transparent;
   transition: background 0.3s var(--ease), border-color 0.3s var(--ease);
 }
 .topbar.is-pinned {
-  background: rgba(16, 17, 19, 0.9);
+  background: rgba(11, 18, 38, 0.9);
   border-bottom-color: var(--border);
 }
 .topbar .wrap {

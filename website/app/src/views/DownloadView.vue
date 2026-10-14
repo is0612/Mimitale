@@ -271,7 +271,7 @@ const EXAMPLE = `{
   margin: 0;
   padding: var(--s4);
   overflow-x: auto;
-  background: #0c0e10;
+  background: var(--bg-sunken);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
@@ -422,7 +422,7 @@ const EXAMPLE = `{
 .term {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: #0c0e10;
+  background: var(--bg-sunken);
   overflow: hidden;
 }
 .term-bar {

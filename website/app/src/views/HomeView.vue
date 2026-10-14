@@ -333,12 +333,14 @@ const SESSIONS = [
             「你俩又聊到后半夜了……」
             <span>—— 它盯着屏幕，尾巴尖晃了一下</span>
           </div>
-          <!-- 抽象的小生物：不指定物种，只给一个坐姿剪影 -->
+          <!-- 抽象的小生物：不指定物种，只给一个坐姿剪影。
+               线/面走 .fig-* 类读 token —— 这里原是写死的 #23262b / #3a3f46，
+               底色一换深蓝就露馅了。 -->
           <svg class="pet-figure" width="96" height="104" viewBox="0 0 96 104" fill="none" aria-hidden="true">
-            <path d="M70 84 C88 82 92 70 84 62" stroke="#3a3f46" stroke-width="7" stroke-linecap="round" />
-            <path d="M28 88 C16 88 12 78 16 66 C20 52 28 44 40 42 C52 40 62 46 66 58 C70 72 66 88 54 88 Z" fill="#23262b" stroke="#3a3f46" stroke-width="2" />
-            <path d="M28 46 L24 30 L40 40 Z" fill="#23262b" stroke="#3a3f46" stroke-width="2" />
-            <path d="M54 42 L60 26 L68 42 Z" fill="#23262b" stroke="#3a3f46" stroke-width="2" />
+            <path class="fig-tail" d="M70 84 C88 82 92 70 84 62" stroke-width="7" stroke-linecap="round" />
+            <path class="fig-body" d="M28 88 C16 88 12 78 16 66 C20 52 28 44 40 42 C52 40 62 46 66 58 C70 72 66 88 54 88 Z" stroke-width="2" />
+            <path class="fig-body" d="M28 46 L24 30 L40 40 Z" stroke-width="2" />
+            <path class="fig-body" d="M54 42 L60 26 L68 42 Z" stroke-width="2" />
             <circle cx="36" cy="60" r="3.4" fill="#e8b84b" />
             <circle cx="52" cy="59" r="3.4" fill="#e8b84b" />
             <path d="M42 70 q2.5 3 6 0" stroke="#7d848c" stroke-width="1.6" stroke-linecap="round" fill="none" />
@@ -1026,6 +1028,9 @@ h1 .lit {
 }
 .pet-bubble span { color: var(--text-faint); font-size: 11px; display: block; margin-top: 4px; }
 .pet-figure { position: absolute; right: 9%; bottom: 0; }
+/* 剪影的线与面读 token，不写死色值 —— 底色一换，它跟着走 */
+.pet-figure .fig-tail { stroke: var(--border-hi); fill: none; }
+.pet-figure .fig-body { fill: var(--bg-item); stroke: var(--border-hi); }
 .pet-shadow {
   position: absolute;
   right: 11%;
@@ -1108,7 +1113,7 @@ h1 .lit {
 .term {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: #0c0e10;
+  background: var(--bg-sunken);
   overflow: hidden;
 }
 .term-bar {
