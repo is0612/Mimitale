@@ -93,13 +93,23 @@ export function shiftSummariesForRemoval(convo, messageIndex) {
  * 删了的话 start 已经过期，照记就会把错位的那段标成「已覆盖」—— 和 shiftSummariesForRemoval
  * 防的是同一种吞消息。对不上就放弃这一段，下一轮按新的位置重压。
  */
-export function summaryRangeIntact(convo, start, sent, count) {
+export function summaryRangeIntact(convo, start, sent, count, snapshot) {
   if (summarizedCount(convo) !== start) return false;
   const context = convoContextMessages(convo);
   for (let i = 0; i < count; i += 1) {
     if (context[start + i] !== sent[i]) return false;
+    if (snapshot && (sent[i].role !== snapshot[i].role || sent[i].content !== snapshot[i].content)) return false;
   }
   return true;
+}
+
+export function invalidateSummariesForEdit(convo, message) {
+  const index = convoContextMessages(convo).indexOf(message);
+  if (index < 0) return;
+  const list = convoSummaries(convo);
+  const affected = list.findIndex((seg) => index >= (Number(seg.start) || 0) && index < (Number(seg.end) || 0));
+  // Later summaries were generated with this segment as previous context.
+  if (affected >= 0) convo.summaries = list.slice(0, affected);
 }
 
 export function nextSegmentTitle(convo) {

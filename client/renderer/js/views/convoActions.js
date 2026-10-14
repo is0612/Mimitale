@@ -55,6 +55,10 @@ export async function removeConvo(id) {
     danger: true
   });
   if (!ok) return;
+  if (state.streaming) {
+    showToast('正在生成回答，先点「停止生成」再删除会话');
+    return;
+  }
 
   state.conversations = state.conversations.filter((c) => c.id !== id);
   // 桌宠的「攒了几轮」是按会话 id 记的，会话没了就把那条计数删掉 ——
@@ -71,6 +75,10 @@ export async function removeConvo(id) {
 }
 
 export async function clearConvo() {
+  if (state.streaming) {
+    showToast('正在生成回答，先点「停止生成」再清空对话');
+    return;
+  }
   const convo = activeConvo();
   if (!convo || !convo.messages.length) {
     showToast('当前会话已经是空的');
@@ -87,6 +95,11 @@ export async function clearConvo() {
   // 弹窗关掉后焦点会留在弹窗里，不主动交还的话输入框点起来像是「没反应」。
   if (!ok) {
     el.input.focus();
+    return;
+  }
+
+  if (state.streaming) {
+    showToast('正在生成回答，先点「停止生成」再清空对话');
     return;
   }
 
@@ -127,6 +140,14 @@ export async function removeMessage(index) {
     danger: true
   });
   if (!ok) return;
+  if (state.streaming) {
+    showToast('正在生成回答，先点「停止生成」再删除消息');
+    return;
+  }
+  // 确认期间其它操作可能改变了下标，不能误删另一条消息。
+  const currentIndex = convo.messages.indexOf(message);
+  if (currentIndex < 0 || !state.conversations.includes(convo)) return;
+  index = currentIndex;
 
   // 先挪摘要覆盖点再删（要靠被删的那条算它在上下文里的位置）
   shiftSummariesForRemoval(convo, index);

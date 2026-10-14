@@ -640,10 +640,11 @@ body {
         （2026-10-12 踩过，别用 min-width:0 去救，那只会变省略号）。 */
   height: 36px;
   padding: 0 10px;
-  gap: 8px;
+  gap: 6px;
   font-size: var(--fs-sm);
   justify-content: flex-start;
   white-space: nowrap;
+  min-width: 0;
   overflow: hidden;
   background: transparent;
   border: 1px solid transparent;
@@ -654,10 +655,13 @@ body {
   background: var(--bg-item, var(--bg-card));
 }
 .sidebar-foot .btn svg { flex: 0 0 18px; width: 18px; height: 18px; opacity: 0.75; }
-/* 收起态要单独藏的那层文字（见下面的 .sidebar.collapsed）。
-   ⚠️ 不给 min-width:0 / text-overflow —— 一旦允许收缩，三列里塞不下的那颗就会
-   变成「角…」（2026-10-12 踩过）。宁可让它撑破那 1px，也别把字吃了。 */
-.foot-label { flex: 0 0 auto; }
+/* 文字可收缩，但图标和按钮本身保持稳定，字号放大时不会撑破网格。 */
+.foot-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* 「新对话」：稿子是高 32 的方角块，居中一颗 ＋ 加文字 */
 .btn-new {
@@ -687,7 +691,10 @@ body {
   font-family: inherit;
   font-weight: 400;
   cursor: pointer;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
   position: relative;
 }
@@ -713,7 +720,8 @@ body {
 }
 .btn-ghost:hover {
   color: var(--accent);
-  box-shadow: var(--shadow-lg);
+  /* 悬停只需比静态按钮更清晰，不把普通控件抬成浮层。 */
+  box-shadow: 0 4px 12px rgba(23, 18, 24, 0.10);
 }
 
 .btn-danger { 
@@ -995,9 +1003,9 @@ body {
   transition: color 0.15s, background-color 0.15s, box-shadow 0.15s;
 }
 
-.model-switch:hover { color: var(--accent); box-shadow: var(--shadow-lg); }
+.model-switch:enabled:hover { color: var(--accent); background-color: var(--bg-input); }
 .model-switch:focus-visible { box-shadow: var(--focus-ring); }
-.model-switch[aria-expanded='true'] { color: var(--accent); box-shadow: var(--shadow-lg); }
+.model-switch[aria-expanded='true'] { color: var(--accent); background-color: var(--accent-soft); }
 .model-switch:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1761,11 +1769,110 @@ body {
   background: var(--bg-input);
   box-shadow: none;
   transition: box-shadow 0.15s;
+  /* ⚠️ position: relative 是给 #quick-menu（快捷短语面板）当定位基准的 ——
+     面板写成 position: absolute + bottom: 100%，就贴在输入框**正上方**。
+     挂在 .composer 上的话会连下面那行提示（.composer-hint）一起算进去，
+     面板和输入框之间会多出一道提示行的空当。 */
+  position: relative;
 }
 
 /* ⛔ 基础段那条 `.composer-box:focus-within { box-shadow: var(--shadow-lg) }` 删于 2026-10-13 ——
    被文件末尾那条（改边框色 + 阴影归零）**完全覆盖**，渲染上早就不生效，合并掉。
    现在这个选择器只有末尾一处定义。查全部重复：node tools/audit-css-dup.js */
+
+/* ---------------------- 输入框：快捷短语面板 ---------------------- */
+
+/* 输入框左边那颗「{ }」。透明底 + 图标，跟输入框一体 ——
+   它旁边就是「发送」那颗实心胶囊，这里再用实心块会打架。
+   ⚠️ align-self: flex-end 让它跟发送键、输入框底边对齐（输入框会长高）。 */
+.btn-quick {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.btn-quick:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.btn-quick:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* 展开态：和顶栏「切换模型」打开时同一个口径（底色留住 = 「它开着呢」） */
+.btn-quick[aria-expanded='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* 图标（由 views/quickPhrases.js 插进来的 .quick-icon）—— 输入框里的图标小一档 */
+.btn-quick .quick-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* 面板贴在输入框**正上方**：.menu-pop 默认是往下弹（top: calc(100% + 6px); right: 0），
+   这里四条一起改 —— 顶/右要让位，底/左接上。 */
+.quick-menu {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 232px;
+  max-width: 360px;
+  /* 13 行 × 约 33px ≈ 430px：默认给到 480 让它们**一次全露出来**（星宝那张图上
+     就是一整列到底的）。窗口矮的时候（最小 680）退回 60vh 自己滚，
+     别让面板顶出屏幕、把最上面几行切掉。 */
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  /* 面板是往上弹的，入场动画跟着改成从下往上（反转 .menu-pop 那条 menu-in） */
+  animation: quick-in 0.14s ease-out;
+}
+
+@keyframes quick-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 一行 = 名字 + 右侧淡色括注（点了会插进什么）。
+   基础长相吃 .menu-pop .menu-item（见上面），这里只补两端的间距。
+   ⚠️ 括注是**紧跟名字左对齐**的（图上「旁白（旁白：）」就是这个排法），
+      不是推到面板最右边 —— 那样短名字和括注之间会空出一大片，眼睛要横着找。 */
+.quick-item {
+  justify-content: flex-start;
+  gap: 16px;
+  width: 100%;
+}
+
+.quick-name { flex: 0 0 auto; }
+
+/* 括注（渲染时就带着一对全角括号，见 views/quickPhrases.js）：比名字淡一档，
+   别抢「这一行叫什么」。
+   ⚠️ 名字和括注相同时**照样显示**（看图上的「继续（继续）」）——
+   括注是「点了插进什么」的预览，不是解释。 */
+.quick-hint {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 悬停整行时，括注跟着变主色 —— 和名字是同一个「选中了」的信号 */
+.quick-item:hover .quick-hint { color: inherit; }
 
 /* ---------------------- 「帮我想想」的建议条 ---------------------- */
 
@@ -2032,7 +2139,10 @@ body {
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .icon-btn svg { width: 16px; height: 16px; }
@@ -4333,12 +4443,37 @@ select {
 select {
   appearance: none;
   -webkit-appearance: none;
-  padding-right: 36px;
+  padding-right: 40px;
+  background-color: var(--bg-input);
   background-image: var(--select-arrow);
   background-repeat: no-repeat;
   background-position: right 12px center;
-  background-size: 15px 15px;
+  background-size: 16px 16px;
+  box-shadow: var(--shadow-sm);
+  text-overflow: ellipsis;
   cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+}
+
+select:enabled:hover {
+  background-color: var(--bg-card);
+}
+
+select:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+select option,
+select optgroup {
+  background-color: var(--bg-card);
+  color: var(--text);
 }
 
 input[type="text"]:hover,
@@ -4709,7 +4844,10 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   background: var(--bg-card);
   cursor: pointer;
   min-width: 0;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .wb-picker-row:hover { border-color: var(--border-hover); }
@@ -6387,7 +6525,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 @media (prefers-reduced-motion: reduce) {
   .modal, .modal-card, .waiting::after, .menu-pop, .toast,
   .msg-option-skeleton, .msg.illustrating .bubble { animation: none; }
-  .btn, .icon-btn, .mini-btn, .modal-card, .check, .check-title,
+  .btn, .icon-btn, .mini-btn, .btn-quick, .quick-item, .modal-card, .check, .check-title,
   input, textarea, select,
   .check > input[type="checkbox"],
   .check > input[type="checkbox"]::after { transition: none; }

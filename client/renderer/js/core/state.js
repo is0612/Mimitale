@@ -23,5 +23,7 @@ export const state = {
   activeId: null,
   streaming: false,
   requestId: null,
+  // 每次聊天请求绑定原会话和原消息，接收分片时不依赖当前选中的会话。
+  requestTarget: null,
   usage: null
 };

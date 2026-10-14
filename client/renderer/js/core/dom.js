@@ -151,6 +151,10 @@ export const el = {
   suggestStrip: $('suggest-strip'),
   suggestList: $('suggest-list'),
   btnSuggestClose: $('btn-suggest-close'),
+  // 输入框左边的快捷短语（按钮 + 它上面的弹层）。
+  // 行由 views/quickPhrases.js 铺，开合也在那边（纯插入，不发送 —— 发送归建议条）。
+  btnQuick: $('btn-quick'),
+  quickMenu: $('quick-menu'),
   perspectiveModal: $('perspective-modal'),
   btnClosePerspective: $('btn-close-perspective'),
   btnClosePerspective2: $('btn-close-perspective-2'),

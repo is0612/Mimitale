@@ -543,7 +543,16 @@ function loadSettings() {
   return settings;
 }
 
+let settingsSaveQueue = Promise.resolve();
+
 function saveSettings(patch) {
+  const snapshot = structuredClone(patch && typeof patch === 'object' ? patch : {});
+  const task = settingsSaveQueue.then(() => saveSettingsPatch(snapshot));
+  settingsSaveQueue = task.catch(() => {});
+  return task;
+}
+
+function saveSettingsPatch(patch) {
   const current = loadSettings();
 
   // 白名单：只收「默认设置里有」或者「磁盘上本来就有」的键。

@@ -211,6 +211,34 @@ test('API Key 解不开时不再把密文当 Key（换电脑 / 换 Windows 账�
   }
 });
 
+test('saveSettings: concurrent patches preserve both changes', async () => {
+  await saveSettings({ theme: 'light', accent: 'amber' });
+  await Promise.all([saveSettings({ theme: 'dark' }), saveSettings({ accent: 'blue' })]);
+  const saved = JSON.parse(fs.readFileSync(dataFile('config.json'), 'utf8'));
+  assert.equal(saved.theme, 'dark');
+  assert.equal(saved.accent, 'blue');
+});
+
+test('saveSettings: queued patches are snapshots and recover after failure', async () => {
+  const patch = { accent: 'matcha' };
+  const pending = saveSettings(patch);
+  patch.accent = 'pink';
+  assert.equal((await pending).accent, 'matcha');
+
+  const original = fs.renameSync;
+  fs.renameSync = () => {
+    const err = new Error('disk full');
+    err.code = 'ENOSPC';
+    throw err;
+  };
+  try {
+    await assert.rejects(saveSettings({ theme: 'light' }), /写入失败/);
+  } finally {
+    fs.renameSync = original;
+  }
+  assert.equal((await saveSettings({ theme: 'dark' })).theme, 'dark');
+});
+
 test('清理临时目录', () => {
   try {
     fs.rmSync(tmpRoot, { recursive: true, force: true });

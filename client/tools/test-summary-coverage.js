@@ -114,6 +114,17 @@ const PAGE_SCRIPT = (rootUrl, panelUrl) => `(async () => {
     c2.messages.splice(2, 1);
     check('③ 覆盖范围之前删了一条（start 变了）：识别为已过期', !memory.summaryRangeIntact(c2, 6, sent2, 12));
   }
+  {
+    const convo = { messages: Array.from({ length: 30 }, (_, i) => msg(i)), summaries: [] };
+    const sent = memory.convoContextMessages(convo).slice(0, 12);
+    const snapshot = sent.map(({ role, content }) => ({ role, content }));
+    check('summary snapshots accept unchanged text', memory.summaryRangeIntact(convo, 0, sent, 12, snapshot));
+    sent[0].content += ' edited';
+    check('summary snapshots reject in-place edits', !memory.summaryRangeIntact(convo, 0, sent, 12, snapshot));
+    convo.summaries = [{ start: 0, end: 4 }, { start: 4, end: 8 }, { start: 8, end: 12 }];
+    memory.invalidateSummariesForEdit(convo, sent[5]);
+    check('edits invalidate affected and dependent summaries', convo.summaries.length === 1 && convo.summaries[0].end === 4);
+  }
   return results;
 })()`;
 

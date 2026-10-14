@@ -3799,6 +3799,11 @@ app.whenReady().then(async () => {
             if ($$('#panel-cast .panel-avatar').length > 1) break;
           }
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 输入框左边的快捷短语面板展开的样子（行距 / 括注颜色 / 面板与输入框的间距）
+        quickPhrases: `
+          const t = document.querySelector('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }
+          document.querySelector('#btn-quick')?.click();
+          await new Promise(r => setTimeout(r, 350));`,
         // 顶栏「切换模型」弹层展开的样子（自绘列表，不是系统菜单那种直角 + 系统蓝）
         modelMenu: `
           const t = document.querySelector('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }

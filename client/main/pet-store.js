@@ -609,7 +609,9 @@ function petRigPack(look) {
   const tex = {};
   for (const p of model.parts) {
     const name = String(p.tex || '');
-    if (!name || tex[name]) continue; // 去重：多个部件可共用一张贴图
+    if (!name) continue;
+    if (/[\\/:\x00-\x1f]/.test(name) || name === '.' || name === '..') return null;
+    if (Object.prototype.hasOwnProperty.call(tex, name)) continue;
     let file = '';
     for (const ext of ['.png', '.webp', '.jpg']) {
       const f = path.join(dir, 'tex', `${name}${ext}`);
@@ -635,7 +637,9 @@ function petRigPack(look) {
   // 不整包作废 —— 顶多少了眼睛，不至于整只猫画不出来。
   for (const fdef of Object.values(model.feat || {})) {
     const name = String((fdef && fdef.tex) || '');
-    if (!name || tex[name]) continue; // 去重：feat 与 part 共用同一张也认
+    if (!name) continue;
+    if (/[\\/:\x00-\x1f]/.test(name) || name === '.' || name === '..') return null;
+    if (Object.prototype.hasOwnProperty.call(tex, name)) continue;
     let file = '';
     for (const ext of ['.png', '.webp', '.jpg']) {
       const f = path.join(dir, 'feat', `${name}${ext}`);

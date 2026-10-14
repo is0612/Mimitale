@@ -2216,6 +2216,143 @@ await scenario('输入框：发不出去时字要留着', async () => {
 });
 
 // ---------------------------------------------------------------------------
+//  场景 9.10b：输入框的快捷短语面板（点一行 = 插进输入框，不发送）
+// ---------------------------------------------------------------------------
+await scenario('输入框：快捷短语面板', async () => {
+  await waitFor('回到聊天页', () => shown('#view-chat'));
+  const menu = byId('quick-menu');
+  const btn = byId('btn-quick');
+  const input = byId('input');
+
+  check('输入框左边有快捷短语按钮', !!btn && !!menu);
+  check('面板一开始是收起的', menu.classList.contains('hidden'));
+
+  // --- 打开 ---
+  click('#btn-quick');
+  await waitFor('面板展开', () => !menu.classList.contains('hidden'));
+  check('按钮标成展开态（aria-expanded）', btn.getAttribute('aria-expanded') === 'true');
+
+  const rows = $$('#quick-menu .quick-item');
+  check('面板里铺出了快捷短语行', rows.length >= 10, String(rows.length));
+  check(
+    '第一行是「旁白」，右侧预览就是插进输入框的原文（连括号）',
+    /旁白/.test(rows[0].textContent) && /（旁白：）/.test(rows[0].textContent),
+    rows[0].textContent
+  );
+  // 符号行没有预览（插进去的就是符号本身，没什么可预告的）
+  const heartRow = rows.find((r) => r.querySelector('.quick-name').textContent === '♡');
+  check(
+    '符号行（♡）不带预览',
+    !!heartRow && !heartRow.querySelector('.quick-hint'),
+    heartRow ? heartRow.textContent : '（没找到 ♡ 那一行）'
+  );
+
+  // 面板要**贴在输入框正上方**：盖住输入框、或者飘到窗口外，都只能靠几何量看出来
+  const boxRect = $('.composer-box').getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+  check(
+    '面板在输入框正上方（没有盖住输入框）',
+    menuRect.bottom <= boxRect.top + 1 && menuRect.top >= 0,
+    `menu.bottom=${Math.round(menuRect.bottom)} box.top=${Math.round(boxRect.top)} menu.top=${Math.round(menuRect.top)}`
+  );
+  check('面板在窗口内、没有横向溢出', menuRect.left >= 0 && menuRect.right <= window.innerWidth + 1,
+    `left=${Math.round(menuRect.left)} right=${Math.round(menuRect.right)} 窗口=${window.innerWidth}`);
+
+  // --- 点一行：插进输入框（连括号一起）---
+  const msgsBefore = $$('#messages .msg').length;
+  setValue('#input', '');
+  input.setSelectionRange(0, 0);
+  rows[0].click();
+  await waitFor('点完收起', () => menu.classList.contains('hidden'));
+  check('点一行把整条指令插进了输入框（连括号，不是发出去）', input.value === '（旁白：）', JSON.stringify(input.value));
+  check(
+    '插入后光标停在右括号**里面**（接着就能写内容）',
+    input.selectionStart === 4 && input.selectionEnd === 4,
+    String(input.selectionStart)
+  );
+  check('插入后焦点回到输入框（接着就能打字）', document.activeElement === input);
+  check('插入不会直接发消息', $$('#messages .msg').length === msgsBefore, `${msgsBefore} → ${$$('#messages .msg').length}`);
+  check('收起后按钮不再是展开态', btn.getAttribute('aria-expanded') === 'false');
+
+  // 光标真的在括号里：接着敲两个字，应该落在「：」和「）」之间
+  input.setRangeText('雨停了。', input.selectionStart, input.selectionEnd, 'end');
+  check(
+    '打进去的字落在括号里（（旁白：雨停了。））',
+    input.value === '（旁白：雨停了。）',
+    JSON.stringify(input.value)
+  );
+
+  // --- 插到光标处（不是无脑追加到末尾）---
+  setValue('#input', 'AB');
+  input.setSelectionRange(1, 1);
+  click('#btn-quick');
+  await waitFor('面板再展开', () => !menu.classList.contains('hidden'));
+  $$('#quick-menu .quick-item')[0].click();
+  check('插在光标处而不是末尾', input.value === 'A（旁白：）B', JSON.stringify(input.value));
+
+  // --- 整句指令：插进来的就是那行右侧预览的原文 ---
+  setValue('#input', '');
+  input.setSelectionRange(0, 0);
+  click('#btn-quick');
+  await waitFor('面板第三次展开', () => !menu.classList.contains('hidden'));
+  const rowTexts = $$('#quick-menu .quick-item').map((r) => r.textContent);
+  const pushRow = $$('#quick-menu .quick-item').find((r) => r.querySelector('.quick-name').textContent === '推进剧情');
+  check('面板里有「推进剧情」这一行', !!pushRow, rowTexts.join(' | '));
+  pushRow.click();
+  check('整句指令原样插进来', input.value === '（推进剧情到下一个场景）', JSON.stringify(input.value));
+
+  // --- Esc 收起 ---
+  click('#btn-quick');
+  await waitFor('面板展开（等 Esc）', () => !menu.classList.contains('hidden'));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await waitFor('Esc 收起面板', () => menu.classList.contains('hidden'));
+  check('Esc 收起后焦点仍在输入框', document.activeElement === input);
+
+  // --- 点别处收起 ---
+  click('#btn-quick');
+  await waitFor('面板展开（等点别处）', () => !menu.classList.contains('hidden'));
+  document.body.click();
+  await waitFor('点别处收起面板', () => menu.classList.contains('hidden'));
+  check('点别处会收起面板', menu.classList.contains('hidden'));
+
+  // --- 键盘、重复初始化和选区替换 ---
+  const quickMod = await import(new URL('js/views/quickPhrases.js', document.baseURI).href);
+  quickMod.initQuickPhrases();
+  check('重复初始化不重复插入图标', btn.querySelectorAll('svg').length === 1);
+  btn.focus();
+  btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+  check('向上键从按钮展开并聚焦最后一行', !menu.classList.contains('hidden') && document.activeElement === rows[rows.length - 1]);
+  const key = (value) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true }));
+  key('Home');
+  check('Home 聚焦第一行', document.activeElement === rows[0]);
+  key('ArrowDown');
+  check('向下键聚焦下一行', document.activeElement === rows[1]);
+  key('ArrowUp');
+  check('向上键聚焦上一行', document.activeElement === rows[0]);
+  key('End');
+  check('End 聚焦最后一行', document.activeElement === rows[rows.length - 1]);
+  input.focus();
+  // 后台 Electron 窗口可能不派发原生 focusin，显式模拟 Tab 的焦点事件。
+  input.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+  check('焦点离开菜单时自动收起', menu.classList.contains('hidden'));
+
+  setValue('#input', '甲乙丙');
+  input.setSelectionRange(1, 2);
+  click('#btn-quick');
+  check('重复初始化后按钮仍正常展开', !menu.classList.contains('hidden'));
+  rows[0].click();
+  check('选区替换保留两侧文字和完整括号', input.value === '甲（旁白：）丙' && input.selectionStart === 5);
+
+  click('#btn-more');
+  click('#btn-quick');
+  check('展开快捷短语会关闭其它菜单', !shown('#topbar-more') && shown('#quick-menu'));
+  document.body.click();
+
+  // 收尾：别把字留给后面的场景
+  setValue('#input', '');
+});
+
+// ---------------------------------------------------------------------------
 //  场景 9.11：数值字段不能把非数值内容写成「烦躁/100」
 // ---------------------------------------------------------------------------
 await scenario('状态字段：数值字段不吞非数值内容', async () => {

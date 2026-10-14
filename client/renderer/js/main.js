@@ -96,6 +96,7 @@ import { initChatPad, syncChatPadHandles } from './views/chatPad.js';
 import { streamPainter, initStreamFollow } from './views/stream.js';
 import { initChatImages } from './views/chatImages.js';
 import { initSuggestionsUi, pickOption } from './views/suggestionsUi.js';
+import { initQuickPhrases } from './views/quickPhrases.js';
 import { showView, refreshLibraryPage, initViewSwitch } from './views/viewSwitch.js';
 import { initHelp } from './views/help.js';
 import { initCharacterList, renderCharacterPage } from './views/characterList.js';
@@ -185,6 +186,9 @@ function registerRefreshListeners() {
 // ---------------------------------------------------------------------------
 //  事件绑定
 // ---------------------------------------------------------------------------
+
+// Promise.all 任一读取失败时内存仍是初值，关窗不能拿它覆盖磁盘。
+let startupDataLoaded = false;
 
 function bindEvents() {
   // ⛔ 侧栏搜索框的接线 2026-10-12 晚去掉了（星宝：「去掉搜索对话功能」）。
@@ -468,10 +472,10 @@ function bindEvents() {
 
   api.onChunk(({ requestId, text }) => {
     if (requestId !== state.requestId) return;
-    const convo = activeConvo();
-    if (!convo) return;
-    const assistant = convo.messages[convo.messages.length - 1];
-    if (!assistant || assistant.role !== 'assistant') return;
+    const target = state.requestTarget;
+    if (!target) return;
+    const { convo, assistant } = target;
+    if (!state.conversations.includes(convo) || !convo.messages.includes(assistant) || assistant.role !== 'assistant') return;
 
     // 续写（「继续」/自动续写）是把新文本接在**已有正文**后面，而旧正文的末尾一行
     // 往往是状态行 / 剧情选项行 —— 模型写完正文顺手就写它们，且那一行末尾没有换行。
@@ -485,6 +489,12 @@ function bindEvents() {
 
     assistant.content += text;
 
+    // 后台目标仍可收分片，但绝不绘制到另一个会话的同下标节点。
+    if (state.activeId !== convo.id) {
+      chunkTarget = { requestId, node: null, base: '', delta: '' };
+      return;
+    }
+
     // 一次流式过程中目标节点一般不变，缓存起来 —— 否则每个 token 都要
     // 在消息列表里查一次 DOM，长对话下这些查询加起来也不少。
     //
@@ -495,7 +505,7 @@ function bindEvents() {
     //    直到 finally 里 renderAll 才把整段正文一次性刷出来。
     //    isConnected 为 false 就地重查一次，代价只有那些被重绘的轮次。
     if (chunkTarget.requestId !== requestId || !chunkTarget.node || !chunkTarget.node.isConnected) {
-      const index = convo.messages.length - 1;
+      const index = convo.messages.indexOf(assistant);
       // 本次流式开始前这条消息已有的正文（继续时 = 上一轮的原文，可能带旧状态块）。
       // 它是完整的，用 cleanAssistantText 精确剥掉旧状态块，得到干净正文 base。
       // 重绘之后重查也走同一条路：assistant.content 已经含了本轮全部增量，
@@ -531,14 +541,15 @@ function bindEvents() {
 
   api.onReasoning(({ requestId, text }) => {
     if (requestId !== state.requestId) return;
-    const convo = activeConvo();
-    if (!convo) return;
-    const assistant = convo.messages[convo.messages.length - 1];
-    if (!assistant || assistant.role !== 'assistant') return;
+    const target = state.requestTarget;
+    if (!target) return;
+    const { convo, assistant } = target;
+    if (!state.conversations.includes(convo) || !convo.messages.includes(assistant) || assistant.role !== 'assistant') return;
     assistant.reasoning = (assistant.reasoning || '') + text;
   });
 
   window.addEventListener('beforeunload', () => {
+    if (!startupDataLoaded) return;
     api.saveConversationsNow({ conversations: state.conversations, activeId: state.activeId });
     // 角色和世界书一起写（主进程收到 worldbooks 才会更新那个文件，漏掉的话
     // 角色绑定关系会指向一本已经不在磁盘上的书）。
@@ -640,6 +651,9 @@ async function init() {
   initSuggestionsUi({
     send: sendMessage
   });
+  // 输入框左边的快捷短语面板：纯「插进输入框」，不发送 —— 发送那条路由上面的
+  // 建议条负责。它只碰 el.input，没有要注入的动作。
+  initQuickPhrases();
   // 侧边栏的「角色库 / 世界书 / 帮助」几个入口自己绑（切屏是 viewSwitch 自己的事）。
   initViewSwitch();
   // 帮助页只有一颗「复制优化提示词」，内容本身是静态 HTML，不用重绘。
@@ -826,6 +840,7 @@ async function init() {
     state.activeId = state.conversations[0].id;
   }
 
+  startupDataLoaded = true;
   renderAll({ forceScroll: true });
   el.input.focus();
 

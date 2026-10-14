@@ -119,6 +119,8 @@ function downloadBinary(url, timeoutMs = 120000, redirectsLeft = MAX_REDIRECTS) 
       },
       (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          // 已交给下一跳处理；旧响应体断流不能覆盖下一跳的结果。
+          res.on('error', () => {});
           res.resume(); // 3xx 的响应体不要，但得读掉，不然这条连接一直挂着
           if (redirectsLeft <= 0) {
             reject(new Error('下载图片失败：重定向次数太多。'));
@@ -134,6 +136,12 @@ function downloadBinary(url, timeoutMs = 120000, redirectsLeft = MAX_REDIRECTS) 
           downloadBinary(next, timeoutMs, redirectsLeft - 1).then(resolve, reject);
           return;
         }
+        res.on('aborted', () => {
+          reject(new Error('下载图片失败：响应被中止。'));
+        });
+        res.on('error', (err) => {
+          reject(new Error(`下载图片失败：${normalizeNetworkError(err)}`));
+        });
         const declared = Number(res.headers['content-length']);
         if (declared > MAX_DOWNLOAD_BYTES) {
           req.destroy(new Error('下载图片失败：文件太大。'));
@@ -208,6 +216,12 @@ function requestJson({ url, method = 'GET', headers = {}, body = null, timeoutMs
             return;
           }
           reject(new Error(describeHttpError(res.statusCode, text)));
+        });
+        res.on('aborted', () => {
+          reject(new Error('接口响应被中止。'));
+        });
+        res.on('error', (err) => {
+          reject(new Error(normalizeNetworkError(err)));
         });
       }
     );
@@ -548,6 +562,12 @@ function bridgeChat({ settings, messages, characterContext, noImage, signal, tim
             drawReason: String(json.draw_reason || '')
           });
         });
+        res.on('aborted', () => {
+          reject(new Error(signal && signal.aborted ? '已停止生成。' : '接口响应被中止。'));
+        });
+        res.on('error', (err) => {
+          reject(new Error(signal && signal.aborted ? '已停止生成。' : normalizeNetworkError(err)));
+        });
       }
     );
 
@@ -641,6 +661,12 @@ function bridgeDraw({ baseUrl, text, characterContext, preset, timeoutMs = 30000
             drawReason: String(json.draw_reason || ''),
             promptUsed: String(json.prompt_used || '')
           });
+        });
+        res.on('aborted', () => {
+          reject(new Error('接口响应被中止。'));
+        });
+        res.on('error', (err) => {
+          reject(new Error(normalizeNetworkError(err)));
         });
       }
     );

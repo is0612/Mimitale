@@ -69,16 +69,56 @@ function rankBySimilarity(queryVector, candidates, options) {
   const minScore = Number.isFinite(Number(opts.minScore)) ? Number(opts.minScore) : 0.3;
   const exclude = opts.exclude instanceof Set ? opts.exclude : new Set(opts.exclude || []);
 
-  const scored = [];
+  // Keep only the current top K while scanning. RAG candidate lists can grow with
+  // long conversations, but K is normally small, so sorting every match wastes work.
+  const heap = [];
+  const isWorse = (a, b) => a.score < b.score || (a.score === b.score && a.index > b.index);
+  const swap = (a, b) => {
+    const value = heap[a];
+    heap[a] = heap[b];
+    heap[b] = value;
+  };
+  const siftUp = (index) => {
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (!isWorse(heap[index], heap[parent])) break;
+      swap(index, parent);
+      index = parent;
+    }
+  };
+  const siftDown = (index) => {
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      let smallest = index;
+      if (left < heap.length && isWorse(heap[left], heap[smallest])) smallest = left;
+      if (right < heap.length && isWorse(heap[right], heap[smallest])) smallest = right;
+      if (smallest === index) break;
+      swap(index, smallest);
+      index = smallest;
+    }
+  };
+
+  let index = 0;
   for (const item of candidates || []) {
     if (!item || exclude.has(item.key)) continue;
     const score = cosineSimilarity(queryVector, item.vector);
     if (!Number.isFinite(score) || score < minScore) continue;
-    scored.push({ ...item, score });
+
+    const ranked = { item, score, index };
+    index += 1;
+    if (heap.length < topK) {
+      heap.push(ranked);
+      siftUp(heap.length - 1);
+    } else if (isWorse(heap[0], ranked)) {
+      heap[0] = ranked;
+      siftDown(0);
+    }
   }
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, topK);
+  return heap
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(({ item, score }) => ({ ...item, score }));
 }
 
 /**
@@ -110,10 +150,10 @@ function collectCandidates(options) {
     out.push({ kind: 'message', key: `m:${hashText(text)}`, text, role: m.role });
   }
 
-  const wanted = Array.isArray(opts.worldbookIds) ? opts.worldbookIds : [];
+  const wanted = new Set(Array.isArray(opts.worldbookIds) ? opts.worldbookIds : []);
   const books = Array.isArray(opts.books) ? opts.books : [];
   for (const book of books) {
-    if (!book || !wanted.includes(book.id)) continue;
+    if (!book || !wanted.has(book.id)) continue;
     for (const entry of book.entries || []) {
       const text = String(entry && entry.content ? entry.content : '').trim();
       if (!text) continue;

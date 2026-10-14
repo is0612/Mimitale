@@ -160,6 +160,15 @@
           <button id="btn-suggest-close" class="suggest-close" type="button" title="收起" aria-label="收起建议">✕</button>
         </div>
         <div class="composer-box">
+          <!-- 快捷短语：把「旁白：/ OOC：/ 推进剧情…」这类常用指令和符号插进输入框。
+               它是**插入**不是发送 —— 前几条是前缀，插完还要接着写内容；
+               「点一下就发出去」那条路归上面的建议条（#suggest-strip）。
+               面板贴在 .composer-box 上（它是 position: relative），所以输入框
+               自己长高时面板跟着往上走。行由 views/quickPhrases.js 铺。 -->
+          <button id="btn-quick" class="btn-quick" type="button"
+                  title="快捷短语：插进输入框" aria-label="快捷短语"
+                  aria-haspopup="menu" aria-expanded="false"></button>
+          <div id="quick-menu" class="menu-pop quick-menu hidden" role="menu" aria-label="快捷短语"></div>
           <textarea id="input" rows="2" placeholder="说点什么……（Shift + Enter 换行）" aria-label="输入消息"></textarea>
           <button id="btn-send" class="btn btn-primary btn-send" aria-label="发送消息">发送</button>
         </div>

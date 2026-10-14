@@ -63,6 +63,7 @@ export async function maybeSummarize(convo) {
     // 覆盖范围按**真正写进原文的条数**记（超长时尾巴那几条留给下一段），
     // 见 data/memory.js 的 buildTranscriptFromStart
     const { text: transcript, count: covered } = buildTranscriptFromStart(slice, charNameForSummary(convo));
+    const snapshot = slice.map(({ role, content }) => ({ role, content }));
     const previous = convoSummaries(convo).map((s) => String(s.text || '')).join('\n\n');
 
     const text = await generateSummary(convo, transcript, previous);
@@ -78,7 +79,7 @@ export async function maybeSummarize(convo) {
     }
 
     // 等模型这段时间里用户删过消息：start 已过期，照记会吞掉错位的消息。放弃，下一轮重压
-    if (!summaryRangeIntact(convo, start, slice, covered)) {
+    if (!summaryRangeIntact(convo, start, slice, covered, snapshot)) {
       convo.summaryBusy = false;
       renderHeader();
       return false;
@@ -155,13 +156,14 @@ export async function summarizeNow() {
     // 覆盖范围按**真正写进原文的条数**记（超长时尾巴那几条留给下一段），
     // 见 data/memory.js 的 buildTranscriptFromStart
     const { text: transcript, count: covered } = buildTranscriptFromStart(slice, charNameForSummary(convo));
+    const snapshot = slice.map(({ role, content }) => ({ role, content }));
     const previous = convoSummaries(convo).map((s) => String(s.text || '')).join('\n\n');
     const text = await generateSummary(convo, transcript, previous);
     if (!text) {
       showToast('摘要返回为空', 'error');
       return;
     }
-    if (!summaryRangeIntact(convo, start, slice, covered)) {
+    if (!summaryRangeIntact(convo, start, slice, covered, snapshot)) {
       showToast('压缩期间对话有改动，这段没存，再点一次就好', 'error');
       return;
     }

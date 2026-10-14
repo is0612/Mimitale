@@ -24,6 +24,7 @@ import { ensureConvoEndpoint, isBridgeProvider } from '../data/providers.js';
 import { buildApiMessages, characterContextForConvo, effectiveSampling } from '../data/messages.js';
 import { matchWorldbookSections } from '../data/cast.js';
 import { recallSection } from '../data/rag.js';
+import { invalidateSummariesForEdit } from '../data/memory.js';
 import {
   convoFieldDisplayNames,
   convoPanelFields,
@@ -40,7 +41,10 @@ import { renderAll } from './redraw.js';
 import { maybeSummarize } from './summarize.js';
 import { maybePetAutoSpeak } from '../data/petContext.js';
 
+let preparationStopped = false;
+
 function setStreaming(on) {
+  if (on) preparationStopped = false;
   state.streaming = on;
   el.btnStop.classList.toggle('hidden', !on);
   el.btnSend.disabled = on;
@@ -150,12 +154,14 @@ export function editMessage(index) {
 
   const finish = (save) => {
     if (save) {
+      if (state.streaming || !convo.messages.includes(message)) return;
       const next = textarea.value;
       if (!next.trim()) {
         showToast('内容不能为空 —— 想删掉这条就用「删除」', 'error');
         textarea.focus();
         return;
       }
+      if (next !== message.content) invalidateSummariesForEdit(convo, message);
       message.content = next;
       // 这条要是正好是「某一条候选」，改动要落回它那个槽里，
       // 否则切走再切回来就变回老样子了
@@ -229,8 +235,7 @@ function reasoningTokensOf(usage) {
 /**
  * 让**最后一条**助手消息接着往下写 ——「继续」和「截断自动续写」共用这一段。
  *
- * 不新建消息是这里的关键：流式分片是「认 state.requestId，把增量加到 messages
- * 里最后一条、再画到它的节点上」，所以只要不加新消息，新写的字自然接在原文后面。
+ * 不新建消息是这里的关键：每个 requestId 绑定这条助手消息，增量直接接在原文后面。
  *
  * 刻意不抛异常，返回 { ok, usage, finishReason, error } —— 好让调用方自己决定
  * 是弹提示（用户手动点「继续」）还是静默降级（自动续写失败时不必打扰用户）。
@@ -244,6 +249,7 @@ async function extendAssistantMessage(convo, endpoint, worldbook, ragSection, nu
 
   const requestId = uid();
   state.requestId = requestId;
+  state.requestTarget = { convo, assistant: last };
 
   const messages = buildApiMessages(convo, worldbook, ragSection);
   messages.push({ role: 'user', content: nudge || CONTINUE_NUDGE });
@@ -350,16 +356,16 @@ export async function continueLastMessage() {  const convo = activeConvo();
     return;
   }
 
-  const worldbook = await matchWorldbookSections(convo);
-  const ragSection = await recallSection(convo);
-
-  const index = convo.messages.length - 1;
-  const bubble = el.messages.querySelector(`.msg[data-index="${index}"] .bubble`);
-  if (bubble) bubble.classList.add('streaming');
-
   setStreaming(true);
-
   try {
+    const worldbook = await matchWorldbookSections(convo);
+    const ragSection = await recallSection(convo);
+    if (preparationStopped) return;
+
+    const index = convo.messages.length - 1;
+    const bubble = el.messages.querySelector(`.msg[data-index="${index}"] .bubble`);
+    if (bubble) bubble.classList.add('streaming');
+
     const res = await extendAssistantMessage(convo, endpoint, worldbook, ragSection, CONTINUE_NUDGE);
     if (!res.ok) throw new Error(res.error);
     // 续写也可能整轮不提状态表 —— 尤其是「只思考没落笔」之后点继续的那条路径：
@@ -371,6 +377,7 @@ export async function continueLastMessage() {  const convo = activeConvo();
     streamPainter.stop();
     setStreaming(false);
     state.requestId = null;
+    state.requestTarget = null;
     convo.updatedAt = now();
     // 续写改了正文，同样要落回当前那个候选槽
     if (Array.isArray(last.variants) && Number.isFinite(last.variantIndex)) {
@@ -439,56 +446,61 @@ async function requestCompletion(convo, options) {
     return;
   }
 
-  // 世界书在渲染层匹配（和 buildApiMessages 同一个进程，省一次往返）。
-  // 之前这里要求「消息数 ≥ 3」才匹配，但那会让世界模型的第一个回合拿不到设定 ——
-  // 而开场引导往往正是最需要世界书的时候。匹配本身是本地纯计算，不省这一下。
-  const worldbook = await matchWorldbookSections(convo);
-  const ragSection = await recallSection(convo);
-
-  const requestId = uid();
-  state.requestId = requestId;
-
-  // 先插入一个空的助手消息，边收边填
-  const assistant = {
-    role: 'assistant',
-    content: '',
-    reasoning: '',
-    at: now(),
-    model: endpoint.model,
-    providerId: endpoint.provider.id
-  };
-  // 重新生成：把老候选接在前面，新的那条占一个空位先显示「正在思考」。
-  // 先占位是为了让「2/3」这种计数在流式过程中就是对的。
-  const seeded = options && Array.isArray(options.variants) ? options.variants.filter((v) => String(v || '').trim()) : null;
-  if (seeded && seeded.length) {
-    assistant.variants = [...seeded, ''];
-    assistant.variantIndex = assistant.variants.length - 1;
-  }
-
-  convo.messages.push(assistant);
-
-  const index = convo.messages.length - 1;
-  renderAll({ forceScroll: true });
-
-  const node = el.messages.querySelector(`.msg[data-index="${index}"] .msg-content`);
-  const bubble = node ? node.parentElement : null;
-
-  if (bubble) bubble.classList.add('streaming');
-
-  if (node) {
-    const wait = document.createElement('div');
-    wait.className = 'waiting';
-    // 本机桥接一次返回全文、非流式，出图时整轮可能 30~40 秒 —— 提前说明别让用户干等
-    wait.textContent = isBridgeProvider(endpoint.provider)
-      ? '正在生成（本地模型，出图时可能需要 40 秒左右）'
-      : '正在思考';
-    node.innerHTML = '';
-    node.appendChild(wait);
-  }
-
+  if (state.streaming) return;
   setStreaming(true);
+  let assistant = null;
+  let index = -1;
 
   try {
+    // 世界书在渲染层匹配（和 buildApiMessages 同一个进程，省一次往返）。
+    // 之前这里要求「消息数 ≥ 3」才匹配，但那会让世界模型的第一个回合拿不到设定 ——
+    // 而开场引导往往正是最需要世界书的时候。匹配本身是本地纯计算，不省这一下。
+    const worldbook = await matchWorldbookSections(convo);
+    const ragSection = await recallSection(convo);
+
+    if (preparationStopped) return;
+    const requestId = uid();
+    state.requestId = requestId;
+
+    // 先插入一个空的助手消息，边收边填
+    assistant = {
+      role: 'assistant',
+      content: '',
+      reasoning: '',
+      at: now(),
+      model: endpoint.model,
+      providerId: endpoint.provider.id
+    };
+    // 重新生成：把老候选接在前面，新的那条占一个空位先显示「正在思考」。
+    // 先占位是为了让「2/3」这种计数在流式过程中就是对的。
+    const seeded = options && Array.isArray(options.variants) ? options.variants.filter((v) => String(v || '').trim()) : null;
+    if (seeded && seeded.length) {
+      assistant.variants = [...seeded, ''];
+      assistant.variantIndex = assistant.variants.length - 1;
+    }
+
+    convo.messages.push(assistant);
+    state.requestTarget = { convo, assistant };
+
+    index = convo.messages.length - 1;
+    renderAll({ forceScroll: true });
+
+    const node = el.messages.querySelector(`.msg[data-index="${index}"] .msg-content`);
+    const bubble = node ? node.parentElement : null;
+
+    if (bubble) bubble.classList.add('streaming');
+
+    if (node) {
+      const wait = document.createElement('div');
+      wait.className = 'waiting';
+      // 本机桥接一次返回全文、非流式，出图时整轮可能 30~40 秒 —— 提前说明别让用户干等
+      wait.textContent = isBridgeProvider(endpoint.provider)
+        ? '正在生成（本地模型，出图时可能需要 40 秒左右）'
+        : '正在思考';
+      node.innerHTML = '';
+      node.appendChild(wait);
+    }
+
     const response = await api.sendChat({
       requestId,
       providerId: endpoint.provider.id,
@@ -638,26 +650,27 @@ async function requestCompletion(convo, options) {
     const stopped = /已停止生成/.test(message);
 
     // 没生成出东西，那个占位的空候选要撤掉，不然会留下一条空白候选
-    if (Array.isArray(assistant.variants)) {
+    if (assistant && Array.isArray(assistant.variants)) {
       assistant.variants.pop();
       if (!assistant.variants.length) delete assistant.variants;
       else assistant.variantIndex = assistant.variants.length - 1;
     }
 
     if (stopped) {
-      if (!assistant.content) {
+      if (assistant && !assistant.content) {
         convo.messages.splice(index, 1);
       }
       showToast('已停止生成');
     } else {
       // 把失败的那条助手消息换成错误提示，并留一个「重试」按钮
-      convo.messages.splice(index, 1);
+      if (assistant) convo.messages.splice(index, 1);
       convo.messages.push({ role: 'error', content: message, at: now(), retryable: true });
     }
   } finally {
     streamPainter.stop();
     setStreaming(false);
     state.requestId = null;
+    state.requestTarget = null;
     convo.updatedAt = now();
     // 回复写完了，从里面抽出状态栏存到会话上 —— 下一轮由程序权威注入，
     // 不再依赖模型去抄历史（历史会被 maxTurns 截断）。
@@ -738,6 +751,7 @@ export function switchVariant(index, delta) {
   const next = (current + delta + list.length) % list.length;
   if (next === current) return;
 
+  invalidateSummariesForEdit(convo, message);
   message.variantIndex = next;
   message.content = list[next];
   convo.updatedAt = now();
@@ -751,5 +765,6 @@ export function switchVariant(index, delta) {
 
 export async function stopGenerating() {
   // 只停聊天这一路 —— 后台摘要 / AI 生成角色这些不归「停止」按钮管
+  if (state.streaming && !state.requestId) preparationStopped = true;
   if (state.requestId) await api.stopChat(state.requestId);
 }

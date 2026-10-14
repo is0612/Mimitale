@@ -454,6 +454,21 @@ const PET = 'pet1';
     '老配置里显式写的 30 原样保留（改默认 ≠ 改现状）');
 
   // -------------------------------------------------------------------------
+  section('rig texture boundaries');
+  const skinDir = path.join(tmpRoot, 'pet', 'skins', 'boundary-test');
+  fs.mkdirSync(path.join(skinDir, 'tex'), { recursive: true });
+  fs.writeFileSync(path.join(skinDir, 'tex', 'safe.png'), Buffer.from('image fixture'));
+  const modelPath = path.join(skinDir, 'model.json');
+  const look = { kind: 'rig', source: 'user', skin: 'boundary-test' };
+  for (const name of ['../../../../outside', '..\\outside', 'C:outside']) {
+    fs.writeFileSync(modelPath, JSON.stringify({ parts: [{ tex: name }], units: {}, pivots: {} }));
+    eq(petStore.petRigPack(look), null, `reject texture path ${name}`);
+  }
+  fs.writeFileSync(modelPath, JSON.stringify({ parts: [{ tex: 'safe' }], feat: { eye: { tex: '../outside' } }, units: {}, pivots: {} }));
+  eq(petStore.petRigPack(look), null, 'reject feature texture traversal');
+  fs.writeFileSync(modelPath, JSON.stringify({ parts: [{ tex: 'safe' }], units: {}, pivots: {} }));
+  ok(!!petStore.petRigPack(look)?.tex.safe, 'ordinary texture names still load');
+
   section('位置记忆');
 
   eq(
