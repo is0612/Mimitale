@@ -778,7 +778,7 @@ body {
      ⚠️ 原来是 68 —— 那是「44px 圆头像 + 一行字」时期的数，头像收到 26 之后
      顶栏白多出 20px，把下面的「在场角色条」整条往下推。 */
   min-height: 48px;
-  padding: 0 14px;
+  padding: 6px 12px;
   /* 抬高两层：① 不这样「⋯」/「切换模型」弹层展开时会被下面的消息区盖住；
      ② 还要高过浮动的状态卡 —— .state-cards 是**整列大小**（inset:0）且 z-index 40，
         它虽然在 DOM 里排在顶栏后面，只要层级比顶栏高，就能把整个顶栏连同弹层
@@ -802,8 +802,8 @@ body {
   flex: 0 0 auto;
   /* 26 → 34（星宝 2026-10-12 深夜：「顶部的图标也小了」）。
      顶栏本来就是给这一颗留的呼吸位，34 不会把它顶高 —— .topbar 的高度由标题那两行决定。 */
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius);
   display: grid;
   place-items: center;
@@ -1881,7 +1881,7 @@ body {
   /* 跟输入框同宽，不居中 */
   max-width: none;
   margin: 0;
-  padding: 0 2px;
+  padding: 2px;
   display: flex;
   justify-content: space-between;
   font-size: var(--fs-xs);
@@ -4224,7 +4224,6 @@ input[type="number"]:focus,
 textarea:focus,
 select:focus {
   border-color: var(--accent);
-  box-shadow: var(--focus-ring);
 }
 
 input::placeholder, textarea::placeholder { color: var(--text-faint); }
@@ -5083,7 +5082,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 14px 10px;
+  margin: 0 0 10px;
   /* 稿子 2:113 = h34（7px 内边距 + 20px 方角头像）。
      2026-10-12 深夜头像 20 → 28，这条跟着涨到 48（10 + 28 + 10）。
      ⚠️ 2026-10-13：内边距原来是 **9px**（奇数），「边距奇数统一归偶」之后成了 10px，
@@ -6748,7 +6747,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .cast-tab {
   flex: 1 1 auto;
   min-width: 0;
-  height: 20px;
+  height: 32px;
   padding: 0 6px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -7126,13 +7125,13 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
    ⚠️ 别挂进 .messages：那个容器 overflow-y:auto，绝对定位的把手会跟着正文一起滚走。 */
 .pad-handle[data-side='left'] {
   left: 4px;
-  top: 50%;
+  top: calc(50% - 10px);
   transform: translateY(-50%);
 }
 
 .pad-handle[data-side='right'] {
   right: 4px;
-  top: 50%;
+  top: calc(50% - 10px);
   transform: translateY(-50%);
 }
 
@@ -7404,8 +7403,8 @@ body.pad-dragging {
    深蓝底在深色主题下几乎融进侧栏，浅色主题下是一块圆角深蓝小标 —— 有意保留，
    不抠透明（发光的星/月边缘抠出来会毛）。 */
 .brand-logo {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-sm);
   object-fit: cover;
   flex: 0 0 auto;
