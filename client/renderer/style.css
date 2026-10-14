@@ -932,6 +932,14 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg);
+  /* 入场：弹窗有 card-in，菜单之前是瞬现 —— 同一套「浮起来」的语言补齐。
+     translateY(-4px) 不影响定位（top 是 calc(100% + 6px)，transform 不参与）。 */
+  animation: menu-in 0.14s ease-out;
+}
+
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* 菜单项目身是 <button>，但要长得像菜单行，不是按钮。
@@ -2548,16 +2556,14 @@ body {
 .settings-content > .panel-section > .field,
 .settings-content > .panel-section > .field-grid,
 .settings-content > .panel-section > .field-stack,
-.settings-content > .panel-section > .persona-row,
-.settings-content > .panel-section > .provider-row {
+.settings-content > .panel-section > .persona-row {
   margin-bottom: 10px;
 }
 .settings-content > .panel-section > .check:last-child,
 .settings-content > .panel-section > .field:last-child,
 .settings-content > .panel-section > .field-grid:last-child,
 .settings-content > .panel-section > .field-stack:last-child,
-.settings-content > .panel-section > .persona-row:last-child,
-.settings-content > .panel-section > .provider-row:last-child {
+.settings-content > .panel-section > .persona-row:last-child {
   margin-bottom: 0;
 }
 
@@ -3466,25 +3472,8 @@ body {
   border-radius: 999px;
   background: var(--toggle-track);
 }
-
-.crop-zoom::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  /* 让 16px 的拇指在 6px 的轨道上居中：(6 - 16) / 2 */
-  margin-top: -4px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--bg-elev);
-  box-shadow: 0 1px 3px rgba(23, 37, 66, 0.25);
-}
-
-.crop-zoom:focus-visible {
-  outline: none;
-  border-radius: 999px;
-  box-shadow: var(--focus-ring);
-}
+/* 滑块 thumb / focus-visible 与设置页那三个 range 滑块共用一份（见「控件」区），
+   这里只有 crop 自己那条纯色轨道跟它们不同。 */
 
 .crop-foot {
   display: flex;
@@ -4488,10 +4477,36 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
   box-shadow: var(--shadow-lg);
   /* 提示条只是给人看的，绝不能挡住下面的按钮和输入框 */
   pointer-events: none;
+  animation: toast-in 0.2s ease-out;
+}
+
+/* keyframes 里的 transform 必须带上 translateX(-50%) —— 否则会把定位用的
+   那份 transform 整个顶掉，toast 出现的一瞬间会跳到右边去。 */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 .toast.error { border-color: var(--danger-border); color: var(--danger-text); }
 .toast.ok { border-color: var(--ok-border); color: var(--ok-text); }
+
+/* ---------------------- 全局交互细节 ---------------------- */
+
+/* 选中文字的底色：跟主题走。系统的默认选区是蓝底白字，
+   和琥珀/草莓/苏打/抹茶四套主题全都不搭。只给底色不给字色，
+   accent-soft 本来就是各主题调好的淡主色，原字色在它上面对比足够。 */
+::selection { background: var(--accent-soft); }
+
+/* 按压反馈：行状可点元素按下时轻微变淡，和 .btn:active 的「下沉 1px」
+   是同一套手感语言。这些元素 hover 都有反馈，之前唯独缺按压 ——
+   点下去界面是「死」的，这是前端手感里最明显的缺口。 */
+.convo-item:active,
+.settings-nav-item:active,
+.menu-pop .menu-item:active,
+.msg-option-btn:active,
+.provider-card:active {
+  opacity: 0.7;
+}
 
 /* 滚动条 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -5841,7 +5856,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .appearance-row input[type="range"]::-webkit-slider-thumb,
 .gen-row input[type="range"]::-webkit-slider-thumb,
-.field input[type="range"]::-webkit-slider-thumb {
+.field input[type="range"]::-webkit-slider-thumb,
+.crop-zoom::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 16px;
@@ -5857,7 +5873,8 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 
 .appearance-row input[type="range"]:focus-visible,
 .gen-row input[type="range"]:focus-visible,
-.field input[type="range"]:focus-visible {
+.field input[type="range"]:focus-visible,
+.crop-zoom:focus-visible {
   outline: none;
   border-radius: 999px;
   box-shadow: var(--focus-ring);
@@ -6368,7 +6385,7 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 .lightbox-hint { font-size: var(--fs-xs); color: var(--text-faint); }
 
 @media (prefers-reduced-motion: reduce) {
-  .modal, .modal-card, .waiting::after,
+  .modal, .modal-card, .waiting::after, .menu-pop, .toast,
   .msg-option-skeleton, .msg.illustrating .bubble { animation: none; }
   .btn, .icon-btn, .mini-btn, .modal-card, .check, .check-title,
   input, textarea, select,
