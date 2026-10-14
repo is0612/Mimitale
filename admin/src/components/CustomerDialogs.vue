@@ -15,7 +15,7 @@ import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { updateCustomer } from '@/api/customer'
 import { useDictStore } from '@/stores/dict'
-import { formatQuota } from '@/config/labels'
+import { formatQuota, formatTime, membershipState } from '@/config/labels'
 import type { Customer } from '@/types'
 
 const emit = defineEmits<{ done: [] }>()
@@ -120,7 +120,74 @@ async function submitUnban(row: Customer): Promise<void> {
   }
 }
 
-defineExpose({ openQuota, openBan, submitUnban })
+/* ---------------- 发会员 ---------------- */
+
+const memberVisible = ref(false)
+const memberTarget = ref<Customer | null>(null)
+/** 目标等级 —— 字典 membership_level 的 value，默认初级会员 */
+const memberLevel = ref('basic')
+const memberDays = ref(30)
+
+/** 快捷时长 —— 按月续费是 30 天，其余给常用档位省得手打 */
+const MEMBER_PRESETS = [
+  { label: '1 个月', days: 30 },
+  { label: '3 个月', days: 90 },
+  { label: '6 个月', days: 180 },
+  { label: '1 年', days: 365 }
+]
+
+/** 等级下拉 —— 字典里加一档这里立刻多一档 */
+const memberLevelOptions = computed(() => dict.optionsOf('membership_level'))
+
+const memberSummary = computed(() => {
+  const t = memberTarget.value
+  if (!t) return ''
+  const s = membershipState(t)
+  if (s === 'none') return '当前：非会员，开通后从今天起算'
+  if (s === 'expired') return `当前：已过期（${formatTime(t.membershipExpireAt)}），续费从今天起算`
+  return `当前：${dict.labelOf('membership_level', t.membershipLevel)}，${formatTime(
+    t.membershipExpireAt
+  )} 到期（续费从到期日顺延）`
+})
+
+const memberHint = computed(() => {
+  const n = Number(memberDays.value)
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) return '请填正整数天数'
+  return `顺延 ${n} 天`
+})
+
+function openMembership(row: Customer): void {
+  memberTarget.value = row
+  memberLevel.value = 'basic'
+  memberDays.value = 30
+  memberVisible.value = true
+}
+
+async function submitMembership(): Promise<void> {
+  const target = memberTarget.value
+  if (!target) return
+  if (!memberLevel.value) {
+    ElMessage.warning('选一个会员等级')
+    return
+  }
+  const n = Number(memberDays.value)
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
+    ElMessage.warning('天数要填正整数')
+    return
+  }
+  try {
+    await updateCustomer(target.id, { membershipLevel: memberLevel.value, membershipDays: n })
+    ElMessage.success(
+      `已给「${target.nickname}」发 ${n} 天${dict.labelOf('membership_level', memberLevel.value)}`
+    )
+    memberVisible.value = false
+    emit('done')
+  } catch {
+    // 错误提示已在 request 层统一处理
+  }
+}
+
+defineExpose({ openQuota, openBan, submitUnban, openMembership })
 </script>
 
 <template>
@@ -177,6 +244,43 @@ defineExpose({ openQuota, openBan, submitUnban })
       <el-button type="danger" @click="submitBan">确定封禁</el-button>
     </template>
   </el-dialog>
+
+  <!-- 发会员 -->
+  <el-dialog v-model="memberVisible" title="发会员" width="460px">
+    <div v-if="memberTarget" class="dlg-body">
+      <div class="dlg-target">
+        {{ memberTarget.nickname }}
+        <span class="dlg-mail">{{ memberTarget.email }}</span>
+      </div>
+      <div class="member-summary">{{ memberSummary }}</div>
+      <div class="dlg-label">等级</div>
+      <el-select v-model="memberLevel" style="width: 100%">
+        <el-option v-for="o in memberLevelOptions" :key="o.value" :label="o.label" :value="o.value" />
+      </el-select>
+      <div class="dlg-label">时长</div>
+      <div class="presets">
+        <el-button
+          v-for="p in MEMBER_PRESETS"
+          :key="p.days"
+          size="small"
+          :type="Number(memberDays) === p.days ? 'primary' : 'default'"
+          @click="memberDays = p.days"
+        >
+          {{ p.label }}
+        </el-button>
+      </div>
+      <div class="dlg-label">或者手填天数</div>
+      <el-input v-model.number="memberDays" placeholder="30 = 一个月" />
+      <div class="hint">{{ memberHint }}</div>
+      <div class="hint warn">
+        现在没有收费功能 —— 客户到期后找你开会员，就靠这里手动给他续。这个动作会记进操作日志。
+      </div>
+    </div>
+    <template #footer>
+      <el-button @click="memberVisible = false">取消</el-button>
+      <el-button type="primary" @click="submitMembership">发会员</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -197,6 +301,16 @@ defineExpose({ openQuota, openBan, submitUnban })
   font-size: 12px;
   color: var(--text-sub);
   margin-left: 8px;
+}
+
+.member-summary {
+  font-size: 12px;
+  color: var(--text-sub);
+  background: #f1efe8;
+  border-radius: 8px;
+  padding: 8px 11px;
+  margin-bottom: 4px;
+  line-height: 1.6;
 }
 
 .dlg-label {

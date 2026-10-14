@@ -13,9 +13,11 @@ import {
   CUSTOMER_STATUS_LABEL,
   CUSTOMER_STATUS_TAG,
   formatQuota,
-  formatTime
+  formatTime,
+  membershipState
 } from '@/config/labels'
 import type { Customer, CustomerStatus } from '@/types'
+import type { TagType } from '@/config/labels'
 
 const router = useRouter()
 const dict = useDictStore()
@@ -59,6 +61,21 @@ function reset(): void {
 
 function openDetail(row: Customer): void {
   router.push({ name: 'customer-detail', params: { id: row.id } })
+}
+
+/** 会员等级这一列的显示名：等级显示名走字典；已过期的直接标「已过期」，而不是还挂着等级名 */
+function memberLabel(row: Customer): string {
+  const s = membershipState(row)
+  if (s === 'none') return '非会员'
+  if (s === 'expired') return '已过期'
+  return dict.labelOf('membership_level', row.membershipLevel)
+}
+
+function memberTag(row: Customer): TagType {
+  const s = membershipState(row)
+  if (s === 'none') return 'info'
+  if (s === 'expired') return 'danger'
+  return 'success'
 }
 
 onMounted(load)
@@ -110,6 +127,19 @@ onMounted(load)
             </el-tooltip>
           </template>
         </el-table-column>
+        <el-table-column label="会员等级" width="104">
+          <template #default="{ row }">
+            <el-tag :type="memberTag(row)" size="small" disable-transitions>{{ memberLabel(row) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="会员到期" width="150">
+          <template #default="{ row }">
+            <span v-if="membershipState(row) === 'none'" class="muted">—</span>
+            <span v-else :class="{ expired: membershipState(row) === 'expired' }">
+              {{ formatTime(row.membershipExpireAt) }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column label="额度" width="78">
           <template #default="{ row }">
             <span :class="{ exhausted: row.quota === 0 }">{{ formatQuota(row.quota) }}</span>
@@ -121,10 +151,11 @@ onMounted(load)
         <el-table-column label="最后登录" width="138">
           <template #default="{ row }">{{ formatTime(row.lastLoginAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="178" fixed="right">
+        <el-table-column label="操作" width="236" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">详情</el-button>
             <el-button link type="primary" @click="dialogs?.openQuota(row)">改额度</el-button>
+            <el-button link type="primary" @click="dialogs?.openMembership(row)">发会员</el-button>
             <el-button
               v-if="row.status === 'active'"
               link
@@ -195,6 +226,10 @@ onMounted(load)
 }
 
 .exhausted {
+  color: #a32d2d;
+}
+
+.expired {
   color: #a32d2d;
 }
 

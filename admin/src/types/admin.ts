@@ -68,6 +68,15 @@ export interface AdminRefreshRes {
 /** 客户状态：正常 / 封禁 */
 export type CustomerStatus = 'active' | 'banned'
 
+/**
+ * 会员等级 —— 字典 `membership_level` 的 value。
+ *
+ * `'none'` 是「非会员」哨兵，**不进字典**（跟客户状态 active/banned 一个道理，是代码语义）；
+ * 其余值（basic / medium / premium …）都来自字典，运营在字典页加一档，发会员的下拉立刻多一档，
+ * 不用改代码、不用发版。
+ */
+export type MembershipLevel = string
+
 export interface Customer {
   id: number
   /** 客户在 Mimitale 客户端里注册用的邮箱 */
@@ -78,6 +87,10 @@ export interface Customer {
   banReason: string | null
   /** 剩余额度（次）。-1 表示不限量 */
   quota: number
+  /** 会员等级。none = 非会员 */
+  membershipLevel: MembershipLevel
+  /** 会员到期时间（ISO 8601）。非会员为 null；已过期的会保留历史到期时间 */
+  membershipExpireAt: string | null
   /** 注册时用的邀请码；直接邮箱注册则为 null */
   inviteCode: string | null
   /** 注册时间 */
@@ -112,6 +125,10 @@ export interface UpdateCustomerReq {
   quota?: number
   /** 封禁原因 —— 值来自字典 ban_reason（只有 status 改成 banned 时才有意义） */
   banReason?: string
+  /** 发会员 —— 目标等级（目前只有 basic） */
+  membershipLevel?: MembershipLevel
+  /** 发会员时顺延的天数（正整数，30 = 一个月） */
+  membershipDays?: number
 }
 
 /**
@@ -140,6 +157,7 @@ export type LogAction =
   | 'customer.ban'
   | 'customer.unban'
   | 'customer.quota'
+  | 'customer.membership'
   | 'card.create'
   | 'card.void'
   | 'dict.create'

@@ -42,6 +42,7 @@ import {
   type InviteCard,
   type LogAction,
   type LogListQuery,
+  type MembershipLevel,
   type OperationLog,
   type UpdateCardReq,
   type UpdateCustomerReq,
@@ -114,6 +115,19 @@ function seedCustomers(): Customer[] {
     const everLogged = rng() > 0.12
     const banned = rng() < 0.12
 
+    // 会员：用下标 i 规律分布（非会员 / 初级 / 中级 / 高级 轮换，生效与过期各半），
+    // 不额外消耗 rng —— 免得扰动其它种子字段的既有取值。
+    let membershipLevel: MembershipLevel = 'none'
+    let membershipExpireAt: string | null = null
+    const mem = i % 4
+    if (mem !== 0) {
+      membershipLevel = (['basic', 'medium', 'premium'] as const)[mem - 1]
+      membershipExpireAt =
+        i % 2 === 0
+          ? new Date(NOW - (3 + (i % 80)) * DAY).toISOString() // 已过期
+          : new Date(NOW + (20 + (i % 20)) * DAY).toISOString() // 生效中
+    }
+
     list.push({
       id: i + 1,
       email: `user${String(i + 1).padStart(3, '0')}@example.com`,
@@ -121,6 +135,8 @@ function seedCustomers(): Customer[] {
       status: banned ? 'banned' : 'active',
       banReason: banned ? BAN_REASON_POOL[Math.floor(rng() * BAN_REASON_POOL.length)] : null,
       quota: QUOTA_POOL[Math.floor(rng() * QUOTA_POOL.length)],
+      membershipLevel,
+      membershipExpireAt,
       inviteCode: rng() > 0.55 ? `MIMI-${randCode(rng, 4)}-${randCode(rng, 4)}` : null,
       createdAt: new Date(createdAt).toISOString(),
       lastLoginAt: everLogged
@@ -130,7 +146,14 @@ function seedCustomers(): Customer[] {
   }
 
   // 放一个眼熟的客户在最前面，打开页面就有东西看
-  list[1] = { ...list[1], nickname: '露西娅', quota: -1, inviteCode: 'MIMI-DEMO-8888' }
+  list[1] = {
+    ...list[1],
+    nickname: '露西娅',
+    quota: -1,
+    inviteCode: 'MIMI-DEMO-8888',
+    membershipLevel: 'basic',
+    membershipExpireAt: new Date(NOW + 28 * DAY).toISOString()
+  }
   return list
 }
 
@@ -262,6 +285,14 @@ const DICT_SEEDS: SeedDict[] = [
       ['付费购买', 'paid', '第三方平台卖出去的'],
       ['内部测试', 'test', '']
     ]
+  },
+  {
+    type: { code: 'membership_level', name: '会员等级', remark: '客户所属的会员档位；none 是「非会员」哨兵，不进字典', createdAt: '' },
+    items: [
+      ['初级会员', 'basic', '新用户免费试用 30 天'],
+      ['中级会员', 'medium', ''],
+      ['高级会员', 'premium', '']
+    ]
   }
 ]
 
@@ -390,9 +421,16 @@ function seedLogs(): void {
     })
   }
 
-  // ⑤ 给最前面那个「眼熟的客户」补两条，详情页打开就有东西看
+  // ⑤ 给最前面那个「眼熟的客户」补几条，详情页打开就有东西看
   const demo = customers[1]
   if (demo) {
+    add(Date.parse(demo.createdAt) + 1 * DAY, {
+      ...base,
+      action: 'customer.membership',
+      targetId: demo.id,
+      targetName: demo.nickname,
+      detail: '发会员：初级会员 +30 天（新开通）'
+    })
     add(Date.parse(demo.createdAt) + 2 * DAY, {
       ...base,
       action: 'customer.quota',
@@ -656,6 +694,43 @@ function handleUpdateCustomer({ params, body, headers }: MockCtx): MockOutcome {
         detail: `额度 ${before === -1 ? '不限量' : before} → ${next === -1 ? '不限量' : next}`
       })
     }
+  }
+
+  // 发会员：把等级设为传进来的字典值，从「当前到期时间（若还在有效期）或现在」顺延 N 天。
+  // 没收费功能，会员全靠这里手动发 —— 客户到期来找你，你就给他续。
+  // 等级直接取字典 membership_level 的 value，运营加一档这里自动支持，不用改代码。
+  if (req.membershipLevel) {
+    const level = String(req.membershipLevel)
+    const levelLabel = dictLabel('membership_level', level)
+    // dictLabel 查不到就原样返回，所以「label === 原值」= 字典里没这档（含误传 'none'）
+    if (level === 'none' || levelLabel === level) {
+      return fail(ApiCode.INVALID_PARAM, '这个会员等级不存在')
+    }
+    const days = Math.floor(Number(req.membershipDays ?? 30))
+    if (!Number.isFinite(days) || days <= 0) {
+      return fail(ApiCode.INVALID_PARAM, '顺延天数要是正整数')
+    }
+
+    const now = Date.now()
+    const base = target.membershipExpireAt
+      ? Math.max(now, Date.parse(target.membershipExpireAt) || now)
+      : now
+    const next = base + days * DAY
+    const wasNone = target.membershipLevel === 'none'
+    target.membershipLevel = level
+    target.membershipExpireAt = new Date(next).toISOString()
+    changed = true
+    pushLog({
+      adminId: admin.id,
+      adminName: admin.nickname,
+      action: 'customer.membership',
+      targetType: 'customer',
+      targetId: target.id,
+      targetName: target.nickname,
+      detail: `发会员：${levelLabel} +${days} 天（${wasNone ? '新开通' : '续费'}，到期 ${localDay(
+        new Date(next).toISOString()
+      )}）`
+    })
   }
 
   if (!changed) return ok(target)

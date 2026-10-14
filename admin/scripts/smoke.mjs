@@ -277,8 +277,13 @@ try {
     const all = await call({ url: '/admin/dicts', method: 'get', headers: auth(token) })
     check('code 0', all.data.code === 0, JSON.stringify(all.data).slice(0, 120))
     const list = all.data.data ?? []
-    check('有 4 个字典类型', list.length === 4, `got ${list.length}`)
+    check('有 5 个字典类型', list.length === 5, `got ${list.length}`)
     check('每个类型都有数据项', list.every((b) => b.items.length > 0))
+
+    const ml = list.find((b) => b.type.code === 'membership_level')
+    check('有 membership_level 字典', Boolean(ml))
+    check('membership_level 有 3 项', ml?.items.length === 3, `got ${ml?.items.length}`)
+    check('会员等级含初中高三档', Boolean(ml?.items.find((i) => i.value === 'basic') && ml?.items.find((i) => i.value === 'medium') && ml?.items.find((i) => i.value === 'premium')))
 
     const ban = list.find((b) => b.type.code === 'ban_reason')
     check('有 ban_reason', Boolean(ban))
@@ -336,6 +341,54 @@ try {
     const after = await call({ url: '/admin/dicts', method: 'get', headers: auth(token) })
     const back = after.data.data.find((b) => b.type.code === 'ban_reason')
     check('删完回到 5 项', back?.items.length === 5, `got ${back?.items.length}`)
+  }
+
+  console.log('\n[会员]')
+  {
+    const all = await call({ url: '/admin/customers', method: 'get', params: { page: 1, pageSize: 100 }, headers: auth(token) })
+    const list = all.data.data.list
+    check('客户带会员字段', list.every((c) => 'membershipLevel' in c && 'membershipExpireAt' in c))
+    const basic = list.filter((c) => c.membershipLevel === 'basic')
+    check('种子有初级会员', basic.length > 0, `got ${basic.length}`)
+    check('种子有中级会员', list.some((c) => c.membershipLevel === 'medium'), '没有 medium')
+    check('种子有高级会员', list.some((c) => c.membershipLevel === 'premium'), '没有 premium')
+    const none = list.find((c) => c.membershipLevel === 'none')
+    check('种子也有非会员', Boolean(none), '没有 none 会员')
+
+    // 给非会员发 30 天初级会员
+    const grant = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'basic', membershipDays: 30 }, headers: auth(token) })
+    check('发会员 → level basic', grant.data.data?.membershipLevel === 'basic', JSON.stringify(grant.data).slice(0, 120))
+    check('到期时间在未来', Date.parse(grant.data.data?.membershipExpireAt) > Date.now(), String(grant.data.data?.membershipExpireAt))
+
+    // 发中级 / 高级会员 —— 等级是字典值，接口不该只认 basic
+    const grantMedium = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'medium', membershipDays: 90 }, headers: auth(token) })
+    check('发中级会员生效', grantMedium.data.data?.membershipLevel === 'medium', JSON.stringify(grantMedium.data).slice(0, 120))
+    const grantPremium = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'premium', membershipDays: 365 }, headers: auth(token) })
+    check('发高级会员生效', grantPremium.data.data?.membershipLevel === 'premium', JSON.stringify(grantPremium.data).slice(0, 120))
+
+    // 续费：给一个仍在有效期的会员再发 30 天，应从原到期日顺延
+    const activeMember = list.find((c) => c.membershipLevel !== 'none' && Date.parse(c.membershipExpireAt) > Date.now())
+    if (activeMember) {
+      const prevExpire = Date.parse(activeMember.membershipExpireAt)
+      const renew = await call({ url: `/admin/customers/${activeMember.id}`, method: 'patch', body: { membershipLevel: 'basic', membershipDays: 30 }, headers: auth(token) })
+      const newExpire = Date.parse(renew.data.data?.membershipExpireAt)
+      check('续费从原到期日顺延 30 天', Math.abs(newExpire - prevExpire - 30 * 86400000) < 2000, `prev=${prevExpire} new=${newExpire}`)
+    }
+
+    // 发会员也落日志
+    const logs = await call({ url: '/admin/logs', method: 'get', params: { page: 1, pageSize: 5 }, headers: auth(token) })
+    check('发会员落日志', logs.data.data.list[0].action === 'customer.membership', logs.data.data.list[0].action)
+    check('日志带天数', String(logs.data.data.list[0].detail).includes('天'), logs.data.data.list[0].detail)
+
+    // 错误分支
+    const badLevel = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'diamond', membershipDays: 30 }, headers: auth(token) })
+    check('不存在的等级 → 1001', badLevel.data.code === 1001, JSON.stringify(badLevel.data))
+
+    const noneLevel = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'none', membershipDays: 30 }, headers: auth(token) })
+    check('把 none 当等级发 → 1001', noneLevel.data.code === 1001, JSON.stringify(noneLevel.data))
+
+    const badDays = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'basic', membershipDays: 0 }, headers: auth(token) })
+    check('天数非正 → 1001', badDays.data.code === 1001, JSON.stringify(badDays.data))
   }
 
   console.log('\n[refresh / logout]')

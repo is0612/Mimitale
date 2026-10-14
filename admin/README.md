@@ -88,7 +88,7 @@ src/
 ├── router/index.ts   路由与登录守卫（hash 模式）
 ├── layouts/          侧边栏 + 顶栏骨架
 ├── components/
-│   └── CustomerDialogs.vue  改额度 / 封禁弹层（列表页与详情页共用）
+│   └── CustomerDialogs.vue  改额度 / 封禁 / 发会员弹层（列表页与详情页共用）
 ├── views/            登录、客户列表、客户详情、卡密、操作日志、字典
 └── scripts/smoke.mjs 接口自测
 ```
@@ -113,7 +113,7 @@ src/
 | --- | --- | --- |
 | GET | `/api/admin/customers` | 客户列表（分页 / 关键词 / 状态） |
 | GET | `/api/admin/customers/{id}` | 客户详情（+ 来源卡密 + 操作记录） |
-| PATCH | `/api/admin/customers/{id}` | 封禁 / 解封 / 改额度（**每个动作落一条日志**） |
+| PATCH | `/api/admin/customers/{id}` | 封禁 / 解封 / 改额度 / 发会员（**每个动作落一条日志**） |
 
 ### 操作日志（8）
 
@@ -156,6 +156,7 @@ src/
 | 客户来源 `customer_source` | 卡密状态 `unused` / `used` / `void` |
 | 额度预设 `quota_preset` | 管理员角色 `super` / `normal` |
 | 卡密备注分类 `card_note` | 操作日志的动作类型 |
+| 会员等级 `membership_level` |  |
 
 **为什么不能都塞进去**：后端写着 `if (status === 'banned')`，你在字典里加个第三态，
 界面上会多出一个**选得动、但点了什么都不会发生**的选项。假旋钮比没旋钮更糟 ——
@@ -177,7 +178,7 @@ src/
 
 ## 操作日志怎么来的
 
-**只由后端写入。** 封禁、解封、改额度、生成卡密、作废卡密、改动字典，
+**只由后端写入。** 封禁、解封、改额度、发会员、生成卡密、作废卡密、改动字典，
 都在同一个 handler 里顺手 `pushLog(...)` 一条。
 
 这不是「顺便加的功能」—— 日志如果靠前端上报，那它记录的就只是

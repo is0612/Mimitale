@@ -18,7 +18,7 @@
  * 这条边界是有意的，别为了「统一」把这些也搬进字典。
  */
 
-import type { CardStatus, CustomerStatus, LogAction } from '@/types'
+import type { CardStatus, CustomerStatus, LogAction, MembershipLevel } from '@/types'
 
 /** el-tag 支持的类型 */
 export type TagType = 'success' | 'info' | 'warning' | 'danger'
@@ -28,6 +28,7 @@ export const LOG_ACTION_LABEL: Record<LogAction, string> = {
   'customer.ban': '封禁客户',
   'customer.unban': '解封客户',
   'customer.quota': '调整额度',
+  'customer.membership': '发会员',
   'card.create': '生成卡密',
   'card.void': '作废卡密',
   'dict.create': '新建字典',
@@ -40,6 +41,7 @@ export const LOG_ACTION_TAG: Record<LogAction, TagType> = {
   'customer.ban': 'danger',
   'customer.unban': 'success',
   'customer.quota': 'info',
+  'customer.membership': 'success',
   'card.create': 'info',
   'card.void': 'danger',
   'dict.create': 'info',
@@ -52,6 +54,7 @@ export const LOG_ACTION_OPTIONS: LogAction[] = [
   'customer.ban',
   'customer.unban',
   'customer.quota',
+  'customer.membership',
   'card.create',
   'card.void',
   'dict.create',
@@ -68,6 +71,21 @@ export const CUSTOMER_STATUS_LABEL: Record<CustomerStatus, string> = {
 export const CUSTOMER_STATUS_TAG: Record<CustomerStatus, TagType> = {
   active: 'success',
   banned: 'danger'
+}
+
+/**
+ * 会员生效状态：none 非会员 / active 生效中 / expired 已过期。
+ * 只由「等级 + 到期时间 vs 现在」推导 —— 后端不需要在表里另存一个"过期"字段。
+ *
+ * 等级的**显示名**走字典 membership_level（basic / medium / premium…），
+ * 只有 `'none'` 这个「非会员」哨兵是代码语义、不进字典。
+ */
+export function membershipState(c: {
+  membershipLevel: MembershipLevel
+  membershipExpireAt: string | null
+}): 'none' | 'active' | 'expired' {
+  if (c.membershipLevel === 'none' || !c.membershipExpireAt) return 'none'
+  return Date.parse(c.membershipExpireAt) > Date.now() ? 'active' : 'expired'
 }
 
 /** 卡密状态 */

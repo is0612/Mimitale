@@ -25,8 +25,10 @@ import {
   LOG_ACTION_TAG,
   deriveCustomerSource,
   formatQuota,
-  formatTime
+  formatTime,
+  membershipState
 } from '@/config/labels'
+import type { TagType } from '@/config/labels'
 import type { CustomerDetail } from '@/types'
 
 const route = useRoute()
@@ -55,6 +57,20 @@ async function load(): Promise<void> {
 
 function goBack(): void {
   router.push({ name: 'customers' })
+}
+
+function memberLabel(c: CustomerDetail): string {
+  const s = membershipState(c)
+  if (s === 'none') return '非会员'
+  if (s === 'expired') return '已过期'
+  return dict.labelOf('membership_level', c.membershipLevel)
+}
+
+function memberTag(c: CustomerDetail): TagType {
+  const s = membershipState(c)
+  if (s === 'none') return 'info'
+  if (s === 'expired') return 'danger'
+  return 'success'
 }
 
 onMounted(load)
@@ -94,6 +110,7 @@ onMounted(load)
           </div>
           <div class="actions">
             <el-button @click="dialogs?.openQuota(detail)">改额度</el-button>
+            <el-button @click="dialogs?.openMembership(detail)">发会员</el-button>
             <el-button v-if="detail.status === 'active'" type="danger" @click="dialogs?.openBan(detail)">
               封禁
             </el-button>
@@ -108,6 +125,15 @@ onMounted(load)
           </el-descriptions-item>
           <el-descriptions-item label="剩余额度">
             <span :class="{ exhausted: detail.quota === 0 }">{{ formatQuota(detail.quota) }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="会员等级">
+            <el-tag :type="memberTag(detail)" size="small" disable-transitions>{{ memberLabel(detail) }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="会员到期">
+            <span v-if="membershipState(detail) === 'none'" class="muted">—</span>
+            <span v-else :class="{ expired: membershipState(detail) === 'expired' }">
+              {{ formatTime(detail.membershipExpireAt) }}
+            </span>
           </el-descriptions-item>
           <el-descriptions-item label="注册时间">{{ formatTime(detail.createdAt) }}</el-descriptions-item>
           <el-descriptions-item label="最后登录">{{ formatTime(detail.lastLoginAt) }}</el-descriptions-item>
@@ -308,6 +334,10 @@ onMounted(load)
 }
 
 .exhausted {
+  color: #a32d2d;
+}
+
+.expired {
   color: #a32d2d;
 }
 </style>
