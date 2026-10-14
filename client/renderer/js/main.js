@@ -92,7 +92,7 @@ import {
 } from './views/preset.js';
 import { initSettings, setEditingProvider, openSettings, leaveSettings, closePersonaDialog, expandSettingsSection } from './views/settings.js';
 import { initAppearance, applyChatAppearance } from './views/appearance.js';
-import { initChatPad } from './views/chatPad.js';
+import { initChatPad, syncChatPadHandles } from './views/chatPad.js';
 import { streamPainter, initStreamFollow } from './views/stream.js';
 import { initChatImages } from './views/chatImages.js';
 import { initSuggestionsUi, pickOption } from './views/suggestionsUi.js';
@@ -743,6 +743,10 @@ async function init() {
   // 配色方案同理（粉色默认，蓝色按设置；preload 已先打标记）
   applyAccent(state.settings.accent);
   applyChatAppearance();
+  // ⚠️ 抓手的位置也得按**真实**内缩值再摆一次 —— initChatPad() 跑在 state.settings
+  //    赋值之前，那时只读得到默认值，抓手会停在 20px 处；正文/输入框却是按下面这行
+  //    之后的真实值缩进的。不补这一次，表现就是「一重启抓手就回到默认位置」。
+  syncChatPadHandles();
 
   state.characters = asArray(storedChars && storedChars.characters);
 

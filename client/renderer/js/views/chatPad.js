@@ -205,12 +205,26 @@ function bindHandle(handle, side) {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * 把两侧抓手摆到**当前设置里**的内缩线上。
+ *
+ * ⚠️ 这个函数必须能在「设置加载完之后」再被调一次 —— 这是修「重启后抓手回原位」的关键。
+ *    initChatPad() 跑在 main.js 里 state.settings 赋值**之前**（事件绑定属于启动早期），
+ *    那一刻 padValue() 只能读到默认值 20，于是抓手被摆到 20px 处；
+ *    而正文 / 输入框的缩进是稍后 applyChatAppearance() 按**真实值**（比如 196px）刷的 ——
+ *    两边就此错开，看起来就是「一重启抓手就重置了」。见 main.js 里 applyChatAppearance() 之后那次调用。
+ */
+export function syncChatPadHandles() {
+  moveHandleTo(el.padHandleLeft, 'left', padValue('left'));
+  moveHandleTo(el.padHandleRight, 'right', padValue('right'));
+}
+
 export function initChatPad() {
   bindHandle(el.padHandleLeft, 'left');
   bindHandle(el.padHandleRight, 'right');
-  // 初始也把抓手摆到当前内缩线上：CSS 只给了 4px 的贴边默认值，
-  // 但内缩值（默认 20px）和它错开 —— 不摆一次，进软件第一眼抓手就骑在错误的位置，
-  // 拖一下才「跳」到正确线上。
-  moveHandleTo(el.padHandleLeft, 'left', padValue('left'));
-  moveHandleTo(el.padHandleRight, 'right', padValue('right'));
+  // 先摆一次兜底：CSS 只给了 4px 的贴边默认值，跟内缩值（默认 20px）错开，
+  // 不摆的话进软件第一眼抓手就骑在错误的位置。
+  // ⚠️ 此刻 state.settings 可能还没加载（见 syncChatPadHandles 的注释），
+  //    摆的是默认值 —— 设置到位后由 syncChatPadHandles() 再摆一次修正。
+  syncChatPadHandles();
 }
