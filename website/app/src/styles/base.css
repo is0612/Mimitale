@@ -33,18 +33,18 @@ body {
   background:
     /* 星：一共十来颗，集中在上半部，越往下越淡。
        密度一旦上去就变成「星空壁纸」了 —— 1px 的点要「平时不太抢眼、
-       抬头的时候它在」。 */
-    radial-gradient(1.2px 1.2px at 13% 11%, rgba(198, 218, 255, 0.78), transparent 62%),
-    radial-gradient(1.1px 1.1px at 28% 6%,  rgba(198, 218, 255, 0.54), transparent 62%),
-    radial-gradient(1.3px 1.3px at 44% 14%, rgba(198, 218, 255, 0.66), transparent 62%),
-    radial-gradient(1.1px 1.1px at 61% 5%,  rgba(198, 218, 255, 0.48), transparent 62%),
-    radial-gradient(1.2px 1.2px at 77% 12%, rgba(198, 218, 255, 0.70), transparent 62%),
-    radial-gradient(1.1px 1.1px at 89% 7%,  rgba(198, 218, 255, 0.50), transparent 62%),
-    radial-gradient(1.1px 1.1px at 21% 24%, rgba(198, 218, 255, 0.42), transparent 62%),
-    radial-gradient(1.2px 1.2px at 52% 27%, rgba(198, 218, 255, 0.46), transparent 62%),
-    radial-gradient(1.1px 1.1px at 70% 22%, rgba(198, 218, 255, 0.40), transparent 62%),
-    radial-gradient(1.1px 1.1px at 36% 36%, rgba(198, 218, 255, 0.30), transparent 62%),
-    radial-gradient(1.1px 1.1px at 84% 34%, rgba(198, 218, 255, 0.26), transparent 62%),
+       抬头的时候它在」。色相钉在 tokens 的 --star 上，alpha 各星不同。 */
+    radial-gradient(1.2px 1.2px at 13% 11%, rgb(var(--star) / 0.78), transparent 62%),
+    radial-gradient(1.1px 1.1px at 28% 6%,  rgb(var(--star) / 0.54), transparent 62%),
+    radial-gradient(1.3px 1.3px at 44% 14%, rgb(var(--star) / 0.66), transparent 62%),
+    radial-gradient(1.1px 1.1px at 61% 5%,  rgb(var(--star) / 0.48), transparent 62%),
+    radial-gradient(1.2px 1.2px at 77% 12%, rgb(var(--star) / 0.70), transparent 62%),
+    radial-gradient(1.1px 1.1px at 89% 7%,  rgb(var(--star) / 0.50), transparent 62%),
+    radial-gradient(1.1px 1.1px at 21% 24%, rgb(var(--star) / 0.42), transparent 62%),
+    radial-gradient(1.2px 1.2px at 52% 27%, rgb(var(--star) / 0.46), transparent 62%),
+    radial-gradient(1.1px 1.1px at 70% 22%, rgb(var(--star) / 0.40), transparent 62%),
+    radial-gradient(1.1px 1.1px at 36% 36%, rgb(var(--star) / 0.30), transparent 62%),
+    radial-gradient(1.1px 1.1px at 84% 34%, rgb(var(--star) / 0.26), transparent 62%),
     /* 夜空本体：顶部是「地平线以上的天光」，往下沉进黑。
        ⚠️ 顶部这一档要**看得出来是蓝的** —— 第一版整个画面只差 13 个蓝通道，
           肉眼分辨不出改过什么。现在顶部 B−R = 39，是明确的夜空蓝，但仍压得很暗。 */
@@ -207,6 +207,75 @@ h2 {
 
 /* 锚点跳转别被贴顶的顶栏盖住（顶栏高 62px，留一点余量） */
 section[id] { scroll-margin-top: calc(var(--topbar-h) + 14px); }
+
+/* 独立页（下载 / 图片区）的首屏小节：比首页大节收一档 */
+.page { padding-top: var(--s8); }
+
+/* -------------------- 终端框 + 步骤表（首页与下载页共用） -------------------- */
+/* ⚠️ 这套原来在两个页面里各抄了一份 —— 改一处漏一处的标准温床，只许留这份。 */
+.start {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: var(--s7);
+  /* 不写 align-items —— 让终端框跟着右列拉伸到等高，底部齐平比飘着好看 */
+}
+.term {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 13px;
+  background: var(--bg-side);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+}
+.term-body {
+  padding: var(--s4) var(--s5) var(--s5);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 2.1;
+}
+.term-body .cmt { color: var(--text-faint); }
+.term-body .cmd { color: var(--text); }
+.term-body .cmd::before { content: "$ "; color: var(--lamp); }
+.term-body .out { color: var(--text-dim); margin-top: var(--s2); }
+
+.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+.steps li {
+  position: relative;
+  padding: 0 0 var(--s5) 40px;
+  font-size: 15px;
+  color: var(--text-dim);
+  line-height: 1.75;
+  counter-increment: s;
+}
+.steps li::before {
+  content: counter(s, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--lamp);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  width: 26px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.steps li b { color: var(--text); font-weight: 600; display: block; margin-bottom: 2px; }
+.steps li:last-child { padding-bottom: 0; }
+/* 两页各自的堆叠断点不一样（首页 1080、下载页 860），留在各自的 scoped 媒体查询里 */
 
 /* ------------------------------ 入场动效 ------------------------------ */
 /* 进入视口时浮起。规则在 composables/useRise.ts 里统一挂，

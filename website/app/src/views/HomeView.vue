@@ -334,16 +334,15 @@ const SESSIONS = [
             <span>—— 它盯着屏幕，尾巴尖晃了一下</span>
           </div>
           <!-- 抽象的小生物：不指定物种，只给一个坐姿剪影。
-               线/面走 .fig-* 类读 token —— 这里原是写死的 #23262b / #3a3f46，
-               底色一换深蓝就露馅了。 -->
+               线/面/眼睛全部走 .fig-* 类读 token —— 底色一换，它跟着走。 -->
           <svg class="pet-figure" width="96" height="104" viewBox="0 0 96 104" fill="none" aria-hidden="true">
             <path class="fig-tail" d="M70 84 C88 82 92 70 84 62" stroke-width="7" stroke-linecap="round" />
             <path class="fig-body" d="M28 88 C16 88 12 78 16 66 C20 52 28 44 40 42 C52 40 62 46 66 58 C70 72 66 88 54 88 Z" stroke-width="2" />
             <path class="fig-body" d="M28 46 L24 30 L40 40 Z" stroke-width="2" />
             <path class="fig-body" d="M54 42 L60 26 L68 42 Z" stroke-width="2" />
-            <circle cx="36" cy="60" r="3.4" fill="#e8b84b" />
-            <circle cx="52" cy="59" r="3.4" fill="#e8b84b" />
-            <path d="M42 70 q2.5 3 6 0" stroke="#7d848c" stroke-width="1.6" stroke-linecap="round" fill="none" />
+            <circle class="fig-eye" cx="36" cy="60" r="3.4" />
+            <circle class="fig-eye" cx="52" cy="59" r="3.4" />
+            <path class="fig-mouth" d="M42 70 q2.5 3 6 0" stroke-width="1.6" stroke-linecap="round" fill="none" />
           </svg>
           <div class="pet-shadow"></div>
         </div>
@@ -501,7 +500,7 @@ h1 {
 h1 .lit {
   color: var(--lamp);
   background-image: linear-gradient(180deg, transparent 68%, var(--lamp-a22) 68%);
-  text-shadow: 0 0 46px rgba(232, 184, 75, 0.42);
+  text-shadow: 0 0 46px color-mix(in srgb, var(--lamp) 42%, transparent);
   padding: 0 0.02em 0.05em;
 }
 
@@ -634,12 +633,12 @@ h1 .lit {
   justify-content: center;
   font-size: 12px;
   font-weight: 600;
-  color: #14161a;
+  color: var(--on-lamp);
 }
 .g-amber { background: linear-gradient(135deg, #ffd9a8, #ffab5e); }
 .g-rose  { background: linear-gradient(135deg, #ffb0d0, #b98cff); }
 .g-mint  { background: linear-gradient(135deg, #b9f0d8, #5fd6a8); }
-.g-blue  { background: linear-gradient(135deg, #9fd4ff, #6aa8ff); }
+.g-blue  { background: linear-gradient(135deg, #9fd4ff, var(--cool)); }
 .m-convo .meta { min-width: 0; flex: 1; }
 .m-convo .nm {
   font-size: 12.5px;
@@ -698,7 +697,7 @@ h1 .lit {
   gap: 7px;
 }
 .msg .who .pip { width: 5px; height: 5px; border-radius: 50%; }
-.msg .who .pip.me { background: #6aa8ff; }
+.msg .who .pip.me { background: var(--cool); }
 .msg .who .pip.ai { background: var(--lamp); }
 .msg.me .body { color: var(--text-dim); }
 .msg .body { color: var(--text); line-height: 1.75; }
@@ -709,16 +708,18 @@ h1 .lit {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--ok);
-  background: rgba(127, 214, 168, 0.1);
-  border: 1px solid rgba(127, 214, 168, 0.25);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 25%, transparent);
   border-radius: var(--radius-sm);
   padding: 0 5px;
   margin-left: 3px;
 }
 .m-input {
+  /* ⚠️ margin-top:auto 必须写在 margin 简写**后面**：简写会把四个方向一起重置，
+     写在前面等于没写，输入框就不贴底了（2026-10-14 前一直是这样失效的） */
+  margin: 12px 16px 16px;
   margin-top: auto;
   background: var(--bg-input);
-  margin: 12px 16px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 12px;
@@ -784,7 +785,7 @@ h1 .lit {
   border-radius: 2px;
   background: var(--lamp);
 }
-.m-bar.is-cool i { background: #6aa8ff; }
+.m-bar.is-cool i { background: var(--cool); }
 .m-bar.is-ok i { background: var(--ok); }
 .m-text { font-size: 11.5px; color: var(--text); }
 .m-chips { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -1028,9 +1029,11 @@ h1 .lit {
 }
 .pet-bubble span { color: var(--text-faint); font-size: 11px; display: block; margin-top: 4px; }
 .pet-figure { position: absolute; right: 9%; bottom: 0; }
-/* 剪影的线与面读 token，不写死色值 —— 底色一换，它跟着走 */
+/* 剪影的线/面/眼睛/嘴全读 token，不写死色值 —— 底色一换，它跟着走 */
 .pet-figure .fig-tail { stroke: var(--border-hi); fill: none; }
 .pet-figure .fig-body { fill: var(--bg-item); stroke: var(--border-hi); }
+.pet-figure .fig-eye { fill: var(--lamp); }
+.pet-figure .fig-mouth { stroke: var(--text-faint); }
 .pet-shadow {
   position: absolute;
   right: 11%;
@@ -1079,7 +1082,7 @@ h1 .lit {
   background: var(--bg);
 }
 .node.src { color: var(--text); }
-.node.cloud { border-color: #5a3236; color: #ffb4b0; background: #3a2226; }
+.node.cloud { border-color: var(--bad-border); color: var(--bad); background: var(--bad-bg); }
 .node.local {
   border-color: var(--lamp-a35);
   color: var(--lamp);
@@ -1104,68 +1107,7 @@ h1 .lit {
 }
 
 /* ------------------------------ 快速开始 ------------------------------ */
-.start {
-  display: grid;
-  grid-template-columns: 0.9fr 1.1fr;
-  gap: var(--s7);
-  /* 不写 align-items —— 让终端框跟着右列拉伸到等高，底部齐平比飘着好看 */
-}
-.term {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-sunken);
-  overflow: hidden;
-}
-.term-bar {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 13px;
-  background: var(--bg-side);
-  border-bottom: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--text-faint);
-  letter-spacing: 0.06em;
-}
-.term-body {
-  padding: var(--s4) var(--s5) var(--s5);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 2.1;
-}
-.term-body .cmt { color: var(--text-faint); }
-.term-body .cmd { color: var(--text); }
-.term-body .cmd::before { content: "$ "; color: var(--lamp); }
-.term-body .out { color: var(--text-dim); margin-top: var(--s2); }
-
-.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
-.steps li {
-  position: relative;
-  padding: 0 0 var(--s5) 40px;
-  font-size: 15px;
-  color: var(--text-dim);
-  line-height: 1.75;
-  counter-increment: s;
-}
-.steps li::before {
-  content: counter(s, decimal-leading-zero);
-  position: absolute;
-  left: 0;
-  top: 1px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--lamp);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  width: 26px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.steps li b { color: var(--text); font-weight: 600; display: block; margin-bottom: 2px; }
-.steps li:last-child { padding-bottom: 0; }
+/* 终端框 + 步骤表的样式在 base.css（与下载页共用一份），这里只留本页的布局关系 */
 
 /* ------------------------------ 响应式 ------------------------------ */
 @media (max-width: 1080px) {

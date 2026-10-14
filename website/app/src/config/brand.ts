@@ -12,5 +12,7 @@
  *
  * ⚠️ 别把母版直接挂到页面上 —— 为画一个 30px 的圆点扛 661 KB 不值当。
  *    换图：把新的 128×128 丢进 `public/brand/`，按名字改这一行。
+ *
+ * 走 BASE_URL 拼路径：部署到子目录（比如 GitHub Pages 的仓库页）时不会 404。
  */
-export const BRAND_LOGO = '/brand/logo-128.webp'
+export const BRAND_LOGO = `${import.meta.env.BASE_URL}brand/logo-128.webp`

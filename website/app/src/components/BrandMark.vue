@@ -41,11 +41,11 @@ withDefaults(defineProps<{ size?: 'md' | 'sm' }>(), { size: 'md' })
   border-radius: 50%;
   overflow: hidden;
   flex: none;
-  background: #0a1226;
+  background: var(--bg);
   /* 1px 环 + 一点冷光：logo 本身是深蓝星空，落在深灰底上要靠这圈线立住 */
   box-shadow:
     0 0 0 1px var(--border-hi),
-    0 0 16px rgba(106, 168, 255, 0.16);
+    0 0 16px color-mix(in srgb, var(--cool) 16%, transparent);
 }
 .emblem img {
   display: block;

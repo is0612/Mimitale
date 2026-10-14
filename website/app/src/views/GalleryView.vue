@@ -15,7 +15,7 @@ import { SITE } from '@/config/site'
 </script>
 
 <template>
-  <section class="sec">
+  <section class="sec page">
     <div class="wrap">
       <div class="sec-head">
         <span class="lampblock lampblock--sm" aria-hidden="true"></span>
@@ -41,7 +41,6 @@ import { SITE } from '@/config/site'
 </template>
 
 <style scoped>
-.sec { padding-top: var(--s8); }
 .placeholder {
   border: 1px dashed var(--border-hi);
   border-radius: var(--radius);

@@ -32,8 +32,9 @@ export const router = createRouter({
   scrollBehavior(to, _from, saved) {
     if (saved) return saved
     if (to.hash) {
-      // top 是相对目标元素的偏移：顶栏贴着顶，不避开就会被盖住
-      return { el: to.hash, top: 78, behavior: 'smooth' }
+      // top 是相对目标元素的偏移：顶栏贴着顶，不避开就会被盖住。
+      // 与 base.css 的 scroll-margin-top 同口径（--topbar-h 62 + 14 余量）。
+      return { el: to.hash, top: 76, behavior: 'smooth' }
     }
     return { top: 0 }
   }

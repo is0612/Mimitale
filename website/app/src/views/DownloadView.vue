@@ -71,7 +71,7 @@ const EXAMPLE = `{
 </script>
 
 <template>
-  <section class="sec">
+  <section class="sec page">
     <div class="wrap">
       <div class="sec-head">
         <span class="lampblock lampblock--sm" aria-hidden="true"></span>
@@ -212,7 +212,6 @@ const EXAMPLE = `{
 </template>
 
 <style scoped>
-.sec { padding-top: var(--s8); }
 .hl { color: var(--text); font-weight: 600; }
 .muted { color: var(--text-faint); font-size: 14px; }
 
@@ -229,7 +228,7 @@ const EXAMPLE = `{
   justify-content: center;
   margin-bottom: var(--s5);
   /* 让那块琥珀「亮」一点，把空态撑起来 */
-  filter: drop-shadow(0 0 22px rgba(232, 184, 75, 0.35));
+  filter: drop-shadow(0 0 22px var(--lamp-a35));
 }
 .empty h3 {
   font-family: var(--font-serif);
@@ -414,67 +413,7 @@ const EXAMPLE = `{
   font-weight: 600;
   margin: 0 0 var(--s5);
 }
-.start {
-  display: grid;
-  grid-template-columns: 0.9fr 1.1fr;
-  gap: var(--s7);
-}
-.term {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-sunken);
-  overflow: hidden;
-}
-.term-bar {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 13px;
-  background: var(--bg-side);
-  border-bottom: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--text-faint);
-  letter-spacing: 0.06em;
-}
-.term-body {
-  padding: var(--s4) var(--s5) var(--s5);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 2.1;
-}
-.term-body .cmt { color: var(--text-faint); }
-.term-body .cmd { color: var(--text); }
-.term-body .cmd::before { content: "$ "; color: var(--lamp); }
-.term-body .out { color: var(--text-dim); margin-top: var(--s2); }
-
-.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
-.steps li {
-  position: relative;
-  padding: 0 0 var(--s5) 40px;
-  font-size: 15px;
-  color: var(--text-dim);
-  line-height: 1.75;
-  counter-increment: s;
-}
-.steps li::before {
-  content: counter(s, decimal-leading-zero);
-  position: absolute;
-  left: 0;
-  top: 1px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--lamp);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  width: 26px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.steps li b { color: var(--text); font-weight: 600; display: block; margin-bottom: 2px; }
-.steps li:last-child { padding-bottom: 0; }
+/* 终端框 + 步骤表的样式在 base.css（与首页共用一份） */
 
 @media (max-width: 860px) {
   .start { grid-template-columns: 1fr; gap: var(--s6); }
