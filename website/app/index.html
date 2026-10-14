@@ -3,7 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <!-- 关键样式：样式表还在下载/解析时，底色就已经必须是对的。
+       不内联的话，深色站会先白闪一下（浏览器默认白底）—— 它正好发生在
+       首帧之后、内容之前，看上去就是「刚进来是空的」。
+       color-scheme 顺带把滚动条也变成深色，不然深色页面配一条浅色滚动条。
+       ⚠️ 这里的 #0b1226 必须跟 styles/tokens.css 的 --bg 一致，改一处要改两处。 -->
+  <style>
+    html { background: #0b1226; color-scheme: dark; }
+  </style>
   <title>子夜酒馆 Nocturne Tavern — 一间只在深夜开门的酒馆</title>
   <meta name="description" content="本地运行的 AI 角色扮演客户端。导入酒馆角色卡，世界书按关键词命中注入，状态数值聊上百轮也不漂。没有服务器，数据只在你自己机器上。">
 </head>

@@ -1,5 +1,5 @@
-import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { nextTick, onBeforeUnmount, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 
 /**
  * 入场动效（.rise）全站只装一次 —— 在 App.vue 里调用。
@@ -48,17 +48,35 @@ export function useRise(): void {
     items.forEach((el) => io.observe(el))
   }
 
-  const route = useRoute()
+  const router = useRouter()
 
-  onMounted(scan)
-  // 路由切换后是新 DOM，得重新扫一遍（等一帧，让视图先渲染出来）
-  watch(
-    () => route.fullPath,
-    () => {
-      void nextTick(scan)
-    }
-  )
+  /**
+   * ⚠️ 起点必须是 router.isReady()，不能是裸的 onMounted。
+   *
+   * Vue Router 的**首次导航是异步的**：onMounted 跑的那一刻 RouterView 里还是空的，
+   * 这时 querySelectorAll('.rise') 拿到 0 个元素 —— 全站二十多个 .rise 于是
+   * 永远没人 observe，全部停在 opacity: 0。页面看上去就是「只有 Hero 那几行字，
+   * 往下全空」（2026-10-14 星宝报的「刚进去没有内容」就是这个）。
+   *
+   * 用 watch(() => route.fullPath) 兜也救不了：初始导航的 fullPath 从 '/' 到 '/'，
+   * 值没变，watch 根本不触发。
+   *
+   * isReady() 在首次导航完成时 resolve；afterEach 覆盖之后每一次导航
+   * （含 /download 那种懒加载组件 —— afterEach 时它已 resolve，下一个 tick DOM 就绪）。
+   * ⛔ 以后新加 .rise 元素，仍然要走这两个时机，别用「等几秒再渲染」那种方式进场。
+   */
+  onMounted(async () => {
+    await router.isReady()
+    await nextTick()
+    scan()
+  })
+
+  const stopAfterEach = router.afterEach(() => {
+    void nextTick(scan)
+  })
+
   onBeforeUnmount(() => {
+    stopAfterEach()
     observer?.disconnect()
     observer = null
   })
