@@ -386,6 +386,73 @@ function seedForShots() {
     card('c-shot-8', '选项测试角色', { optionsSpec: { count: 3, hint: '语气轻松些' } })
   ];
 
+  // 出图用的世界封面：天空渐变（上深下亮）+ 一轮日/月 + 一层山影。
+  // 真机上这一块就是用户自己传的图（2:3），卡片按 object-fit: cover 铺 ——
+  // 所以这里给 2:3 正好。
+  const shotCover = (hue, moonX) =>
+    'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">` +
+        `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">` +
+        `<stop offset="0" stop-color="hsl(${hue},42%,8%)"/>` +
+        `<stop offset="1" stop-color="hsl(${hue},58%,42%)"/>` +
+        `</linearGradient></defs>` +
+        `<rect width="300" height="450" fill="url(#s)"/>` +
+        `<circle cx="${moonX}" cy="168" r="30" fill="hsl(${hue},82%,76%)" opacity="0.9"/>` +
+        `<path d="M0 450 L0 318 Q74 276 150 316 T300 288 L300 450 Z" fill="rgba(4,6,10,0.92)"/>` +
+        `</svg>`
+    );
+
+  // 世界书页要出图：**带封面和不带封面的两种卡片都要看得到**，
+  // 所以三本带封面（其中一本有角色副本 → 卡片小字会写成「N 条设定 · N 个角色」）
+  // 加一本不带的。
+  const wbEntry = (id, title, keys) => ({
+    id,
+    title,
+    keys,
+    secondaryKeys: [],
+    selective: false,
+    selectiveLogic: 'AND_ANY',
+    content: `${title}的设定正文。`,
+    order: 100,
+    constant: false,
+    recursive: false,
+    matchWholeWords: false,
+    caseSensitive: false,
+    probability: 100,
+    enabled: true
+  });
+
+  store.worldbooks.push(
+    {
+      id: 'w-shot-1',
+      name: '灰港',
+      opening: '',
+      cover: shotCover(205, 220),
+      entries: [wbEntry('e-s1-1', '小镇广场', ['广场']), wbEntry('e-s1-2', '港口的雾', ['雾']), wbEntry('e-s1-3', '老船锚酒馆', ['酒馆'])],
+      characters: [
+        { id: 'wc-s1', name: '老板娘', avatar: '' },
+        { id: 'wc-s2', name: '独眼水手', avatar: '' }
+      ]
+    },
+    {
+      id: 'w-shot-3',
+      name: '星轨学院',
+      opening: '',
+      cover: shotCover(250, 90),
+      entries: [wbEntry('e-s3-1', '天文台', ['天文台']), wbEntry('e-s3-2', '星轨课', ['星轨'])],
+      characters: []
+    },
+    {
+      id: 'w-shot-4',
+      name: '沙海商路',
+      opening: '',
+      cover: shotCover(28, 150),
+      entries: [wbEntry('e-s4-1', '绿洲', ['绿洲'])],
+      characters: []
+    }
+  );
+
   // 两本书：一本有内容，一本空的 —— 卡片上的「N 条设定 · N 个角色 / N 条设定」两种写法都看得到
   store.worldbooks.push({ id: 'w-shot-2', name: '新世界书', entries: [], characters: [], opening: '' });
 }
@@ -3699,6 +3766,29 @@ app.whenReady().then(async () => {
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-appearance"]')?.click();
           await new Promise(r => setTimeout(r, 300));`,
+        // 世界书列表页（2026-10-14 卡片改成「封面铺满整卡」之后补的场景）：
+        // 封面卡 / 「世」字占位块两种形态、书名压在封面上的那层压暗、右上角那颗
+        // 悬停才浮出来的 × —— 全是要看图才认得出来的东西。
+        worldbooks: `
+          const t = document.querySelector('#toast');
+          if (t) { t.classList.add('hidden'); t.textContent = ''; }
+          document.querySelector('#btn-worldbooks')?.click();
+          await new Promise(r => setTimeout(r, 450));
+          // 悬停态在图里看不出来，把第一张卡的 × 直接点亮
+          const del = document.querySelector('#wb-page-grid .char-card .char-card-del');
+          if (del) del.style.opacity = '1';`,
+        // 世界书编辑器的左栏：封面块在最上面（书的脸），下面才是书名 / 开场白 / 本书角色。
+        // 打开一本**带封面的**，否则看到的还是空框。
+        worldbookEditor: `
+          const t = document.querySelector('#toast');
+          if (t) { t.classList.add('hidden'); t.textContent = ''; }
+          document.querySelector('#btn-worldbooks')?.click();
+          await new Promise(r => setTimeout(r, 400));
+          const cards = Array.from(document.querySelectorAll('#wb-page-grid .char-card'));
+          const withCover = cards.find(c => c.querySelector('.wb-card-cover img'));
+          const btn = withCover && Array.from(withCover.querySelectorAll('.btn')).find(b => b.textContent === '编辑');
+          if (btn) btn.click();
+          await new Promise(r => setTimeout(r, 600));`,
         panel: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);

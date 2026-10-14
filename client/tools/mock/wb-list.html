@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Mimitale · 世界书列表改版 · 三方向对比稿</title>
+<style>
+/* ==========================================================================
+   世界书列表改版 —— 三方向对比稿（静态稿，只服务出图）
+
+   frame 固定 1440x900 = 真实窗口尺寸（main/window.js 的 WINDOW_SIZE）。
+   token 取真实默认主题：[data-theme='dark'] + [data-accent='amber']（style.css 310/328）。
+   侧栏 300px、页头 padding 18/24、页体 padding 20/24/28 —— 全按真机数值来。
+
+   三个方向的差异落在「结构主张」上（不是换色）：
+     A 书脊式  封面 2:3 竖版铺满整卡，名字压在图上  —— 像书架上一本本
+     B 画卷式  封面 3:2 横版，名字和图分栏           —— 像世界图鉴
+     C 书格式  方形缩略图 + 居中信息                 —— 现状升级，密度最高
+   同一批数据、同一套文案，方便横向对照。
+   ========================================================================== */
+
+* { box-sizing: border-box; }
+/* 出图脚本截整个视口 → body 零留白；多页堆叠会出现滚动条，必须藏掉（否则裁掉底部） */
+html { scrollbar-width: none; }
+::-webkit-scrollbar { width: 0; height: 0; }
+body { margin: 0; padding: 0; background: #000; display: block; font-family: var(--ui); }
+
+:root {
+  --ui: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+
+  --bg: #101113;
+  --bg-side: #16181b;
+  --bg-card: #1b1e22;
+  --bg-band: #191c21;
+  --bg-item: #23262b;
+  --bg-input: #1e2126;
+  --border: #2a2e34;
+  --border-soft: #1f2227;
+  --text: #e4e7ea;
+  --text-dim: #9aa1a9;
+  --text-faint: #7d848c;
+  --accent: #e8b84b;
+  --on-accent: #0e1216;
+  --accent-soft: rgba(232, 184, 75, 0.14);
+  --accent-line: rgba(232, 184, 75, 0.42);
+  --accent-border: rgba(232, 184, 75, 0.35);
+  --danger: #e06c75;
+  --radius: 4px;
+  --radius-sm: 3px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+  --fs-xs: 12px;
+  --fs-sm: 14px;
+  --fs-md: 16px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+}
+
+/* ------------------------------- 外壳 ------------------------------- */
+.frame {
+  width: 1440px; height: 900px;
+  display: flex; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-size: var(--fs-sm);
+}
+.side {
+  flex: 0 0 300px; width: 300px;
+  background: var(--bg-side);
+  display: flex; flex-direction: column;
+  padding: 12px 10px; gap: 10px;
+  position: relative;
+}
+.main { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+
+.stoggle {
+  position: absolute; top: 8px; right: 8px;
+  width: 20px; height: 20px; padding: 0;
+  border: 0; border-radius: var(--radius);
+  background: transparent; color: var(--text-faint);
+  font-size: var(--fs-sm); cursor: pointer;
+}
+
+/* 品牌行 */
+.brand { display: flex; align-items: center; gap: 12px; padding: 4px 30px 4px 6px; }
+.brand-logo {
+  width: 24px; height: 24px; border-radius: 7px;
+  background: linear-gradient(135deg, #f2ce74, #e8b84b);
+  box-shadow: 0 0 12px rgba(242, 206, 116, 0.55);
+}
+.brand-name { margin-right: auto; font-size: var(--fs-lg); font-weight: 500; letter-spacing: 0.04em; }
+.brand-ver { font-size: var(--fs-xs); color: var(--text-faint); }
+
+.slabel { font-size: var(--fs-xs); color: var(--text-faint); padding: 2px 8px 8px; letter-spacing: 0.1em; }
+
+.btn {
+  font-family: inherit; font-size: var(--fs-sm); cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-card); color: var(--text);
+  height: 32px; padding: 0 12px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--text-dim); }
+.btn.danger { background: transparent; border-color: transparent; color: var(--danger); }
+.btn.block { width: 100%; }
+.btn.sm { height: 28px; padding: 0 10px; font-size: var(--fs-xs); }
+
+/* 侧栏会话列表 */
+.clist { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+.crow {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px; border-radius: var(--radius); color: var(--text-dim);
+  font-size: var(--fs-sm);
+}
+.crow.active { background: var(--bg-item); color: var(--text); }
+.crow .cava { flex: 0 0 26px; width: 26px; height: 26px; border-radius: var(--radius-sm); }
+.crow .cname2 { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 侧栏底部 6 颗 */
+.sfoot {
+  position: relative; display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px; padding-top: 14px;
+}
+.sfoot::before { content: ''; position: absolute; top: 0; left: -10px; right: -10px; height: 1px; background: var(--border); }
+.sfoot .btn {
+  height: 36px; padding: 0 10px; gap: 8px; justify-content: flex-start;
+  white-space: nowrap; overflow: hidden; background: transparent;
+  border-color: transparent; color: var(--text-dim); box-shadow: none;
+  font-size: var(--fs-sm);
+}
+.sfoot .btn svg { flex: 0 0 18px; width: 18px; height: 18px; opacity: 0.75; }
+.sfoot .btn.active { background: var(--accent-soft); color: var(--accent); }
+.sfoot .btn.active svg { opacity: 1; }
+
+/* ------------------------------- 页头 / 页体 ------------------------------- */
+.phead {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; padding: 18px 24px; border-bottom: 1px solid var(--border); background: var(--bg-side);
+}
+.ptitle { margin: 0; font-size: var(--fs-lg); font-weight: 700; }
+.psub { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--text-faint); }
+.pactions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.pbody { flex: 1 1 auto; padding: 20px 24px 28px; overflow: hidden; min-height: 0; }
+
+/* 网格：A/C 六列，B 三列 */
+.grid6 { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+
+/* ------------------------------- 卡片公共 ------------------------------- */
+.card {
+  position: relative; background: var(--bg-card); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); overflow: hidden;
+  display: flex; flex-direction: column;
+  transition: box-shadow 0.15s, transform 0.12s;
+}
+.card.on { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+
+.del {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(12, 14, 17, 0.72); color: #e8ecf0;
+  font-size: var(--fs-sm); line-height: 1; cursor: pointer;
+  opacity: 0; transition: opacity 0.12s;
+}
+.card.on .del { opacity: 1; }
+
+.cmeta { font-size: var(--fs-xs); color: var(--text-faint); }
+.cacts { display: flex; gap: 8px; margin-top: auto; }
+.cacts .btn { flex: 1 1 0; }
+
+/* ------------------------------- 封面 -------------------------------
+   一张封面 = 天空渐变 + 光源 + 两层地貌剪影（clip-path）+ 底部压暗。
+   稿子里不能引外部图，所以「世界长什么样」全靠这四层拼 —— 每本书换一组参数。
+   落在成品上，这一块就是用户上传的那张图（object-fit: cover）。 */
+.cover {
+  position: relative; width: 100%; height: 100%; overflow: hidden;
+  background: linear-gradient(to bottom, var(--sky1) 0%, var(--sky2) 100%);
+}
+/* 光源：地平线附近的一轮日/月。中心实在、外围快速晕开 —— 剪影靠它衬托出来。
+   宽度乘 0.82：原值当直径用会太大、像个贴纸。 */
+.sun {
+  position: absolute; left: var(--gx); top: var(--gy);
+  width: calc(var(--gs) * 0.82); aspect-ratio: 1; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, var(--moon) 0%, var(--moon) 10%, rgba(0, 0, 0, 0) 56%);
+  opacity: 0.85;
+}
+.rd { position: absolute; left: 0; right: 0; bottom: 0; height: var(--h); background: var(--c); }
+/* 底部压暗：既是氛围，也保证压在封面上的书名读得出来 */
+.press {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.76) 0%, rgba(0, 0, 0, 0.22) 42%, rgba(0, 0, 0, 0) 62%);
+}
+.cover.flat { background: linear-gradient(to bottom, #26292e, #1c1f23); }
+.cv-glyph {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: 600; color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.06em;
+}
+.oncover-name {
+  position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 2;
+  font-size: var(--fs-md); font-weight: 700; color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ------------------------------- 方向 A：书脊式（2:3 竖版） ------------------------------- */
+.cA .thumb { position: relative; width: 100%; aspect-ratio: 2 / 3; }
+.cA .cardbody { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.cA .cacts .btn { height: 30px; font-size: var(--fs-xs); }
+.cA.on .thumb { outline: 2px solid var(--accent-border); outline-offset: -2px; }
+
+/* ------------------------------- 方向 B：画卷式（3:2 横版） ------------------------------- */
+.cB .thumb { position: relative; width: 100%; aspect-ratio: 3 / 2; }
+.cB .cardbody { display: flex; flex-direction: column; gap: 6px; padding: 12px; }
+.cB .ctitle { font-size: var(--fs-md); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cB .csub { font-size: var(--fs-xs); color: var(--text-faint); }
+.cB .cacts { margin-top: 6px; }
+.cB .cacts .btn { height: 30px; font-size: var(--fs-xs); }
+.cB.on .thumb { outline: 2px solid var(--accent-border); outline-offset: -2px; }
+
+/* ------------------------------- 方向 C：书格式（1:1 方形） ------------------------------- */
+.cC { padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.cC .thumb { position: relative; width: 100%; aspect-ratio: 1 / 1; border-radius: var(--radius-sm); overflow: hidden; }
+.cC .cname3 { max-width: 100%; font-size: var(--fs-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cC .cmeta { max-width: 100%; }
+.cC .cacts { width: 100%; }
+.cC .cacts .btn { height: 28px; font-size: var(--fs-xs); }
+.cC.on .thumb { outline: 2px solid var(--accent-border); outline-offset: -2px; }
+
+/* 现状（0 号）：照当前实现画 —— 76px 圆角方块「世」字居中 + 名字 + 小字 + 两按钮 */
+.c0 {
+  align-items: center; gap: 8px; padding: 16px 14px 14px;
+}
+.c0 .face {
+  width: 76px; height: 76px; border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 26px; font-weight: 600;
+}
+.c0 .cname0 { max-width: 100%; font-size: var(--fs-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c0 .cmeta { max-width: 100%; }
+.c0 .cacts { width: 100%; margin-top: 2px; }
+.c0 .cacts .btn { height: 28px; font-size: var(--fs-xs); }
+.g1 { background: linear-gradient(135deg, #ffb0d0, #b98cff); }
+.g2 { background: linear-gradient(135deg, #b9f0d8, #5fd6a8); }
+.g3 { background: linear-gradient(135deg, #ffd9a8, #ffab5e); }
+.g4 { background: linear-gradient(135deg, #c8d4ff, #8a9dff); }
+.g5 { background: linear-gradient(135deg, #e0d4ff, #a98cff); }
+.g6 { background: linear-gradient(135deg, #ffc9c9, #ff8f8f); }
+
+/* 方向标签：贴在 frame **左下角**（侧栏底部那块空白），不遮任何控件 —— 贴在左上角
+   会正好压住品牌行，看着像 bug 而不是标签。 */
+.tag {
+  position: absolute; left: 0; bottom: 0; z-index: 9;
+  padding: 5px 12px; border-top-right-radius: var(--radius);
+  background: var(--accent); color: var(--on-accent);
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.04em;
+}
+.tag.alt { background: #57606a; color: #fff; }
+
+/* ------------------------------- 编辑器（D1） ------------------------------- */
+.wbwrap { display: grid; grid-template-columns: 548px minmax(0, 1fr); min-height: 0; flex: 1 1 auto; }
+.wbbook {
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  border-right: 1px solid var(--border-soft); background: var(--bg);
+}
+.wbcoltitle { padding: 6px 12px 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); letter-spacing: 0.08em; }
+.wbblock { padding: 8px 12px 0; }
+.flabel { display: block; font-size: var(--fs-xs); color: var(--text-dim); margin-bottom: 4px; }
+.finput {
+  width: 100%; height: 32px; padding: 0 10px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--bg-input); color: var(--text);
+  font-family: inherit; font-size: var(--fs-sm);
+}
+.farea {
+  width: 100%; padding: 8px 10px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--bg-input); color: var(--text);
+  font-family: inherit; font-size: var(--fs-sm);
+}
+.fhelp { display: block; margin-top: 4px; font-size: var(--fs-xs); color: var(--text-faint); }
+
+/* ★ 新增：封面块 —— 竖版 2:3（和角色立绘同一个比例，裁剪组件现成）*/
+.coverbox { display: flex; gap: 10px; }
+.coverframe {
+  position: relative; flex: 0 0 96px; width: 96px; aspect-ratio: 2 / 3;
+  border-radius: var(--radius-sm); overflow: hidden; cursor: pointer;
+  border: 1px dashed var(--border);
+}
+.coverframe.has { border-style: solid; border-color: var(--border-soft); }
+.coverframe .cv-hint {
+  position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  color: var(--text-faint); font-size: var(--fs-xs); background: var(--bg-input);
+}
+.coverframe .cv-hint b { font-weight: 600; color: var(--text-dim); font-size: var(--fs-sm); }
+.coverbtns { display: flex; flex-direction: column; gap: 6px; justify-content: flex-start; padding-top: 2px; }
+.coverbtns .btn { height: 28px; font-size: var(--fs-xs); }
+
+/* 条目列表栏 */
+.wbentries { display: flex; flex-direction: column; min-height: 0; overflow: hidden; border-right: 1px solid var(--border-soft); }
+.wbentryhead { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px; }
+.wbentryhead .flabel { margin: 0; }
+.wbcount { font-size: var(--fs-xs); color: var(--text-faint); }
+.wbentryacts { display: flex; gap: 6px; margin-left: auto; }
+.wbentrylist { flex: 1 1 auto; overflow: hidden; padding: 0 10px 10px; display: flex; flex-direction: column; gap: 4px; }
+.wbentry {
+  padding: 8px 10px; border-radius: var(--radius); background: transparent;
+  border: 1px solid transparent; color: var(--text-dim);
+}
+.wbentry.active { background: var(--bg-item); border-color: var(--accent-border); color: var(--text); }
+.wbentry-t { font-size: var(--fs-sm); font-weight: 600; }
+.wbentry-k { font-size: var(--fs-xs); color: var(--text-faint); margin-top: 2px; }
+.wbbadge {
+  display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 2px;
+  background: var(--accent-soft); color: var(--accent); font-size: var(--fs-xs); font-weight: 600;
+}
+.wbmain { display: flex; flex-direction: column; min-height: 0; padding: 16px 18px; gap: 14px; overflow: hidden; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// ---------------------------------------------------------------------------
+//  数据：12 个世界。封面用 CSS 拼（稿子里不能引外部图）——
+//  天空 sky1→sky2、光源 moon(位置 gx/gy、大小 gs)、两层地貌剪影 ridge[2]。
+//  换成真图后这一块就是用户上传的那张封面。
+// ---------------------------------------------------------------------------
+const SCAPE = {
+  // 山脊
+  m1: 'polygon(0% 68%, 15% 40%, 30% 58%, 46% 26%, 62% 50%, 78% 32%, 92% 54%, 100% 42%, 100% 100%, 0% 100%)',
+  m2: 'polygon(0% 76%, 20% 44%, 38% 62%, 56% 34%, 74% 58%, 100% 38%, 100% 100%, 0% 100%)',
+  // 塔楼城市
+  c1: 'polygon(0% 100%, 0% 78%, 9% 78%, 9% 60%, 18% 60%, 18% 72%, 27% 72%, 27% 46%, 35% 46%, 35% 68%, 46% 68%, 46% 54%, 55% 54%, 55% 76%, 66% 76%, 66% 38%, 74% 38%, 74% 64%, 84% 64%, 84% 54%, 92% 54%, 92% 74%, 100% 74%, 100% 100%)',
+  c2: 'polygon(0% 100%, 0% 84%, 14% 84%, 14% 66%, 30% 66%, 30% 78%, 48% 78%, 48% 60%, 62% 60%, 62% 80%, 78% 80%, 78% 68%, 100% 68%, 100% 100%)',
+  // 水面波纹
+  w1: 'polygon(0% 80%, 10% 76%, 20% 82%, 30% 76%, 40% 82%, 50% 76%, 60% 82%, 70% 76%, 80% 82%, 90% 76%, 100% 82%, 100% 100%, 0% 100%)',
+  // 沙丘
+  d1: 'polygon(0% 100%, 0% 78%, 24% 62%, 50% 80%, 74% 60%, 100% 76%, 100% 100%)',
+  // 穹顶建筑
+  p1: 'polygon(0% 100%, 0% 82%, 12% 82%, 12% 68%, 24% 68%, 24% 58%, 36% 58%, 36% 46%, 50% 36%, 64% 46%, 64% 58%, 76% 58%, 76% 68%, 88% 68%, 88% 82%, 100% 82%, 100% 100%)',
+  // 书架 / 书脊
+  s1: 'polygon(0% 100%, 0% 64%, 12% 64%, 12% 80%, 26% 80%, 26% 54%, 40% 54%, 40% 76%, 54% 76%, 54% 62%, 68% 62%, 68% 82%, 82% 82%, 82% 50%, 94% 50%, 94% 76%, 100% 76%, 100% 100%)',
+  // 裂缝 / 峡谷
+  j1: 'polygon(0% 100%, 8% 78%, 20% 88%, 30% 66%, 44% 84%, 58% 62%, 72% 82%, 86% 70%, 100% 86%, 100% 100%)',
+  // 云层
+  v1: 'polygon(0% 100%, 0% 74%, 16% 66%, 32% 76%, 50% 64%, 68% 76%, 84% 68%, 100% 78%, 100% 100%)'
+};
+
+//  天空 sky[0]=顶部深 → sky[1]=地平线亮（这一亮才衬得出剪影）；moon 光源落在地平线附近。
+const BOOKS = [
+  { n: '灰港',       e: 42, c: 7, sky: ['#0b131c', '#41627f'], m: '#f0b45c', gx: '74%', gy: '56%', gs: '38%', rd: ['c1', 'w1'], tone: 'g1' },
+  { n: '星轨学院',   e: 28, c: 5, sky: ['#0a0d24', '#3c4680'], m: '#e8d79a', gx: '28%', gy: '30%', gs: '30%', rd: ['m1', 'p1'], tone: 'g4' },
+  { n: '沙海商路',   e: 19, c: 3, sky: ['#2a1206', '#d08a3c'], m: '#ffe0a3', gx: '50%', gy: '62%', gs: '50%', rd: ['d1', 'd1'], tone: 'g3' },
+  { n: '沉船之底',   e: 31, c: 4, sky: ['#03111c', '#1f7e8e'], m: '#9df0f4', gx: '44%', gy: '26%', gs: '46%', rd: ['w1', 'w1'], tone: 'g2' },
+  { n: '长夜雪国',   e: 24, c: 6, sky: ['#0a1220', '#6a86ab'], m: '#f2f8ff', gx: '70%', gy: '32%', gs: '26%', rd: ['m2', 'm1'], tone: 'g4' },
+  { n: '雾都茶馆',   e: 16, c: 4, sky: ['#100e14', '#544a53'], m: '#f0b578', gx: '52%', gy: '54%', gs: '30%', rd: ['c2', 'c1'], tone: 'g5' },
+  { n: '赤色荒原',   e: 22, c: 5, sky: ['#1a0705', '#a83e2d'], m: '#ff9a6a', gx: '34%', gy: '46%', gs: '42%', rd: ['j1', 'm1'], tone: 'g6' },
+  { n: '云上城邦',   e: 37, c: 8, sky: ['#0d1a26', '#8fb4da'], m: '#ffffff', gx: '56%', gy: '28%', gs: '44%', rd: ['v1', 'c2'], tone: 'g4' },
+  { n: '无光深渊',   e: 12, c: 2, sky: ['#020407', '#273f66'], m: '#8fa6ee', gx: '50%', gy: '72%', gs: '34%', rd: ['m2', 'j1'], tone: 'g5' },
+  { n: '渡鸦酒馆',   e: 26, c: 6, sky: ['#0d0803', '#604626'], m: '#f5c063', gx: '46%', gy: '60%', gs: '26%', rd: ['c2', 'c1'], tone: 'g3' },
+  { n: '无名图书馆', e: 9,  c: 1, sky: ['#080d0a', '#455839'], m: '#cfe6bb', gx: '50%', gy: '42%', gs: '32%', rd: ['s1', 's1'], tone: 'g2' },
+  { n: '未命名世界', e: 3,  c: 0, sky: ['#26292e', '#1c1f23'], m: '',        gx: '50%', gy: '50%', gs: '0',   rd: [],           tone: 'g6' }
+];
+
+const ICON = {
+  book: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  sliders: '<line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4.5"/><line x1="12" y1="17.5" x2="12.01" y2="17.5"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8.9 4.7H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>'
+};
+const svg = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[name]}</svg>`;
+
+const sidebar = () => `
+<aside class="side">
+  <button class="stoggle" title="收起侧栏">‹</button>
+  <div class="brand">
+    <span class="brand-logo"></span>
+    <span class="brand-name">如我所书</span>
+    <span class="brand-ver">v1.0</span>
+  </div>
+  <button class="btn primary block">＋ 新对话</button>
+  <div class="slabel">最近会话</div>
+  <div class="clist">
+    <div class="crow"><span class="cava g1"></span><span class="cname2">灰港 · 夜航</span></div>
+    <div class="crow active"><span class="cava g3"></span><span class="cname2">渡鸦酒馆 · 第一夜</span></div>
+    <div class="crow"><span class="cava g4"></span><span class="cname2">星轨学院</span></div>
+    <div class="crow"><span class="cava g2"></span><span class="cname2">和露西娅聊天</span></div>
+    <div class="crow"><span class="cava g5"></span><span class="cname2">新对话</span></div>
+  </div>
+  <div class="sfoot">
+    <button class="btn">${svg('users')}<span>角色库</span></button>
+    <button class="btn active">${svg('book')}<span>世界书</span></button>
+    <button class="btn">${svg('sliders')}<span>预设</span></button>
+    <button class="btn">${svg('help')}<span>帮助</span></button>
+    <button class="btn">${svg('settings')}<span>设置</span></button>
+    <button class="btn">${svg('folder')}<span>数据</span></button>
+  </div>
+</aside>`;
+
+const phead = () => `
+<header class="phead">
+  <div>
+    <h1 class="ptitle">世界书</h1>
+    <p class="psub">共 12 个世界 · 点「游玩」进入，进去前先创建你自己的角色</p>
+  </div>
+  <div class="pactions">
+    <button class="btn ghost sm">导入世界书</button>
+    <button class="btn primary sm">＋ 新建世界书</button>
+  </div>
+</header>`;
+
+const cover = (b) => b.c
+  ? `<div class="cover" style="--sky1:${b.sky[0]};--sky2:${b.sky[1]};--moon:${b.m};--gx:${b.gx};--gy:${b.gy};--gs:${b.gs}">
+       <span class="sun"></span>
+       <span class="rd" style="--c:rgba(2,4,8,.86);--h:46%;clip-path:${SCAPE[b.rd[0]]}"></span>
+       <span class="rd" style="--c:#05070b;--h:30%;clip-path:${SCAPE[b.rd[1]]}"></span>
+       <span class="press"></span>
+     </div>`
+  : `<div class="cover flat"><span class="press"></span><span class="cv-glyph">世</span></div>`;
+
+const meta = (b) => b.c ? `${b.e} 条设定 · ${b.c} 个角色` : `${b.e} 条设定`;
+
+// 方向 A：书脊式 —— 封面 2:3 铺满，名字压在图上
+const cardA = (b, cls) => `
+<div class="card cA ${cls}">
+  <button class="del" title="删除这个世界书">×</button>
+  <div class="thumb">${cover(b)}<span class="oncover-name">${b.n}</span></div>
+  <div class="cardbody">
+    <div class="cmeta">${meta(b)}</div>
+    <div class="cacts"><button class="btn ghost sm">编辑</button><button class="btn primary sm">游玩</button></div>
+  </div>
+</div>`;
+
+// 方向 B：画卷式 —— 封面 3:2，名字在图下方
+const cardB = (b, cls) => `
+<div class="card cB ${cls}">
+  <button class="del" title="删除这个世界书">×</button>
+  <div class="thumb">${cover(b)}</div>
+  <div class="cardbody">
+    <div class="ctitle">${b.n}</div>
+    <div class="csub">${meta(b)}</div>
+    <div class="cacts"><button class="btn ghost sm">编辑</button><button class="btn primary sm">游玩</button></div>
+  </div>
+</div>`;
+
+// 方向 C：书格式 —— 方形缩略图 + 居中信息（现状升级）
+const cardC = (b, cls) => `
+<div class="card cC ${cls}">
+  <button class="del" title="删除这个世界书">×</button>
+  <div class="thumb">${cover(b)}</div>
+  <div class="cname3">${b.n}</div>
+  <div class="cmeta">${meta(b)}</div>
+  <div class="cacts"><button class="btn ghost sm">编辑</button><button class="btn primary sm">游玩</button></div>
+</div>`;
+
+// 0 号：现状 —— 76px「世」字方块
+const card0 = (b, cls) => `
+<div class="card c0 ${cls}">
+  <button class="del" title="删除这个世界书">×</button>
+  <div class="face ${b.tone}">世</div>
+  <div class="cname0">${b.n}</div>
+  <div class="cmeta">${meta(b)}</div>
+  <div class="cacts"><button class="btn ghost sm">编辑</button><button class="btn primary sm">游玩</button></div>
+</div>`;
+
+const listFrame = (shot, tag, tagAlt, gridCls, cardFn, books) => `
+<div class="frame" data-shot="${shot}">
+  <span class="tag${tagAlt ? ' alt' : ''}">${tag}</span>
+  ${sidebar()}
+  <main class="main">
+    ${phead()}
+    <div class="pbody"><div class="${gridCls}">${books.map((b, i) => cardFn(b, i === 0 ? 'on' : '')).join('')}</div></div>
+  </main>
+</div>`;
+
+// ---------------------------------------------------------------------------
+//  D1：编辑器 —— 新增的「封面」块放在左栏最上面（书名之前）
+// ---------------------------------------------------------------------------
+const ENTRIES = ['小镇广场', '港口的雾', '老船锚酒馆', '蒸汽机车', '码头帮会', '捕鲸船「白鲸号」'];
+const editorFrame = () => `
+<div class="frame" data-shot="D1-editor">
+  <span class="tag">D · 编辑器封面位（与方向无关）</span>
+  ${sidebar()}
+  <main class="main">
+    <header class="phead">
+      <div>
+        <h1 class="ptitle">世界书</h1>
+        <p class="psub">一条条目 = 一组关键词 + 一段设定；关键词命中才会注入提示词</p>
+      </div>
+      <div class="pactions">
+        <span class="wbcount">有未保存的改动</span>
+        <button class="btn ghost sm">返回</button>
+        <button class="btn primary sm">保存</button>
+      </div>
+    </header>
+    <div class="wbwrap">
+      <section class="wbbook">
+        <div class="wbcoltitle">本书设置</div>
+
+        <!-- ★ 新增块：封面（放在书名之前 —— 它是这本书的「脸」） -->
+        <div class="wbblock">
+          <span class="flabel">封面</span>
+          <div class="coverbox">
+            <div class="coverframe has">${cover(BOOKS[0])}</div>
+            <div class="coverbtns">
+              <button class="btn sm">更换封面</button>
+              <button class="btn ghost sm">清除</button>
+              <span class="fhelp" style="margin-top:2px">列表页上<br />显示的就是<br />这一块。</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="wbblock">
+          <span class="flabel">书名</span>
+          <input class="finput" value="灰港" />
+        </div>
+
+        <div class="wbblock">
+          <span class="flabel">开场白</span>
+          <textarea class="farea" rows="2">雾还没散。你站在灰港的石阶上，远处汽笛响了一声。</textarea>
+        </div>
+
+        <div class="wbblock">
+          <div class="wbentryhead" style="padding:0">
+            <span class="flabel" style="margin:0">本书角色</span>
+            <span class="wbcount">7 个 · 已收起</span>
+          </div>
+        </div>
+
+        <div class="wbblock">
+          <button class="btn ghost sm">预览命中</button>
+        </div>
+
+        <div class="wbblock" style="margin-top:auto; display:flex; gap:8px; border-top:1px solid var(--border-soft); padding:8px 12px">
+          <button class="btn ghost sm">导出</button>
+          <button class="btn danger sm">删除本书</button>
+        </div>
+      </section>
+
+      <section class="wbentries">
+        <div class="wbentryhead">
+          <span class="flabel">条目</span>
+          <span class="wbcount">42 条条目 · 40 条启用</span>
+          <div class="wbentryacts">
+            <button class="btn ghost sm">＋ 条目</button>
+            <button class="btn ghost sm">套用模板</button>
+            <button class="btn ghost sm">＋ 事件</button>
+          </div>
+        </div>
+        <div class="wbentrylist">
+          ${ENTRIES.map((t, i) => `
+          <div class="wbentry ${i === 1 ? 'active' : ''}">
+            <div class="wbentry-t">${t}${i === 0 ? '<span class="wbbadge">常驻</span>' : ''}</div>
+            <div class="wbentry-k">${i === 0 ? '（无关键词）' : '雾, 海雾, 浓雾'}</div>
+          </div>`).join('')}
+        </div>
+      </section>
+
+      <section class="wbmain">
+        <div>
+          <span class="flabel">条目名称</span>
+          <input class="finput" value="港口的雾" />
+        </div>
+        <div>
+          <span class="flabel">关键词</span>
+          <input class="finput" value="雾, 海雾, 浓雾" />
+          <span class="fhelp">对话里出现任意一个就注入。中文按子串匹配，英文按单词匹配。</span>
+        </div>
+        <div style="flex:1 1 auto; min-height:0; display:flex; flex-direction:column">
+          <span class="flabel">内容</span>
+          <textarea class="farea" style="flex:1 1 auto" rows="9">灰港的雾是甜的，混着煤烟和咸腥。能见度不到十步，汽笛声从雾里传出来时，船已经贴着码头了。当地人靠听声辨位行船。</textarea>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>`;
+
+document.getElementById('root').innerHTML = [
+  listFrame('0-now', '0 · 现状（对照）', true, 'grid6', card0, BOOKS),
+  listFrame('A1-list', 'A · 书脊式 — 封面 2:3 竖版', false, 'grid6', cardA, BOOKS),
+  listFrame('B1-list', 'B · 画卷式 — 封面 3:2 横版', false, 'grid3', cardB, BOOKS.slice(0, 6)),
+  listFrame('C1-list', 'C · 书格式 — 封面 1:1 方形', false, 'grid6', cardC, BOOKS),
+  editorFrame()
+].join('');
+</script>
+</body>
+</html>

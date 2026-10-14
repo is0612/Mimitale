@@ -64,7 +64,7 @@ function presetCard(preset) {
     sub: subBits.join(' · ') || '（空预设）',
     subTitle: String(preset.content || ''),
     avatarText: '预',
-    avatarClass: `worldbook-avatar ${entityTone(preset.id, preset.name)}`,
+    avatarClass: `preset-avatar ${entityTone(preset.id, preset.name)}`,
     extra: button({
       class: 'char-card-del',
       text: '×',

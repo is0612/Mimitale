@@ -375,6 +375,8 @@ export const el = {
     //    和「整本书的表单」那层壳都跟条目无关了，旧名里那个 entries 会误导下一位。
     bookEmpty: $('wb-book-empty'),
     bookWrap: $('wb-book-wrap'),
+    cover: $('wb-cover'),
+    btnClearCover: $('btn-clear-wb-cover'),
     name: $('wb-name'),
     opening: $('wb-opening'),
     entryCount: $('wb-entry-count'),

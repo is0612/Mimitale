@@ -28,6 +28,15 @@ const MAX_WORLDBOOK_CHARACTERS = 50;
 const MAX_IMPORTED_WORLDBOOK_CHARACTERS = 30;
 // 世界书开场白的上限
 const MAX_WORLDBOOK_OPENING = 4000;
+// 世界书封面（dataURL）的字符数上限。
+//
+// ⚠️ 比角色的 MAX_AVATAR_CHARS（1800 万）**严得多**，这是刻意的：
+//    · 封面是可有可无的装饰图，不是角色卡那种「一张卡就靠这张立绘」；
+//    · worldbooks.json 是**整库覆盖写** —— 改一个字就要重写整个文件，
+//      一本 3MB 的封面乘几十本，每次保存都卡一下。
+//    渲染层那边压到 800 宽（≈200KB 的 webp），这个上限留了 20 倍余量，
+//    正常路径永远碰不到，只拦畸形文件。
+const MAX_WORLDBOOK_COVER = 4000000;
 
 /** 把一条 entry 的不同写法（ST 的 key/keys、constant、order…）统一成内部格式 */
 function normalizeWorldbookEntry(raw) {
@@ -174,12 +183,22 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
   }
 
   const opening = r.opening ?? own.opening;
+  // 封面：dataURL，列表卡片上铺满整卡的那张 2:3 竖版图。
+  // 两个位置都认（和 opening 一个道理）：独立世界书导出时在顶层，
+  // 角色卡内嵌书（character_book）那边塞在 extensions.mimitale 里。
+  // 校验和角色头像同规矩：必须是 data:image/ 开头，超限就当没有。
+  const rawCover = r.cover ?? own.cover;
+  const cover = typeof rawCover === 'string' && rawCover.startsWith('data:image/') && rawCover.length <= MAX_WORLDBOOK_COVER
+    ? rawCover
+    : '';
   const genId = typeof makeId === 'function' ? makeId : () => `w${Date.now().toString(36)}`;
   return {
     id: typeof r.id === 'string' && r.id ? r.id : genId(),
     name: name.slice(0, 120),
     // 进这个世界时自动作为第一条消息；留空则由界面那边让模型现生成一段开局
     opening: typeof opening === 'string' ? opening.slice(0, MAX_WORLDBOOK_OPENING) : '',
+    // 没有封面就是空串 —— 卡片那边据此退回「世」字占位块
+    cover,
     entries,
     characters,
     createdAt: Number(r.createdAt) || Date.now(),
@@ -244,6 +263,7 @@ module.exports = {
   MAX_WORLDBOOK_CHARACTERS,
   MAX_IMPORTED_WORLDBOOK_CHARACTERS,
   MAX_WORLDBOOK_OPENING,
+  MAX_WORLDBOOK_COVER,
   normalizeWorldbook,
   worldbookFromCharacterBook,
   worldbookFromLorebook,

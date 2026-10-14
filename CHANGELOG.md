@@ -4,6 +4,70 @@
 
 ---
 
+## 2026-10-14 第二十七批：世界书能设封面了 + 列表卡片改成「封面铺满整卡」
+
+一句话：世界书卡片上那块 76px 的「世」字色块，换成了一张 **2:3 的封面图** ——
+封面在编辑器左栏最上面（书的脸的位置）上传，铺满列表卡片，书名压在封面上。
+
+### 起因
+
+星宝：「世界书列表没有酒馆的风格，看起来没有感觉」。
+
+根因不是配色 —— 是**卡片上没有任何东西替这本书说话**：角色库每张卡有一张立绘，
+世界书只有一块写着「世」字的色块，十来本摆一起长得一模一样。
+
+所以这次是**功能 + 视觉一起做**：先能传封面，再让卡片围着封面重排。
+方向是从三套对比稿里挑的（书脊式 2:3 / 画卷式 3:2 / 书格式 1:1），
+选了**书脊式**：2:3 正是角色形象在用的比例，`ui/imageCrop.js` 那套裁剪直接复用，
+不用新增比例、也就绕开了「1024×1365 除不尽」那类坑。稿子在
+`client/tools/mock/wb-list.html`，出图见 `client/tools/shots/mock/`。
+
+### 改法
+
+| 文件 | 改动 |
+| --- | --- |
+| `client/main/worldbook-parse.js` | `normalizeWorldbook` 加 `cover`（**白名单式，不同步这一处就是静默丢失**）+ `MAX_WORLDBOOK_COVER` |
+| `client/renderer/js/data/library.js` | 新增 `worldbookCover()`；`worldbookPayload` 导出带 `cover`；角色卡内嵌书塞进 `extensions.mimitale.cover` |
+| `client/renderer/js/views/worldbook.js` | 封面进**草稿**（点「保存」才写盘）+ 上传 / 清除 |
+| `client/renderer/js/views/worldbookList.js` | 卡片改成封面铺满整卡（不再复用 `ui/build.js` 的 `card()`） |
+| `client/renderer/index.html` · `core/dom.js` | 编辑器左栏新增「封面」块 + 对应的 `el.wb.cover` / `btnClearCover` |
+| `client/renderer/style.css` | `.wb-card-*` / `.wb-cover-*`；`.wb-grid` 的 gap 14 → 16（和角色库拉齐） |
+| `client/tools/smoke-renderer.js` · `smoke-test.js` | 新增「世界书：封面」场景（10 条断言）+ 两个截图场景 |
+
+### 四条设计上的选择
+
+- **封面真的铺满整卡**：卡片自己 `padding: 0`，封面从卡片顶边一路铺到左右两边，
+  顶部那 4px 圆角靠卡片的 `overflow: hidden` 裁出来（下面两块信息各自带内边距）。
+  留一圈 8px 白边会变成「一张图装在一个框里」，书脊的感觉就没了 —— 设计稿里就是这个样子。
+- **封面是草稿的一部分**，和书名 / 开场白同一条规矩：点「保存」才写回书里、
+  才在列表卡上露头；不保存关掉就还原。不做成「选了图立刻落盘」那种外挂字段 ——
+  否则「保存 / 放弃」这套语义就在这一本书里出现两个口径。
+- **没封面的书退回「世」字占位块**（深灰底，不是随机渐变）。「一本书一个色」
+  那套（`entityTone`）在 76px 小方块上好看，铺成 2:3 的大色块就太吵，
+  而且会让人误以为那是一张图。
+- **封面输出 800×1200**，比角色形象的 1024×1536 小一档：卡片上只显示约 170px 宽，
+  而 `worldbooks.json` 是**整库覆盖写**（改一个字就要重写整个文件），
+  几十本书各带一张封面时，体积是实打实的保存耗时。
+
+### ⚠️ 五个坑
+
+- **落盘白名单**。保存 / 读取 / 导入三条路都走 `normalizeWorldbook`，它是白名单式的 ——
+  加字段忘了同步就是「界面上看得见、重启就没了」，不报错、不提示。
+  测试里那条「封面落盘了」的断言就是钉这个的。
+- **导出的 cover 有两个位置**：独立世界书（`worldbookPayload`）放顶层；
+  角色卡内嵌书（`characterBookPayload`）放 `extensions.mimitale`（那是 ST 的规范结构，
+  顶层不该塞私有键）。导入那边两个位置都认，和 `opening` 一样。
+- **`.wb-card .char-card-del` 的 `z-index: 2` 不能省**。`.wb-card-cover` 也是定位元素
+  （`position: relative`）而且排在 × **后面**，不给层级的话封面会整块盖住它 ——
+  表现是「× 好好地待在 DOM 里，就是看不见」。角色库那张卡不需要这条，
+  因为它的媒体位（`.char-card-avatar`）不是定位元素，不参与这个先后关系。
+- **`.worldbook-avatar` 改名成 `.preset-avatar`**。世界书卡改用封面之后，
+  这个类只剩预设卡在借（它一直是「预设卡的头像位」），名字对不上会误导下一位。
+- **`.wb-card-cover` 的 `flex: 0 0 auto` 别删**：卡片是 flex 列，子项按内容算高度时
+  `aspect-ratio` 会被绕过去，封面就变形了。
+
+---
+
 ## 2026-10-14 第二十六批：开发时热重载（改主进程也不用重启了）
 
 一句话：以前「改了代码得自己关窗口重开」，现在 `npm run dev` 之后 ——

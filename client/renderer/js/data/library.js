@@ -83,6 +83,18 @@ export function worldbookCharacters(book) {
 }
 
 /**
+ * 世界书封面：一张 2:3 竖版图（dataURL），铺在世界书列表卡片上。
+ *
+ * 和 `characterPortrait` 的「看键在不在」不同，这里**只看值**：
+ * 封面没有「老数据靠别的字段兜底」这件事 —— 没设过就是没有，
+ * 卡片退回「世」字占位块。所以空串和缺键是同一种情况，不用分开处理。
+ */
+export function worldbookCover(book) {
+  const cover = book && book.cover;
+  return typeof cover === 'string' ? cover : '';
+}
+
+/**
  * 世界书角色副本的 id：单独一个前缀，和角色库、会话的 id 不会看混。
  * 两头都要用 —— 世界书编辑器里「加入副本」发一个，角色编辑器在
  * 「世界书作用域」下起草新角色时也发一个，所以沉在这儿。
@@ -207,7 +219,7 @@ function worldbookCharacterPayload(character) {
  *
  * ⚠️ opening 和 characters 也一起导出（酒馆规范里没有这两个字段，多出来的键
  * 别家会忽略）。少了它们，「导出这本书再导回来」就等于**丢掉开场白和全部 NPC** ——
- * 而那正是别人分享一份世界书时最想要的两样东西。
+ * 而那正是别人分享一份世界书时最想要的两样东西。cover 同理（连图一起丢就更亏了）。
  */
 export function worldbookPayload(book) {
   const entries = {};
@@ -235,6 +247,7 @@ export function worldbookPayload(book) {
 
   const payload = { name: book.name || '未命名世界', description: book.description || '', entries };
   if (typeof book.opening === 'string' && book.opening) payload.opening = book.opening;
+  if (typeof book.cover === 'string' && book.cover) payload.cover = book.cover;
   const cast = asArray(book.characters);
   if (cast.length) payload.characters = cast.map(worldbookCharacterPayload);
   return payload;
@@ -243,11 +256,19 @@ export function worldbookPayload(book) {
 /** v2 角色卡内嵌书使用数组条目；与独立 ST 世界书的对象条目格式分开。 */
 export function characterBookPayload(book) {
   const lorebook = worldbookPayload(book);
-  const { opening, characters: cast } = lorebook;
+  const { opening, characters: cast, cover } = lorebook;
   return {
     name: lorebook.name,
     description: lorebook.description,
-    extensions: { mimitale: { ...(opening ? { opening } : {}), ...(cast ? { characters: cast } : {}) } },
+    // mimitale 私有字段：酒馆不认这三个键，但我们的导入链路认（见 main/worldbook-parse.js）。
+    // 少了 cover，角色卡里的世界书导回来就只剩条目、封面没了。
+    extensions: {
+      mimitale: {
+        ...(opening ? { opening } : {}),
+        ...(cast ? { characters: cast } : {}),
+        ...(cover ? { cover } : {})
+      }
+    },
     entries: Object.values(lorebook.entries).map((entry) => ({
       id: entry.uid,
       comment: entry.comment,

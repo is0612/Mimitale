@@ -2795,16 +2795,19 @@ body {
 .char-grid,
 .wb-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
 }
 
 /* 角色卡比世界书卡大一档。
    卡上那个圆头像其实是**人设图**的位置（2:3 竖版立绘，见下面的 .char-card-avatar），
-   168px 的窄卡里放不下像样的立绘 —— 世界书卡没有图，保持上面那档宽度。 */
+   168px 的窄卡里放不下像样的立绘。
+   ⚠️ 世界书卡 2026-10-14 起也有封面了（.wb-card-cover，同为 2:3），但**仍然保持
+   168 这档**：一行 6 个、一屏 12 个 —— 密度就是它和角色库的区别。
+   gap 两边统一 16px（世界书原来是 14，2026-10-14 跟着封面铺满一起改齐）：
+   封面贴到卡片边缘之后，14px 的缝看起来比原来挤。 */
 .char-grid {
   grid-template-columns: repeat(auto-fill, minmax(198px, 1fr));
-  gap: 16px;
 }
 
 .char-card {
@@ -2949,8 +2952,147 @@ body {
 .char-card-actions .btn-ghost { background: transparent; box-shadow: none; }
 .char-card-actions .btn-ghost:hover { background: var(--accent-soft); color: var(--accent); }
 
-/* 世界书卡片的头像位：不用首字母，固定一个「世」字，和角色卡区分开 */
-.worldbook-avatar {
+/* --- 世界书卡：封面铺满整卡，书名压在封面上（2026-10-14）---------------------
+
+   ⚠️ 这张卡**不走** .char-card-avatar 那个圆头像位（它也没在 DOM 里），
+      用的是自己的 .wb-card-cover。
+   ⚠️ 封面比例 2:3 要三处一起改：这里、.wb-cover-frame、worldbook.js 的 WB_COVER_RATIO。 */
+
+/* 卡片自己**不留内边距** —— 封面要从卡片顶边一路铺到左右两边（设计稿就是这个样子），
+   缩进 8px 会变成「一张图装在一个框里」，书脊的感觉就没了。
+   下面那两块信息各自带自己的内边距，所以不靠卡片的 padding 撑。 */
+.wb-card {
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  /* 封面铺满顶部之后，卡片那 4px 圆角得靠这一层裁 ——
+     .char-card 本身没有 overflow，不写封面就是直角压在圆角上。 */
+  overflow: hidden;
+}
+
+/* `flex: 0 0 auto`：卡片是 flex 列，显式写死基准，免得以后有人往这张卡里
+   加东西时，子项按内容算高度、把 aspect-ratio 绕过去（封面就会变形）。 */
+.wb-card-cover {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  /* 不用自己的圆角：顶部两角跟着卡片的 overflow: hidden 走，免得套一层小圆角 */
+  border-radius: 0;
+  overflow: hidden;
+  background: var(--bg-input);
+}
+
+.wb-card-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  /* 点开看大图（和角色库那张形象一个路子） */
+  cursor: zoom-in;
+}
+
+/* 底部压暗：书名压在浅色封面上时全靠它读得出来 */
+.wb-card-cover::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 58px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+
+/* 没封面：深灰占位块 + 一个半透明的「世」字。
+   ⚠️ 别改回 entityTone 那套渐变色 —— 76px 的小方块上好看，
+      铺成 2:3 的大色块就太吵，而且会让人误以为那是一张图。 */
+.wb-card-cover.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to bottom, #26292e, #1c1f23);
+}
+
+.wb-card-glyph {
+  font-size: 30px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.34);
+  letter-spacing: 0.06em;
+  user-select: none;
+}
+
+.wb-card-name {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: #fff;
+  /* 白字压在图上：深色封面靠阴影，浅色封面靠上面那层压暗 */
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 下面这两块自己带内边距（卡片本身 padding: 0，见 .wb-card 那段） */
+.wb-card-meta {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 10px 10px 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* margin-top: auto —— 同一行里卡片等高时，按钮贴着底边（和设计稿一致） */
+.wb-card-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: auto;
+  padding: 8px 10px 10px;
+}
+.wb-card-actions .btn { flex: 1 1 0; }
+.wb-card-actions .btn-ghost { background: transparent; box-shadow: none; }
+.wb-card-actions .btn-ghost:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* 删除 × 现在浮在**封面图上**（以前它落在卡片底上）。浅色封面上一颗淡灰的 ×
+   根本看不见，所以给它一个半透明白色小圆底 —— 和角色库那张卡的处理完全一致；
+   底色不跟主题走：它压的是图片，跟着主题变反而会在暗色下糊掉。
+   ⚠️ `z-index: 2` 不能省：`.wb-card-cover` 也是定位元素（relative）且排在 × **后面**，
+      不给层级的话封面会整块盖住它 —— 表现是「× 在 DOM 里、但看不见」。
+      （角色库那边不需要，因为它的媒体位不是定位元素。） */
+.wb-card .char-card-del {
+  z-index: 2;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.wb-card .char-card-del:hover { background: var(--danger-bg); color: var(--danger); }
+
+/* 预设卡的头像位：不用首字母，固定一个「预」字，和角色卡 / 世界书卡区分开。
+   ⚠️ 2026-10-14 从 .worldbook-avatar 改名过来 —— 世界书卡那天起改用封面了
+   （见 .wb-card-cover），这个类其实一直是**预设卡**在借，名字对不上就会误导下一位。 */
+.preset-avatar {
   border-radius: var(--radius);
   font-size: 26px;
 }
@@ -4674,6 +4816,45 @@ input[type="number"]:hover::-webkit-outer-spin-button { opacity: 0.8; }
 /* 这一栏是上下叠的一列，块间距由各块自己的 padding 决定 ——
    .field 那 20px 的 margin-bottom 在这儿只会叠出一片空白。 */
 .wb-book .field { margin-bottom: 0; }
+
+/* 封面：这一栏最上面那一块（书的脸，所以排在书名之前）。
+   2:3 竖版 —— 和列表卡片上的 .wb-card-cover 严格同一个比例，
+   也是角色形象在用的比例（ui/imageCrop.js 那套裁剪直接复用）。
+   ⚠️ 改比例要三处一起改：这里、.wb-card-cover、worldbook.js 的 WB_COVER_RATIO。 */
+.wb-cover { flex: 0 0 auto; padding: 10px 12px 0; }
+/* .field-label 自带 12px padding-top 是为了在 grid 里和右侧输入框对齐；
+   这里不是 grid，去掉它 */
+.wb-cover > .field-label { padding-top: 0; }
+.wb-cover-row { display: flex; gap: 10px; margin-top: 6px; }
+/* 说明文字通栏放在下面：挤在封面框右边那一小条里会折成三行 */
+.wb-cover-help { display: block; margin-top: 6px; }
+
+.wb-cover-frame {
+  position: relative;
+  flex: 0 0 96px;
+  width: 96px;
+  aspect-ratio: 2 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  /* 空态是虚线框（「这里可以放东西」），有图就收成实线细边 */
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.wb-cover-frame:hover { border-color: var(--border-hover); }
+.wb-cover-frame:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.wb-cover-frame.has { border-color: var(--border-soft); border-style: solid; }
+.wb-cover-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.wb-cover-side { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 
 .wb-book-name { flex: 0 0 auto; padding: 10px 12px 0; }
 

@@ -15,8 +15,8 @@
 //  刻意保留的（不算错，只列出来让你确认）—— 都是绑在**固定尺寸容器**里的占位字，
 //  它们**不该**跟界面字号走（跟了就会从框里溢出来）：
 //    · .convo-avatar        20px   48px 头像里的首字
-//    · .worldbook-avatar    26px   世界书卡的「世」字
-//    · （某处字母块）        30px
+//    · .preset-avatar       26px   预设卡的「预」字（2026-10-14 从 .worldbook-avatar 改名）
+//    · .wb-card-glyph       30px   世界书卡的「世」字（没封面时那个占位块）
 //    · .char-card-avatar    52px   2:3 立绘的占位字
 //
 //  ⚠️ 只查 renderer/style.css。renderer/pet/ 是**另一个窗口**的独立变量体系

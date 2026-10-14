@@ -18,12 +18,17 @@
 //
 //  重绘入口是 renderWorldbookPage()，由入口层的 refreshLibraryPage()
 //  在「当前正停在世界书页」时调用（那个分发要读 currentView，属于入口层）。
+//
+//  ⚠️ 2026-10-14：卡片改成**封面铺满整卡**（封面 2:3 竖版），不再走 ui/build.js
+//     的 `card()` —— 那个壳是「居中媒体位 + 名字 + 小字 + 按钮」竖排，给角色库
+//     正合适（它上面那张图是 2:3 立绘、居中摆着就好看），但世界书要的是
+//     「书名压在封面上」。两者结构不同，硬套只会让 card() 长出一堆开关。
 // ---------------------------------------------------------------------------
 
 import { el } from '../core/dom.js';
-import { button, card, renderListPage } from '../ui/build.js';
-import { entityTone } from '../ui/avatarTone.js';
-import { worldbooks, worldbookCharacters } from '../data/library.js';
+import { h, button, renderListPage } from '../ui/build.js';
+import { openLightbox } from '../ui/lightbox.js';
+import { worldbooks, worldbookCharacters, worldbookCover } from '../data/library.js';
 import { openPlayerModal } from './player.js';
 
 /** 打开世界书编辑器（入口层注入，见文件头说明） */
@@ -51,7 +56,15 @@ export function renderWorldbookPage() {
 }
 
 /**
- * 一张世界书卡片：世界名 + 设定条数 / 角色数 + 编辑/游玩，右上角悬停浮出删除 ×
+ * 一张世界书卡片：**封面铺满整卡** + 书名压在封面底部 + 一行条数 + 编辑/游玩，
+ * 右上角悬停浮出删除 ×。
+ *
+ * 没设封面的书退回「世」字占位块（深灰底，不是随机渐变色）——
+ * 「一本书一个色」那套（entityTone）在 76px 的小方块上好看，铺成 2:3 的大色块
+ * 就太吵了；而且没有封面的书本来就该安静，别让人误以为那是一张图。
+ *
+ * 封面能点开看大图（和角色库的形象一个路子）—— 卡片上只有 ~170px 宽，
+ * 800×1200 的图缩得看不清细节。
  *
  * × 和角色卡那一颗是同一套（静止透明、悬停浮出、键盘 Tab 得到也能看见）。
  * 以前这里刻意没有 ×，理由是「一本书里攒了很多条目，删掉找不回来，
@@ -61,13 +74,12 @@ export function renderWorldbookPage() {
  */
 function worldbookCard(book) {
   const charCount = worldbookCharacters(book).length;
+  const cover = worldbookCover(book);
 
-  return card({
-    title: book.name,
-    sub: charCount ? `${book.entries.length} 条设定 · ${charCount} 个角色` : `${book.entries.length} 条设定`,
-    avatarText: '世',
-    avatarClass: `worldbook-avatar ${entityTone(book.id, book.name)}`,
-    extra: button({
+  return h(
+    'div',
+    { class: 'char-card wb-card', role: 'listitem', title: book.name },
+    button({
       class: 'char-card-del',
       text: '×',
       title: '删除这个世界书',
@@ -77,9 +89,23 @@ function worldbookCard(book) {
         removeBook(book.id);
       }
     }),
-    actions: [
+    h(
+      'div',
+      { class: ['wb-card-cover', !cover && 'is-empty'] },
+      cover
+        ? h('img', { src: cover, alt: '', onclick: () => openLightbox(cover, { title: book.name }) })
+        : h('span', { class: 'wb-card-glyph', text: '世' }),
+      h('span', { class: 'wb-card-name', text: book.name })
+    ),
+    h('div', {
+      class: 'wb-card-meta',
+      text: charCount ? `${book.entries.length} 条设定 · ${charCount} 个角色` : `${book.entries.length} 条设定`
+    }),
+    h(
+      'div',
+      { class: 'wb-card-actions' },
       button({ class: 'btn btn-ghost btn-sm', text: '编辑', onClick: () => openEditor(book.id) }),
       button({ class: 'btn btn-primary btn-sm', text: '游玩', onClick: () => openPlayerModal(book.id) })
-    ]
-  });
+    )
+  );
 }

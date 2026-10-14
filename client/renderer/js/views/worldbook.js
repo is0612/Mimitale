@@ -40,6 +40,7 @@ import { uid, now, activeConvo, safeFileName } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear } from '../ui/build.js';
+import { pickAndCrop } from '../ui/imageCrop.js';
 import { showView, currentViewName } from './viewSwitch.js';
 import { saveExport } from '../data/export.js';
 import { persistLibrary, persistConversations } from '../data/persist.js';
@@ -124,6 +125,10 @@ export function initWorldbook(opts = {}) {
     markDraftDirty();
   });
 
+  // 封面：点击框上传 / 更换，旁边那颗清除。和书名一样只动草稿，点「保存」才落盘。
+  if (el.wb.cover) el.wb.cover.addEventListener('click', pickWorldbookCover);
+  if (el.wb.btnClearCover) el.wb.btnClearCover.addEventListener('click', clearWorldbookCover);
+
   el.wb.opening.addEventListener('input', () => {
     const draft = currentDraft();
     if (!draft) return;
@@ -203,6 +208,7 @@ function draftFor(book) {
     draft = {
       name: book.name || '未命名世界书',
       opening: book.opening || '',
+      cover: typeof book.cover === 'string' ? book.cover : '',
       entries: cloneEntries(book.entries),
       dirty: false,
       isNew: false
@@ -264,6 +270,7 @@ function commitDraft(bookId) {
 
   book.name = String(draft.name || '').trim().slice(0, 120) || '未命名世界书';
   book.opening = String(draft.opening || '').slice(0, 4000);
+  book.cover = String(draft.cover || '');
   book.entries = cloneEntries(draft.entries);
   book.updatedAt = now();
 
@@ -343,6 +350,87 @@ function currentEntry() {
   const draft = currentDraft();
   if (!draft) return null;
   return draft.entries.find((e) => e.id === editingEntryId) || null;
+}
+
+// ---------------------------------------------------------------------------
+//  封面
+//
+//  一张 2:3 竖版图，铺在世界书列表的卡片上 —— 比例和角色形象完全一致，
+//  所以直接复用 ui/imageCrop.js 那套（它按目标尺寸输出，这里不再二次缩放）。
+//
+//  它是**草稿的一部分**（不是立刻落盘的外挂字段）：点页头「保存」才写回书里，
+//  和书名 / 开场白同一条规矩。不保存关掉就还原。
+// ---------------------------------------------------------------------------
+
+// 输出 800×1200。
+// ⚠️ 为什么比角色形象（1024×1536）小一档：卡片上只显示 ~170px 宽，
+//    「worldbooks.json 是整库覆盖写」——改一个字就要重写整个文件，
+//    几十本书各带一张封面时，体积是实打实的保存耗时。800 宽在列表里和
+//    1024 看不出差别。
+// ⚠️ 2:3 才对应 800×1200。改比例要三处一起改：这里、style.css 的
+//    .wb-cover-frame、以及 #wb-page-grid .wb-card-cover 的 aspect-ratio。
+const WB_COVER_RATIO = 2 / 3;
+const WB_COVER_WIDTH = 800;
+
+/** 画编辑器里那个封面框（有图 / 空 两态） */
+function renderWorldbookCover() {
+  const box = el.wb.cover;
+  if (!box) return;
+
+  const draft = currentDraft();
+  const cover = draft && typeof draft.cover === 'string' ? draft.cover : '';
+
+  box.innerHTML = '';
+  if (cover) {
+    const img = document.createElement('img');
+    img.src = cover;
+    img.alt = '';
+    box.appendChild(img);
+  } else {
+    const span = document.createElement('span');
+    span.className = 'wb-cover-empty';
+    span.textContent = '点击上传';
+    box.appendChild(span);
+  }
+
+  box.classList.toggle('has', !!cover);
+  box.title = cover
+    ? '点击更换封面'
+    : '点击上传封面（2:3 竖版，铺在世界书列表的卡片上）';
+  if (el.wb.btnClearCover) el.wb.btnClearCover.classList.toggle('hidden', !cover);
+}
+
+/** 点击封面框：选图 → 裁剪 → 落进草稿（不落盘） */
+async function pickWorldbookCover() {
+  const draft = currentDraft();
+  if (!draft) return;
+
+  const cropped = await pickAndCrop({
+    aspect: WB_COVER_RATIO,
+    outWidth: WB_COVER_WIDTH,
+    title: '裁剪世界书封面',
+    hint: '世界书列表上铺满整张卡的就是这一块',
+    pickTitle: '选一张封面'
+  });
+  if (!cropped) return;
+
+  // 浮层是异步的，回来时重新取一次草稿 —— 别写进已经切走的那一本
+  const target = currentDraft();
+  if (!target) return;
+  target.cover = cropped;
+  markDraftDirty();
+  renderWorldbookCover();
+  showToast('封面已更换，记得点「保存」', 'ok');
+}
+
+/** 清除封面（退回「世」字占位块）—— 同样只动草稿 */
+function clearWorldbookCover() {
+  const draft = currentDraft();
+  if (!draft || !draft.cover) return;
+  draft.cover = '';
+  markDraftDirty();
+  renderWorldbookCover();
+  showToast('封面已清除，记得点「保存」');
 }
 
 /** 把世界书表单里的内容写进草稿（书名 + 开场白）。不落盘，只改内存里的那一份 */
@@ -509,6 +597,7 @@ function selectWorldbook(id) {
   if (!book) {
     editingEntryId = null;
     showEntryForm(false);
+    renderWorldbookCover();
     renderWorldbookChars();
     renderDirtyHint();
     return;
@@ -518,6 +607,7 @@ function selectWorldbook(id) {
   const draft = draftFor(book);
   el.wb.name.value = draft.name;
   el.wb.opening.value = draft.opening;
+  renderWorldbookCover();
   el.wb.entryCount.textContent = wbEntryCountText(draft.entries);
   // 底部提示写的是**落盘过的**书名：一眼分得清「界面上在改什么」和「盘上是什么」
   el.wb.footHint.textContent = `「${book.name}」只保存在你自己电脑上`;
@@ -979,6 +1069,9 @@ function newWorldbook() {
   const book = {
     id: `w${uid()}`,
     name: '新世界书',
+    opening: '',
+    // 新书没有封面 —— 卡片上先是「世」字占位块，进编辑器点一下就换掉
+    cover: '',
     entries: [],
     characters: [],
     createdAt: now(),
@@ -1407,6 +1500,11 @@ async function exportWorldbook() {
     title: '导出世界书',
     fileName: `${safeFileName(draft.name)}.json`,
     filters: [{ name: '世界书 JSON（酒馆可直接导入）', extensions: ['json'] }],
-    text: JSON.stringify(worldbookPayload({ ...book, name: draft.name, entries: draft.entries }), null, 2)
+    // cover 也带上（导出的永远是界面上这份草稿）—— 少了它，「导出再导回来」就是丢封面
+    text: JSON.stringify(
+      worldbookPayload({ ...book, name: draft.name, entries: draft.entries, cover: draft.cover }),
+      null,
+      2
+    )
   });
 }

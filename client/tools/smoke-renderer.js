@@ -3938,8 +3938,8 @@ await scenario('世界书：放弃未保存的改动', async () => {
   const names = (await savedWorldbooks()).map((b) => b.name);
   check('放弃之后改的名字没落盘', !names.includes('改了一半的名字'), JSON.stringify(names));
   check('列表页卡片还是落盘过的那个名字',
-    $$('#wb-page-grid .char-card-name').some((n) => n.textContent === '冒烟测试世界'),
-    JSON.stringify($$('#wb-page-grid .char-card-name').map((n) => n.textContent)));
+    $$('#wb-page-grid .wb-card-name').some((n) => n.textContent === '冒烟测试世界'),
+    JSON.stringify($$('#wb-page-grid .wb-card-name').map((n) => n.textContent)));
 });
 
 // ---------------------------------------------------------------------------
@@ -6372,7 +6372,7 @@ await scenario('状态卡：点头像查看与编辑', async () => {
 //    · 点「保存」之后才真的落盘，两本书各是各的名字。
 // ---------------------------------------------------------------------------
 await scenario('世界书：切书时旧表单不能盖住新书', async () => {
-  const namesOnPage = () => $$('#wb-page-grid .char-card-name').map((n) => n.textContent);
+  const namesOnPage = () => $$('#wb-page-grid .wb-card-name').map((n) => n.textContent);
   const cardNamed = (name) => $$('#wb-page-grid .char-card').find((c) => c.title === name);
 
   click('#btn-worldbooks');
@@ -6460,7 +6460,7 @@ await scenario('世界书：卡片上删除', async () => {
   await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
   await sleep(200);
 
-  const namesOnPage = () => $$('#wb-page-grid .char-card-name').map((n) => n.textContent);
+  const namesOnPage = () => $$('#wb-page-grid .wb-card-name').map((n) => n.textContent);
   const card = $$('#wb-page-grid .char-card').find((c) => c.title === '待删的临时世界');
   check('新建的书出现在列表页上', !!card, JSON.stringify(namesOnPage()));
   if (!card) return;
@@ -6483,6 +6483,90 @@ await scenario('世界书：卡片上删除', async () => {
   check('卡片被删掉了', !namesOnPage().includes('待删的临时世界'), JSON.stringify(namesOnPage()));
   const after = (await savedWorldbooks()).map((b) => b.name);
   check('卡片上删除也落了盘', !after.includes('待删的临时世界'), JSON.stringify(after));
+});
+
+// ---------------------------------------------------------------------------
+//  场景 26c：世界书封面（2026-10-14 新增的功能）
+//
+//  封面是**草稿的一部分** —— 和书名 / 开场白同一条规矩：点「保存」才写盘、
+//  才在列表卡上露头。这条场景把这条规矩钉住，同时验证两个容易静默失效的点：
+//    · 裁剪输出的比例是 2:3（800×1200，和角色形象同为 2:3 但小一档）；
+//    · **落盘白名单**。normalizeWorldbook 是白名单式的，加字段忘了同步就是
+//      「界面上看得见、重启就没了」—— 这种 bug 不报错，只有落盘断言能抓住。
+// ---------------------------------------------------------------------------
+await scenario('世界书：封面', async () => {
+  const NAME = '封面测试世界';
+  const cardNamed = (name) => $$('#wb-page-grid .char-card').find((c) => c.title === name);
+
+  click('#btn-worldbooks');
+  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
+
+  // 新建一本。还没保存，所以列表页上暂时没有它 —— 断言卡片的事都放到保存之后
+  click('#btn-new-worldbook');
+  await waitFor('世界书编辑器打开', () => shown('#view-wb-editor'));
+  await sleep(150);
+  setValue('#wb-name', NAME);
+  await sleep(120);
+
+  check('新书一开始是「点击上传」', !!byId('wb-cover').querySelector('.wb-cover-empty'));
+  check('没图的时候「清除」是藏着的', byId('btn-clear-wb-cover').classList.contains('hidden'));
+
+  // 传封面：点框 → 弹裁剪浮层 → 「用这块」
+  click('#wb-cover');
+  await waitFor('封面裁剪浮层弹出来了', () => !!byId('crop-layer'));
+  check('裁剪标题是「裁剪世界书封面」', byId('crop-layer').textContent.includes('裁剪世界书封面'));
+  click('#crop-ok');
+  // dataURL 的解码是异步的，等到宽度出来再断言，别读到 0
+  await waitFor('封面按 800 宽落进框里', () => {
+    const i = byId('wb-cover').querySelector('img');
+    return !!i && i.naturalWidth === 800;
+  });
+
+  const cvImg = byId('wb-cover').querySelector('img');
+  check(
+    '封面按 2:3 裁（800×1200）',
+    !!cvImg && cvImg.naturalWidth === 800 && cvImg.naturalHeight === 1200,
+    cvImg ? `${cvImg.naturalWidth}×${cvImg.naturalHeight}` : '框里没图'
+  );
+  check('有图之后「清除」露出来了', !byId('btn-clear-wb-cover').classList.contains('hidden'));
+
+  // 保存 —— 到这一刻卡片上才该有封面
+  click('#btn-save-wb');
+  await sleep(350);
+  const card = () => cardNamed(NAME);
+  check('卡片上有封面图了', !!card() && !!card().querySelector('.wb-card-cover img'));
+  check('有封面时不再显示「世」字占位块', !!card() && !card().querySelector('.wb-card-glyph'));
+
+  click('#btn-close-worldbooks');
+  await waitFor('世界书编辑器关闭', () => !shown('#view-wb-editor'));
+  await sleep(200);
+
+  const saved = (await savedWorldbooks()).find((b) => b.name === NAME);
+  check(
+    '封面落盘了（normalizeWorldbook 的白名单里有 cover）',
+    !!saved && String(saved.cover).startsWith('data:image/'),
+    String(saved && saved.cover).slice(0, 24)
+  );
+
+  // 再进去一次：封面该从盘上读回来、填进框里
+  click(buttonByText(cardNamed(NAME), '编辑'));
+  await waitFor('世界书编辑器又打开了', () => shown('#view-wb-editor'));
+  await sleep(250);
+  check('重新打开时封面框里有图（从盘上读回来了）', !!byId('wb-cover').querySelector('img'));
+
+  // 清除：同样只动草稿，保存后才落盘
+  click('#btn-clear-wb-cover');
+  await sleep(150);
+  check('点「清除」后框里回到「点击上传」', !!byId('wb-cover').querySelector('.wb-cover-empty'));
+  click('#btn-save-wb');
+  await sleep(350);
+  click('#btn-close-worldbooks');
+  await waitFor('世界书编辑器关闭（第二次）', () => !shown('#view-wb-editor'));
+  await sleep(200);
+
+  check('卡片退回「世」字占位块', !!card() && !!card().querySelector('.wb-card-glyph'));
+  const after = (await savedWorldbooks()).find((b) => b.name === NAME);
+  check('清除也落了盘（cover 是空串）', !!after && after.cover === '', JSON.stringify(after && after.cover));
 });
 
 // ---------------------------------------------------------------------------

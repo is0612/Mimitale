@@ -706,6 +706,23 @@
         <section class="wb-book">
           <div class="wb-book-title">本书设置</div>
 
+          <!-- 封面：铺在世界书列表卡片上的那张 2:3 竖版图（和角色形象同一个比例，
+               走同一个裁剪组件）。点击上传 → 结果先落**草稿**，点页头「保存」才写盘 ——
+               和书名 / 开场白同一条规矩，不保存关掉就还原。 -->
+          <div class="wb-cover">
+            <span class="field-label">封面</span>
+            <div class="wb-cover-row">
+              <button id="wb-cover" class="wb-cover-frame" type="button"
+                      title="点击上传封面（2:3 竖版，铺在世界书列表的卡片上）" aria-label="上传世界书封面">
+                <span class="wb-cover-empty">点击上传</span>
+              </button>
+              <div class="wb-cover-side">
+                <button id="btn-clear-wb-cover" class="btn btn-ghost btn-sm hidden" type="button">清除</button>
+              </div>
+            </div>
+            <span class="field-help wb-cover-help">点图片上传或更换；没封面时卡片上是「世」字块。</span>
+          </div>
+
           <label class="field field-stack wb-book-name">
             <span class="field-label">书名</span>
             <input id="wb-name" type="text" spellcheck="false" placeholder="世界书名称" aria-label="世界书名称" />
