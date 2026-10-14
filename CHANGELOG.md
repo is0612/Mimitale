@@ -4,6 +4,59 @@
 
 ---
 
+## 2026-10-14 第二十六批：开发时热重载（改主进程也不用重启了）
+
+一句话：以前「改了代码得自己关窗口重开」，现在 `npm run dev` 之后 ——
+改界面保存即刷新，改主进程自动重启应用。
+
+### 起因
+
+星宝问「这个项目好像不能热更新」。查下来是**有半套**：`main/window.js` 里本来就写了
+dev 模式监听 `renderer/` 并 reload，但
+
+- 只在 `electron . --dev` 下生效，启动器和 `npm start` 都不带它；
+- `"dev": "electron . --dev"` 还**漏了 `--no-sandbox`** —— 本机火绒拦 Electron 沙箱时，
+  启动器有兜底（崩了换 `--no-sandbox` 重试 + 落 `.mimitale-no-sandbox` 标记），
+  dev 脚本绕过了那套兜底，于是出现「双击启动器能开、`npm run dev` 闪一下就没」。
+
+### 改法
+
+| 文件 | 改动 |
+| --- | --- |
+| `client/tools/dev.js` | **新增**。开发模式启动器：清掉继承来的 `ELECTRON_RUN_AS_NODE`；跟启动器共用沙箱标记，崩了就 `--no-sandbox` 重试一次并记住 |
+| `client/package.json` | `dev` 从 `electron . --dev` 改成 `node tools/dev.js` |
+| `client/main/window.js` | 监听从「只有 renderer」扩成三路，并按「让改动生效要多大代价」分档 |
+| `使用说明.md` | 「开发的时候怎么改」一节跟着改（原来写着「改 `main.js` / `preload.js` 必须重启」） |
+
+### 三路监听
+
+| 改动 | 反应 | 为什么 |
+| --- | --- | --- |
+| `renderer/**`、根目录 `preload.js` | 刷新窗口 | 这些文件每次 reload 都会重新加载 / 重新注入 |
+| `main.js`、`main/**`、`preload-pet.js` | **重启应用** | 主进程代码只在启动时读一次，Electron 没有「只重启主进程」这回事 |
+
+### ⚠️ 四个坑
+
+- **刷新要用 `reloadIgnoringCache()`**。`file://` 下的脚本会被 Chromium 记住，
+  普通 `reload()` 偶尔仍吃旧代码 —— 「改了怎么没生效」多半是这么来的。
+- **重启要用 `app.quit()`，不能用 `app.exit()`**。`exit()` 跳过 `before-quit`，
+  而桌宠位置落盘和单实例标记清理都挂在 `before-quit` 上（见 `main.js`）。
+- **别用 `fs.watch` 盯单个文件**。编辑器保存是「写临时文件再改名」，盯单文件的 watcher
+  会跟丢目标；改成「监听项目根目录（非递归）+ 按文件名白名单过滤」。
+  非递归还有个附带好处：`data/` 里的读写（会话 / 角色 / 宠物位置）打不进来。
+- **`app.relaunch()` 要显式传 `process.argv.slice(1)`**，否则 `--dev`、`--no-sandbox`
+  这些开关会在重启后丢掉。
+
+### 验证
+
+- 三路监听各自触发正确（分别 `touch` `renderer/style.css`、`main/presets.js`、`main.js`，
+  终端分别报 `renderer/` / `main/` / `main.js`）✓
+- 改 `main/` 后 `app.relaunch()` 生效，新进程正常起来（启动路径的日志照旧打在同一个终端）✓
+- 验证时数据目录**隔离在临时 `--user-data-dir` 下**，`client/data/` 的六份数据
+  与各自 `.backup` 字节数完全一致，未被触碰 ✓
+
+---
+
 ## 2026-10-14 第二十五批：修「重启后对话区抓手回到默认位置」
 
 一句话：拖抓手调过内缩之后重启软件，抓手会跑回默认的 20px 处 ——

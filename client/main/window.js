@@ -3,11 +3,20 @@
 // ============================================================================
 //  main/window.js —— 主窗口 + 开发模式热重载
 //
-//  跑 `npm run dev`（等价于 electron . --dev）时会：
-//    · 自动打开 DevTools
-//    · 监听 renderer/ 目录，文件一保存就自动刷新窗口
-//  改界面（html/css/js）完全不用重启应用。
-//  改 main.js / main/* / preload.js 仍然要重启 —— 它们只在启动时读一次。
+//  跑 `npm run dev` 时会自动打开 DevTools，并按「让改动生效要多大代价」分两档监听：
+//
+//    · 界面层（renderer/** 和根目录的 preload.js）
+//        保存即刷新窗口。这些文件每次 reload 都会重新加载 / 重新注入，本来就不用重启。
+//        用 reloadIgnoringCache() 而不是 reload()：file:// 下的脚本/样式会被 Chromium
+//        记住，普通 reload() 偶尔仍吃旧代码 —— 「改了怎么没生效」多半是这么来的。
+//
+//    · 主进程（main.js、main/**、preload-pet.js）
+//        整进程重启（app.relaunch + app.quit()）。主进程代码只在启动时读一次，
+//        Electron 也没有「只重启主进程」这回事，只能重开一个进程。
+//        ⚠️ 用 quit() 不用 exit()：exit() 跳过 before-quit，而桌宠位置落盘和单实例
+//           标记清理都挂在 before-quit 上（见 main.js）。
+//
+//  改动有没有被接住，看终端里的 [dev] 行。
 // ============================================================================
 
 const { app, BrowserWindow, shell } = require('electron');
@@ -48,35 +57,90 @@ const WINDOW_SIZE = {
 const DEV_MODE =
   process.argv.includes('--dev') || process.env.MIMITALE_OPEN_DEVTOOLS === '1';
 
-let devWatcher = null;
+// 编辑器保存一次往往触发好几个事件（写临时文件 → rename），稍微微防抖一下。
+const DEV_DEBOUNCE_MS = 150;
+
+let devWatchers = [];
 let devReloadTimer = null;
+let devRelaunchTimer = null;
+let devRelaunching = false;
+
+function addDevWatcher(target, options, onChange) {
+  try {
+    const watcher = fs.watch(target, options, (eventType, filename) => onChange(filename || ''));
+    // watcher 自己也可能是错误来源，不接住这个事件就是进程级未捕获异常
+    watcher.on('error', (err) => console.warn('[dev] 监听中断:', target, '-', err.message));
+    devWatchers.push(watcher);
+  } catch (err) {
+    console.warn('[dev] 监听不了', target, '- 自动刷新对它不生效:', err.message);
+  }
+}
+
+/** 界面层改动：刷新窗口就够，不必重启 */
+function scheduleDevReload(reason) {
+  clearTimeout(devReloadTimer);
+  devReloadTimer = setTimeout(() => {
+    if (devRelaunching) return; // 整进程都要重启了，这次刷新没意义
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    console.log(`[dev] ${reason} 有改动，刷新窗口`);
+    mainWindow.webContents.reloadIgnoringCache();
+  }, DEV_DEBOUNCE_MS);
+}
+
+/** 主进程改动：没有别的办法，只能重开一个进程 */
+function scheduleDevRelaunch(reason) {
+  clearTimeout(devRelaunchTimer);
+  devRelaunchTimer = setTimeout(() => {
+    if (devRelaunching) return;
+    devRelaunching = true; // 已经排上队了，后面的改动不用再排一次
+    console.log(`[dev] ${reason} 有改动，重启应用`);
+    // 显式把当前 argv 传下去，--dev 和 --no-sandbox 才不会丢
+    app.relaunch({ args: process.argv.slice(1) });
+    app.quit();
+  }, DEV_DEBOUNCE_MS);
+}
+
+// 项目根下这几个文件的代价不一样：
+//   preload.js      每次窗口 reload 都会重新注入 —— 刷新就生效
+//   preload-pet.js  属于宠物窗口那一侧 —— 跟着整进程重启最省事
+// 监听方式是「监听根目录 + 按文件名过滤」，不用 fs.watch 盯单个文件：
+// 编辑器保存是「写临时文件再改名」，盯单文件的 watcher 会跟丢目标。
+const ROOT_RELOAD_FILES = new Set(['preload.js']);
+const ROOT_RELAUNCH_FILES = new Set(['main.js', 'preload-pet.js']);
 
 function watchRendererForDev() {
-  if (!DEV_MODE || devWatcher) return;
+  if (!DEV_MODE || devWatchers.length) return;
 
-  try {
-    devWatcher = fs.watch(path.join(__dirname, '..', 'renderer'), { recursive: true }, () => {
-      // 编辑器保存一次往往触发好几个事件，稍微防抖一下
-      clearTimeout(devReloadTimer);
-      devReloadTimer = setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          console.log('[dev] renderer 有改动，刷新窗口');
-          mainWindow.webContents.reload();
-        }
-      }, 150);
-    });
-  } catch (err) {
-    console.warn('[dev] 无法监听 renderer 目录，自动刷新不可用:', err.message);
-  }
+  const rootDir = path.join(__dirname, '..');
+
+  // 界面层：整个 renderer/ 目录，递归
+  addDevWatcher(path.join(rootDir, 'renderer'), { recursive: true }, () => scheduleDevReload('renderer/'));
+
+  // 主进程：main/ 目录递归
+  addDevWatcher(path.join(rootDir, 'main'), { recursive: true }, () => scheduleDevRelaunch('main/'));
+
+  // 根目录：**非递归** —— 只报直接子项的变化，data/ 里的读写（会话、角色、宠物位置）
+  // 打不进来。即便如此也还是按文件名白名单过滤一遍，因为根目录下还住着
+  // assets/、node_modules/、generated-images/ 这些会被频繁碰的东西。
+  addDevWatcher(rootDir, { recursive: false }, (filename) => {
+    if (ROOT_RELOAD_FILES.has(filename)) return scheduleDevReload(filename);
+    if (ROOT_RELAUNCH_FILES.has(filename)) return scheduleDevRelaunch(filename);
+  });
 }
 
 function stopDevWatcher() {
   clearTimeout(devReloadTimer);
+  clearTimeout(devRelaunchTimer);
   devReloadTimer = null;
-  if (devWatcher) {
-    devWatcher.close();
-    devWatcher = null;
+  devRelaunchTimer = null;
+  for (const watcher of devWatchers) {
+    try {
+      watcher.close();
+    } catch (err) {
+      // 关不掉无所谓 —— 能走到这儿一般就是进程要退了
+    }
   }
+  devWatchers = [];
 }
 
 function createWindow() {
