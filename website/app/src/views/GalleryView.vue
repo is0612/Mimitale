@@ -27,11 +27,8 @@ import { SITE } from '@/config/site'
       </p>
 
       <div class="placeholder">
-        <p>
-          真要开的时候：站内图片直接把地址写进 <code>public/photos.json</code> 就能显示；
-          但<b>让访客自己上传</b>需要后端（对象存储 + 上传接口），
-          本地静态站做不到 —— 到那一步再单独决定。
-        </p>
+        <p>作品展示区尚未开放。你可以先在客户端创建角色、搭建世界，并导出自己的作品。</p>
+        <RouterLink class="btn btn-primary" to="/download">开始创作<span class="arw">→</span></RouterLink>
         <a class="btn btn-ghost" :href="SITE.repo" target="_blank" rel="noopener">
           先去 GitHub 看看<span class="arw">→</span>
         </a>

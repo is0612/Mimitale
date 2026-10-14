@@ -15,9 +15,10 @@ useRise()
   <div class="lamp" aria-hidden="true"></div>
   <div class="grain" aria-hidden="true"></div>
 
+  <a class="skip-link" href="#top">跳到主要内容</a>
   <SiteHeader />
 
-  <main id="top">
+  <main id="top" tabindex="-1">
     <RouterView />
   </main>
 

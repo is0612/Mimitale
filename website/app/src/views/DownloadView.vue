@@ -5,16 +5,7 @@ import { useReleases } from '@/composables/useReleases'
 import { SITE } from '@/config/site'
 import type { Release, ReleaseAsset } from '@/types/release'
 
-/**
- * 安装包页。
- *
- * 整页内容都从 `public/releases.json` 来 —— 加一个版本要做的只有两件事：
- *   ① 把安装包丢进 `public/downloads/`
- *   ② 往 releases.json 里加一条
- * 不用改这里的任何代码，甚至不用重新构建前端（把 JSON 覆盖到服务器上就行）。
- */
-
-const { manifest, loading, load } = useReleases()
+const { manifest, loading, failed, load } = useReleases()
 
 onMounted(() => {
   void load()
@@ -46,28 +37,6 @@ function ready(asset: ReleaseAsset): boolean {
   return asset.file.trim().length > 0
 }
 
-// ⚠️ 这段是要展示给维护者抄的示例，里面不能出现连续两个左花括号
-//（那会被 Vue 当成插值，编译不过）。
-const EXAMPLE = `{
-  "latest": "0.1.0",
-  "releases": [
-    {
-      "version": "0.1.0",
-      "date": "2026-10-13",
-      "title": "第一个公测版",
-      "notes": "首版。\\n角色卡、世界书、状态面板、桌宠都能用。",
-      "assets": [
-        {
-          "platform": "windows",
-          "label": "Windows 安装包 (.exe)",
-          "file": "/downloads/NocturneTavern-Setup-0.1.0.exe",
-          "size": "78.2 MB",
-          "sha256": "（可选，填了就会显示出来）"
-        }
-      ]
-    }
-  ]
-}`
 </script>
 
 <template>
@@ -77,14 +46,22 @@ const EXAMPLE = `{
         <span class="lampblock lampblock--sm" aria-hidden="true"></span>
         <span class="sec-kicker">Download</span>
       </div>
-      <h2>把窗口打开</h2>
+      <h1 class="page-title">把窗口打开</h1>
       <p class="sec-sub">
-        安装包和源码两条路，挑一条走。装好之后在<b class="hl">设置</b>里填一次模型接口，
-        就可以开始了。
+        选择安装包，或从源码启动。默认通过模型 API 对话，无需高性能显卡；
+        启动后在<b class="hl">设置</b>里配置服务商与 API Key。
+        模型调用可能产生费用，由服务商按其规则收费。
       </p>
 
       <!-- —————————————— 加载中 —————————————— -->
-      <p v-if="loading" class="muted">正在读安装包清单…</p>
+      <p v-if="loading" class="muted" role="status" aria-live="polite">正在读取安装包清单…</p>
+
+      <!-- —————————————— 清单读取失败 —————————————— -->
+      <div v-else-if="failed" class="empty">
+        <h3>暂时无法读取下载列表</h3>
+        <p role="alert">可能是网络连接或下载服务暂时不可用。请重试，也可以先按下方步骤从源码启动。</p>
+        <button class="btn btn-ghost" type="button" @click="load">重新加载<span class="arw">↻</span></button>
+      </div>
 
       <!-- —————————————— 还没有安装包 —————————————— -->
       <template v-else-if="!latest">
@@ -94,24 +71,14 @@ const EXAMPLE = `{
           </div>
           <h3>安装包正在准备中</h3>
           <p>
-            第一版还在打包。可以先<b>从源码跑起来</b>（见下方），
-            或者等安装包放上来 —— 到时候这一页会自动换成下载列表。
+            当前还没有可下载的安装包。可以先按下方步骤<b>从源码启动</b>，
+            或稍后回来查看发布情况。
           </p>
           <a class="btn btn-ghost" :href="SITE.repo" target="_blank" rel="noopener">
             去 GitHub 看源码<span class="arw">→</span>
           </a>
         </div>
 
-        <!-- 给维护者看的：折叠起来，公开页面上不碍眼 -->
-        <details class="admin-note">
-          <summary>填清单的说明（站长看，可折叠）</summary>
-          <p>
-            把安装包放进 <code>public/downloads/</code>，然后往
-            <code>public/releases.json</code> 里写一条 —— 上面的下载卡片就会自动出现。
-            也可以把 <code>file</code> 直接写成外链（CDN / GitHub Release 都行）。
-          </p>
-          <pre>{{ EXAMPLE }}</pre>
-        </details>
       </template>
 
       <!-- —————————————— 有安装包 —————————————— -->
@@ -172,7 +139,13 @@ const EXAMPLE = `{
           <span class="lampblock lampblock--sm" aria-hidden="true"></span>
           <span class="sec-kicker">From source</span>
         </div>
-        <h3 class="source-title">不想等安装包，就从源码跑</h3>
+        <h3 class="source-title">从源码启动</h3>
+        <p class="source-intro">
+          这条路线需要 Node.js 18+；使用安装包无需另装 Node.js。
+          先<a :href="SITE.repo" target="_blank" rel="noopener">获取 GitHub 仓库</a>：
+          可以用下面的 Git 命令，或在仓库页选择 Code → Download ZIP，解压后在所得文件夹中打开终端，
+          执行 <code>cd client</code>、<code>npm install</code>、<code>npm start</code>。
+        </p>
 
         <div class="start">
           <div class="term">
@@ -181,28 +154,28 @@ const EXAMPLE = `{
               <span>终端</span>
             </div>
             <div class="term-body">
-              <div class="cmt"># 客户端代码都在 client/ 里，先进去</div>
-              <div class="cmd">cd client</div>
-              <div class="cmt"># 首次会下载约 100MB 的 Electron 运行时</div>
+              <div class="cmt"># 先用 Git 获取仓库（需要已安装 Git）</div>
+              <div class="cmd">git clone {{ SITE.repo }}.git Mimitale</div>
+              <div class="cmd">cd Mimitale/client</div>
+              <div class="cmt"># 首次安装会下载依赖和 Electron 运行时</div>
               <div class="cmd">npm install</div>
               <div class="cmd">npm start</div>
-              <div class="out">Electron 已就绪 —— 窗口打开了</div>
             </div>
           </div>
 
           <ol class="steps">
             <li>
-              <b>要有 Node.js 18+</b>
-              Windows / macOS / Linux 都行。Windows 用户也可以直接双击
-              <code>client\Start-Mimitale.cmd</code>，它会自己检查环境、自动装依赖。
+              <b>源码启动需 Node.js 18+</b>
+              Windows / macOS / Linux 均可。选择预构建安装包则无需单独安装 Node.js。
             </li>
             <li>
-              <b>填一次模型接口</b>
-              启动后点左下角「设置」，从内置预设里挑一家填上 API Key。只填一次。
+              <b>配置服务商和 API Key</b>
+              在左下角「设置」中选择模型服务商并填写该服务商签发的 API Key。
+              是否收费、价格和计费方式由服务商决定；请先查看其当前定价，密钥不要分享给他人。
             </li>
             <li>
-              <b>把角色卡拖进来</b>
-              酒馆用的 PNG 卡直接导入，设定、头像、开场白、内嵌世界书一起到位。
+              <b>在角色库导入角色卡</b>
+              打开「角色库」，点击「导入角色」按钮选择 PNG 角色卡，再选择角色开始对话。
             </li>
           </ol>
         </div>
@@ -212,6 +185,23 @@ const EXAMPLE = `{
 </template>
 
 <style scoped>
+.page-title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(28px, 3.6vw, 40px);
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  margin: 0 0 var(--s4);
+  text-wrap: balance;
+}
+.source-intro {
+  color: var(--text-dim);
+  font-size: 14.5px;
+  line-height: 1.85;
+  margin: 0 0 var(--s5);
+}
+.source-intro a { color: var(--lamp); text-decoration: underline; text-underline-offset: 3px; }
+.term .cmd { overflow-wrap: anywhere; }
 .hl { color: var(--text); font-weight: 600; }
 .muted { color: var(--text-faint); font-size: 14px; }
 
@@ -244,40 +234,6 @@ const EXAMPLE = `{
   margin: 0 auto var(--s5);
 }
 .empty p b { color: var(--text); font-weight: 600; }
-
-/* 站长说明：折叠着，公开页面上不占地方 */
-.admin-note {
-  margin-top: var(--s5);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  padding: var(--s3) var(--s4);
-}
-.admin-note summary {
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--text-faint);
-  font-family: var(--font-mono);
-  letter-spacing: 0.04em;
-}
-.admin-note p {
-  font-size: 13.5px;
-  color: var(--text-dim);
-  line-height: 1.8;
-  margin: var(--s4) 0;
-}
-.admin-note pre {
-  margin: 0;
-  padding: var(--s4);
-  overflow-x: auto;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--text-dim);
-}
 
 /* ------------------------------ 版本头 ------------------------------ */
 .ver-head {

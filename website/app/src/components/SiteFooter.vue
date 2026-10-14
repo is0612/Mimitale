@@ -61,7 +61,7 @@ const DEEP_LINKS = [
 
       <div class="foot-bottom">
         <span>{{ SITE.license }} License · {{ SITE.name }} {{ SITE.latin }}</span>
-        <span>本地运行 · 没有服务器 · 数据不出本机</span>
+        <span>本地保存 · 自选模型 · API 直连</span>
       </div>
     </div>
   </footer>

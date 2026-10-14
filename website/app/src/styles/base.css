@@ -94,6 +94,10 @@ body {
 }
 
 a { color: inherit; text-decoration: none; }
+.skip-link { position: fixed; top: 8px; left: 8px; z-index: 100; padding: 10px 16px; background: var(--lamp); color: var(--on-lamp); transform: translateY(-160%); }
+.skip-link:focus { transform: none; }
+main:focus { outline: none; }
+p { overflow-wrap: anywhere; }
 
 :focus-visible {
   outline: 2px solid var(--lamp);

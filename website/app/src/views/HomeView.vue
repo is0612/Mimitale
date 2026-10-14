@@ -6,10 +6,26 @@
  * 手写 —— 那些文案各自不同，抽成数据反而更难改。
  */
 
+import { SITE, DOC_LINKS } from '@/config/site'
+
+const SCENES = [
+  { no: '01', title: '和角色聊一场', desc: '导入你熟悉的角色卡，选一条开场白。从日常陪伴到剧情互动，让性格、语气和关系都有延续。' },
+  { no: '02', title: '走进自己的世界', desc: '用世界书组织地点、阵营和背景，让 AI 以 GM 模式扮演世界与 NPC。你决定行动，故事逐轮展开。' },
+  { no: '03', title: '试写另一种结局', desc: '调整叙述视角、推进节奏和文风预设，在分支与存档点之间试走不同路线，积累自己的故事素材。' }
+]
+const FAQ = [
+  { q: '需要什么才能开始？', a: '一台电脑、一个支持的模型接口，以及对应的 API Key。源码运行还需要 Node.js 18+；安装包的可用平台以下载页实际发布内容为准。' },
+  { q: '模型费用怎么算？', a: '客户端源码以 MIT 协议开放。模型调用费用由你选择的提供商按其规则收取，不包含在客户端里；长上下文、语义检索、生图和桌宠可能产生额外调用。' },
+  { q: '需要好显卡，或者可以完全离线吗？', a: '默认通过 API 调用模型，不需要高性能显卡，但需要网络。也可以配置本机的 OpenAI 兼容服务；能否离线使用、运行什么模型，取决于该服务和你的硬件。' },
+  { q: '酒馆角色卡能直接用吗？', a: '支持 SillyTavern PNG 角色卡与 JSON v1 / v2 / v3，读取设定、头像、开场白和示例对话，也会处理内嵌世界书。复杂扩展、脚本或非标准字段不保证完全兼容，导入后建议检查。' },
+  { q: '长对话会一直记住所有细节吗？', a: '摘要、检索和状态面板帮助维持连续性，但模型仍可能遗漏或误判。重要设定建议写入世界书，关键数值交给状态面板，必要时编辑回复或回到存档点。' },
+  { q: '换电脑如何迁移？', a: '在客户端打开数据文件夹，关闭程序后备份整个 data 目录。记录、角色和世界书可迁移；API Key 的加密与系统环境有关，换电脑后可能需要重新填写。当前不提供自动跨设备同步。' }
+]
+
 /** 长对话那三件东西 */
 const FLOW = [
-  { no: '01 / SUMMARY', title: '分段记忆摘要', desc: '较早的对话压成摘要常驻在上下文里。聊多久，开局那一幕都还在。' },
-  { no: '02 / RAG', title: '语义检索', desc: '按「意思」把相关的旧内容和设定捞回来，不靠关键词字面命中。' },
+  { no: '01 / SUMMARY', title: '分段记忆摘要', desc: '较早的对话压成摘要常驻在上下文里。帮助保留重要人物、事件和约定，减少长剧情中的遗忘。' },
+  { no: '02 / RAG', title: '语义检索（可选）', desc: '配置嵌入模型并启用后，按语义找回相关旧内容和设定。嵌入调用可能产生额外费用。' },
   { no: '03 / BRANCH', title: '分支与存档点', desc: '走岔了能整个退回来。想看看另一条路会怎样，不用重开一局。' }
 ]
 
@@ -28,26 +44,28 @@ const SESSIONS = [
   <!-- ============================ Hero ============================ -->
   <section class="hero">
     <div class="wrap">
-      <span class="eyebrow"><i class="pulse"></i>本地运行 · 没有服务器 · MIT</span>
+      <span class="eyebrow"><i class="pulse"></i>桌面 AI 角色扮演 · 自带模型 API · MIT 开源</span>
 
-      <h1>一间只在<span class="lit">深夜</span>开门的酒馆</h1>
+      <h1>让角色有回应，<br>让故事由<span class="lit">你</span>续写</h1>
 
       <p class="lead">
-        本地运行的 AI 角色扮演客户端。直接导入酒馆（SillyTavern）的 PNG 角色卡，
-        世界书按关键词命中才注入，<strong>状态数值聊上百轮也不会漂</strong> ——
-        而聊天记录和 API Key，从始至终只待在你自己的机器上。
+        子夜酒馆（Mimitale）是运行在你电脑上的 AI 角色扮演与互动故事客户端。
+        导入角色卡、搭建世界、追踪人物状态，用自己选择的模型，
+        <strong>把一段对话，慢慢写成你的故事。</strong>
       </p>
 
       <div class="hero-cta">
-        <RouterLink class="btn btn-primary" to="/download">下载安装包<span class="arw">→</span></RouterLink>
+        <RouterLink class="btn btn-primary" to="/download">下载与开始<span class="arw">→</span></RouterLink>
         <RouterLink class="btn btn-ghost" :to="{ path: '/', hash: '#pieces' }">看看它有什么</RouterLink>
       </div>
 
+      <p class="hero-note">聊天记录保存在本机；生成回复需调用你配置的模型接口，费用按提供商规则计算。</p>
+
       <div class="facts">
-        <div><b>零</b> 构建步骤</div>
+        <div><b>角色</b> 与世界自由创作</div>
         <div><b>6</b> 家模型预设</div>
-        <div><b>PNG</b> 卡直接吃</div>
-        <div>数据 <b>不出本机</b></div>
+        <div><b>PNG / JSON</b> 角色卡导入</div>
+        <div>记录 <b>本地保存</b></div>
       </div>
     </div>
 
@@ -162,6 +180,16 @@ const SESSIONS = [
           </div>
         </div>
       </div>
+      <p class="mock-caption">客户端界面示意 · 展示对话与状态面板，实际布局以当前版本为准</p>
+    </div>
+  </section>
+
+  <section id="scenes" class="sec">
+    <div class="wrap">
+      <div class="sec-head rise"><span class="lampblock lampblock--sm" aria-hidden="true"></span><span class="sec-kicker">Your story</span></div>
+      <h2 class="rise">今晚，你想从哪一幕开始？</h2>
+      <p class="sec-sub rise">不只是问一句、答一句。让同一个角色、同一段关系、同一个世界，持续生长。</p>
+      <div class="flow rise"><div v-for="scene in SCENES" :key="scene.no"><span class="n">{{ scene.no }}</span><h3>{{ scene.title }}</h3><p>{{ scene.desc }}</p></div></div>
     </div>
   </section>
 
@@ -172,10 +200,10 @@ const SESSIONS = [
         <span class="lampblock lampblock--sm" aria-hidden="true"></span>
         <span class="sec-kicker">Four pieces</span>
       </div>
-      <h2 class="rise">角色卡管演谁，世界书管在哪儿<br>预设管怎么回，面板管记不记得住</h2>
+      <h2 class="rise">角色卡管演谁，世界书管在哪儿<br>预设管怎么回，面板管状态怎么变</h2>
       <p class="sec-sub rise">
-        酒馆里该有的四件事，一件都不少；每件都按<strong>能被程序接住</strong>的方式重做了一遍 ——
-        模型说的话，能落成数据。
+        从人物设定到世界规则，再到文风与数值，把影响体验的事情分开管理。
+        <strong>想换一位主角，不必重写整个世界。</strong>
       </p>
 
       <div class="cards">
@@ -187,11 +215,10 @@ const SESSIONS = [
           </div>
           <div>
             <p class="card-desc">
-              直接导入酒馆的 <strong>PNG 角色卡</strong> —— 解析 PNG 里的 <code>tEXt</code> 数据块，
-              设定、头像、开场白、示例对话一起读进来；JSON 卡 v1 / v2 / v3 也认，
-              连把开场白塞进 <code>chat_history</code> 的变体都认。也可以从头手写一个。
+              导入 SillyTavern 的 <strong>PNG / JSON 角色卡</strong>，把设定、头像、开场白和示例对话一起带进来。
+              也可以自己写角色、上传形象，为同一个人准备不同的入场剧本。
             </p>
-            <span class="quote">示例对话会变成真正的 user / assistant 消息一起发出去 —— 扮演质量的差距就在这儿。</span>
+            <span class="quote">用示例对话帮助模型理解语气；多条开场白，让同一个角色有不同的相遇方式。</span>
           </div>
         </article>
 
@@ -205,9 +232,9 @@ const SESSIONS = [
             <p class="card-desc">
               <strong>关键词命中才注入</strong>。一本书几百条设定，只有相关的那几条进上下文 ——
               四两拨千斤。条目命中后正文还能再触发别的条目，一路连锁。
-              副关键词、选择性逻辑、概率、常驻、扫描深度都有。
+              可配置常驻条目、扫描深度和触发条件，让设定在合适的时候出现。
             </p>
-            <span class="quote">「命中预览」会拿真实对话扫一遍，先告诉你这轮要注入哪几条，再发。</span>
+            <span class="quote">用「命中预览」检查哪些条目会进入上下文，让复杂世界也有迹可循。</span>
           </div>
         </article>
 
@@ -234,11 +261,11 @@ const SESSIONS = [
           </div>
           <div>
             <p class="card-desc">
-              模型每轮输出的状态栏会被<strong>解析出来单独保存</strong>，下一轮由程序权威注入 ——
-              所以聊再多轮，数值也不会因为历史被截断而开始乱编。数值带范围，超出自动拉回；
+              模型输出的状态栏会被<strong>解析并单独保存</strong>，下一轮再注入当前状态，
+              减少历史截断带来的数值丢失。数值带范围，超出自动拉回；
               字段能分组、能带变化规则，还能给每轮几个可点的剧情选项。
             </p>
-            <span class="quote">模型写 150/100，程序拉回 100/100 —— 不靠祈祷，靠代码。</span>
+            <span class="quote">例如好感度范围设为 0–100，越界数值会被校正；状态更新仍依赖模型的有效输出。</span>
           </div>
         </article>
       </div>
@@ -252,10 +279,10 @@ const SESSIONS = [
         <span class="lampblock lampblock--sm" aria-hidden="true"></span>
         <span class="sec-kicker">Long play</span>
       </div>
-      <h2 class="rise">聊到第一百轮，它还记得开局</h2>
+      <h2 class="rise">让长剧情，有迹可循</h2>
       <p class="sec-sub rise">
-        长对话不丢前文，靠的是三件东西叠着用 —— 不是把历史一股脑塞进上下文，
-        那既不省也不准。
+        用摘要保留脉络，用语义检索找回相关细节，用分支尝试另一条路。
+        减少反复解释背景，把上下文留给此刻正在发生的故事。
       </p>
 
       <div class="flow rise">
@@ -275,7 +302,7 @@ const SESSIONS = [
         <span class="lampblock lampblock--sm" aria-hidden="true"></span>
         <span class="sec-kicker">Any model</span>
       </div>
-      <h2 class="rise">哪家的模型都行，一个会话用一个</h2>
+      <h2 class="rise">模型由你选，会话各自记住</h2>
 
       <div class="models">
         <div class="rise">
@@ -289,8 +316,8 @@ const SESSIONS = [
             <span class="pill plus">+ 自定义 OpenAI 兼容</span>
           </div>
           <p class="pill-note">
-            API Key 用系统级 <code>safeStorage</code> 加密后落盘，
-            明面上不写进任何配置文件。
+            可测试连接、拉取可用模型；接口兼容性与可用能力以提供商为准。
+            API Key 使用系统级 <code>safeStorage</code> 加密后保存。
           </p>
         </div>
 
@@ -357,45 +384,43 @@ const SESSIONS = [
         <span class="lampblock lampblock--sm" aria-hidden="true"></span>
         <span class="sec-kicker">No server</span>
       </div>
-      <h2 class="rise">没有服务器，就没有「上传」这个词</h2>
+      <h2 class="rise">记录留在本机，数据流向说清楚</h2>
       <p class="sec-sub rise">
-        这个项目<strong>没有任何后台</strong>。主进程就是本地的 Node.js，跑在你自己的机器上。
-        这不是一句承诺，是它没有的东西 —— 想传也没地方传。
+        角色、世界书和聊天记录保存在你的电脑上；生成回复时，
+        <strong>所需的对话上下文会发送给你配置的模型提供商</strong>。
+        本地保存不等于离线推理，也不等于内容从不联网。
       </p>
 
       <div class="privacy rise">
         <div class="privacy-grid">
           <div class="privacy-col them">
-            <h3>一般的云端 AI</h3>
+            <h3>本地保存的内容</h3>
             <div class="flowchart">
-              <span class="node src">你的对话</span>
+              <span class="node src">记录 · 角色 · 世界书</span>
               <span class="arw-line">──▶</span>
-              <span class="node cloud">别人的服务器</span>
-              <span class="arw-line">──▶</span>
-              <span class="node">回来了</span>
+              <span class="node">本机数据目录</span>
             </div>
-            <p>聊天记录、角色设定、你写的一切，都要先在别人的机器上落一次地。</p>
-            <p>换台电脑，得重新登录；服务下线，记录跟着一起走。</p>
+            <p>客户端在本地管理你的创作资料与会话，支持导出与手动备份。</p>
+            <p>通过「打开数据文件夹」找到实际存储位置。当前不提供自动跨设备同步。</p>
           </div>
 
           <div class="privacy-col us">
-            <h3>子夜酒馆</h3>
+            <h3>生成时发送的内容</h3>
             <div class="flowchart">
-              <span class="node src">你的对话</span>
+              <span class="node src">本机 · 必要上下文</span>
               <span class="arw-line">──▶</span>
-              <span class="node local">本机 · 直连模型 API</span>
+              <span class="node local">你配置的模型 API</span>
             </div>
-            <p>只有发往你自己配置的模型接口那一次请求，别的什么都不经过第三方。</p>
+            <p>生成回复会发送所需的历史、角色设定与命中条目。模型平台如何处理数据，取决于其隐私政策。</p>
             <p>
-              <b>数据就在程序旁边</b>：整个 <code>data\</code> 文件夹拷走，记录、角色、世界书全跟着走
-              —— 换机器、放 U 盘、发给别人，都不用重新配置。
+              <b>生图、检索和桌宠</b>启用后也可能调用各自配置的接口。请勿把密钥、真实身份或其他敏感资料写入剧情。
             </p>
           </div>
         </div>
 
         <div class="privacy-foot">
-          页面本身被 CSP 锁死（<code>default-src 'none'</code>）—— 它连网络请求都发不出去。
-          所有系统能力都必须走进程间通信交给主进程。即使页面里被塞了恶意脚本，它也没办法把数据往外送。
+          API Key 加密保存，但不是备份时可以随意分享的内容。迁移数据后可能需要重新配置 Key；
+          分享作品时优先使用角色卡、世界书或对话导出，不要直接分享整个数据目录。
         </div>
       </div>
     </div>
@@ -408,43 +433,21 @@ const SESSIONS = [
         <span class="lampblock lampblock--sm" aria-hidden="true"></span>
         <span class="sec-kicker">Get started</span>
       </div>
-      <h2 class="rise">三步，点灯开门</h2>
+      <h2 class="rise">三步，开始你的第一场对话</h2>
 
-      <div class="start">
-        <div class="term rise">
-          <div class="term-bar">
-            <span class="lampblock lampblock--sm" aria-hidden="true"></span>
-            <span>终端</span>
-          </div>
-          <div class="term-body">
-            <div class="cmt"># 客户端代码都在 client/ 里，先进去</div>
-            <div class="cmd">cd client</div>
-            <div class="cmt"># 首次会下载约 100MB 的 Electron 运行时</div>
-            <div class="cmd">npm install</div>
-            <div class="cmd">npm start</div>
-            <div class="out">Electron 已就绪 —— 窗口打开了</div>
-          </div>
-        </div>
-
-        <ol class="steps rise">
-          <li>
-            <b>要有 Node.js 18+</b>
-            Windows / macOS / Linux 都行。Windows 用户也可以直接双击
-            <code>client\Start-Mimitale.cmd</code>，它会自己检查环境、自动装依赖，
-            出错时给中文提示。
-          </li>
-          <li>
-            <b>填一次模型接口</b>
-            启动后点左下角「设置」，从内置预设里挑一家填上 API Key。
-            只填一次，之后每个会话自己记着用哪家、哪个模型。
-          </li>
-          <li>
-            <b>把角色卡拖进来</b>
-            酒馆用的 PNG 卡直接导入，设定、头像、开场白、内嵌世界书一起到位。
-            然后就可以开始了 —— 从今晚，或者任意一个你想回的夜晚。
-          </li>
-        </ol>
-      </div>
+      <ol class="flow onboarding rise">
+        <li><span class="n">01 / OPEN</span><h3>获取并打开客户端</h3><p>到下载页查看已发布安装包，或按源码指南启动。Windows、macOS、Linux 的安装包以实际发布为准。</p><RouterLink class="text-link" to="/download">查看下载与运行方式 →</RouterLink></li>
+        <li><span class="n">02 / CONNECT</span><h3>连接你的模型</h3><p>在「设置」选择提供商，填写 API Key 与模型，测试连接后保存。默认通过 API 生成，不需要高性能显卡。</p><a class="text-link" :href="DOC_LINKS[1].href" target="_blank" rel="noopener">阅读配置说明 ↗</a></li>
+        <li><span class="n">03 / PLAY</span><h3>选一个角色，开聊</h3><p>在「角色库」点「导入角色卡」或新建角色，保存后点「聊天」。也可以新建空白对话，把它当作通用助手。</p><RouterLink class="text-link" :to="{ path: '/', hash: '#pieces' }">了解角色与世界 →</RouterLink></li>
+      </ol>
+    </div>
+  </section>
+  <section id="faq" class="sec">
+    <div class="wrap">
+      <div class="sec-head rise"><span class="lampblock lampblock--sm" aria-hidden="true"></span><span class="sec-kicker">Before you begin</span></div>
+      <h2 class="rise">开始前，你可能想问</h2>
+      <div class="faq-list rise"><details v-for="item in FAQ" :key="item.q"><summary>{{ item.q }}</summary><p>{{ item.a }}</p></details></div>
+      <div class="closing rise"><div><h3>下一幕，轮到你落笔。</h3><p>准备好角色和 API Key，从一句开场白开始。</p></div><RouterLink class="btn btn-primary" to="/download">开始使用<span class="arw">→</span></RouterLink><a class="text-link" :href="SITE.repo" target="_blank" rel="noopener">查看源码 ↗</a></div>
     </div>
   </section>
 </template>
@@ -455,6 +458,24 @@ const SESSIONS = [
    在 styles/base.css 里，这里只放这一页自己的东西。
    ========================================================================== */
 
+/* ------------------------------ 新手路径 ------------------------------ */
+.hero-note, .mock-caption { color: var(--text-dim); font-size: 13px; line-height: 1.8; }
+.hero-note { margin: var(--s4) 0 0; max-width: 640px; }
+.mock-caption { text-align: center; margin: var(--s3) 0 0; }
+.onboarding { list-style: none; padding: 0; margin: 0; }
+.onboarding > li { background: var(--bg-side); padding: var(--s5); min-width: 0; }
+.text-link { display: inline-block; color: var(--lamp); font-size: 14px; margin-top: var(--s4); }
+.text-link:hover { text-decoration: underline; text-underline-offset: 4px; }
+.faq-list { border-top: 1px solid var(--border); }
+.faq-list details { border-bottom: 1px solid var(--border); }
+.faq-list summary { cursor: pointer; padding: var(--s5) 0; font-size: 17px; font-weight: 600; }
+.faq-list details[open] summary { color: var(--lamp); }
+.faq-list p { color: var(--text-dim); max-width: 780px; margin: 0 0 var(--s5); line-height: 1.9; }
+.closing { margin-top: var(--s8); border: 1px solid var(--border-hi); padding: var(--s6); display: flex; align-items: center; gap: var(--s5); flex-wrap: wrap; background: var(--lamp-a08); }
+.closing > div { flex: 1 1 260px; }
+.closing h3 { margin: 0; font-family: var(--font-serif); font-size: 26px; }
+.closing p { color: var(--text-dim); margin: var(--s2) 0 0; }
+.closing .text-link { margin-top: 0; }
 /* ------------------------------ Hero ------------------------------ */
 .hero {
   padding: 96px 0 0;
@@ -855,7 +876,7 @@ h1 .lit {
   max-width: 620px;
 }
 .card-desc strong { color: var(--text); font-weight: 600; }
-.card-desc .quote {
+.card .quote {
   display: block;
   margin-top: var(--s4);
   padding-left: 13px;
@@ -1115,7 +1136,7 @@ h1 .lit {
      缩到 430 会把最下面的「剧情选项」切掉 20px（1024px 实测） */
   .mock-body { grid-template-columns: 190px 1fr 214px; height: 452px; }
   .card { grid-template-columns: 84px 1fr; gap: var(--s5); }
-  .card-desc { grid-column: 2; }
+  .card > div:last-child { grid-column: 2; }
   .card-no { font-size: 36px; }
   .models,
   .pet,
@@ -1134,8 +1155,10 @@ h1 .lit {
 @media (max-width: 620px) {
   .mock-body { grid-template-columns: 1fr; height: 380px; }
   .m-side { display: none; }
+  .m-head { flex-wrap: wrap; }
+  .m-head .model { margin-left: 0; }
   .card { grid-template-columns: 1fr; }
-  .card-desc { grid-column: 1; }
+  .card > div:last-child { grid-column: 1; }
   .card-no { font-size: 28px; }
   .hero-cta .btn { flex: 1; }
 }

@@ -2,8 +2,8 @@
 
 export const SITE = {
   name: '子夜酒馆',
-  latin: 'Nocturne Tavern',
-  tagline: '一间只在深夜开门的酒馆',
+  latin: 'Mimitale',
+  tagline: 'AI 角色扮演与互动故事',
   /** 客户端仓库（页脚「GitHub 仓库」指向这里） */
   repo: 'https://github.com/ls546280821/Mimitale',
   license: 'MIT'
@@ -25,7 +25,8 @@ export const DOC_LINKS = [
 export const HOME_SECTIONS = [
   { id: 'pieces', label: '功能' },
   { id: 'memory', label: '长对话' },
-  { id: 'pet', label: '桌宠' },
-  { id: 'privacy', label: '隐私' },
-  { id: 'start', label: '快速开始' }
+  { id: 'models', label: '模型' },
+  { id: 'privacy', label: '数据' },
+  { id: 'start', label: '开始' },
+  { id: 'faq', label: '常见问题' }
 ] as const
