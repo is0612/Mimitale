@@ -123,7 +123,7 @@ const MAX_ASSISTANT_PERSONA_CHARS = 20000;
 // ui/theme.js 按这个顺序循环切换 —— 加新配色要改这里 + style.css + ui/theme.js + preload.js。
 // ⚠️ **第一项就是默认配色**（好几处 fallback 都写成 ACCENTS[0]），
 //    换默认配色 = 换这里的顺序，别在别处再写死一个名字。
-const ACCENTS = ['amber', 'pink', 'blue', 'matcha'];
+const ACCENTS = ['amber'];
 
 const DEFAULT_SETTINGS = {
   // 可以配置多个服务商，每个都有自己的地址、Key 和模型列表
@@ -149,7 +149,8 @@ const DEFAULT_SETTINGS = {
   //    main/window.js 拿它当**首屏窗口底色**（loadSettings 抛错时的兜底），
   //    写错就是「深色应用启动先闪一下白底」。
   theme: 'dark',
-  // 配色方案：amber（琥珀灯）/ pink（草莓奶昔）/ blue（苏打气泡）/ matcha（抹茶奶绿），
+  // 配色方案：只剩 amber（琥珀灯）一套 —— pink / blue / matcha 已下线，
+  // 老配置里那几个值会在归一化时退回 ACCENTS[0]。
   // 与明暗模式正交。默认见 ACCENTS[0]。
   accent: 'amber',
   sendOnEnter: true,

@@ -70,7 +70,6 @@ import { initChatImages } from './views/chatImages.js';
 import { initSuggestionsUi, pickOption } from './views/suggestionsUi.js';
 import { initQuickPhrases } from './views/quickPhrases.js';
 import { showView, refreshLibraryPage, initViewSwitch } from './views/viewSwitch.js';
-import { initHelp } from './views/help.js';
 import { initCharacterList, renderCharacterPage } from './views/characterList.js';
 import {
   initWorldbook,
@@ -583,10 +582,8 @@ async function init() {
   // 输入框左边的快捷短语面板：纯「插进输入框」，不发送 —— 发送那条路由上面的
   // 建议条负责。它只碰 el.input，没有要注入的动作。
   initQuickPhrases();
-  // 侧边栏的「角色库 / 世界书 / 帮助」几个入口自己绑（切屏是 viewSwitch 自己的事）。
+  // 侧边栏的「角色库 / 世界书」入口自己绑（切屏是 viewSwitch 自己的事）。
   initViewSwitch();
-  // 帮助页只有一颗「复制优化提示词」，内容本身是静态 HTML，不用重绘。
-  initHelp();
   // 角色卡上的三个按钮都跨分区（编辑要开编辑器、聊天要建会话并切屏、删除要解绑会话），
   // 所以由这里把动作交给列表页。
   initCharacterList({

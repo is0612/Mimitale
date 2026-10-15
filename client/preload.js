@@ -20,7 +20,7 @@ const initialTheme = themeArg && themeArg.endsWith('light') ? 'light' : 'dark';
 const accentArg = (process.argv || []).find((arg) => arg.startsWith('--mimitale-accent='));
 // 和 main/providers.js 的 ACCENTS 保持同步。preload 跑在渲染进程里、
 // 拿不到主进程模块，所以这份小列表只能单独列一遍。
-const INITIAL_ACCENTS = ['amber', 'pink', 'blue', 'matcha'];
+const INITIAL_ACCENTS = ['amber'];
 const accentValue = accentArg ? accentArg.slice('--mimitale-accent='.length) : '';
 const initialAccent = INITIAL_ACCENTS.includes(accentValue) ? accentValue : 'amber';
 

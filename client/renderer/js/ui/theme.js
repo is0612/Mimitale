@@ -51,16 +51,13 @@ export function setTheme(theme) {
 }
 
 // ---------------------------------------------------------------------------
-//  配色方案（accent）：pink（草莓奶昔）/ blue（苏打气泡）/ matcha（抹茶奶绿），
-//  和明暗模式正交 —— light / dark × 每种配色都成立。
+//  配色方案（accent）：只剩 amber（琥珀灯）一套（pink / blue / matcha 已下线），
+//  和明暗模式正交 —— light / dark 两档都成立。
 // ---------------------------------------------------------------------------
 
 // 名字给外观弹窗里的色点标签和提示用
 const ACCENT_NAME = {
-  amber: '苔影酒馆',
-  pink: '草莓奶昔',
-  blue: '星空蓝',
-  matcha: '抹茶奶绿'
+  amber: '苔影酒馆'
 };
 
 // 认不出来的 accent 退回它。⚠️ 要和 main/providers.js 的 fallback、

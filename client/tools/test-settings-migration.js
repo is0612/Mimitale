@@ -133,12 +133,16 @@ test('全新安装：默认是夜间 + 琥珀灯', () => {
   assert.equal(DEFAULT_SETTINGS.accent, ACCENTS[0], '默认配色就是 ACCENTS 的第一项');
 });
 
-test('老配置写着 light / pink → 原样保留（默认值只对「缺键」生效）', () => {
+test('老配置写着 light / pink → 明暗原样保留；下线的配色退回默认那套', () => {
   takeSettingsNotices();
   const out = normalizeSettings({ ...legacy(1), theme: 'light', accent: 'pink' });
   assert.equal(out.theme, 'light', '老用户选的白天不能被新默认值改掉');
-  assert.equal(out.accent, 'pink', '老用户选的草莓奶昔不能被新默认值改掉');
-  assert.deepEqual(takeSettingsNotices(), [], '改默认值不是「迁移」，不该发通知');
+  // ⚠️ 这条 2026-10-15 改过：pink / blue / matcha 三套配色已下线，
+  //    老配置里存着的名字渲染不出来了，只能在归一化时退回 ACCENTS[0]。
+  //    和上面那半条的区别是：theme 只是**改了默认值**（用户的选择仍然有效），
+  //    accent「pink」是**这个值本身没了** —— 留着它等于留一个渲染不出来的状态。
+  assert.equal(out.accent, DEFAULT_SETTINGS.accent, '下线的配色退回默认那套');
+  assert.deepEqual(takeSettingsNotices(), [], '改默认值 / 退配色都不是「迁移」，不该发通知');
 });
 
 test('theme 只认 light，其余（缺键 / 脏值）一律算夜间', () => {
@@ -149,11 +153,18 @@ test('theme 只认 light，其余（缺键 / 脏值）一律算夜间', () => {
   assert.equal(normalizeSettings({ theme: 'light' }).theme, 'light', '只有明确写了 light 才是白天');
 });
 
-test('accent 认这四套配色，认不出来就退回默认那套', () => {
+test('accent 只认白名单里的配色，认不出来就退回默认那套', () => {
   for (const a of ACCENTS) {
     assert.equal(normalizeSettings({ accent: a }).accent, a, `${a} 是合法配色`);
   }
-  assert.equal(ACCENTS.length, 4, '一共四套配色');
+  // 只剩琥珀一套（2026-10-15 下线了 pink / blue / matcha）。
+  // 这条断言是**故意钉住数量**的：加回一套配色时它会红，逼着同时补
+  // style.css 的 token 块 + window.js 的 WINDOW_BG + 这里的用例。
+  assert.equal(ACCENTS.length, 1, '现在只剩一套配色');
+  assert.deepEqual(ACCENTS, ['amber'], '剩下的那套是琥珀灯，且它是默认（ACCENTS[0]）');
+  for (const dead of ['pink', 'blue', 'matcha']) {
+    assert.equal(normalizeSettings({ accent: dead }).accent, DEFAULT_SETTINGS.accent, `${dead} 已下线 → 退回默认`);
+  }
   assert.equal(normalizeSettings({ accent: 'rainbow' }).accent, DEFAULT_SETTINGS.accent, '脏值退回默认');
   assert.equal(normalizeSettings({ accent: null }).accent, DEFAULT_SETTINGS.accent, 'null 退回默认');
 });
@@ -212,18 +223,21 @@ test('API Key 解不开时不再把密文当 Key（换电脑 / 换 Windows 账�
 });
 
 test('saveSettings: concurrent patches preserve both changes', async () => {
-  await saveSettings({ theme: 'light', accent: 'amber' });
-  await Promise.all([saveSettings({ theme: 'dark' }), saveSettings({ accent: 'blue' })]);
+  // ⚠️ 两个 patch 必须改**不同的键**，accents 只剩一套（拼不出两个合法 accent），
+  //    所以第二个键换成 sendOnEnter —— 这条用例测的是「串行队列不丢改动」，
+  //    具体哪个键无关。
+  await saveSettings({ theme: 'light', sendOnEnter: true });
+  await Promise.all([saveSettings({ theme: 'dark' }), saveSettings({ sendOnEnter: false })]);
   const saved = JSON.parse(fs.readFileSync(dataFile('config.json'), 'utf8'));
   assert.equal(saved.theme, 'dark');
-  assert.equal(saved.accent, 'blue');
+  assert.equal(saved.sendOnEnter, false);
 });
 
 test('saveSettings: queued patches are snapshots and recover after failure', async () => {
-  const patch = { accent: 'matcha' };
+  const patch = { theme: 'light' };
   const pending = saveSettings(patch);
-  patch.accent = 'pink';
-  assert.equal((await pending).accent, 'matcha');
+  patch.theme = 'dark'; // 调用之后再改这个对象：落盘的必须是**调用那一刻**的快照
+  assert.equal((await pending).theme, 'light');
 
   const original = fs.renameSync;
   fs.renameSync = () => {

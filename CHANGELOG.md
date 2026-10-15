@@ -4,6 +4,143 @@
 
 ---
 
+## 2026-10-15 第三十一批：删掉帮助页、配色只留琥珀一套
+
+一句话：把两个「留着也没人用」的东西摘干净 —— 帮助页整页下线（视图 + 样式 +
+接线 + 模块），主题配色从四套收成**琥珀灯一套**（另外三套的 token 块和色点全删）。
+`style.css` 9000 → 7554 行、`index.html` 2154 → 1700 行（这一批和上一批的改动
+叠在同一个工作区里，行数分不开，这里给的是两批合起来的总量）。
+
+### 帮助页下线
+
+- **视图**：`index.html` 的 `#view-help` 整段（正文是静态 HTML，本来就写在页面里）、
+  右上角那颗「复制优化提示词」。连带 `viewSwitch.js` 的登记项、
+  `dom.js` 的 `viewHelp` / `btnHelp` / `btnCopyHelpPrompt`、`main.js` 的 `initHelp()`
+  调用与 import 一起摘掉。
+- **模块**：`renderer/js/views/help.js` 删除（它只剩「复制提示词」一颗按钮，
+  页面没了就是纯死代码 —— `tools/check-dead-code.js` 正好报出 `initHelp` 无人引用）。
+- **样式**：`.help-doc` 那一整块（正文限宽、对照框、编号清单、尺度条…）连同
+  `.help-toc` / `.help-lead` 一起删干净。死类名 lint 复跑：**0 处**。
+- 那份「故事优化提示词」的正文仍在 `故事优化提示词.md`，要用的自己打开复制。
+
+### 配色收成一套（amber）
+
+- **白名单**：`main/providers.js` 的 `ACCENTS` 从四套改成 `['amber']`；
+  `main/window.js` 的 `WINDOW_BG`、`preload.js` 的 `INITIAL_ACCENTS`、
+  `renderer/js/ui/theme.js` 的 `ACCENT_NAME` 同步收成一项。
+- **样式**：`style.css` 里 `[data-accent='pink' / 'blue' / 'matcha']` 的 token 块
+  （含各自的夜间覆盖）与外观里对应的色点全部删除，`index.html` 只剩琥珀一颗色点。
+- ⚠️ **老配置里存着 pink / blue / matcha 的会退回默认那套**：名字还在、样式没了，
+  留着等于留一个渲染不出来的状态。归一化那句 `ACCENTS.includes(raw.accent) ? … :
+  ACCENTS[0]` 没变，行为是「下线的配色退回默认」——**和「改默认值」不是一回事**
+  （后者对老配置无效，前者必须改）。这条区别写进了 `test-settings-migration.js`
+  的用例注释里，别下回混在一起判。
+- 加回配色时要同步的四处（`style.css` token 块 / `ACCENTS` / `ui/theme.js` /
+  `WINDOW_BG`）没变，老注释还在原处。
+
+### 回归
+
+- `tools/test-settings-migration.js`：四条用例按新行为更新（下线的配色退回默认、
+  白名单只剩一套、两条 saveSettings 串行队列用例改用 `theme` + `sendOnEnter`
+  两个键 —— 一套配色拼不出「两个不同 patch」）。**15/15 通过**。
+- `npm run audit`（DOM id / 按钮 / 导入）与死类名、字号 lint 复跑通过；
+  圆角 lint 仍是存量 5 处（`.wb-char-chip` / `.cast-collapse` / `.sidebar-toggle` /
+  `.composer-box .btn-send` / `.cast-card.has-portrait .cast-portrait`），本次未动。
+- ⚠️ 待办：`使用说明.md` 里还在介绍四套配色与帮助页（第 788 / 1749 / 1771 /
+  1819 / 1894 / 2193 行附近），本次**没动手册**，下次一起改。
+
+---
+
+## 2026-10-15 第三十批：角色编辑页对齐修缮 + 控件样式去重
+
+一句话：角色编辑页的三处老毛病（writing-tabs 不等宽 / textarea 聚焦描边被顶掉 /
+头像区靠绝对定位魔法数硬摆）修掉，顺手把 style.css 里「五类控件各抄一遍」的
+重复段合并成选择器列表，全文件 10421 → 10180 行（−241），字号 lint 首次全绿。
+
+### 角色编辑页（#view-char-editor）
+
+- **writing-tabs 等宽**：`flex: 0 0 auto` → `flex: 1 1 0` + 居中，五颗标签
+  等宽铺满一行，不再按文字长短参差；容器 gap 25 → 12（等宽之后大 gap 只会把
+  下划线切成碎段），媒体查询里 18px / 22px 的 gap 覆盖随之删掉。
+- **textarea 聚焦描边回来了**：`#view-char-editor …textarea` 里写了
+  `border-color: var(--ce-line)`，以 (1,2,1) 的优先级压过全局 `textarea:focus`
+  的 (0,1,1) —— 聚焦时描边永远不变。而 `--ce-line` 本来就等于 `var(--border)`、
+  `--ce-surface` 等于 `var(--bg-card)`，这两行是「写了个寂寞还闯祸」，删掉。
+- **头像区改正常布局**：旧版用 `position: absolute; top: 150px` 的魔法数把头像
+  钉在形象旁边，pane 一变高就错位。改成 `.char-avatar-col` 一行两列
+  （`flex-direction: row; align-items: flex-end`，两列最后一行都是「清除」，
+  底边天然齐平）；720px 断点里的 `top: 108px`、`padding-bottom: 32px` 等补丁
+  一并删掉，float 宽度 110 → 170 给这一行让位。
+- **头像放大一档**：42px 的圈装不下「点击上传」四个字，编辑页内放大到 56px，
+  「点击上传」不再挤成两行溢出圆边。
+- **字号守规矩**：编辑器里写死的 9px / 9px / 10px 三处（`.char-avatar-empty`
+  ×2、清除按钮）删掉，沿用通用规则（12px 起步）——写死字号从 4 处降到 0，
+  `audit-font` 首次全绿。`.cast-card-name` 存量的 22px 也换成 `var(--fs-xl)`。
+
+### 控件样式去重（输入框 / 按钮 / 下拉框写重复的重灾区）
+
+- **基础控件**：`input[text/password/number] + textarea + select` 五段逐字
+  重复的底子（背景 / 描边 / 圆角 / 字号 / 内边距…）合并成一条选择器列表；
+  差异部分（单行 44px 高、多行 104px + resize、下拉箭头）各自单独补，
+  声明顺序不变、级联结果不变。
+- **悬停 / 聚焦**：十段 `:hover` / `:focus` 每类控件一份 → 各一条选择器列表。
+- **设置页卡片控件**：`settings-content` 里同样的五段皮肤 + 五段聚焦 → 两条。
+- **高级选项折叠块**：`.char-advanced` / `.wb-advanced` 的 summary 六对平行
+  规则合并；`.char-media-top` / `.char-head-fields` / `.char-advanced` 三处
+  「先写 margin 又被自己的 margin: 0 覆盖」的死声明清掉。
+
+### 世界书 / 预设板块体检（同批顺手做的）
+
+两页截图核对过没有明显错位，问题集中在样式重复，已合并：
+
+- **角色卡 ↔ 世界书卡的平行副本**：卡面「无内边距贴边」、操作区骨架
+  （display / gap / 按钮等宽 / btn-ghost 透明）、右上角删除浮标（24px 白圆）
+  各自写了两份，全部合并成选择器列表；世界书独有的 `z-index: 2`
+  （要浮在封面渐变层上）单独保留一行。
+- **range 滑块三份副本**：`.appearance-row` / `.field` / 裁剪弹窗 `.crop-zoom`
+  的底子、拇指、focus-visible 逐字相同（第二十八批只合并了拇指的一部分）——
+  现在三处共用一份，差异只有轨道：设置页追 `--range-fill` 进度比例，
+  裁剪那条纯色，各自单独一条轨道规则。
+- **世界书编辑页**：`.wb-search` / `.wb-state` 重复的 calc 宽度 + 边距合并；
+  `.wb-book-foot` 里 `bottom: 0` / `z-index: 1` 是 sticky 页脚的残骸
+  （`position: static` 下根本不生效），删掉。
+- **预设页**视觉核对无错位；`.preset-search` 的「无边框输入框 + 容器描边」
+  是刻意模式，不动。`.wb-checks .check` 那串「逐条拆掉全局卡片样式」的覆盖
+  是已知热点，重写要先动全局 `.check`，本轮不动（单独做才划算）。
+
+### 全项目声明级去重（同批第三段：audit-css-dup.js 升级 + 五大簇合并）
+
+- **工具升级**：`tools/audit-css-dup.js` 新增第二遍「声明级重复」检测——把每条
+  规则的声明排序做成签名，签名相同的规则聚成一簇。原版只能查「同一选择器
+  定义两次」，查不出「换个前缀把同一组声明又抄一遍」；新版一次列出全部 79 簇。
+- **五大簇合并**（67 条规则 → 5 条，全部验证过「每个选择器在全文件只此一条」，
+  无级联冲突）：
+  - **聚焦描边 18 → 1**：`.btn` / `.icon-btn` / `.preset-chip` / `.char-avatar` …
+    十八处 `outline:none; box-shadow:var(--focus-ring)`，合成一条选择器列表；
+  - **图片铺满 13 → 1**：所有头像/封面/立绘容器的 `img` 各写一份
+    `display:block + 100%×100% + object-fit:cover`，合成一条；
+  - **meta 小字 16 → 1**：`font-size:xs + color:faint` 的说明文字；
+  - **危险色 11 → 1**：`.btn-danger` 和各处删除按钮的 `:hover`；
+  - **强调悬停 9 → 1**：菜单项 / 幽灵按钮悬停的 `accent-soft + accent`。
+- 合并时踩了个坑并已修复：删除簇内其余规则时，脚本把「合并规则自己的
+  末尾选择器 + 声明体」也当成了目标（末位选择器后面跟的是 ` {` 不是 `,`），
+  五条合并规则一度被拦腰截断、吞掉了紧随其后的下一条规则——
+  已逐条修复并用冒烟 + 截图（聊天 / 在场角色 / 世界书列表）验证。
+- 行数：10421 → **9974（−447）**，diff −625/+289。
+- 剩余 70+ 个小簇（多为 2~3 条选择器、1~3 条声明的巧合相同）留在工具报告里，
+  价值低、逐簇验证成本高，不再硬合——重复检测以后跑 `node tools/audit-css-dup.js` 就有。
+
+### 回归
+
+- 冒烟全绿：**1461/1461 通过、0 控制台报错**（编辑器相关断言只盯 DOM 结构，
+  不盯几何，布局改动无感）。
+- 四件套 lint：字号 ✅（首次 0 处）、死类名 ✅；圆角 ❌ 与间距 ❌ 均为存量
+  （间距 54 → 51，本次净减 3）。
+- 出图核对：`--shot-only --shot=charEditorPage` / `wbEditorPage` / `presets` /
+  `presetEditor`（视觉与改动前一致，仅角色编辑页有改善）。
+
+---
+
 ## 2026-10-15 第二十九批：输入框的快捷短语面板
 
 一句话：输入框左边多了一颗「{ }」，点开是一列常用指令 —— 点哪一行，那行的文字

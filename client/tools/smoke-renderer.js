@@ -321,53 +321,18 @@ await scenario('明暗切换', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 2b：主题配色（顺带验证 data-accent 与 CSS 变量 + 落盘）
-//  同样在「外观」弹窗里：原来是左上角一颗「循环」按钮（点一下换下一套，
-//  想知道一共有几套只能一路点下去），现在是四个色点，点哪个是哪个。
-//  起点不写死 —— 前面哪个场景动过配色都不该让这里假红。
+//  场景 2b：主题配色（配色只剩琥珀一套：色点唯一、属性与变量一致）
+//  原来是四套色点循环切换，2026-10-15 删了粉/蓝/绿三套，只留琥珀。
 // ---------------------------------------------------------------------------
 await scenario('主题配色', async () => {
   await openAppearanceSection();
 
-  const ALL = ['amber', 'pink', 'blue', 'matcha'];
   const swatch = (a) => $(`#appearance-accents [data-accent="${a}"]`);
-  check('四个色点都在', ALL.length === 4 && ALL.every((a) => !!swatch(a)));
+  check('只剩琥珀一个色点', !!swatch('amber') && !swatch('pink') && !swatch('blue') && !swatch('matcha'));
 
   const readAttr = () => document.documentElement.getAttribute('data-accent');
-  const readAccent = () => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-
-  const start = readAttr();
-  const startAccent = readAccent();
-
-  const next = ALL.find((a) => a !== start);
-  click(`#appearance-accents [data-accent="${next}"]`);
-  await waitFor('data-accent 变化', () => readAttr() === next);
-
-  const nextAccent = readAccent();
-  check('data-accent 切过去了', readAttr() === next, `${start} → ${next}`);
-  check('--accent 变量跟着变', nextAccent !== startAccent, `${startAccent} → ${nextAccent}`);
-  check('选中的色点标了 aria-checked', swatch(next).getAttribute('aria-checked') === 'true');
-  check(
-    '没选中的色点没标',
-    ALL.filter((a) => a !== next).every((a) => swatch(a).getAttribute('aria-checked') === 'false')
-  );
-
-  await sleep(150);
-  const settings = (await window.mimitale.getSettings()).settings;
-  check('配色已落盘', settings.accent === next, `落盘的是 ${settings.accent}`);
-
-  // 再点第三套，确认四个色点各对应一套（不是只认「切换」两态）
-  const third = ALL.find((a) => a !== start && a !== next);
-  click(`#appearance-accents [data-accent="${third}"]`);
-  await waitFor('切到第三套配色', () => readAttr() === third);
-  const thirdAccent = readAccent();
-  check('第三套和前两套都不同', third !== next && third !== start, `${start} → ${next} → ${third}`);
-  check('第三套的 --accent 也换了', thirdAccent !== startAccent && thirdAccent !== nextAccent);
-
-  // 点回起点，别影响后面的场景
-  click(`#appearance-accents [data-accent="${start}"]`);
-  await waitFor('配色转回起点', () => readAttr() === start);
-  check('转回起点后 --accent 也回到原值', readAccent() === startAccent);
+  check('当前配色是琥珀', readAttr() === 'amber', `实际是 ${readAttr()}`);
+  check('琥珀色点标了 aria-checked', swatch('amber').getAttribute('aria-checked') === 'true');
 
   await leaveAppearanceSection();
 });
@@ -692,11 +657,10 @@ await scenario('设置：左导航切组', async () => {
   );
 
   const supportNav = $('#view-settings .settings-nav .settings-nav-item[data-target="sec-support"]');
-  check('帮助与数据入口在设置导航中', !!supportNav && visible(supportNav));
+  check('本地数据入口在设置导航中', !!supportNav && visible(supportNav));
   click(supportNav);
-  check('点击后显示帮助与数据分组', visible(byId('sec-support')));
-  check('帮助与数据按钮均实际可见', visible(byId('btn-help')) && visible(byId('btn-folder')));
-  check('帮助页目录不含设置导航', !$('#view-help .settings-nav-item'));
+  check('点击后显示本地数据分组', visible(byId('sec-support')));
+  check('数据按钮实际可见', visible(byId('btn-folder')));
 
   // 收尾：把回复上限放回去（这个场景用了一个和初值不同的数字来证明「真存住了」）
   if (!visible(byId('sec-params'))) click(paramsNav);
@@ -3557,7 +3521,7 @@ await scenario('侧栏：入口网格与收起', async () => {
 
   const foot = $$('.sidebar-foot .btn');
   check('侧栏保留四个创作入口', foot.length === 4, String(foot.length));
-  check('帮助和数据位于设置页', !!byId('btn-help')?.closest('#view-settings') && !!byId('btn-folder')?.closest('#view-settings'));
+  check('数据按钮位于设置页', !!byId('btn-folder')?.closest('#view-settings'));
   check(
     '每颗都带图标',
     foot.every((b) => !!b.querySelector('svg')),
@@ -9129,36 +9093,6 @@ await scenario('新对话：直接建空白会话，只剩「我」时入口条�
   await waitFor('会话列表多了一条', () => $$('#convo-list .convo-item').length === before + 1);
   await waitFor('切回聊天视图', () => shown('#view-chat'));
   check('空白会话里「在场角色」入口条整条收掉', !shown('#panel-box'));
-});
-
-// 帮助页：纯静态内容，只验「切得过去、小节齐全、目录锚点对得上、复制按钮接对了」。
-// 目录锚点那条不是客套 —— 改正文时最容易忘了同步目录里的 id，
-// 点一下发现跳不动才发现，有了这条能在跑测试时就拦住。
-await scenario('帮助：切页、正文与复制提示词', async () => {
-  click('#btn-help');
-  await waitFor('切到帮助页', () => shown('#view-help'));
-  check('设置中的帮助入口可用', !!byId('btn-help').closest('#view-settings'));
-  check('切走后聊天视图让位', !shown('#view-chat'));
-
-  const sections = $$('#view-help .help-sec');
-  check('帮助正文有 11 个小节', sections.length === 11, `实际 ${sections.length} 节`);
-
-  const lead = $('#view-help .help-lead');
-  check('页首那句总纲在', !!lead && /小引擎/.test(lead.textContent));
-
-  const anchors = $$('#view-help .help-toc a').map((a) => a.getAttribute('href'));
-  check('目录条目数与小节数一致', anchors.length === sections.length, `目录 ${anchors.length} 条`);
-  const missing = anchors.filter((h) => !h || !document.querySelector(`#view-help ${h}`));
-  check('目录锚点全部命中真实小节', missing.length === 0, missing.join(' '));
-
-  // 复制：点完要弹提示。提示里带「故事优化提示词」才说明按钮真接到了那段文本
-  // （不是空点一下），剪贴板本身走的是 util:copy 那条桥，页面里看不到。
-  click('#btn-copy-help-prompt');
-  await waitFor(
-    '复制后弹出提示',
-    () => shown('#toast') && /故事优化提示词/.test(byId('toast').textContent)
-  );
-  check('复制按钮弹出了对的提示', /故事优化提示词/.test(byId('toast').textContent), byId('toast').textContent);
 });
 
 // ---------------------------------------------------------------------------

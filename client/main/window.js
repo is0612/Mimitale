@@ -35,10 +35,7 @@ let mainWindow = null;
 //    同一天加了第 4 套配色 amber（默认），这里必须一起补，否则
 //    `WINDOW_BG['amber']` 是 undefined，会兜回 pink 的粉色底。
 const WINDOW_BG = {
-  amber: { light: '#f4f5f7', dark: '#101113' },
-  pink: { light: '#fff5f8', dark: '#101113' },
-  blue: { light: '#f4f9ff', dark: '#101113' },
-  matcha: { light: '#f3faf5', dark: '#101113' }
+  amber: { light: '#f4f5f7', dark: '#101113' }
 };
 
 // 窗口尺寸 —— **只有这一处定义**。

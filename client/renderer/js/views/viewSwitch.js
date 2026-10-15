@@ -40,9 +40,7 @@ const VIEW_PARTS = [
   { name: 'worldbooks', view: 'viewWorldbooks', btn: 'btnWorldbooks' },
   { name: 'wbEditor', view: 'viewWbEditor', btn: null },
   { name: 'presets', view: 'viewPresets', btn: 'btnPresets' },
-  // 帮助页是纯静态文本，没有 render 函数，只在这里登记显隐和高亮
-  { name: 'help', view: 'viewHelp', btn: 'btnHelp' },
-  // 设置页同理：内容是现成的，切过去之前**先由 views/settings.js 刷新**（它自己调
+  // 设置页：内容是现成的，切过去之前**先由 views/settings.js 刷新**（它自己调
   // showView），这里只管显隐 + 把侧边栏那颗「设置」点亮。
   { name: 'settings', view: 'viewSettings', btn: 'btnSettings' }
 ];
@@ -88,6 +86,4 @@ export function initViewSwitch() {
   el.btnWorldbooks.addEventListener('click', () => showView('worldbooks'));
   // 预设 → 切到预设列表页
   if (el.btnPresets) el.btnPresets.addEventListener('click', () => showView('presets'));
-  // 帮助 → 切到帮助页（静态内容）
-  if (el.btnHelp) el.btnHelp.addEventListener('click', () => showView('help'));
 }

@@ -38,8 +38,6 @@ export const el = {
   btnChars: $('btn-chars'),
   btnWorldbooks: $('btn-worldbooks'),
   btnPresets: $('btn-presets'),
-  // 帮助页（内容是静态文本，没有 render 函数，只靠 viewSwitch 显隐）
-  btnHelp: $('btn-help'),
   // 设置页：内容和显隐都由 views/settings.js 管
   viewSettings: $('view-settings'),
   btnBackSettings: $('btn-back-settings'),
@@ -79,7 +77,7 @@ export const el = {
   stateCards: $('state-cards'),
   // 外观（主题配色 + 明暗管整个界面，字号 / 加粗色 / 背景图只管聊天区）
   // 控件都在 设置 → 外观（#sec-appearance）里；下面这些 id 原样复用。
-  // 「主题配色」四选一：容器里是四个 [data-accent] 按钮，选中态由 ui/theme.js 刷
+  // 「主题配色」：容器里是 [data-accent] 按钮（现在只剩琥珀一套），选中态由 ui/theme.js 刷
   appearanceAccents: $('appearance-accents'),
   // 「明暗」两态：容器里是两个 [data-mode] 按钮，同上
   appearanceModes: $('appearance-modes'),
@@ -169,9 +167,6 @@ export const el = {
   viewWorldbooks: $('view-worldbooks'),
   viewWbEditor: $('view-wb-editor'),
   viewPresets: $('view-presets'),
-  viewHelp: $('view-help'),
-  // 帮助页右上角「复制优化提示词」（文本在 views/help.js）
-  btnCopyHelpPrompt: $('btn-copy-help-prompt'),
   charsPageSub: $('chars-page-sub'),
   charPageGrid: $('char-page-grid'),
   charPageEmpty: $('char-page-empty'),

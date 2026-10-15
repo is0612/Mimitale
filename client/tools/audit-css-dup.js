@@ -119,3 +119,47 @@ if (!out.length) {
 console.log('');
 console.log(`重复定义的选择器：${dupCount} 个（其中「前一次被完全覆盖、可安全合并」的：${mergeable} 个）`);
 console.log(`顶层规则总数：${rules.length}`);
+
+// ----------------------------------------------------------------------------
+// 第二遍：声明级重复 ——「同一组声明，换个选择器前缀又写一遍」。
+// 这正是 audit-css-dup 原本查不出来的那种：选择器不同，所以 byKey 把它们分开了；
+// 但属性逐字相同（或排序后相同），属于「换皮重抄」，是该合并的对象。
+//
+// 判据：把每条规则的声明排序去空格做成签名，签名相同的规则聚成一簇，
+// 簇里 ≥2 条、且声明 ≥2 条（单声明太容易撞，没意义）才报。
+// 排序是为了把 `a;b` 和 `b;a` 认成同一份（写声明顺序不同但效果一样）。
+// ----------------------------------------------------------------------------
+const sigOf = (decls) =>
+  decls
+    .map((d) => d.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .sort()
+    .join(' | ');
+
+const bySig = new Map();
+for (const r of rules) {
+  if (r.decls.length < 2) continue; // 单声明不报，全是噪声
+  const sig = sigOf(r.decls);
+  if (!bySig.has(sig)) bySig.set(sig, []);
+  bySig.get(sig).push(r);
+}
+
+const sigClusters = [...bySig.values()].filter((list) => list.length >= 2);
+// 按簇大小降序，大的（重复最多）排前面
+sigClusters.sort((a, b) => b.length - a.length);
+
+console.log('');
+console.log('=== 声明级重复（同一组声明、不同选择器 —— 该合并的候选）===');
+if (!sigClusters.length) {
+  console.log('  （无）✓');
+} else {
+  for (const list of sigClusters) {
+    const decls = list[0].decls;
+    console.log(`\n● ${list.length} 处共用同一组声明（${decls.length} 条）：`);
+    console.log(`    ${shown(decls)}`);
+    for (const r of list) {
+      console.log(`    style.css:${r.line}  ${r.rawSel}`);
+    }
+  }
+}
+console.log(`\n声明级重复簇：${sigClusters.length} 个（共 ${sigClusters.reduce((n, l) => n + l.length, 0)} 条规则）`);

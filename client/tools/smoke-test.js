@@ -3705,9 +3705,8 @@ app.whenReady().then(async () => {
         );
         await new Promise((r) => setTimeout(r, 300));
       }
-      // --shot-accent=<amber|pink|blue|matcha>：切到指定配色再截图。
-      // 现在弹窗里是四个色点，直接点对应的那一颗就行（以前是循环按钮，
-      // 得一路点到 data-accent 等于目标为止）。
+      // --shot-accent=amber：切到指定配色再截图。
+      // 配色只剩琥珀一套，传别的色名会找不到按钮、no-op（保持琥珀）。
       const shotAccent = (process.argv.find((a) => a.startsWith('--shot-accent')) || '').split('=')[1];
       if (shotAccent) {
         const accentSel = `#appearance-accents [data-accent="${shotAccent}"]`;
@@ -3832,14 +3831,6 @@ app.whenReady().then(async () => {
         chars: `
           document.querySelector('#btn-chars')?.click();
           await new Promise(r => setTimeout(r, 500));`,
-        // 帮助页：一整篇静态长文，「对照框 / 清单 / 尺度条」的排版只靠 DOM
-        // 断言看不出来，得截一张。滚回顶部，不然可能停在上次滚到的位置。
-        help: `
-          document.querySelector('#btn-help')?.click();
-          await new Promise(r => setTimeout(r, 500));
-          const t = document.querySelector('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }
-          const body = document.querySelector('#view-help .page-body');
-          if (body) body.scrollTop = 0;`,
         // 角色库：卡片上铺的是**角色形象**（2:3 竖版立绘），点开还能看大图。
         // 测试里的角色都没有图（上传那条路被 images:pick 的桩挡着），
         // 所以这里给每张卡塞一个 2:3 的 SVG 占位立绘 —— 只为看清裁切和排版；
