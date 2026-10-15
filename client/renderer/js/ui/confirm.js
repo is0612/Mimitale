@@ -8,7 +8,11 @@
 
 import { el } from '../core/dom.js';
 
+let activeCleanup = null;
+
 export function confirmDialog(options) {
+  if (activeCleanup) activeCleanup(false);
+  const previousFocus = document.activeElement;
   const opts = options || {};
 
   el.confirmTitle.textContent = opts.title || '确认';
@@ -24,8 +28,11 @@ export function confirmDialog(options) {
       el.confirmOk.removeEventListener('click', onOk);
       el.confirmCancel.removeEventListener('click', onCancel);
       el.confirmModal.removeEventListener('click', onBackdrop);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('focusin', onFocus, true);
       el.confirmModal.classList.add('hidden');
+      activeCleanup = null;
+      if (previousFocus && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
       resolve(result);
     }
     function onOk() { cleanup(true); }
@@ -33,20 +40,29 @@ export function confirmDialog(options) {
     function onBackdrop(event) {
       if (event.target === el.confirmModal) cleanup(false);
     }
+    function onFocus(event) {
+      if (!el.confirmModal.contains(event.target)) el.confirmCancel.focus({ preventScroll: true });
+    }
     function onKey(event) {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (!['Escape', 'Enter', 'Tab'].includes(event.key)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
       if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
         cleanup(false);
       } else if (event.key === 'Enter') {
-        event.preventDefault();
-        cleanup(true);
+        if (!event.repeat) cleanup(document.activeElement === el.confirmOk);
+      } else {
+        const next = document.activeElement === el.confirmCancel ? el.confirmOk : el.confirmCancel;
+        next.focus();
       }
     }
 
+    activeCleanup = cleanup;
+    document.addEventListener('focusin', onFocus, true);
     el.confirmOk.addEventListener('click', onOk);
     el.confirmCancel.addEventListener('click', onCancel);
     el.confirmModal.addEventListener('click', onBackdrop);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
   });
 }

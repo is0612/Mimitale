@@ -967,9 +967,12 @@ body {
   cursor: pointer;
 }
 
-.menu-pop .menu-item:hover { background: var(--accent-soft); color: var(--accent); }
+.menu-pop .menu-item:hover,
+.menu-pop .menu-item:focus-visible { background: var(--accent-soft); color: var(--accent); }
+.menu-pop .menu-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .menu-pop .menu-item-danger { color: var(--danger-text); }
-.menu-pop .menu-item-danger:hover { background: var(--danger-bg-hover); color: var(--danger-hover); }
+.menu-pop .menu-item-danger:hover,
+.menu-pop .menu-item-danger:focus-visible { background: var(--danger-bg-hover); color: var(--danger-hover); }
 /* 菜单项里的段数角标：它本来是按幽灵按钮上的位置调的，这里跟着文字走就行 */
 .menu-pop .memory-badge { margin-left: 6px; }
 

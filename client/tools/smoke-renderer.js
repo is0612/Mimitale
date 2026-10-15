@@ -399,6 +399,24 @@ await scenario('顶栏「⋯」菜单', async () => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await waitFor('Esc 收起', () => menu.classList.contains('hidden'));
   check('按 Esc 也会收起', menu.classList.contains('hidden'));
+  check('Esc 后焦点回到菜单入口', document.activeElement === byId('btn-more'));
+
+  const menuKey = (key) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  menuKey('ArrowDown');
+  check('方向键打开菜单并聚焦首项', document.activeElement === byId('btn-copy-all'));
+  menuKey('ArrowUp');
+  check('向上从首项循环到末项', document.activeElement === byId('btn-clear'));
+  menuKey('Home');
+  check('Home 回到首项', document.activeElement === byId('btn-copy-all'));
+  menuKey('End');
+  check('End 到达末项', document.activeElement === byId('btn-clear'));
+  byId('input').focus();
+  byId('input').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+  check('焦点离开菜单时自动收起', menu.classList.contains('hidden'));
+  click('#btn-more');
+  byId('btn-more').focus();
+  click('#btn-more');
+  check('再次点击入口能收起菜单', menu.classList.contains('hidden'));
 
   // 点某一项：动作照走 + 菜单收起（复制全文最轻，不会开弹窗打扰后面的场景）
   click('#btn-more');
@@ -759,6 +777,24 @@ await scenario('角色库：放弃新建', async () => {
   click('#btn-close-chars');
   await waitFor('弹出放弃确认框', () => shown('#confirm-modal'));
   check('确认框里带了刚输入的名字', byId('confirm-message').textContent.includes('半途而废'), byId('confirm-message').textContent);
+  check('确认框默认聚焦取消', document.activeElement === byId('confirm-cancel'));
+  const confirmKey = (key, shiftKey = false) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
+  confirmKey('Tab', true);
+  check('Shift+Tab 循环到确认', document.activeElement === byId('confirm-ok'));
+  confirmKey('Tab');
+  check('Tab 循环回取消', document.activeElement === byId('confirm-cancel'));
+  byId('c-name').focus();
+  byId('c-name').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+  check('确认框打开时焦点不会进入背景', document.activeElement === byId('confirm-cancel'));
+  confirmKey('Enter');
+  await waitFor('回车取消确认', () => !shown('#confirm-modal'));
+  check('取消后编辑内容保留', shown('#view-char-editor') && byId('c-name').value === '半途而废');
+  click('#btn-close-chars');
+  await waitFor('再次弹出放弃确认框', () => shown('#confirm-modal'));
+  confirmKey('Escape');
+  check('Esc 只关闭确认框', !shown('#confirm-modal') && shown('#view-char-editor'));
+  click('#btn-close-chars');
+  await waitFor('最后弹出放弃确认框', () => shown('#confirm-modal'));
 
   click('#confirm-ok');
   await waitFor('编辑器关闭', () => !shown('#view-char-editor'));
