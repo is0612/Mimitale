@@ -729,6 +729,7 @@ function registerIpc() {
       if (Number.isFinite(sampling.temperature)) endpoint.temperature = sampling.temperature;
       if (Number.isFinite(sampling.maxTokens)) endpoint.maxTokens = Math.round(sampling.maxTokens);
       if (Number.isFinite(sampling.topP)) endpoint.topP = sampling.topP;
+      if (typeof sampling.thinking === 'boolean') endpoint.thinking = sampling.thinking;
     }
 
     // 本机桥接服务免 Key；其余 OpenAI 兼容服务商照旧要求

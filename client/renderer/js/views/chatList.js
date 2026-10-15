@@ -31,6 +31,13 @@ import { renderHeader } from './header.js';
 import { renderAll } from './redraw.js';
 import { switchConvo, removeConvo } from './convoActions.js';
 
+function storyPreview(convo) {
+  const messages = Array.isArray(convo.messages) ? convo.messages : [];
+  const last = [...messages].reverse().find(message => ['user', 'assistant'].includes(message.role) && String(message.content || '').trim());
+  if (!last) return '故事，等待续写';
+  return String(last.content).replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<[^>]*>/g, '').replace(/[#*_`>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 70) || '故事，等待续写';
+}
+
 export function renderConvoList() {
   clear(el.convoList);
 
@@ -40,7 +47,7 @@ export function renderConvoList() {
   const list = state.conversations;
 
   // 分区标题：平时就是「最近会话」
-  if (el.convoCap) el.convoCap.textContent = '最近会话';
+  if (el.convoCap) el.convoCap.textContent = `故事记录 · ${list.length}`;
 
   if (!list.length) {
     // 这两条内联样式是「空状态」专属的，没有别的用处（真要认真做该进样式表）
@@ -64,6 +71,15 @@ export function renderConvoList() {
         {
           class: ['convo-item', convo.id === state.activeId && 'active'],
           role: 'listitem',
+          title: label,
+          'aria-label': `打开故事：${label}`,
+          tabindex: '0',
+          onkeydown: (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              switchConvo(convo.id);
+            }
+          },
           onclick: () => switchConvo(convo.id)
         },
         convoAvatar(convo),
@@ -71,7 +87,9 @@ export function renderConvoList() {
         // ⚠️ 2026-10-12 去掉了原来那行副标题（「谁 · 什么时候」）：
         //    「跟谁聊」头像已经在说，「什么时候」挪到右端 —— 两行并一行之后
         //    一屏能多放进两个会话，扫列表也快一点。
-        h('span', { class: 'convo-title', text: label, title: label }),
+        h('span', { class: 'convo-story-text' },
+          h('span', { class: 'convo-title', text: label, title: label }),
+          h('small', { class: 'convo-preview', text: storyPreview(convo) })),
         h('span', { class: 'convo-time', text: convoTimeLabel(convo.updatedAt) }),
         button({
           class: 'convo-del',

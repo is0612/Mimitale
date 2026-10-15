@@ -42,6 +42,24 @@ import { maybeSummarize } from './summarize.js';
 import { maybePetAutoSpeak } from '../data/petContext.js';
 
 let preparationStopped = false;
+let cancelPreparation = null;
+
+async function prepareCompletion(convo) {
+  let timeout;
+  const interrupted = new Promise((_, reject) => {
+    cancelPreparation = () => reject(new Error('已停止生成。'));
+    timeout = setTimeout(() => reject(new Error('准备回复超时，请重试或检查语义检索服务。')), 45000);
+  });
+  try {
+    return await Promise.race([
+      (async () => ({ worldbook: await matchWorldbookSections(convo), ragSection: await recallSection(convo) }))(),
+      interrupted
+    ]);
+  } finally {
+    clearTimeout(timeout);
+    cancelPreparation = null;
+  }
+}
 
 function setStreaming(on) {
   if (on) preparationStopped = false;
@@ -358,8 +376,7 @@ export async function continueLastMessage() {  const convo = activeConvo();
 
   setStreaming(true);
   try {
-    const worldbook = await matchWorldbookSections(convo);
-    const ragSection = await recallSection(convo);
+    const { worldbook, ragSection } = await prepareCompletion(convo);
     if (preparationStopped) return;
 
     const index = convo.messages.length - 1;
@@ -450,13 +467,13 @@ async function requestCompletion(convo, options) {
   setStreaming(true);
   let assistant = null;
   let index = -1;
+  let waitingTimer = null;
 
   try {
     // 世界书在渲染层匹配（和 buildApiMessages 同一个进程，省一次往返）。
     // 之前这里要求「消息数 ≥ 3」才匹配，但那会让世界模型的第一个回合拿不到设定 ——
     // 而开场引导往往正是最需要世界书的时候。匹配本身是本地纯计算，不省这一下。
-    const worldbook = await matchWorldbookSections(convo);
-    const ragSection = await recallSection(convo);
+    const { worldbook, ragSection } = await prepareCompletion(convo);
 
     if (preparationStopped) return;
     const requestId = uid();
@@ -496,9 +513,19 @@ async function requestCompletion(convo, options) {
       // 本机桥接一次返回全文、非流式，出图时整轮可能 30~40 秒 —— 提前说明别让用户干等
       wait.textContent = isBridgeProvider(endpoint.provider)
         ? '正在生成（本地模型，出图时可能需要 40 秒左右）'
-        : '正在思考';
+        : '正在等待模型回应…';
       node.innerHTML = '';
       node.appendChild(wait);
+      const started = Date.now();
+      if (!isBridgeProvider(endpoint.provider)) waitingTimer = setInterval(() => {
+        if (!wait.isConnected) return;
+        const seconds = Math.floor((Date.now() - started) / 1000);
+        wait.textContent = assistant.reasoning
+          ? `模型正在深度思考…（${seconds} 秒）`
+          : seconds >= 15
+            ? `服务暂未输出内容，正在等待…（${seconds} 秒，可点停止）`
+            : `正在等待模型回应…（${seconds} 秒）`;
+      }, 1000);
     }
 
     const response = await api.sendChat({
@@ -667,6 +694,7 @@ async function requestCompletion(convo, options) {
       convo.messages.push({ role: 'error', content: message, at: now(), retryable: true });
     }
   } finally {
+    if (waitingTimer) clearInterval(waitingTimer);
     streamPainter.stop();
     setStreaming(false);
     state.requestId = null;
@@ -765,6 +793,9 @@ export function switchVariant(index, delta) {
 
 export async function stopGenerating() {
   // 只停聊天这一路 —— 后台摘要 / AI 生成角色这些不归「停止」按钮管
-  if (state.streaming && !state.requestId) preparationStopped = true;
+  if (state.streaming && !state.requestId) {
+    preparationStopped = true;
+    if (cancelPreparation) cancelPreparation();
+  }
   if (state.requestId) await api.stopChat(state.requestId);
 }

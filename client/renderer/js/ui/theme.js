@@ -57,9 +57,9 @@ export function setTheme(theme) {
 
 // 名字给外观弹窗里的色点标签和提示用
 const ACCENT_NAME = {
-  amber: '琥珀灯',
+  amber: '苔影酒馆',
   pink: '草莓奶昔',
-  blue: '苏打气泡',
+  blue: '星空蓝',
   matcha: '抹茶奶绿'
 };
 

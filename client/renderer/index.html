@@ -7,17 +7,9 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app">
+  <div class="app" data-view="chat">
     <!-- ================= 左侧边栏 ================= -->
     <aside id="sidebar" class="sidebar">
-      <!-- 品牌区只留标记 + 名字。配色方案和夜间模式原来在这挂了两颗图标，
-           现在挪进「外观」弹窗（顶栏那颗按钮）—— 那里才是「改外观」的地方，
-           而且弹窗里能用文字写清楚每套配色叫什么，图标只能靠猜。 -->
-      <!-- 左栏收起 / 展开。跟右栏那颗一个套路：收成窄条、点同一颗回来。
-           绝对定位，不参与侧栏的 flex 流 —— 收起时其它内容整片 display:none，
-           只剩它自己。 -->
-      <button id="btn-sidebar-toggle" class="sidebar-toggle" type="button"
-              title="收起侧栏" aria-label="收起侧栏" aria-expanded="true">‹</button>
 
       <div class="brand">
         <img class="brand-logo" src="assets/brand-logo.png" alt="" draggable="false" />
@@ -25,27 +17,23 @@
         <!-- 版本号从主进程启动参数递进来（preload 的 appVersion）。
              拿不到就整个不显示 —— 不留一个光秃秃的「v」。 -->
         <span id="brand-version" class="brand-version hidden"></span>
+        <button id="btn-sidebar-toggle" class="sidebar-toggle" data-icon="panel-left" type="button" title="收起侧栏" aria-label="收起侧栏" aria-controls="sidebar" aria-expanded="true"></button>
       </div>
 
-      <button id="btn-new" class="btn btn-primary btn-block btn-new" aria-label="创建新对话">＋ 新对话</button>
-
-      <!-- ⛔ 搜索会话框 2026-10-12 晚**去掉**了（星宝：「去掉搜索对话功能」）。
-           当时的实现只过滤侧栏这个列表、不动数据，但它挤在「新对话」和列表之间占一行，
-           而会话本来就不多。要做就做成全局搜索（连消息内容一起搜），half 版不如不做。 -->
+      <button id="btn-new" class="btn btn-primary btn-block btn-new" data-icon="plus" aria-label="创建新对话">开启新篇章</button>
 
       <div id="convo-cap" class="sidebar-label">最近会话</div>
       <div id="convo-list" class="convo-list" role="list"></div>
 
-      <!-- 底部 6 颗入口。⚠️ 文字包在 .foot-label 里是**为了收起态**：
+      <!-- 底部创作与设置入口。⚠️ 文字包在 .foot-label 里是**为了收起态**：
            收成 56px 图标轨时只藏这层文字、图标留着（稿子屏 2 就是这样）。
            文字直接裸在 button 里就没法单独隐藏，只能整颗 display:none。 -->
       <div class="sidebar-foot">
+        <div class="sidebar-section-title">创作空间</div>
         <button id="btn-chars" class="btn btn-ghost btn-block" data-icon="users" aria-label="打开角色库"><span class="foot-label">角色库</span></button>
-        <button id="btn-worldbooks" class="btn btn-ghost btn-block" data-icon="book" aria-label="打开世界书"><span class="foot-label">世界书</span></button>
+        <button id="btn-worldbooks" class="btn btn-ghost btn-block" data-icon="book-open" aria-label="打开世界书"><span class="foot-label">世界书</span></button>
         <button id="btn-presets" class="btn btn-ghost btn-block" data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span></button>
-        <button id="btn-help" class="btn btn-ghost btn-block" data-icon="help" aria-label="打开帮助"><span class="foot-label">帮助</span></button>
         <button id="btn-settings" class="btn btn-ghost btn-block" data-icon="settings" aria-label="打开设置"><span class="foot-label">设置</span></button>
-        <button id="btn-folder" class="btn btn-ghost btn-block" data-icon="folder" aria-label="打开数据文件夹"><span class="foot-label">数据</span></button>
       </div>
 
       <!-- 收起态图标轨最下面那颗：当前会话的头像（稿子屏 2，y≈866 那个 20px 方角图）。
@@ -57,8 +45,8 @@
     <main class="main">
       <!-- 视图一：聊天 -->
       <section id="view-chat" class="view">
-      <!-- 对话列。整个聊天界面（顶栏 / 入口条 / 消息 / 输入框 / 悬浮状态卡）
-           都在里面，所以切到角色库 / 世界书时整块一起消失，不用另写判断。 -->
+      <!-- 主内容中的聊天列：顶栏、场景、消息、输入框与浮动状态卡共用背景。
+           inspector 与 main 并列，由应用当前视图控制显隐。 -->
       <div class="chat-col">
       <header class="topbar">
         <!-- 顶栏头像（设计稿 .top 里那个 .ava）—— 一眼看出「这一屏是在跟谁聊」：
@@ -74,6 +62,7 @@
                第一个数值字段（「好感 41」这种）—— 不用开状态卡就能看见最要紧的数。
                ⚠️ 胶囊是 #convo-title 的**兄弟**不是子节点：标题由 renderHeader 直接
                写 textContent，塞进去会被一起冲掉。 -->
+          <div class="story-eyebrow"><span class="story-status-dot" aria-hidden="true"></span><span id="story-context">故事进行中</span></div>
           <div class="topbar-name">
             <h1 id="convo-title">新对话</h1>
             <span id="convo-pill" class="pill-tag hidden"></span>
@@ -97,39 +86,26 @@
           <!-- 顶栏这三颗改成**图标按钮**（设计稿：26×26、方角、深底细描边）——
                标题下面多出一行元信息之后，三个文字按钮会把顶栏挤成两行。
                可发现性交给 title，鼠标停一下就知道是什么。 -->
-          <!-- 2026-10-12 深夜（星宝：「把头部的外观加入到设置里，然后去掉头部的外观，把记忆放出来」）：
-               ① 外观那颗**撤掉** —— 整块搬进了 设置 → 外观（视图六的第 6 组）；
-               ② 空出来的位置给「记忆」：它原来压在「⋯」菜单里，
-                  「这一局记住了什么」是这几个里最常点的一项，值得占一颗。
-               徽标 #memory-count 挂在右上角（.memory-badge 的 .topbar-icon 那一版）。 -->
+
           <button id="btn-memory" class="topbar-icon" data-icon="bookmark" type="button"
                   title="记忆：这一局记住了什么" aria-label="打开记忆管理">
             <span id="memory-count" class="memory-badge hidden"></span>
           </button>
-          <!-- ⛔ 顶栏那颗「外观」2026-10-12 深夜去掉（搬进设置页），
-               data-icon="palette" 的图标定义留在 ui/icons.js（设置导航那一组要用）。 -->
+
           <button id="btn-perspective" class="topbar-icon" data-icon="eye" type="button"
                   title="视角：叙述模式 / 推进节奏 / GM 模式" aria-label="打开视角设置"></button>
-          <!-- 其余几项收进「⋯」：一排七八个按钮把标题挤成竖排了。
-               常用的（切换模型 / 外观 / 视角）留在外面，偶尔用的收进菜单。
-               菜单的开关逻辑在 js/ui/menu.js，菜单项自己的事件还在原来各处绑。 -->
+
           <div class="menu-wrap">
             <button id="btn-more" class="btn btn-ghost btn-sm menu-toggle topbar-icon" type="button"
-                    aria-label="更多操作" aria-haspopup="menu" aria-expanded="false">⋯</button>
+                    aria-label="更多操作" data-icon="ellipsis" aria-haspopup="menu" aria-expanded="false"></button>
             <div id="topbar-more" class="menu-pop hidden" role="menu" aria-label="更多操作">
-              <!-- 「记忆」2026-10-12 深夜从这里**提到顶栏**了（星宝：「把记忆放出来」）——
-                   它现在是 .topbar-actions 里那颗 data-icon="bookmark" 的图标按钮。
-                   别在菜单里再放一颗：同一个 id 的按钮不能有两份。 -->
+
               <button id="btn-copy-all" class="menu-item" type="button" role="menuitem">复制全文</button>
               <button id="btn-export-convo" class="menu-item" type="button" role="menuitem">导出</button>
               <!-- 排查用：把最近几次真正发出去的请求原样摊开。
                    它不是显示开关，是一次性的动作，所以用普通 menuitem。 -->
               <button id="btn-request-log" class="menu-item" type="button" role="menuitem"
                       title="看看这几轮到底给模型发了什么">请求记录</button>
-              <!-- 生成参数：稿子（屏 2）里是个右侧抽屉，但没画入口 —— 收进「⋯」
-                   正合这里的规矩：常点的留外面，偶尔调的收起来。 -->
-              <button id="btn-gen-params" class="menu-item" type="button" role="menuitem"
-                      title="这一局的采样参数（温度 / 核采样 / 最大长度）">生成参数</button>
               <button id="btn-clear" class="menu-item menu-item-danger" type="button" role="menuitem">清空对话</button>
             </div>
           </div>
@@ -137,23 +113,14 @@
         </div>
       </header>
 
-      <!-- ============ 在场角色：入口条（一行） + 浮动的状态卡 ============
-           入口条跟着对话列**从上往下**排在消息区上面；卡片是**悬浮**在正文上的，
-           点入口条上的头像打开，可拖动，位置按 owner 各记各的。-->
-      <section id="panel-box" class="panel-box hidden" aria-label="在场角色（状态卡入口）">
-        <span class="panel-title">在场角色 <b id="panel-cast-count">0</b></span>
-        <div id="panel-cast" class="panel-cast" aria-label="本局角色状态卡入口"></div>
-        <button id="btn-cards-all" class="panel-all" type="button">全部展开</button>
-      </section>
+      <!-- 场景取自真实状态；角色头像入口位于右栏，状态卡悬浮在对话列内。 -->
+      <div id="scene-context" class="scene-context" aria-label="当前故事场景"></div>
 
       <section id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions"></section>
 
       <footer class="composer">
         <!-- 「帮我想想」给出的几个下一步。点一下就当成你说的话发出去 -->
-        <!-- 设计稿（屏 1 / 屏 2）里这是一**行**：小标题 → 几颗胶囊 → 最右边收起。
-             原来是个「标题 + 收起」的头再加一列胶囊，白占一行高度。
-             ⚠️ 去掉 .suggest-head 这层包装是安全的：JS 只认 #suggest-strip 和
-                #suggest-list，中间那层没有任何代码在找。 -->
+
         <div id="suggest-strip" class="suggest-strip hidden" aria-label="可以这样接话">
           <span class="suggest-title">可以这样接</span>
           <div id="suggest-list" class="suggest-list"></div>
@@ -169,22 +136,17 @@
                   title="快捷短语：插进输入框" aria-label="快捷短语"
                   aria-haspopup="menu" aria-expanded="false"></button>
           <div id="quick-menu" class="menu-pop quick-menu hidden" role="menu" aria-label="快捷短语"></div>
-          <textarea id="input" rows="2" placeholder="说点什么……（Shift + Enter 换行）" aria-label="输入消息"></textarea>
-          <button id="btn-send" class="btn btn-primary btn-send" aria-label="发送消息">发送</button>
+          <textarea id="input" rows="2" placeholder="写下你的回应，让故事继续……" aria-label="输入消息"></textarea>
+          <div class="compose-tools">
+            <span class="writing-mode">故事，由你续写</span>
+            <button id="btn-send" class="btn btn-primary btn-send" data-icon="arrow-up" title="发送回应" aria-label="发送消息"></button>
+          </div>
         </div>
         <div class="composer-hint">
           <span id="hint-text">Enter 发送 · Shift + Enter 换行</span>
           <span id="usage-text"></span>
         </div>
 
-        <!-- 对话区宽度抓手：贴在**输入框两侧**，拖动改左右内缩
-             （2026-10-13 从消息区两侧挪下来的 —— 那两根竖线现在归侧栏收放）。
-             挂在 .composer 里而不是 .chat-col 上，是为了让它自动跟着输入区的高度走：
-             输入框会随内容变高（auto-grow），写死在 .chat-col 上的 top/bottom 对不准。
-             ⚠️ 它是调内缩的**唯一**入口 —— 顶栏那颗「对话宽度」按钮和它的弹层
-                2026-10-12 就删掉了（理由：「聊天框里已经能调宽度了」）。
-             拖它改的是「这一列左右留多少白」：**消息区和输入框一起缩**
-             （两者都吃 --chat-pad-left/right），所以输入框会跟着一起变窄。 -->
         <button id="pad-handle-left" class="pad-handle" data-side="left" type="button"
                 title="拖动调节左侧内缩" aria-label="拖动调节对话区左侧内缩"></button>
         <button id="pad-handle-right" class="pad-handle" data-side="right" type="button"
@@ -195,20 +157,6 @@
            只有卡片实体可交互。卡片是绝对定位的，位置由 stateCard.js 算。 -->
       <div id="state-cards" class="state-cards"></div>
 
-      <!-- 侧栏收放把手：**垂直居中**那颗（2026-10-13 晚从「靠上」挪到中间的 ——
-           星宝：「边缘放收栏要在中间」）。调内缩的那颗在**输入框两侧**
-           （见 .composer 里那两个 .pad-handle），一个在中间、一个在底部，不会撞。
-           左把手管左栏（绑在 main.js）、右把手管右栏（绑在 views/castPanel.js）；
-           右栏是条件出现的，它不显示时右把手跟着一起藏。
-           ⚠️ 箭头用**文字字符**（‹ ›）而不是 SVG 图标：`iconSvg` 那套画在 24×24 上、
-              是给 14px 以上用的细线，缩进 16×26 的把手方块里只剩三四个像素 ——
-              2026-10-13 试过「分栏框」和 polyline 箭头两种，出图放大 4 倍都糊成一个点。
-              文字字形在小尺寸下清楚，而且跟栏内那两颗「‹」是同一套语言。 -->
-      <button id="rail-handle-left" class="rail-handle" data-side="left" type="button"
-              title="收起侧栏" aria-label="收起侧栏" aria-expanded="true">‹</button>
-      <button id="rail-handle-right" class="rail-handle" data-side="right" type="button"
-              title="收起这一栏" aria-label="收起这一栏" aria-expanded="true">›</button>
-
       <!-- 拖动宽度时那条虚线：画在「松开后会落到哪」的位置上，拖到哪儿看见哪儿。
            竖直范围由 chatPad.js 算 —— 从消息区顶一直到对话列底（消息区 + 输入区都要缩，
            只画消息区那段会让人以为输入框不动）。 -->
@@ -216,71 +164,6 @@
       <div id="pad-guide-right" class="pad-guide hidden" aria-hidden="true"></div>
 
       </div><!-- /.chat-col -->
-
-      <!-- 右侧常驻面板（设计稿的第三栏）—— **两个页签**：「在场角色」/「生成参数」。
-           ⚠️ 2026-10-12 晚改的：生成参数原来是**另一个浮层**（#gen-drawer，320px，
-              从右边盖住这一栏，开的时候还会把对话列挤窄 264）。两者抢同一个右边缘 ——
-              稿子自己也没解决这处冲突（屏 2 画抽屉、屏 1/3 画在场角色栏）。
-              改成同一栏的两个页签之后：对话列**宽度一点不变**（开参数不再让正文跳一下），
-              而且两者本来就是同一类东西（「这一局的仪表盘」：一个是看、一个是调）。
-           出现条件：有在场角色、**或者**这一局绑了世界书、**或者**参数页签被打开。
-              什么都没有时整栏收起来，不白占 264px。 -->
-      <aside id="cast-panel" class="cast-panel hidden" aria-label="右侧面板">
-        <div class="cast-head">
-          <div class="cast-tabs" role="tablist" aria-label="右侧面板">
-            <button id="btn-tab-cast" class="cast-tab active" type="button" role="tab"
-                    aria-selected="true" aria-controls="cast-panel-body">在场角色 <b id="cast-panel-count" class="cast-head-count">0</b></button>
-            <button id="btn-tab-gen" class="cast-tab" type="button" role="tab"
-                    aria-selected="false" aria-controls="gen-body">生成参数</button>
-          </div>
-          <button id="btn-cast-collapse" class="cast-collapse" type="button"
-                  title="收起这一栏" aria-label="收起在场角色面板">›</button>
-        </div>
-        <div class="cast-divider"></div>
-        <div id="cast-panel-body" class="cast-body" role="tabpanel" aria-labelledby="btn-tab-cast"></div>
-
-        <!-- 页签二：生成参数（稿子屏 2 那个抽屉的内容搬进来的）。
-             参数**按会话存**（convo.sampling）：滑过 = 这一局改过；没滑过 = 跟随预设 / 全局，
-             所以数值用**主色**标出「这一局自己定了」，灰色就是「跟随中」。
-             ⚠️ 稿子上还有「重复惩罚 / 状态表扫描 / 心理描写 / 流式输出 / 正则」——
-               它们要么没有实现、要么已经有别的入口（「心理描写」就是「视角 → 叙述模式」），
-               摆一排点了没反应的控件比不画更糟，所以没做。 -->
-        <div id="gen-body" class="gen-body hidden" role="tabpanel" aria-labelledby="btn-tab-gen">
-          <p class="gen-preset-line">本轮生效：<span id="gen-preset" class="gen-preset"></span></p>
-
-          <div class="gen-group-title">采样</div>
-          <label class="gen-row">
-            <span class="gen-label">温度</span>
-            <input id="gen-temperature" class="gen-range" type="range" min="0" max="2" step="0.01" aria-label="温度" />
-            <span id="gen-temperature-value" class="gen-value">—</span>
-          </label>
-          <label class="gen-row">
-            <span class="gen-label">核采样</span>
-            <input id="gen-topp" class="gen-range" type="range" min="0" max="1" step="0.01" aria-label="核采样" />
-            <span id="gen-topp-value" class="gen-value">—</span>
-          </label>
-
-          <div class="gen-group-title">输出</div>
-          <label class="gen-row">
-            <span class="gen-label">最大长度</span>
-            <input id="gen-maxtokens" class="gen-range" type="range" min="64" max="32000" step="64" aria-label="最大长度" />
-            <span id="gen-maxtokens-value" class="gen-value">—</span>
-          </label>
-        </div>
-
-        <!-- 页签一的脚注：世界书 · 书名 / N 条已触发 -->
-        <div id="cast-foot" class="cast-foot">
-          <span id="cast-foot-book" class="cast-foot-text"></span>
-          <span id="cast-foot-hit" class="cast-foot-hit"></span>
-        </div>
-
-        <!-- 页签二的脚注：说明 + 恢复默认 -->
-        <div id="gen-foot" class="gen-foot hidden">
-          <p class="gen-hint">改动只影响这一局，跟着会话一起存；没动过的项跟随预设 / 全局设置。</p>
-          <button id="btn-gen-reset" class="btn btn-ghost btn-sm" type="button"
-                  title="三项都清空，回到跟随预设 / 全局">恢复默认</button>
-        </div>
-      </aside>
 
       </section>
 
@@ -310,13 +193,6 @@
         </div>
       </section>
 
-      <!-- 视图七：角色编辑器（2026-10-13 从弹窗改成整页）
-           跟设置页同一套壳：占满主区域，页头左边标题、右边「返回 / 保存」，
-           在它里面按 Esc 和点「返回」是同一件事 —— 回到进来之前那一屏
-           （角色库，或者从世界书编辑器点进来的那一份）。
-
-           ⚠️ 下面这块是从弹窗里**整段搬过来**的，缩进没重排（比本节浅一级），
-              别为缩进单独起一次格式 diff。 -->
       <section id="view-char-editor" class="view hidden" aria-label="编辑角色">
         <header class="page-head">
           <div class="page-heading">
@@ -324,7 +200,7 @@
             <p id="chars-sub" class="page-sub"></p>
           </div>
           <div class="page-actions">
-            <!-- 返回就是以前那颗 ✕ 的位置：弹窗改成页面之后，「关掉」等于「回到上一屏」 -->
+
             <button id="btn-close-chars" class="btn btn-ghost btn-sm" type="button" title="返回上一屏（Esc）">返回</button>
             <button id="btn-save-char" class="btn btn-primary btn-sm" type="button">保存角色</button>
           </div>
@@ -556,11 +432,6 @@
                 </div>
               </div>
 
-              <!-- 「＋ 金币」那种快捷候选词行曾经在这儿（内容来自「设置 → 状态属性」）。
-                   2026-10-09 连同设置项一起去掉：属性名本来就得按角色写，
-                   靠一份全局清单省不了几个字，却多占一行、还要人去维护。
-                   现在就是上面那行手写 + 「粘贴文本」两条路。 -->
-
               <span class="field-help">
                 这些属性会进游玩时的「状态」面板，每轮由程序注入给 AI，数值不会漂。<br />
                 这里填的是<b>初始值</b>；进游戏之后在面板里改的是<b>这一局的当前值</b>，不会动到角色卡。
@@ -681,10 +552,6 @@
         </div>
       </section>
 
-      <!-- 视图八：世界书编辑器（2026-10-13 从弹窗改成整页）
-           和角色编辑器同一个套路：占满主区域，页头左边标题、右边「返回 / 保存」。
-           「有未保存的改动」那面小旗子原来在页脚，跟着「保存」一起挪到页头了。
-           ⚠️ 中间这块是从弹窗里整段搬过来的，缩进没重排。 -->
       <section id="view-wb-editor" class="view hidden" aria-label="编辑世界书">
         <header class="page-head">
           <div class="page-heading">
@@ -701,17 +568,8 @@
         <div class="worldbook-body">
         <div id="wb-book-empty" class="wb-empty">左边选一本书，或新建一本</div>
 
-        <!-- 左半边是并排的两列（书设置 280 + 条目列表 268），一起包在 #wb-book-wrap 里 ——
-             两块都只在「选中了一本书」时出现，由 worldbook.js 的 selectWorldbook 一次开/关。
-             顺序 = 书 → 条目 → 该条目的内容，从左往右读。
-
-             ⚠️ 这两个 id 2026-10-13 之前叫 wb-entries-empty / wb-entries-wrap：
-             「整本书的表单」那层壳以前跟条目列表同处一栏，名字里还留着 entries。 -->
         <div id="wb-book-wrap" class="wb-book-wrap hidden">
 
-        <!-- 左一栏：本书设置。放的全是「设一次就不动」的东西（书名 / 开场白 / 本书角色 /
-             预览 / 导出 / 删除本书）—— 它们以前和条目列表挤在同一个 268px 里，
-             条目卡被压得只露三四张，这才是「内容太多也乱」的来源。 -->
         <section class="wb-book">
           <div class="wb-book-title">本书设置</div>
 
@@ -784,8 +642,7 @@
 
         <!-- 左二栏：条目列表。高频 —— 每次进来都在点它，所以紧挨着编辑区。 -->
         <section class="wb-entries">
-          <!-- 条目：标题和「开场白」一个样式。条目数原来挂在书名下面，
-               看着像书名的注脚 —— 挪到它自己的标题旁边才对得上。 -->
+
           <div class="wb-entry-head">
             <span class="field-label">条目</span>
             <span id="wb-entry-count" class="wb-count"></span>
@@ -902,7 +759,6 @@
         </section>
         </div><!-- /worldbook-body -->
 
-        <!-- 页脚只剩状态行：那两颗书级按钮（导出 / 删除本书）2026-10-13 收进左栏「本书设置」底部了。 -->
         <footer class="page-foot">
           <span id="wb-foot-hint" class="foot-hint">世界书只保存在你自己电脑上</span>
         </footer>
@@ -971,7 +827,7 @@
                 <li><a href="#help-10">出问题的时候</a></li>
                 <li><a href="#help-11">测一测，然后发布</a></li>
               </ol>
-            </nav>
+          </nav>
 
             <!-- 01 -->
             <section id="help-1" class="help-sec">
@@ -1306,17 +1162,6 @@
            故意放在两个视图外面，切换页面时提示不会跟着被藏起来。 -->
       <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-      <!-- ================= 视图六：设置 =================
-           2026-10-09 从弹窗改成**页面**。理由：设置项越加越多（六块卡片），塞在
-           86vh 的弹窗里得一路滚；而它本来就是「低频但会待一会儿」的界面（填 Key、
-           写人设、调桌宠人格），给一整屏更合适 —— 顺带也少了一层弹窗层级，
-           「默认人设」那个弹窗现在是压在页面上，不再是压在弹窗上。
-
-           打开 / 离开都由 views/settings.js 管：它要先刷新内容，还要记住**来处**
-           （保存 / 返回 / Esc 都回到进来之前那一屏，等于以前「关掉弹窗」的语义）。
-
-           ⚠️ 里面那六个 panel-section 保持从弹窗里带过来的缩进（比这里浅一级）——
-              它们是整段搬过来的，没重排，别为缩进单独起一次格式 diff。 -->
       <section id="view-settings" class="view hidden" aria-label="设置">
         <header class="page-head">
           <div class="page-heading">
@@ -1324,22 +1169,12 @@
             <p class="page-sub">配置模型接口与对话行为 · 只保存在本机，改完记得点保存</p>
           </div>
           <div class="page-actions">
-            <!-- 返回 = 不保存直接走（就是以前那颗 × 的位置）。
-                 保存以前固定在弹窗底部，现在跟「返回」并排放在页头，滚到哪儿都能点。 -->
+
             <button id="btn-back-settings" class="btn btn-ghost btn-sm" type="button" title="返回上一屏（Esc）">返回</button>
             <button id="btn-save-settings" class="btn btn-primary btn-sm" type="button" aria-label="保存设置">保存</button>
           </div>
         </header>
 
-        <!-- 2026-10-10 从「一列可折叠卡片」改成「左侧导航 + 右侧内容」：
-             设置项越加越多，一列铺下来要滚很久，还容易找不到目标区块。
-             现在左边是一条固定的分组导航，右边只显示当前那一组，一屏装完。
-
-             接口没变：`id` 仍沿用旧的（sec-models / sec-params / sec-behavior /
-             sec-image / sec-rag / pet-section），expandSettingsSection(id) 照样能用
-             —— 它现在做的是「切到那一组」而不是「拆开那张卡」。
-             导航项的 data-target 指向这些 id；分组内容还是原来那些 .panel-section，
-             但**不再折叠**（.collapsible/.open 那套已摘掉，见 style.css）。 -->
         <div class="settings-shell">
           <nav class="settings-nav" aria-label="设置分组">
             <button class="settings-nav-item active" type="button" data-target="sec-models">
@@ -1407,10 +1242,6 @@
               </span>
             </button>
 
-            <!-- 外观：2026-10-12 深夜从**顶栏那颗调色盘**搬进来的（星宝：
-                 「把头部的外观加入到设置里，然后去掉头部的外观」）。
-                 内容原样搬自 #appearance-modal，id 全保留 —— views/appearance.js
-                 只认 id，接线一行没改。 -->
             <button class="settings-nav-item" type="button" data-target="sec-appearance">
               <span class="settings-nav-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1441,9 +1272,18 @@
                 <span class="settings-nav-desc">桌面上的小家伙</span>
               </span>
             </button>
+            <button class="settings-nav-item" type="button" data-target="sec-support">
+              <span class="settings-nav-icon" data-icon="help" aria-hidden="true"></span>
+              <span class="settings-nav-text"><span class="settings-nav-title">帮助与数据</span><span class="settings-nav-desc">使用说明与本地数据</span></span>
+            </button>
           </nav>
 
           <div class="settings-content page-body settings-body">
+        <section class="panel-section" id="sec-support">
+          <div class="section-head"><span class="section-heading"><span class="section-title">帮助与数据</span><span class="section-desc">使用说明与本机数据管理。</span></span></div>
+          <div class="field field-stack"><span class="field-label">使用帮助</span><p class="field-help">查看角色、世界书、预设与聊天功能的使用说明。</p><button id="btn-help" class="btn btn-ghost" data-icon="help" type="button" aria-label="打开帮助">打开帮助</button></div>
+          <div class="field field-stack"><span class="field-label">本地数据</span><p class="field-help">打开本机数据文件夹，查看或备份应用数据。</p><button id="btn-folder" class="btn btn-ghost" data-icon="folder" type="button" aria-label="打开数据文件夹">打开数据文件夹</button></div>
+        </section>
         <!-- 每个大版块一张卡，一次只显示一张 —— 由左栏导航切换（逻辑在
              views/settings.js 的 showSettingsSection）。下面这些内容保持原样，
              不用再包一层容器。 -->
@@ -1462,11 +1302,6 @@
             <span class="section-stat" id="stat-models" aria-live="polite"></span>
           </div>
 
-          <!-- 模型提供商卡片（2026-10-10 从一排胶囊标签换成卡片，见 style.css 的
-               .provider-card）。id 仍叫 provider-tabs：settings.js 的 renderProviderTabs
-               按它取容器，改名得连逻辑一起动，不值得。
-               role 也不再是 tablist —— 卡片里带了状态文字和选中圈，
-               语义上更接近一组单选（radio），不是纯标签页。 -->
           <div id="provider-tabs" class="provider-cards" role="radiogroup" aria-label="模型提供商"></div>
 
           <div class="provider-add">
@@ -1525,19 +1360,26 @@
             </span>
             <span class="section-heading">
               <span class="section-title">生成参数</span>
-              <span class="section-desc">控制回答的随机程度和长度</span>
+              <span class="section-desc">与右侧生成参数同步，统一控制思考、随机程度和长度</span>
             </span>
           </div>
 
           <div class="field-grid">
             <label class="field">
               <span class="field-label">温度</span>
-              <input id="s-temp" type="number" min="0" max="2" step="0.1" />
+              <input id="s-temp" type="number" min="0" max="2" step="0.01" />
               <span class="field-help">越大越有创意，越小越稳定。0.7 通用。</span>
             </label>
             <label class="field">
+              <span class="field-label">核采样</span>
+              <input id="s-topp" type="number" min="0" max="1" step="0.01" />
+              <span class="field-help">控制候选词范围，默认 0.95。部分模型会忽略此参数。</span>
+            </label>
+            <label class="check"><input id="s-thinking" type="checkbox" /><span class="check-text"><b>深度思考</b><small>默认开启，适用于支持该参数的模型。</small></span></label>
+            <label class="field">
               <span class="field-label">回复上限</span>
               <input id="s-maxtokens" type="number" min="64" max="32000" step="64" />
+
               <span class="field-help">越大回复越长，也越费钱。推理模型的「思考」也算在这份额度里；若调大后仍反复被截断，多半是模型提供商按模型自己的上限截断，换个模型比继续调大更管用。</span>
             </label>
           </div>
@@ -1615,12 +1457,6 @@
             </span>
           </label>
         </section>
-
-        <!-- 曾经这里有一块「状态属性」（角色编辑器里「属性」的快捷候选词清单）。
-             2026-10-09 去掉：候选词没人维护，反而在编辑器里多占一行。
-             属性照旧手写或粘贴文本，还能设类型 / 范围 / 分组。
-             ⚠️ 配套去掉的还有：#c-attr-quick 那一行、settings.js 的读写、
-                main/providers.js 的 commonAttributes 归一化、smoke 里的相关断言。 -->
 
         <!-- 生图：和聊天是两套配置，默认留空 = 不启用 -->
         <section class="panel-section" id="sec-image">
@@ -1721,13 +1557,6 @@
           </span>
         </section>
 
-        <!-- 外观：2026-10-12 深夜从**顶栏弹窗**（#appearance-modal）搬进设置页。
-             两档东西，搬过来一点没变：
-               ① 主题配色 + 明暗 —— 整个界面都跟着变（侧栏、按钮、所有弹窗）
-               ② 正文字号 / 加粗色 / 背景图 —— 只管聊天区怎么显示
-             都不碰发给 AI 的内容，改完**立即生效**（页头那颗「保存」管的是上面那几组配置）。
-             ⚠️ 所有 id 都是原样搬的：views/appearance.js 只认 id、不认容器，所以那边
-                只删掉了「弹窗开关」那三行，其余接线一行没动。 -->
         <section class="panel-section" id="sec-appearance">
           <div class="section-head">
             <span class="section-icon" aria-hidden="true">
@@ -1745,22 +1574,19 @@
             </span>
           </div>
 
-          <!-- 管整个界面的两样并成一行两栏（原来是弹窗里怕它长出可视区才这么排，
-               搬进设置页之后这一屏更宽，两栏也更宽敞）。 -->
           <div class="appearance-global">
             <div class="field field-stack">
               <span class="field-label">主题配色</span>
-              <!-- 四选一。原来是左上角一颗「循环」按钮：点一下换下一套，
-                   想知道「一共有几套、现在在哪套」只能一路点下去。 -->
+
               <div id="appearance-accents" class="accent-swatches" role="radiogroup" aria-label="主题配色">
-                <button class="accent-swatch" type="button" data-accent="amber" role="radio" aria-checked="false" title="琥珀灯">
-                  <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">琥珀灯</span>
+                <button class="accent-swatch" type="button" data-accent="amber" role="radio" aria-checked="false" title="苔影酒馆">
+                  <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">苔影酒馆</span>
                 </button>
                 <button class="accent-swatch" type="button" data-accent="pink" role="radio" aria-checked="false" title="草莓奶昔">
                   <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">草莓奶昔</span>
                 </button>
-                <button class="accent-swatch" type="button" data-accent="blue" role="radio" aria-checked="false" title="苏打气泡">
-                  <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">苏打气泡</span>
+                <button class="accent-swatch" type="button" data-accent="blue" role="radio" aria-checked="false" title="星空蓝">
+                  <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">星空蓝</span>
                 </button>
                 <button class="accent-swatch" type="button" data-accent="matcha" role="radio" aria-checked="false" title="抹茶奶绿">
                   <span class="accent-dot" aria-hidden="true"></span><span class="accent-label">抹茶奶绿</span>
@@ -1781,12 +1607,6 @@
 
           <hr class="appearance-divider" />
 
-          <!-- 界面字号 / 字体：2026-10-12 深夜加的（星宝：「规划项目字体大小，用 var，
-               这样可以整体改字号」+「弄一个小 / 中 / 大就好，毕竟只是系统的字号」）。
-               ⚠️ 它和下面那个「正文字号」是**两件事**：
-                  · 界面字号 → 改 --ui-size 一个变量，**整个界面**等比缩放（标题/按钮/列表）；
-                  · 正文字号 → 只管聊天消息区的字号（--chat-font-size）。
-               三档的系数写在 views/appearance.js 的 UI_SCALES 里（0.9 / 1 / 1.15）。 -->
           <div class="field field-stack">
             <span class="field-label">界面字号</span>
             <div id="appearance-uiscale" class="seg-group" role="radiogroup" aria-label="界面字号">
@@ -1841,11 +1661,12 @@
             <span class="field-label">对话窗口背景图</span>
             <div class="appearance-row">
               <button id="btn-pick-bg" class="btn btn-ghost btn-sm" type="button">选择图片</button>
+              <button id="btn-default-bg" class="btn btn-ghost btn-sm" type="button">雾境皮肤</button>
               <button id="btn-clear-bg" class="btn btn-ghost btn-sm" type="button">清除</button>
             </div>
             <div id="appearance-bg-preview" class="appearance-bg-preview hidden"></div>
             <span class="field-help">
-              铺在消息区（气泡是实心的，所以文字照样清楚）。<br />
+              覆盖整个聊天区域，顶栏、消息与输入区使用半透明面板，保持文字清楚。<br />
               图片会先压到最长边 1920 再存进设置文件，只保存在你自己电脑上。
             </span>
           </div>
@@ -2035,8 +1856,22 @@
         </div>
       </section>
     </main>
+      <!-- 右侧面板：角色状态与场景。生成参数在设置中统一调整。 -->
+      <aside id="cast-panel" class="inspector cast-panel hidden" aria-label="在场角色面板">
+        <div class="cast-head">
+          <div class="cast-tabs"><span id="cast-panel-title" class="cast-tab active">在场角色 <b id="cast-panel-count" class="cast-head-count">0</b></span></div>
+          <button id="btn-cast-collapse" class="cast-collapse" data-icon="panel-right" type="button" title="收起这一栏" aria-label="收起在场角色面板" aria-controls="cast-panel" aria-expanded="true"></button>
+        </div>
+        <section id="panel-box" class="cast-avatar-section hidden" aria-label="在场角色（状态卡入口）">
+          <div id="panel-cast" class="panel-cast" aria-label="本局角色状态卡入口"></div>
+          <span id="panel-cast-count" class="hidden" aria-hidden="true">0</span>
+          <button id="btn-cards-all" class="panel-all" type="button">全部展开</button>
+        </section>
+        <div class="cast-divider"></div>
+        <div id="cast-panel-body" class="cast-body" aria-labelledby="cast-panel-title"></div>
+        <div id="cast-foot" class="cast-foot"><span id="cast-foot-book" class="cast-foot-text"></span><span id="cast-foot-hit" class="cast-foot-hit"></span></div>
+      </aside>
   </div>
-
 
   <!-- ================= 表情图弹窗 =================
        挂在角色编辑弹窗之上。一张卡的表情动辄几十条，单独开一个窗口编，
@@ -2073,7 +1908,6 @@
       </footer>
     </div>
   </div>
-
 
   <!-- ================= 预设编辑器 =================
        只编辑一个预设：名字 + 说明 + 正文 +（可选）采样参数。
@@ -2182,11 +2016,7 @@
   </div>
 
   <!-- ================= 视角设置弹窗 ================= -->
-  <!-- 请求记录：把「这一轮到底发出去了什么」原样摊开。
-       为什么要它：同一个模型，官方网页版和本应用的回复常常不一样 ——
-       原因几乎总在「请求不同」（那边有官方预置的系统提示词、我们只发最近 N 轮、
-       采样参数也是自己设的），而请求以前是看不见的，只能靠猜。
-       数据只在主进程内存里（main/request-log.js），重启就没，所以这页是临时的排查工具。 -->
+
   <div id="requests-modal" class="modal hidden">
     <div class="modal-card requests-card" role="dialog" aria-modal="true" aria-labelledby="requests-title">
       <header class="modal-head">
@@ -2298,12 +2128,6 @@
       </footer>
     </div>
   </div>
-
-  <!-- ⛔ 外观弹窗（#appearance-modal）2026-10-12 深夜**删除** ——
-       整块内容搬进了 设置 → 外观（#sec-appearance，视图六里）。
-       这一批同时摘掉了：顶栏那颗 #btn-appearance、dom.js 里的
-       btnAppearance / appearanceModal / btnCloseAppearance / btnCloseAppearance2 四个引用、
-       以及 main.js Esc 链里「先关外观弹窗」那一段。 -->
 
   <!-- ================= 记忆管理弹窗 ================= -->
   <div id="memory-modal" class="modal hidden">
@@ -2474,9 +2298,7 @@
       </header>
 
       <div class="modal-body">
-        <!-- 人设是按**模型名**存的，所以「正在编辑谁」必须是个看得见、改得动的选择
-             ——以前这里只写一行「当前模型 X」，X 跟着会话自己用的模型走，
-             设置里根本没有地方能改它，想给另一个模型配人设就无从下手。 -->
+
         <label class="field">
           <span class="field-label">给哪个模型</span>
           <select id="persona-model" aria-label="选择要给哪个模型配默认人设"></select>

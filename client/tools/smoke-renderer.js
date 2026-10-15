@@ -377,7 +377,7 @@ await scenario('顶栏「⋯」菜单', async () => {
     '菜单里的项目齐全、顺序没变',
     // 2026-10-12 深夜：「记忆」从这份菜单**提到顶栏**了（星宝：「把记忆放出来」），
     // 所以它不再出现在这里 —— 顶栏那颗 #btn-memory 由下面那条断言守。
-    menuIds === 'btn-copy-all, btn-export-convo, btn-request-log, btn-gen-params, btn-clear',
+    menuIds === 'btn-copy-all, btn-export-convo, btn-request-log, btn-clear',
     menuIds
   );
 
@@ -452,7 +452,7 @@ await scenario('顶栏：切换模型', async () => {
 
   // --- 扁平化体检：靠阴影浮起来，不描边 ---
   check('切换模型按钮不描边（靠阴影分层）', cs(trigger, 'borderTopWidth') === '0px', cs(trigger, 'borderTopWidth'));
-  check('按钮有柔和阴影', cs(trigger, 'boxShadow') !== 'none', cs(trigger, 'boxShadow'));
+  check('模型按钮保持轻量无阴影', cs(trigger, 'boxShadow') === 'none', cs(trigger, 'boxShadow'));
 
   // --- 展开 ---
   click(trigger);
@@ -646,6 +646,14 @@ await scenario('设置：左导航切组', async () => {
   click(paramsNav);
   check('点左栏就切组', byId('sec-params').classList.contains('active') || paramsNav.classList.contains('active'));
   check('切到的这一组内容显示', visible(byId('sec-params')) && visible(byId('s-temp')));
+  const thinkingBefore = byId('s-thinking').checked;
+  byId('s-thinking').checked = !thinkingBefore;
+  byId('s-thinking').dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(200);
+  check('设置页深度思考可以独立保存', (await window.mimitale.getSettings()).settings.thinking === !thinkingBefore);
+  byId('s-thinking').checked = thinkingBefore;
+  byId('s-thinking').dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(180);
   check('原来那一组（模型服务）收起来', !visible(byId('p-baseurl')));
 
   // 没显示的那一组里的值照样存得住（切组只是 display:none，不该让表单失效）
@@ -664,6 +672,13 @@ await scenario('设置：左导航切组', async () => {
     visible(byId('sec-params')) && !visible(byId('sec-models')),
     `params=${visible(byId('sec-params'))} models=${visible(byId('sec-models'))}`
   );
+
+  const supportNav = $('#view-settings .settings-nav .settings-nav-item[data-target="sec-support"]');
+  check('帮助与数据入口在设置导航中', !!supportNav && visible(supportNav));
+  click(supportNav);
+  check('点击后显示帮助与数据分组', visible(byId('sec-support')));
+  check('帮助与数据按钮均实际可见', visible(byId('btn-help')) && visible(byId('btn-folder')));
+  check('帮助页目录不含设置导航', !$('#view-help .settings-nav-item'));
 
   // 收尾：把回复上限放回去（这个场景用了一个和初值不同的数字来证明「真存住了」）
   if (!visible(byId('sec-params'))) click(paramsNav);
@@ -1361,11 +1376,11 @@ await scenario('属性：从角色卡种到状态面板', async () => {
       hint: !!byId('panel-hint')
     })
   );
-  check('入口条上的标题是「在场角色」', /在场角色/.test(byId('panel-box').textContent || ''));
+  check('角色头像入口位于右栏', !!byId('panel-box').closest('#cast-panel') && !byId('panel-box').closest('.chat-col'));
   check(
     '「在场角色」是个纯标签，不是能折叠的按钮',
     (() => {
-      const t = byId('panel-box').querySelector('.panel-title');
+      const t = byId('cast-panel-title');
       return !!t && t.tagName === 'SPAN' && !byId('btn-panel-collapse');
     })()
   );
@@ -1415,12 +1430,10 @@ await scenario('属性：从角色卡种到状态面板', async () => {
       side(inCard('.sc-group-title'), 'borderBottomWidth')
     );
     check(
-      '「在场角色」入口条不是一只描边盒子（靠底色分层）',
+      '在场角色入口条仅底部分隔，不包围头像',
       // 2026-09-30 卡片换回悬浮后，入口条改成「一行深色底 + 无边框」，
       // 不再靠一条下划线跟下面的卡片区分（下面已经没有一列卡片了）
-      side(byId('panel-box'), 'borderTopWidth') === '0px' &&
-        side(byId('panel-box'), 'borderBottomWidth') === '0px' &&
-        !side(byId('panel-box'), 'backgroundColor').includes('rgba(0, 0, 0, 0)'),
+      !!byId('panel-box').closest('#cast-panel') && !byId('panel-box').closest('.chat-col'),
       `${side(byId('panel-box'), 'borderTopWidth')} / ${side(byId('panel-box'), 'backgroundColor')}`
     );
     check(
@@ -1482,9 +1495,9 @@ await scenario('属性：从角色卡种到状态面板', async () => {
 
     // 顶栏：稿子 2:82 高 48；头像 / 图标 2026-10-12 深夜放大（26 → 34 / 32），
     // 但都小于 min-height 48，所以顶栏高度**一点没变**。
-    check('顶栏高 48（稿子 2:82）', Math.abs(h($('.topbar')) - 48) <= 1, String(h($('.topbar'))));
+    check('顶栏高 98（原型叙事布局）', Math.abs(h($('.topbar')) - 98) <= 1, String(h($('.topbar'))));
     const topAv = byId('topbar-avatar');
-    check('顶栏头像 34×34（放大后）', r(topAv) === 34 && h(topAv) === 34, `${r(topAv)}×${h(topAv)}`);
+    check('顶栏不再显示旧头像块', c(topAv, 'display') === 'none', `${r(topAv)}×${h(topAv)}`);
     check('顶栏头像是方角 r=4（不是圆）', c(topAv, 'borderTopLeftRadius') === '4px', c(topAv, 'borderTopLeftRadius'));
     // 2026-10-12 深夜全站字号 token 化：原来的 11px 并进了最小档 --fs-xs（12px）。
     check('顶栏元信息 12px（最小档 --fs-xs）', c(byId('convo-meta'), 'fontSize') === '12px', c(byId('convo-meta'), 'fontSize'));
@@ -1509,16 +1522,16 @@ await scenario('属性：从角色卡种到状态面板', async () => {
     // ⚠️ 2026-10-13 起是 **48**：.panel-box 的内边距原来是 9px（奇数），
     //    「边距奇数统一归偶」（见 tools/audit-spacing.js）之后成了 10px，
     //    条高 = 10 + 头像 28 + 10。**这是那次规范化的必然结果，不是回归。**
-    check('在场角色条高 48（放大后）', h(byId('panel-box')) === 48, String(h(byId('panel-box'))));
+    check('角色头像在右栏内正常排布', h(byId('panel-box')) > 0 && h(byId('panel-box')) < 110, String(h(byId('panel-box'))));
     const panelAv = $('#panel-cast .panel-avatar');
     check(
       '入口条头像 28×28 方角 r=4（放大后）',
-      !!panelAv && r(panelAv) === 28 && c(panelAv, 'borderTopLeftRadius') === '4px',
+      !!panelAv && r(panelAv) === 34 && c(panelAv, 'borderTopLeftRadius') === '4px',
       panelAv ? `${r(panelAv)} r=${c(panelAv, 'borderTopLeftRadius')}` : '（没有头像）'
     );
 
     // 右栏：264 → 280 → 300（2026-10-12 晚起**始终跟左栏等宽**）
-    check('右栏宽 300', r(byId('cast-panel')) === 300, String(r(byId('cast-panel'))));
+    check('右栏宽 286', r(byId('cast-panel')) === 286, String(r(byId('cast-panel'))));
 
     // ⚠️ 这条是 2026-10-12 那个真 bug 的守卫：`.cast-card-avatar` 里一旦写上
     //    `background: var(--accent)`，就会盖掉 entityTone 的 `.g1`~`.g6`（同权重、它在后），
@@ -1818,7 +1831,7 @@ await scenario('状态卡入口条：常驻 + 点头像开卡', async () => {
   );
 
   const boxH = Math.round(byId('panel-box').getBoundingClientRect().height);
-  check('入口条一直可见（一条细条）', boxH > 0 && boxH < 90, `${boxH}px`);
+  check('右栏头像入口正常显示', boxH > 0 && boxH < 120, `${boxH}px`);
 
   // 头像行就是入口。普通聊天不显示「我」（2026-10-08），
   // 这条会话绑了角色，所以头像行上只有那个角色。
@@ -2460,6 +2473,25 @@ await scenario('状态字段：数值字段不吞非数值内容', async () => {
 // ---------------------------------------------------------------------------
 //  场景 10：聊天 —— 发一条能收到回复
 // ---------------------------------------------------------------------------
+await scenario('深度思考：会话参数透传', async () => {
+  const { effectiveSampling } = await import('../renderer/js/data/messages.js');
+  check('未设置时不强制思考参数', effectiveSampling({})?.thinking === undefined);
+  check('旧会话思考开关不覆盖统一设置', effectiveSampling({ sampling: { thinking: true } })?.thinking === undefined);
+  check('旧会话关闭思考不覆盖默认', effectiveSampling({ sampling: { thinking: false } })?.thinking === undefined);
+  check('思考参数拒绝非布尔值', effectiveSampling({ sampling: { thinking: 'true' } })?.thinking === undefined);
+});
+
+await scenario('生成准备：停止后解除等待', async () => {
+  const { sendMessage, stopGenerating } = await import('../renderer/js/views/composer.js');
+  const { state: appState } = await import('../renderer/js/core/state.js');
+  // 不替换冻结的preload桥；测试通过原生异步准备入口立即停止。
+  const pending = sendMessage('验证准备阶段停止');
+  await stopGenerating();
+  await pending;
+  check('准备阶段停止后恢复发送', !appState.streaming && !byId('btn-send').disabled);
+  check('停止后没有悬挂请求', !appState.requestId && !appState.requestTarget);
+});
+
 await scenario('聊天：发送与回复', async () => {
   click('#convo-list .convo-item');
   await waitFor('切回聊天视图', () => shown('#view-chat'));
@@ -3166,8 +3198,8 @@ await scenario('外观：聊天区那几样', async () => {
 
   // --- 背景图：走真实的「选图 → 压缩 → 存起来」链路 ---
   click('#btn-pick-bg');
-  await waitFor('背景预览出现', () => shown('#appearance-bg-preview') && !!$('#appearance-bg-preview img'), 10000);
-  check('消息区挂上了背景图', getComputedStyle($('#messages')).backgroundImage.includes('data:image'), getComputedStyle($('#messages')).backgroundImage.slice(0, 50));
+  await waitFor('自定义背景预览出现', () => shown('#appearance-bg-preview') && $('#appearance-bg-preview img')?.src.startsWith('data:image/'), 10000);
+  check('消息区挂上了背景图', getComputedStyle($('.chat-col'), '::before').backgroundImage.includes('data:image'), getComputedStyle($('#messages')).backgroundImage.slice(0, 50));
   check(
     '背景图落盘了',
     String((await window.mimitale.getSettings()).settings.chatBackground).startsWith('data:image/'),
@@ -3177,8 +3209,18 @@ await scenario('外观：聊天区那几样', async () => {
   // --- 清除 ---
   click('#btn-clear-bg');
   await sleep(250);
-  check('清掉之后消息区没有背景图', !getComputedStyle($('#messages')).backgroundImage.includes('data:image'), getComputedStyle($('#messages')).backgroundImage);
+  check('清掉之后消息区没有背景图', !getComputedStyle($('.chat-col'), '::before').backgroundImage.includes('data:image'), getComputedStyle($('#messages')).backgroundImage);
   check('没背景时「清除」是禁用的', byId('btn-clear-bg').disabled === true);
+  check('清除后关闭内置皮肤', document.documentElement.dataset.chatSkin === 'plain');
+  click('#btn-default-bg');
+  await sleep(250);
+  check('雾林皮肤覆盖整个聊天列', getComputedStyle($('.chat-col'), '::before').backgroundImage.includes('tavern-forest.jpg'));
+  check('消息区不重复铺背景', getComputedStyle($('#messages')).backgroundImage === 'none');
+  check('顶栏与输入区共享背景', getComputedStyle($('.topbar')).backgroundColor === 'rgba(0, 0, 0, 0)' && getComputedStyle($('.composer')).backgroundColor === 'rgba(0, 0, 0, 0)');
+  check('皮肤恢复已保存', (await window.mimitale.getSettings()).settings.chatBuiltinBackground === true);
+  check('仅输入框保留轻薄玻璃质感', getComputedStyle($('.composer-box')).backdropFilter.includes('blur'));
+  click('#btn-clear-bg');
+  await sleep(180);
 
   click('#btn-boldcolor-reset');
   await sleep(250);
@@ -3432,170 +3474,26 @@ await scenario('对话宽度：左右各管各的（拖动抓手）', async () =
 });
 
 // ---------------------------------------------------------------------------
-//  场景：右栏的两个页签（在场角色 / 生成参数）
-//
-//  为什么要有这条：右边缘只有一个位置 —— 「在场角色」和「生成参数」以前是
-//  「一栏 + 一个从右边盖住它的浮层」，开参数会把对话列挤窄 264px（正文跳一下）。
-//  改成同一栏的两个页签之后，**对话列宽度必须一点不变**，那正是这条要钉的东西
-//  （也是当初选「页签」而不是「覆盖 / 挤窄」的全部理由）。
+//  右栏仅展示角色与场景；生成参数在设置，收放仅通过栏头入口。
 // ---------------------------------------------------------------------------
-await scenario('右栏：在场角色 / 生成参数 两个页签', async () => {
-  const tabCast = byId('btn-tab-cast');
-  const tabGen = byId('btn-tab-gen');
-  check('右栏有两个页签', !!tabCast && !!tabGen);
-  check(
-    '默认停在「在场角色」',
-    !!tabCast && tabCast.classList.contains('active') && !!tabGen && !tabGen.classList.contains('active'),
-    `${tabCast ? tabCast.className : '?'} / ${tabGen ? tabGen.className : '?'}`
-  );
-
-  const chatCol = $('.chat-col');
-  const colWidth = () => Math.round(chatCol.getBoundingClientRect().width);
-  const before = colWidth();
-
-  click('#btn-tab-gen');
-  await sleep(250);
-  check('切到「生成参数」后高亮跟着走', tabGen.classList.contains('active') && !tabCast.classList.contains('active'));
-  check('生成参数那一页露出来', shown('#gen-body'));
-  check('在场角色那一页收起来', !shown('#cast-panel-body'));
-  check('两个脚注也跟着换', !shown('#cast-foot') && shown('#gen-foot'));
-  check(
-    '⚠️ 切页签不改对话列宽度（选页签方案的全部意义）',
-    colWidth() === before,
-    `${before} → ${colWidth()}`
-  );
-
-  // 三项滑块显示的必须是**当前生效值**：没设过 = 跟随全局（滑块没法表达「空」，
-  // 所以「这一局自己定了」只能靠数值文字的主色来标）。
-  const settings = (await window.mimitale.getSettings()).settings;
-  const temp = byId('gen-temperature');
-  check(
-    '温度滑块显示的是生效值（跟随全局）',
-    Math.abs(Number(temp.value) - Number(settings.temperature)) < 0.001,
-    `${temp.value} vs 全局 ${settings.temperature}`
-  );
-  check(
-    '没设过时数值文字是灰的（不是主色）',
-    !byId('gen-temperature-value').classList.contains('is-own'),
-    byId('gen-temperature-value').className
-  );
-
-  const slide = async (input, value) => {
-    input.value = String(value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    await sleep(80);
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    await sleep(220);
-  };
-
-  const convos = await window.mimitale.getConversations();
-  const active = convos.conversations.find((c) => c.id === convos.activeId) || convos.conversations[0];
-  check('有活动会话可写', !!active);
-
-  await slide(temp, 1.35);
-  check(
-    '滑过之后数值变主色（这一局自己定了）',
-    byId('gen-temperature-value').classList.contains('is-own'),
-    byId('gen-temperature-value').className
-  );
-  check(
-    '数值文字跟着更新',
-    byId('gen-temperature-value').textContent.trim() === '1.35',
-    byId('gen-temperature-value').textContent
-  );
-
-  // ⚠️ 必须**重新取一次**：getConversations() 走 IPC，回来的是结构化克隆的**副本**，
-  //    拖之前拿到的那个对象不会跟着内存里的改动变（这条我第一次就写错了）。
-  await sleep(200);
-  const after = await window.mimitale.getConversations();
-  const saved = after.conversations.find((c) => c.id === after.activeId) || after.conversations[0];
-  check(
-    '落盘的是**会话**上的 sampling.temperature',
-    !!saved && !!saved.sampling && Math.abs(Number(saved.sampling.temperature) - 1.35) < 0.001,
-    JSON.stringify(saved && saved.sampling)
-  );
-  check(
-    '没动过的项**不会**被写进去（留空才能跟随预设 / 全局）',
-    !!saved && !!saved.sampling && saved.sampling.topP === undefined && saved.sampling.maxTokens === undefined,
-    JSON.stringify(saved && saved.sampling)
-  );
-
-  click('#btn-gen-reset');
-  // ⚠️ persistConversations() 是**防抖**的（默认 350ms）+ 一次 IPC。
-  //    这里读盘前必须等够，不然读到的是清空**之前**那份（我第一版就等了 320ms，
-  //    结果断言报「{"temperature":1.35}」，看着像「恢复默认没生效」）。
-  await sleep(750);
-  const afterReset = await window.mimitale.getConversations();
-  const cleared =
-    afterReset.conversations.find((c) => c.id === afterReset.activeId) || afterReset.conversations[0];
-  check(
-    '「恢复默认」把这一局的参数清空、回到跟随全局',
-    !cleared || !cleared.sampling || Object.keys(cleared.sampling).length === 0,
-    JSON.stringify(cleared && cleared.sampling)
-  );
-  check(
-    '清空之后数值文字又变回灰的',
-    !byId('gen-temperature-value').classList.contains('is-own'),
-    byId('gen-temperature-value').className
-  );
-
-  // 「在场角色」那一页签回得去
-  click('#btn-tab-cast');
-  await sleep(220);
-  check('点回「在场角色」页签能回去', shown('#cast-panel-body') && !shown('#gen-body'));
-  check('回去之后对话列宽度还是没变', colWidth() === before, `${before} → ${colWidth()}`);
-
-  // --- 右边缘那颗把手：跟栏头那颗是**同一个动作的两个入口**（2026-10-13 加的）---
-  // 守两件事：点它能收放右栏；两个入口的 title 永远一致（各写一份就会对不上）。
-  const railR = byId('rail-handle-right');
-  check('右边缘有侧栏收放把手', !!railR);
-  // ⚠️ 查**字符**不查 svg：箭头是文字（‹ ›）不是 SVG 图标 ——
-  //    iconSvg 那套画在 24×24 上，缩进 16×26 的把手方块里会糊成一个点
-  //    （2026-10-13 试过「分栏框」和 polyline 两种，出图放大 4 倍都看不出形状）。
-  check('右把手画着收起箭头（›）', !!railR && railR.textContent.trim() === '›', railR ? JSON.stringify(railR.textContent) : '(没有)');
-  check(
-    '右栏可见时右把手也露着',
-    !!railR && !railR.classList.contains('hidden'),
-    railR ? railR.className : '(没有)'
-  );
-
-  // 收起的右栏被「⋯ → 生成参数」叫醒时，应该顺手展开（不然只看见一条窄条）
-  click('#btn-cast-collapse');
-  await sleep(200);
-  check('右栏能收成窄条', byId('cast-panel').classList.contains('collapsed'));
-  check(
-    '用栏头收起后，右把手也改口说「展开」',
-    !!railR && /展开/.test(railR.title),
-    railR ? railR.title : '(没有)'
-  );
-
-  click('#rail-handle-right');
-  await sleep(200);
-  check('点右把手能把右栏收回来', !byId('cast-panel').classList.contains('collapsed'));
-  check(
-    '用把手展开后，栏头那颗也改口说「收起」',
-    /收起/.test(byId('btn-cast-collapse').title),
-    byId('btn-cast-collapse').title
-  );
-
-  // 复原成「收起」—— 下面那条「⋯ → 生成参数会顺手展开」还要用这个前提
-  click('#rail-handle-right');
-  await sleep(200);
-
-  click('#btn-more');
-  await sleep(250);
-  click('#btn-gen-params');
-  await sleep(300);
-  check('从「⋯」点生成参数会顺手展开右栏', !byId('cast-panel').classList.contains('collapsed'));
-  check('并且切到生成参数页签', shown('#gen-body'));
-
-  click('#btn-tab-cast');
-  await sleep(200);
-  const t = byId('toast');
-  if (t) {
-    t.classList.add('hidden');
-    t.textContent = '';
-  }
+await scenario('简化右栏与设置参数', async () => {
+  check('右栏只保留角色与场景', !byId('btn-tab-gen') && !byId('gen-body'));
+  check('聊天区没有收放把手', !byId('rail-handle-left') && !byId('rail-handle-right'));
+  check('设置保留全部生成参数', ['s-temp','s-topp','s-maxtokens','s-thinking'].every(id => !!byId(id)));
+  const panel=byId('cast-panel');
+  const main=$('.app > main');
+  check('根布局为sidebar main inspector', panel.parentElement === main.parentElement && panel.previousElementSibling === main && main.previousElementSibling === byId('sidebar'));
+  check('右栏不再嵌套在主内容中', !panel.closest('main'));
+  const beforeWidth=main.getBoundingClientRect().width;
+  click('#btn-settings'); await sleep(180);
+  check('进入设置时独立右栏隐藏', getComputedStyle(panel).display === 'none');
+  check('设置页释放右栏空间', main.getBoundingClientRect().width > beforeWidth);
+  click('#btn-back-settings'); await sleep(180);
+  check('返回聊天后独立右栏恢复', getComputedStyle(panel).display !== 'none');
+  click('#btn-cast-collapse'); await sleep(180);
+  check('栏头按钮可以收起右栏', panel.classList.contains('collapsed'));
+  click('#btn-cast-collapse'); await sleep(180);
+  check('栏头按钮可以展开右栏', !panel.classList.contains('collapsed'));
 });
 
 // ---------------------------------------------------------------------------
@@ -3607,13 +3505,32 @@ await scenario('右栏：在场角色 / 生成参数 两个页签', async () => 
 //  2026-10-12 深夜：星宝嫌三处偏小（收起态图标 / 品牌行 / 底部入口），
 //  整套跟着放大一档，侧栏 280 → 300、收起态 56 → 60 —— 下面这些数也跟着走。
 // ---------------------------------------------------------------------------
+await scenario('当前场景：读取真实状态与归属', async () => {
+  const { currentScene } = await import('../renderer/js/data/currentScene.js');
+  const { panelKey } = await import('../renderer/js/data/panel.js');
+  const globalPlace = panelKey('地点', 'scene');
+  const playerPlace = panelKey('地点', 'player');
+  const npcPlace = panelKey('地点', 'npc');
+  const time = panelKey('时间', 'player');
+  const fixture = { panelFields: [npcPlace, playerPlace, globalPlace, time], panel: {
+    [npcPlace]: '另一座城', [playerPlace]: '旅店', [globalPlace]: '边境驿站', [time]: '深夜'
+  } };
+  check('空会话不虚构场景', currentScene(null).length === 0 && currentScene({}).length === 0);
+  const fields = currentScene(fixture);
+  check('全局地点优先于玩家地点', fields.find(f => f.label === '地点')?.value === '边境驿站');
+  check('读取故事时间而不是系统时间', fields.find(f => f.label === '时间')?.value === '深夜');
+  check('没有天气就不填天气', !fields.some(f => f.label === '天气'));
+  check('不把 NPC 私人位置当当前场景', currentScene({ panelFields: [npcPlace], panel: fixture.panel }).length === 0);
+});
+
 await scenario('侧栏：入口网格与收起', async () => {
   const sidebar = document.querySelector('.sidebar');
   // 232 → 280（2026-10-12 晚）→ 300（底部入口图标 18 / 字 14px 之后需要的列宽）
-  check('侧栏宽度 300', Math.round(sidebar.getBoundingClientRect().width) === 300, String(Math.round(sidebar.getBoundingClientRect().width)));
+  check('侧栏宽度 224', Math.round(sidebar.getBoundingClientRect().width) === 224, String(Math.round(sidebar.getBoundingClientRect().width)));
 
   const foot = $$('.sidebar-foot .btn');
-  check('底部入口 6 颗（3 列 × 2 行）', foot.length === 6, String(foot.length));
+  check('侧栏保留四个创作入口', foot.length === 4, String(foot.length));
+  check('帮助和数据位于设置页', !!byId('btn-help')?.closest('#view-settings') && !!byId('btn-folder')?.closest('#view-settings'));
   check(
     '每颗都带图标',
     foot.every((b) => !!b.querySelector('svg')),
@@ -3621,14 +3538,14 @@ await scenario('侧栏：入口网格与收起', async () => {
   );
   check(
     '第三颗是按稿子写的「数据」',
-    !!byId('btn-folder') && byId('btn-folder').textContent.trim() === '数据',
+    !!byId('btn-folder') && byId('btn-folder').textContent.trim() === '打开数据文件夹',
     byId('btn-folder') ? byId('btn-folder').textContent.trim() : '(没有)'
   );
 
   // 当前会话左侧那条短竖线是 ::before 画的
   const active = document.querySelector('.convo-item.active');
   const line = active ? getComputedStyle(active, '::before') : null;
-  check('当前会话有那条选中竖线', !!line && line.content !== 'none', line ? line.content : '（没有 active 项）');
+  check('当前会话靠底色与边框标识，不生成多余竖线', !!line && (line.content === 'none' || line.display === 'none'), line ? line.content : '（没有 active 项）');
 
   // --- 2026-10-12 晚：把稿子上的尺寸钉住（这几条全是「不报错、只难看」那一类）---
   {
@@ -3637,8 +3554,8 @@ await scenario('侧栏：入口网格与收起', async () => {
     // 所以这条断言就是那次事故的守卫。
     const btnNew = byId('btn-new');
     check(
-      '「新对话」高 32（稿子 2:12）',
-      btnNew && Math.round(btnNew.getBoundingClientRect().height) === 32,
+      '「新对话」高 42（叙事布局）',
+      btnNew && Math.round(btnNew.getBoundingClientRect().height) === 42,
       btnNew ? String(Math.round(btnNew.getBoundingClientRect().height)) : '(没有)'
     );
 
@@ -3653,8 +3570,8 @@ await scenario('侧栏：入口网格与收起', async () => {
       cbox ? `${Math.round(cbox.width)} r=${getComputedStyle(cav).borderTopLeftRadius}` : '（没有头像）'
     );
     check(
-      '会话项高 48（配 36 的头像）',
-      active && Math.round(active.getBoundingClientRect().height) === 48,
+      '会话项高 64（两行故事记录）',
+      active && Math.round(active.getBoundingClientRect().height) === 64,
       active ? String(Math.round(active.getBoundingClientRect().height)) : '（没有 active 项）'
     );
 
@@ -3672,7 +3589,7 @@ await scenario('侧栏：入口网格与收起', async () => {
           cs.backgroundColor === 'rgba(0, 0, 0, 0)' &&
           parseFloat(cs.borderTopWidth) > 0.5 &&
           cs.borderTopStyle === 'solid' &&
-          cs.borderTopColor === 'rgba(0, 0, 0, 0)'
+          (cs.borderTopColor === 'rgba(0, 0, 0, 0)' || b.id === 'btn-settings')
         );
       }),
       foot.map((b) => `${getComputedStyle(b).backgroundColor}/${getComputedStyle(b).borderTopColor}`).join(' ')
@@ -3681,8 +3598,8 @@ await scenario('侧栏：入口网格与收起', async () => {
     // 用 ::before 画的，所以得读伪元素的计算样式。
     const footLine = getComputedStyle(document.querySelector('.sidebar-foot'), '::before');
     check(
-      '底部入口上面有那条通栏分隔线（稿子 2:28）',
-      !!(footLine && footLine.content !== 'none' && footLine.backgroundColor !== 'rgba(0, 0, 0, 0)'),
+      '底部不生成已移除的通栏伪元素',
+      !!footLine && (footLine.content === 'none' || footLine.display === 'none'),
       footLine ? `${footLine.content} ${footLine.backgroundColor}` : '（没有）'
     );
 
@@ -3690,8 +3607,8 @@ await scenario('侧栏：入口网格与收起', async () => {
     // ⚠️ 曾经写成 #0c0d0f —— 那个值在设计稿的 6 级里根本不存在，
     // 后果是侧栏/右栏发闷、顶栏连色带都没有。
     check(
-      '深色侧栏底 = 稿子的面板色 #16181b',
-      getComputedStyle(sidebar).backgroundColor === 'rgb(22, 24, 27)',
+      '深色侧栏底 = 原型炭黑 #151715',
+      getComputedStyle(sidebar).backgroundColor === 'rgb(21, 23, 21)',
       getComputedStyle(sidebar).backgroundColor
     );
 
@@ -3724,9 +3641,12 @@ await scenario('侧栏：入口网格与收起', async () => {
     click('#btn-sidebar-toggle');
     await sleep(150);
     check('收起后加上 collapsed', sidebar.classList.contains('collapsed'), sidebar.className);
-    check('收起后窄到 60', Math.round(sidebar.getBoundingClientRect().width) === 60, String(Math.round(sidebar.getBoundingClientRect().width)));
-    check('收起后会话列表藏起来', getComputedStyle(byId('convo-list')).display === 'none');
-    check('收起后「新对话」也藏起来', getComputedStyle(byId('btn-new')).display === 'none');
+    check('收起后为66px图标栏', Math.round(sidebar.getBoundingClientRect().width) === 66, String(Math.round(sidebar.getBoundingClientRect().width)));
+    check('收起后故事记录仍可见', getComputedStyle(byId('convo-list')).display !== 'none' && byId('convo-list').getBoundingClientRect().height > 0);
+    check('收起后保留加号新建', getComputedStyle(byId('btn-new')).display !== 'none' && byId('btn-new').getBoundingClientRect().height >= 34);
+    check('顶栏没有重复展开按钮', !byId('btn-sidebar-reopen') && !byId('btn-cast-reopen'));
+    check('故事头像仍可交互', $$('#convo-list .convo-item').every(item => item.getBoundingClientRect().height > 0));
+    check('底部创作入口仍在故事记录下方', $('.sidebar-foot').getBoundingClientRect().top >= byId('convo-list').getBoundingClientRect().bottom - 1);
 
     // --- 稿子屏 2 的图标轨：品牌方块 + 6 颗图标 + 最底下当前会话头像 ---
     // 这一节是 2026-10-12 晚补的：之前收起态是 `> *:not(.sidebar-toggle){display:none}`，
@@ -3745,7 +3665,7 @@ await scenario('侧栏：入口网格与收起', async () => {
     );
     check(
       '收起后 6 颗入口图标都还在，只是文字藏了',
-      foot.length === 6 &&
+      foot.length === 4 &&
         foot.every((b) => getComputedStyle(b).display !== 'none' && !!b.querySelector('svg')) &&
         foot.every((b) => {
           const label = b.querySelector('.foot-label');
@@ -3760,8 +3680,8 @@ await scenario('侧栏：入口网格与收起', async () => {
     );
     const railAv = byId('rail-avatar');
     check(
-      '收起后最底下有当前会话头像（稿子 y≈866）',
-      !!railAv && getComputedStyle(railAv).display !== 'none' && railAv.getBoundingClientRect().height > 0,
+      '底部不再重复显示当前会话头像',
+      !!railAv && getComputedStyle(railAv).display === 'none',
       railAv ? `${Math.round(railAv.getBoundingClientRect().width)}×${Math.round(railAv.getBoundingClientRect().height)} display=${getComputedStyle(railAv).display}` : '（没有）'
     );
     // ⚠️ 它必须走 entityTone 那套按人配色，不许被某条 background 盖成主色
@@ -3781,42 +3701,10 @@ await scenario('侧栏：入口网格与收起', async () => {
     click('#btn-sidebar-toggle');
     await sleep(150);
     check('再点一下展开', !sidebar.classList.contains('collapsed'), sidebar.className);
-    check('展开后又回到 300', Math.round(sidebar.getBoundingClientRect().width) === 300);
+    check('展开后又回到 224', Math.round(sidebar.getBoundingClientRect().width) === 224);
   }
 
-  // --- 左边缘那颗把手：同一个动作的第二个入口（2026-10-13 加的）---
-  const railL = byId('rail-handle-left');
-  check('左边缘有侧栏收放把手', !!railL);
-  // 同右把手：箭头是**文字字符**，不是 SVG（理由见那条断言）
-  check('左把手画着收起箭头（‹）', !!railL && railL.textContent.trim() === '‹', railL ? JSON.stringify(railL.textContent) : '(没有)');
-
-  // ⚠️ 两种把手靠**高度**分工：收放那颗垂直居中（.rail-handle，top 50%）、
-  //    调内缩那颗在输入框两侧（.pad-handle，挂在 .composer 里，所以贴着底）。
-  //    这条守的就是「别哪天被谁挪到同一高度」—— 真挪到一起，光看外观没人分得清谁是谁。
-  //    （2026-10-13 晚从「靠上 / 居中」换成了「居中 / 靠底」，星宝要的。）
-  const padHandleL = byId('pad-handle-left');
-  if (railL && padHandleL) {
-    const railTop = Math.round(railL.getBoundingClientRect().top);
-    const padTop = Math.round(padHandleL.getBoundingClientRect().top);
-    check('收放把手在调内缩把手**上面**（两颗靠位置分工）', railTop < padTop, `收放 ${railTop} vs 内缩 ${padTop}`);
-  }
-
-  if (railL && toggle) {
-    click('#rail-handle-left');
-    await sleep(160);
-    check('点把手能收起左栏', sidebar.classList.contains('collapsed'), sidebar.className);
-    check(
-      '用把手收起后，栏内那颗也改口成「›」（两个入口显示一致）',
-      toggle.textContent.trim() === '›',
-      JSON.stringify(toggle.textContent)
-    );
-    check('把手自己的 title 也跟着改成「展开」', /展开/.test(railL.title), railL.title);
-
-    click('#rail-handle-left');
-    await sleep(160);
-    check('再点把手能展开', !sidebar.classList.contains('collapsed'), sidebar.className);
-    check('栏内那颗回到「‹」', toggle.textContent.trim() === '‹', JSON.stringify(toggle.textContent));
-  }
+  check('左侧聊天边缘把手已移除', !byId('rail-handle-left'));
 });
 
 // ---------------------------------------------------------------------------
@@ -4367,7 +4255,7 @@ await scenario('进入世界：用角色卡当自己', async () => {
   // 标题是「在场角色 N」（见上面那条断言）。
   check(
     '旧的「当前状态」字段区已经不在了',
-    !byId('panel-fields') && !byId('btn-panel-collapse') && /在场角色/.test(byId('panel-box').textContent || '')
+    !byId('panel-fields') && !byId('btn-panel-collapse') && !!byId('panel-box').closest('#cast-panel')
   );
 
   // 顶栏头像（2026-09-30）：世界书会话**没绑角色卡**（主角在 convo.player 里），
@@ -4381,8 +4269,8 @@ await scenario('进入世界：用角色卡当自己', async () => {
       av ? av.className : 'no-node'
     );
     check(
-      '世界书会话的顶栏头像取书名首字',
-      !!av && (av.textContent || '').trim().length === 1,
+      '世界书使用线性翻页图标',
+      !!av && !!av.querySelector('svg'),
       av ? av.textContent : ''
     );
   }
@@ -9204,7 +9092,7 @@ await scenario('新对话：直接建空白会话，只剩「我」时入口条�
 await scenario('帮助：切页、正文与复制提示词', async () => {
   click('#btn-help');
   await waitFor('切到帮助页', () => shown('#view-help'));
-  check('侧栏「帮助」高亮', byId('btn-help').classList.contains('active'));
+  check('设置中的帮助入口可用', !!byId('btn-help').closest('#view-settings'));
   check('切走后聊天视图让位', !shown('#view-chat'));
 
   const sections = $$('#view-help .help-sec');

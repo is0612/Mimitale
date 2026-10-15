@@ -1,0 +1,15 @@
+[
+  {
+    "provider": "DeepSeek",
+    "model": "deepseek-flash",
+    "ok": true,
+    "contentChars": 2,
+    "firstMs": 723,
+    "elapsedMs": 726,
+    "thinkingSent": "enabled",
+    "streamSent": true,
+    "reasoningChars": 50,
+    "deltaCount": 1,
+    "finishReason": "stop"
+  }
+]

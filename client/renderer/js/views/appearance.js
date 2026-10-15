@@ -113,8 +113,10 @@ export function applyChatAppearance() {
   }
 
   // dataURL 里不会出现引号，包一层更保险
-  if (s.chatBackground) root.style.setProperty('--chat-bg-image', `url("${s.chatBackground}")`);
+  const background = s.chatBackground || (s.chatBuiltinBackground !== false ? 'assets/tavern-forest.jpg' : '');
+  if (background) root.style.setProperty('--chat-bg-image', `url("${background}")`);
   else root.style.removeProperty('--chat-bg-image');
+  root.dataset.chatSkin = background ? 'image' : 'plain';
 }
 
 /** 滑块的「已选比例」是 CSS 渐变画的，所以值一变就得把 --range-fill 同步过去 */
@@ -158,7 +160,7 @@ export function renderAppearanceForm() {
   el.appearanceBoldColorText.value = s.chatBoldColor || '';
   el.appearanceBoldColor.value = s.chatBoldColor || currentAccentHex();
 
-  const bg = s.chatBackground || '';
+  const bg = s.chatBackground || (s.chatBuiltinBackground !== false ? 'assets/tavern-forest.jpg' : '');
   el.appearanceBgPreview.innerHTML = '';
   if (bg) {
     const img = document.createElement('img');
@@ -337,5 +339,6 @@ export function initAppearance() {
   el.btnBoldColorReset.addEventListener('click', () => persistAppearance({ chatBoldColor: '' }));
 
   el.btnPickBg.addEventListener('click', pickChatBackground);
-  el.btnClearBg.addEventListener('click', () => persistAppearance({ chatBackground: '' }));
+  el.btnClearBg.addEventListener('click', () => persistAppearance({ chatBackground: '', chatBuiltinBackground: false }));
+  document.getElementById('btn-default-bg')?.addEventListener('click', () => persistAppearance({ chatBackground: '', chatBuiltinBackground: true }));
 }

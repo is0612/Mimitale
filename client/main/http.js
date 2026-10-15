@@ -305,8 +305,26 @@ function normalizeUsage(usage) {
  * （界面上的「请求记录」靠它）。放在这个函数里是因为只有这里才权威 ——
  * 让上层各自照着重拼一遍，参数一多迟早走样。
  */
-function streamChat({ settings, messages, onDelta, onReasoning, signal, onRequest }) {
+function streamChat({ settings, messages, onDelta, onReasoning, signal, onRequest, deadlineMs = 300000, progressTimeoutMs = 60000 }) {
   return new Promise((resolve, reject) => {
+    let deadlineTimer = null;
+    let progressTimer = null;
+    let settled = false;
+    let req = null;
+    let res = null;
+    let abortHandler = null;
+    const cleanup = () => {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      if (progressTimer) clearTimeout(progressTimer);
+      if (signal && abortHandler) signal.removeEventListener('abort', abortHandler);
+    };
+    const settle = (error, value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve(value);
+    };
     let target;
     try {
       target = new URL(chatUrl(settings.baseUrl));
@@ -320,7 +338,6 @@ function streamChat({ settings, messages, onDelta, onReasoning, signal, onReques
     }
 
     const transport = target.protocol === 'http:' ? http : https;
-
     const body = {
       model: settings.model || DEFAULT_MODEL,
       messages,
@@ -328,149 +345,151 @@ function streamChat({ settings, messages, onDelta, onReasoning, signal, onReques
       temperature: Number(settings.temperature),
       max_tokens: Math.max(1, Number(settings.maxTokens) || 8192)
     };
-    // 有些服务商不接受 top_p 与 temperature 同时出现，这里仅在显式设置时附带
-    if (settings.topP !== undefined && settings.topP !== null && settings.topP !== '') {
-      body.top_p = Number(settings.topP);
+    const isDeepSeekThinkingModel = target.hostname === 'api.deepseek.com' && /^(deepseek-flash|deepseek-v4-pro)$/i.test(body.model);
+    const useJsonReply = settings.stream === false && !isDeepSeekThinkingModel;
+    // DeepSeek flash/pro uses SSE in the tavern so generated text appears progressively.
+    if (useJsonReply) body.stream = false;
+    if (target.hostname === 'api.deepseek.com' && /^(deepseek-flash|deepseek-v4-pro)$/i.test(body.model)) {
+      body.thinking = { type: settings.thinking === false ? 'disabled' : 'enabled' };
     }
-
-    // 交出去给「请求记录」留档。body 到这里已经定稿、往后不会再改 ——
-    // 所以记下的就是服务端即将收到的那一份。记录本身失败也不能拖垮这次请求。
+    if (settings.topP !== undefined && settings.topP !== null && settings.topP !== '') body.top_p = Number(settings.topP);
     if (typeof onRequest === 'function') {
-      try {
-        onRequest(body, target.href);
-      } catch (err) {
-        /* 记录是旁路功能，出错就跳过 */
-      }
+      try { onRequest(body, target.href); } catch (err) { /* 记录失败不能拖垮请求 */ }
     }
-
     const payload = Buffer.from(JSON.stringify(body), 'utf8');
+    let buffer = '';
+    let content = '';
+    let reasoning = '';
+    let usage = null;
+    let finishReason = '';
 
-    const req = transport.request(
-      {
-        protocol: target.protocol,
-        hostname: target.hostname,
-        port: target.port || (target.protocol === 'http:' ? 80 : 443),
-        path: `${target.pathname}${target.search}`,
-        method: 'POST',
-        headers: {
-          ...buildHeaders(settings),
-          'Content-Length': payload.length
-        }
-      },
-      (res) => {
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          const chunks = [];
-          res.on('data', (c) => chunks.push(c));
-          res.on('end', () => {
-            reject(new Error(describeHttpError(res.statusCode, Buffer.concat(chunks).toString('utf8'))));
-          });
-          return;
-        }
+    // Socket 活跃不代表模型有进展：角色帧、空增量和心跳都不能续期。
+    const progressMs = Number(progressTimeoutMs);
+    const resetProgressTimer = () => {
+      if (progressTimer) clearTimeout(progressTimer);
+      if (settled || finishReason || !Number.isFinite(progressMs) || progressMs <= 0) return;
+      progressTimer = setTimeout(() => {
+        settle(new Error(content || reasoning
+          ? '生成停滞：模型已返回部分内容，但随后长时间没有新的模型输出，请稍后重试。'
+          : '生成超时：服务端仅有心跳或空响应，没有返回任何模型输出，请稍后重试。'));
+        if (res) res.destroy();
+        if (req) req.destroy();
+      }, progressMs);
+    };
+    const finish = () => settle(null, { content, reasoning, usage: normalizeUsage(usage), finishReason });
+    const failResponse = (err) => settle(new Error(normalizeNetworkError(err)));
+    req = transport.request({
+      protocol: target.protocol,
+      hostname: target.hostname,
+      port: target.port || (target.protocol === 'http:' ? 80 : 443),
+      path: `${target.pathname}${target.search}`,
+      method: 'POST',
+      headers: { ...buildHeaders(settings), 'Content-Length': payload.length }
+    }, (response) => {
+      res = response;
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => settle(new Error(describeHttpError(res.statusCode, Buffer.concat(chunks).toString('utf8')))));
+        res.on('aborted', () => settle(new Error('接口响应被中止。')));
+        res.on('error', failResponse);
+        return;
+      }
 
-        res.setEncoding('utf8');
-
-        let buffer = '';
-        let content = '';
-        let reasoning = '';
-        let usage = null;
-        let finishReason = '';
-        let finished = false;
-
-        const handleLine = (line) => {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith(':')) return;
-          if (!trimmed.startsWith('data:')) return;
-
-          const data = trimmed.slice(5).trim();
-          if (data === '[DONE]') {
-            finished = true;
-            return;
-          }
-
-          let json;
-          try {
-            json = JSON.parse(data);
-          } catch (err) {
-            return; // 忽略半截的心跳/脏数据
-          }
-
-          if (json.usage) usage = json.usage;
-
-          const choice = json.choices && json.choices[0];
-          if (!choice) return;
-
-          // 收尾信号只在最后一个 chunk 上出现（之前都是 null），有就记下来
-          if (choice.finish_reason) finishReason = choice.finish_reason;
-
-          const delta = choice.delta || choice.message || {};
-          if (typeof delta.reasoning_content === 'string' && delta.reasoning_content) {
-            reasoning += delta.reasoning_content;
-            if (onReasoning) onReasoning(delta.reasoning_content);
-          }
-          if (typeof delta.content === 'string' && delta.content) {
-            content += delta.content;
-            if (onDelta) onDelta(delta.content);
-          }
-        };
-
-        const onAbort = () => {
-          req.destroy(new Error('已停止生成。'));
-        };
-        if (signal) {
-          if (signal.aborted) {
-            onAbort();
-            return;
-          }
-          signal.addEventListener('abort', onAbort, { once: true });
-        }
-
-        res.on('data', (chunk) => {
-          buffer += chunk;
-          // SSE 以空行分隔事件；这里用换行切分即可
-          let index;
-          while ((index = buffer.indexOf('\n')) >= 0) {
-            const line = buffer.slice(0, index);
-            buffer = buffer.slice(index + 1);
-            handleLine(line);
-          }
-        });
-
+      res.setEncoding('utf8');
+      if (useJsonReply) {
+        let jsonBody = '';
+        res.on('data', chunk => { jsonBody += chunk; });
         res.on('end', () => {
-          if (buffer) handleLine(buffer);
-          if (signal) signal.removeEventListener('abort', onAbort);
-          if (!content && !reasoning && !finished) {
-            reject(new Error('接口没有返回任何内容。可能是模型名不对，或该模型不支持流式输出。'));
+          try {
+            const json = JSON.parse(jsonBody);
+            if (json.error) { settle(new Error('模型服务返回错误，请稍后重试。')); return; }
+            const choice = json.choices && json.choices[0];
+            content = typeof choice?.message?.content === 'string' ? choice.message.content : '';
+            reasoning = typeof choice?.message?.reasoning_content === 'string' ? choice.message.reasoning_content : '';
+            usage = json.usage || null;
+            finishReason = choice?.finish_reason || '';
+            if (!content && !reasoning) { settle(new Error('接口没有返回任何内容。')); return; }
+            if (onReasoning && reasoning) onReasoning(reasoning);
+            if (onDelta && content) onDelta(content);
+            finish();
+          } catch { settle(new Error('接口返回的不是合法的对话 JSON。')); }
+        });
+        res.on('aborted', () => settle(new Error('接口响应被中止。')));
+        res.on('error', failResponse);
+        return;
+      }
+      const handleLine = (line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith(':') || !trimmed.startsWith('data:')) return false;
+        const data = trimmed.slice(5).trim();
+        if (data === '[DONE]') return true;
+        let json;
+        try { json = JSON.parse(data); } catch (err) { return false; }
+        if (json.usage) usage = json.usage;
+        const choice = json.choices && json.choices[0];
+        if (!choice) return false;
+        if (choice.finish_reason) {
+          finishReason = choice.finish_reason;
+          if (progressTimer) clearTimeout(progressTimer);
+        }
+        const delta = choice.delta || choice.message || {};
+        if (typeof delta.reasoning_content === 'string' && delta.reasoning_content) {
+          reasoning += delta.reasoning_content;
+          resetProgressTimer();
+          if (onReasoning) onReasoning(delta.reasoning_content);
+        }
+        if (typeof delta.content === 'string' && delta.content) {
+          content += delta.content;
+          resetProgressTimer();
+          if (onDelta) onDelta(delta.content);
+        }
+        return false;
+      };
+      res.on('data', (chunk) => {
+        buffer += chunk;
+        let index;
+        while (!settled && (index = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, index);
+          buffer = buffer.slice(index + 1);
+          if (handleLine(line)) {
+            // DONE 是流协议的终止标记，不能等待服务端关闭 keep-alive 连接。
+            buffer = '';
+            finish();
+            res.destroy();
             return;
           }
-          resolve({ content, reasoning, usage: normalizeUsage(usage), finishReason });
-        });
-
-        res.on('error', (err) => {
-          if (signal) signal.removeEventListener('abort', onAbort);
-          reject(new Error(normalizeNetworkError(err)));
-        });
-      }
-    );
-
-    req.setTimeout(60000, () => {
-      req.destroy(new Error('请求超时：60 秒内没有响应。'));
-    });
-    req.on('error', (err) => {
-      if (signal && signal.aborted) {
-        reject(new Error('已停止生成。'));
-        return;
-      }
-      reject(new Error(normalizeNetworkError(err)));
+        }
+      });
+      res.on('end', () => {
+        if (!settled && buffer && handleLine(buffer)) finish();
+        else if (!settled && !content && !reasoning) settle(new Error('接口没有返回任何内容。可能是模型名不对，或该模型不支持流式输出。'));
+        else finish();
+      });
+      res.on('aborted', () => settle(new Error('接口响应被中止。')));
+      res.on('error', failResponse);
     });
 
-    if (signal) {
-      if (signal.aborted) {
-        req.destroy(new Error('已停止生成。'));
-        return;
-      }
-      signal.addEventListener('abort', () => req.destroy(new Error('已停止生成。')), { once: true });
+    req.setTimeout(useJsonReply ? deadlineMs : 60000, () => req.destroy(new Error('请求超时：模型服务长时间没有响应。')));
+    req.on('error', (err) => settle(new Error(signal && signal.aborted ? '已停止生成。' : normalizeNetworkError(err))));
+    const ms = Number(deadlineMs);
+    if (Number.isFinite(ms) && ms > 0) {
+      deadlineTimer = setTimeout(() => {
+        settle(new Error(`请求超时：达到 ${ms} 毫秒总时限。`));
+        if (res) res.destroy();
+        if (req) req.destroy();
+      }, ms);
     }
-
+    abortHandler = () => {
+      settle(new Error('已停止生成。'));
+      if (res) res.destroy();
+      if (req) req.destroy();
+    };
+    if (signal) {
+      if (signal.aborted) { abortHandler(); return; }
+      signal.addEventListener('abort', abortHandler, { once: true });
+    }
+    if (!useJsonReply) resetProgressTimer();
     req.write(payload);
     req.end();
   });

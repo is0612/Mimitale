@@ -4,39 +4,12 @@
 //  main.js —— 界面逻辑的入口（跑在窗口里）
 //  职责：画对话、把消息发给主进程、接收流式增量做「打字机」效果、存历史。
 //
-//  已按 ES module 分层拆完（从峰值 7900 多行降下来；行数别写在注释里，
-//  改一次就过期 —— 要复核跑 `node tools/analyze.js`），分层是：
-//    core/   底层：常量、状态、DOM 引用、preload 桥、工具函数
-//    ui/     通用界面件：提示条、确认框、主题、Markdown
-//    data/   纯逻辑：服务商/模型、角色库、面板、叙述规则、摘要、持久化、导入重发 id、导出收尾、
-//            「谁在说话」（cast）、提示词组装（messages）、世界书召回（rag）、建议与剧情选项（suggestions）、
-//            会话的新建与分叉（conversations）
-//    views/  一个功能一块（refresh.js 刷新总线、redraw.js 全量重绘门面、
-//            header.js 对话头部、chatList.js 会话列表 + 模型切换、
-//            chatMessages.js 消息渲染、composer.js 发送与流式接收、
-//            convoActions.js 会话/消息增删改、summarize.js 摘要调度、
-//            chatExport.js 导出、stream.js 流式绘制 + 自动跟随、
-//            chatImages.js 图片消息、suggestionsUi.js 建议条 + 剧情选项、
-//            worldPlay.js 进入世界、player.js 玩家角色弹窗、
-//            memoryUi.js 记忆管理 + 存档点、panelUi.js 状态面板、
-//            perspectiveUi.js 视角设置、settings.js 设置页（视图六）、appearance.js 外观弹窗、
-//            viewSwitch.js 视图切换、characterList.js 角色列表页、
-//            charAttributes.js 角色属性编辑器、characterEditor.js 角色编辑器弹窗、
-//            characterImport.js 导入角色卡通道、
-//            worldbookList.js 世界书列表页、worldbook.js 世界书编辑器、
-//            help.js 帮助页的「复制优化提示词」）
-//  这个文件只剩入口层的编排：把事件接到各模块身上、把启动流程串起来，
-//  以及两处刻意留在这里的跨视图动作（导入世界书、Esc 的关闭顺序）。
-//
-//  拆的时候有两条约束，别踩：
-//    · 依赖方向只能向下：core ← ui ← data ← views ← 入口
-//    · 别让两个功能模块互相 import 成**环**（搬完可以跑一遍环检测确认）。
-//      刷新总线在 views/refresh.js：谁想被重绘就在 registerRefreshListeners 里
-//      登记一次；要「全量重绘」就 import views/redraw.js 的 renderAll()。
-//      单向 import 一个不回头依赖你的展示层/动作模块是允许的
-//      （例如 worldbookList 借 player 的弹窗、chatMessages 借 composer 的发送）；
-//      只有「入口层才知道的编排」才用注入 —— initXxx({ theAction })。
-// ============================================================================
+//  按 ES module 分层：core/（常量、状态、DOM、preload 桥、工具）← ui/（通用界面件）
+//  ← data/（纯逻辑）← views/（一个功能一块）← 入口。两条约束：
+//    · 依赖方向只能向下，且别让两个功能模块互相 import 成环。
+//    · 只有「入口层才知道的编排」才用注入 —— initXxx({ theAction })。
+//  刷新总线在 views/refresh.js（registerRefreshListeners 登记），全量重绘走
+//  views/redraw.js 的 renderAll()。单向 import 一个不回头依赖你的展示层是允许的。
 
 import { api } from './core/api.js';
 import { state } from './core/state.js';
@@ -78,7 +51,6 @@ import { closePlayerModal, applyPlayerCharChoice } from './views/player.js';
 import { initMemoryUi, closeMemoryModal } from './views/memoryUi.js';
 import { initPanelUi } from './views/panelUi.js';
 import { initCastPanel } from './views/castPanel.js';
-import { initGenParams } from './views/genParams.js';
 import { initStateCards } from './views/stateCard.js';
 import { initWorldbookList, renderWorldbookPage } from './views/worldbookList.js';
 import { initPresetList } from './views/presetList.js';
@@ -139,10 +111,8 @@ import { summarizeNow } from './views/summarize.js';
 import { exportCharacter, exportConversation } from './views/chatExport.js';
 import { startPlayerFlow, chatWithCharacter } from './views/worldPlay.js';
 
-// 「设置页里当前正在编辑的服务商」随设置页一起搬到了 views/settings.js ——
-// 入口层只在启动时把当前服务商带过去（setEditingProvider）。
-// 「世界书弹窗里当前选中哪本书 / 哪条条目」随世界书编辑器一起搬到了
-// views/worldbook.js —— 那是编辑器自己的状态，别处不需要知道。
+// 「设置页里当前正在编辑的服务商」的初始值随设置页状态走（views/settings.js），
+// 入口层只在启动时把它带过去（setEditingProvider）。
 
 /**
  * 登记「谁需要被重绘」。顺序 = 绘制顺序，和以前 renderAll 里的调用顺序一致。
@@ -161,7 +131,6 @@ function registerRefreshListeners() {
   // 直接接 suggestionsUi.js，不经过这里。
   initPanelUi(); // → onRefresh(renderPanel)
   initCastPanel(); // → onRefresh(renderCastPanel)：右侧那条常驻面板（跟入口条共用名单）
-  initGenParams(); // 生成参数抽屉（入口在「⋯」菜单里）
   initMemoryUi(); // → onRefresh(renderMemoryIndicator)
   onRefresh(renderMessages);
   // 浮动状态卡（点「我」/角色的头像打开）。登记在消息之后：它读的是同一份面板数据，
@@ -191,10 +160,6 @@ function registerRefreshListeners() {
 let startupDataLoaded = false;
 
 function bindEvents() {
-  // ⛔ 侧栏搜索框的接线 2026-10-12 晚去掉了（星宝：「去掉搜索对话功能」）。
-  //    连 #convo-search 这个输入框一起删了 —— 只过滤标题的半版搜索不如不做，
-  //    要做就做成带消息内容的全局搜索。
-
   // 品牌行右端的版本号：主进程启动时通过 preload 递过来。
   // 格式化成 major.minor（package.json 的 1.0.0 → v1.0），拿不到就整个不显示。
   if (el.brandVersion) {
@@ -206,40 +171,23 @@ function bindEvents() {
     }
   }
 
-  // 侧栏收起 / 展开。收成窄条，点同一颗（这时是 ›）回来 ——
-  // 跟右侧在场角色那栏同一个套路，收起来和展开在同一个位置。
-  //
-  // ⚠️ 2026-10-13：对话列**左边缘那颗靠上的把手**（#rail-handle-left）是同一个动作的
-  //    第二个入口。两个入口必须走同一个函数 —— 各写一份的下场是「用把手收起来了、
-  //    栏内那颗还写着 ‹」，两处显示对不上。
+  // 栏头和顶栏入口共享原有收放状态。
   const applySidebarCollapsed = () => {
     const collapsed = !!(el.sidebar && el.sidebar.classList.contains('collapsed'));
-    const btn = el.btnSidebarToggle;
-    if (btn) {
-      btn.textContent = collapsed ? '›' : '‹';
+    if (el.btnSidebarToggle) {
+      const btn = el.btnSidebarToggle;
       btn.title = collapsed ? '展开侧栏' : '收起侧栏';
-      btn.setAttribute('aria-label', collapsed ? '展开侧栏' : '收起侧栏');
-      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-    }
-    // 箭头跟着状态翻（跟栏内那颗「‹」用同一个字符 = 同一个动作）。
-    // ⚠️ 是**文字字符**不是 SVG 图标 —— 为什么不用 iconSvg，见 index.html 那段注释。
-    const handle = el.railHandleLeft;
-    if (handle) {
-      handle.textContent = collapsed ? '›' : '‹';
-      handle.title = collapsed ? '展开侧栏' : '收起侧栏';
-      handle.setAttribute('aria-label', handle.title);
-      handle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      btn.setAttribute('aria-label', btn.title);
+      btn.setAttribute('aria-expanded', String(!collapsed));
     }
   };
-
   const toggleSidebar = () => {
     if (!el.sidebar) return;
     el.sidebar.classList.toggle('collapsed');
     applySidebarCollapsed();
   };
-
   if (el.btnSidebarToggle) el.btnSidebarToggle.addEventListener('click', toggleSidebar);
-  if (el.railHandleLeft) el.railHandleLeft.addEventListener('click', toggleSidebar);
+  applySidebarCollapsed();
 
   // 「＋ 新对话」= 直接建一个空白会话并切到聊天屏。
   // 想跟某个角色聊，去角色库点卡片上的「聊天」—— 那条路会自己建会话并绑角色。
@@ -314,19 +262,11 @@ function bindEvents() {
     if (event.target === el.playerModal) closePlayerModal();
   });
 
-  // 主题配色 / 夜间模式已经不在这里了 —— 2026-10-08 挪进「外观」弹窗，
-  // 点击由 views/appearance.js 接（那边才有它们的控件）。
+  // 主题配色 / 夜间模式在「外观」弹窗里，点击由 views/appearance.js 接。
 
-  // 打开数据文件夹。主进程回 { ok, path, error } —— 失败时得说一句人话：
-  // 以前这里 .catch(() => {}) 什么都吞，用户只看到 Windows 自己弹的那个框
-  // （「Windows 无法访问指定设备、路径或文件」），既不知道哪一步失败，
-  // 也拿不到路径。
-  //
-  // ⚠️ 2026-10-08 补的兜底：**ok:true 只代表 explorer.exe 起来了，不代表文件夹真弹出来了**。
-  //    （进程被沙箱/权限限制住时就是这样：explorer 继承同一个受限令牌，请求递不到
-  //     已经开着的资源管理器 —— 文件夹不开，而这边的返回值是"成功"。见 main/ipc.js。）
-  //    主进程查不出这件事，所以这里把**路径无条件塞进剪贴板**：真没弹出来的话，
-  //    用户按 Ctrl+L 往资源管理器地址栏一粘就进去了，不至于"点了没反应"。
+  // 打开数据文件夹。主进程回 { ok, path, error } —— 失败时得说一句人话，别吞错。
+  // ⚠️ ok:true 只代表 explorer.exe 起来了，不代表文件夹真弹出来了（见 main/ipc.js），
+  //    所以这里把路径无条件塞进剪贴板：真没弹出来，用户 Ctrl+L 一粘就进去了。
   el.btnFolder.addEventListener('click', async () => {
     let result = null;
     try {
@@ -346,8 +286,6 @@ function bindEvents() {
     }
     if (result && result.ok === false) {
       console.error('打开数据文件夹失败', result.error);
-      // 以前这里只弹路径，把主进程好不容易带回来的原因（result.error）丢掉了 ——
-      // 用户只看到「打不开数据文件夹：C:\...」，拿不到任何下一步。
       showToast(`打不开数据文件夹：${result.error || result.path}`, 'error');
       return;
     }
@@ -360,9 +298,7 @@ function bindEvents() {
   // 传的是按钮本身（模块靠 closest('.modal') 找到它所属的弹窗），所以各弹窗互不影响。
   // 逐个绑而不是循环数组 —— tools/audit-buttons.js 是按「el.xxx 后面同一行有没有
   // addEventListener」查漏绑的，写成数组它会把这几个全报成没绑。
-  // （设置那颗 2026-10-09 撤了、角色卡 / 世界书那两颗 2026-10-13 撤了：
-  //  它们都从弹窗改成了**页面**，本来就占满整个窗口，没有「放大」这回事。
-  //  只剩预设还是弹窗。）
+  // 现在只剩预设编辑器还是弹窗（其余的都改成了占满整窗的页面）。
   el.btnFsPreset.addEventListener('click', () => toggleModalMax(el.btnFsPreset));
 
   el.input.addEventListener('input', autoGrowInput);
@@ -426,8 +362,8 @@ function bindEvents() {
       closeWorldbookPicker();
       return;
     }
-    // 角色编辑器 2026-10-13 起也是**页面**（视图七）而不是弹窗：在里面按 Esc
-    // = 回到进来之前那一屏，和页头那颗「返回」同一个动作（跟下面的设置页一样）。
+    // 角色编辑器是**页面**而不是弹窗：在里面按 Esc = 回到进来之前那一屏，
+    // 和页头那颗「返回」同一个动作。
     if (!el.viewCharEditor.classList.contains('hidden')) {
       leaveCharacterEditor();
       return;
@@ -438,16 +374,13 @@ function bindEvents() {
       closePersonaDialog();
       return;
     }
-    // 设置 2026-10-09 起是**页面**（视图六）而不是弹窗：在它里面按 Esc = 返回上一屏，
+    // 设置是**页面**而不是弹窗：在它里面按 Esc = 返回上一屏，
     // 和页头那颗「返回」同一个动作。
     if (!el.viewSettings.classList.contains('hidden')) {
       leaveSettings();
       return;
     }
-    // ⛔ 「外观弹窗」这一段 2026-10-12 深夜摘掉：外观搬进设置页（#sec-appearance）了，
-    //    它不再是压在设置之上的那一层 —— 在设置页里按 Esc 就走上面那条 leaveSettings()。
-    // 剩下这三个以前漏在链外 —— 只开着它们的时候按 Esc 毫无反应，和别的弹窗行为不一致
-    // ⚠️ 世界书编辑器 2026-10-13 起同样从弹窗变成了**页面**（视图八），判据跟着换。
+    // 世界书编辑器同样是**页面**而不是弹窗，判据跟着换。
     if (!el.viewWbEditor.classList.contains('hidden')) {
       leaveWorldbookEditor();
       return;
@@ -553,12 +486,9 @@ function bindEvents() {
     api.saveConversationsNow({ conversations: state.conversations, activeId: state.activeId });
     // 角色和世界书一起写（主进程收到 worldbooks 才会更新那个文件，漏掉的话
     // 角色绑定关系会指向一本已经不在磁盘上的书）。
-    // ⚠️ 必须走 persistCharacters —— 它带着「世界书没读出来就别写」的守卫
-    // （data/persist.js 的 worldbooksLoaded）。以前这里直接调
-    // api.saveCharactersNow({ ..., worldbooks: worldbooks() }) 把守卫绕过去了：
-    // 世界书读失败时 state.worldbooks 是空数组，而主进程 store.js 判断的是
-    // 「Array.isArray(payload.worldbooks)」—— 空数组照样算「带了世界书」，
-    // 于是「启动读失败 + 关一次窗口」就把 worldbooks.json 清空了。
+    // 必须走 persistCharacters —— 它带着「世界书没读出来就别写」的守卫
+    // （data/persist.js 的 worldbooksLoaded）：世界书读失败时 state.worldbooks
+    // 是空数组，绕过守卫写盘会把 worldbooks.json 清空。
     persistCharacters(true);
   });
 }
@@ -634,8 +564,7 @@ async function init() {
   initRequestLog();
   // 外观弹窗同理：改完即时生效 + 落盘，没有需要整体重绘的 DOM。
   initAppearance();
-  // 对话区宽度（顶栏弹层 + 消息流两侧的抓手）——2026-10-12 从外观弹窗搬出来的。
-  // 它写的是同一批 CSS 变量，但 UI 和接线都在 views/chatPad.js。
+  // 对话区宽度（顶栏弹层 + 消息流两侧的抓手）：UI 和接线都在 views/chatPad.js。
   initChatPad();
   // 弹窗「放大」状态：关弹窗时自动摘掉，下次打开回到正常大小。
   initModalMax();
@@ -728,10 +657,8 @@ async function init() {
   refreshPetCache().catch(() => {});
 
   // ---- 启动数据：五份互不依赖，并行去取 ----
-  // 以前是五个 await 排队，每次都要等上一个跨进程往返回来才发下一个；
-  // 并行后总耗时从「五次往返相加」压到「最慢那一份」。
   // 世界书 / 预设读失败不该拦住启动（但要记住没读到，各自 catch 里见），
-  // 所以这两份单独包一层、失败也 resolve；其余三份失败 = 启动失败，语义同前。
+  // 所以这两份单独包一层、失败也 resolve；其余三份失败 = 启动失败。
   const soft = (p) => p.then(
     (r) => ({ ok: true, r }),
     (err) => ({ ok: false, err })
@@ -802,12 +729,7 @@ async function init() {
     mergePlayerOwnedFields(convo);
     // 选项是程序写进去的，读盘时只要保证形状对（不是数组就当没有）
     if (!Array.isArray(convo.options)) convo.options = [];
-    // 剧情选项：以前「没配过」落的是 null（当时的默认是不开）。现在默认改成
-    // 「全都开、4 条」，所以老会话要在读盘时补一次：
-    //   · 绑了角色卡 → 按那张卡的配置（卡上明确关掉的仍是 null，不会被强行打开）；
-    //   · 进世界的会话（没绑卡、只挂了世界书）→ 直接给默认；
-    //   · 纯聊天会话（没卡也没世界书）→ 保持 null，注入那边本来就会跳过。
-    // 只在真的没有配置时才补，已经配过的会话不动（快照语义还在）。
+    // 剧情选项默认「全都开、4 条」；老会话在读盘时补一次（快照语义：已配过的不动）。
     if (!convo.optionsSpec || typeof convo.optionsSpec !== 'object') {
       const bound = convo.characterId
         ? asArray(state.characters).find((c) => c && c.id === convo.characterId)

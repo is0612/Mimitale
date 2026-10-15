@@ -167,7 +167,7 @@ export function initQuickPhrases() {
 
   // 按钮上的图标：和顶栏那几颗一样走 data-icon 那套（见 ui/icons.js），
   // 但那是给静态标签用的扫描，这里直接插一次更省事。
-  const icon = iconHtml('braces', 'quick-icon');
+  const icon = iconHtml('sparkles', 'quick-icon');
   if (icon) el.btnQuick.insertAdjacentHTML('afterbegin', icon);
 
   renderRows();

@@ -143,6 +143,7 @@ const DEFAULT_SETTINGS = {
   // 设小了会出现「思考还没写完、正文一个字没出」的截断，所以默认给得宽一些。
   maxTokens: 8192,
   topP: 0.95,
+  thinking: true,
   // 界面主题：light（白天）/ dark（夜间）
   // ⚠️ 必须是**真实的出厂默认**，不能是「以前那版的默认」—— 它不只用来补缺键：
   //    main/window.js 拿它当**首屏窗口底色**（loadSettings 抛错时的兜底），
@@ -192,7 +193,8 @@ const DEFAULT_SETTINGS = {
   // 界面字体（2026-10-12 深夜加）：key 对应 renderer 那边 UI_FONTS 里的一套字体栈。
   uiFont: 'default',
   chatBoldColor: '',    // **加粗** 用什么颜色，空 = 跟随主题
-  chatBackground: '',   // 消息区背景图（dataURL），空 = 没有
+  chatBackground: '',   // 自定义聊天背景（dataURL）
+  chatBuiltinBackground: true, // 无自定义图时使用内置雾林皮肤；清除背景可关闭
   // 消息区的左右内边距（px）。**两个独立的值，不是「一个宽度」** ——
   // 需要它是因为浮动卡片常被放在左下角，那时候对话贴边会被挡住，
   // 而那只需要把**左边**推开；用一个对称的宽度值会让右边跟着一起缩，
@@ -431,6 +433,7 @@ function normalizeSettings(saved) {
   s.uiSize = ['small', 'medium', 'large'].includes(raw.uiSize) ? raw.uiSize : DEFAULT_SETTINGS.uiSize;
   s.uiFont = ['default', 'noto', 'simhei', 'serif'].includes(raw.uiFont) ? raw.uiFont : DEFAULT_SETTINGS.uiFont;
 
+  s.chatBuiltinBackground = raw.chatBuiltinBackground !== false;
   const bg = typeof raw.chatBackground === 'string' ? raw.chatBackground : '';
   s.chatBackground =
     bg.startsWith('data:image/') && bg.length <= MAX_CHAT_BACKGROUND_CHARS ? bg : '';
@@ -526,7 +529,8 @@ function endpointFor(settings, providerId, model) {
     model: chosen,
     temperature: settings.temperature,
     maxTokens: settings.maxTokens,
-    topP: settings.topP
+    topP: settings.topP,
+    thinking: settings.thinking !== false
   };
 }
 

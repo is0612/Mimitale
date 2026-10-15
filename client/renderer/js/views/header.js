@@ -17,6 +17,8 @@ import { state } from '../core/state.js';
 import { el } from '../core/dom.js';
 import { activeConvo } from '../core/util.js';
 import { h } from '../ui/build.js';
+import { iconSvg } from '../ui/icons.js';
+import { currentScene } from '../data/currentScene.js';
 import { entityTone } from '../ui/avatarTone.js';
 import { currentEndpoint } from '../data/providers.js';
 import { characterForConvo, convoWorldbookIds, worldbookById } from '../data/library.js';
@@ -73,12 +75,12 @@ function renderTopbarAvatar(convo, character) {
   const wb = wbId ? worldbookById(wbId) : null;
   if (wb) {
     host.classList.add('book', entityTone(wb.id, wb.name));
-    host.textContent = wb.name.slice(0, 1);
+    host.innerHTML = iconSvg('book-open');
     return;
   }
 
   host.classList.add('plain');
-  host.textContent = convo ? '书' : '·';
+  host.innerHTML = iconSvg('book-open');
 }
 
 /**
@@ -158,6 +160,27 @@ export function renderHeader() {
   const convoBooks = convoBookIds.map((id) => worldbookById(id)).filter(Boolean);
   const charBookIds = character && Array.isArray(character.worldbookIds) ? character.worldbookIds : [];
   const charBooks = charBookIds.map((id) => worldbookById(id)).filter(Boolean);
+  const effectiveBooks = convoBooks.length ? convoBooks : character && character.worldbookEnabled !== false ? charBooks : [];
+  const storyContext = document.getElementById('story-context');
+  if (storyContext) storyContext.textContent = effectiveBooks.length
+    ? `故事进行中 / ${effectiveBooks.map(book => book.name).join(' · ')}`
+    : character ? `故事进行中 / ${character.name}` : '自由叙事 / 新的篇章';
+  const sceneHost = document.getElementById('scene-context');
+  if (sceneHost) {
+    sceneHost.replaceChildren();
+    const marker = h('span', { class: 'scene-marker', 'aria-hidden': 'true' });
+    marker.innerHTML = iconSvg('map-pin');
+    sceneHost.appendChild(marker);
+    const scene = currentScene(convo);
+    sceneHost.appendChild(h('span', { text: scene.length ? scene.map(field => field.value).join(' · ') : '故事场景，随你的叙述展开' }));
+    if (effectiveBooks.length) {
+      const books = h('span', { class: 'scene-worldbook', title: effectiveBooks.map(book => book.name).join('、') });
+      const bookIcon = h('span', { 'aria-hidden': 'true' });
+      bookIcon.innerHTML = iconSvg('book-open');
+      books.append(bookIcon, document.createTextNode(effectiveBooks.map(book => book.name).join(' · ')));
+      sceneHost.appendChild(books);
+    }
+  }
 
   if (convoBooks.length && charBooks.length) {
     el.convoMeta.textContent +=

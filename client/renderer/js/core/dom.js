@@ -12,14 +12,11 @@ export const el = {
   convoList: $('convo-list'),
   // 会话列表头上的分组标签（「最近 · 5」，条数由 renderConvoList 填）
   convoCap: $('convo-cap'),
-  // 左栏收起 / 展开（收成 52px 图标轨，点同一颗回来）
-  // 左栏本身（收起态是它身上的 .collapsed）+ 栏内那颗「‹」。
-  // 边缘把手（#rail-handle-left）也改这两个东西，见 main.js 里 toggleSidebar。
+  // 左栏与顶栏的收放入口共享 collapsed 状态。
   sidebar: $('sidebar'),
   btnSidebarToggle: $('btn-sidebar-toggle'),
   // 图标轨最下面那颗：当前会话的头像（只在收起态显示，由 renderConvoList 填）
   railAvatar: $('rail-avatar'),
-  // ⛔ 侧栏搜索框 2026-10-12 晚去掉了（星宝要求），这里不再登记 #convo-search
   // 品牌行右端的版本号，值从 preload 的 appVersion 来（main.js 启动时填）
   brandVersion: $('brand-version'),
   convoTitle: $('convo-title'),
@@ -43,9 +40,7 @@ export const el = {
   btnPresets: $('btn-presets'),
   // 帮助页（内容是静态文本，没有 render 函数，只靠 viewSwitch 显隐）
   btnHelp: $('btn-help'),
-  // 主题配色 / 夜间模式原先在品牌区挂了两颗图标按钮（btnAccent / btnTheme），
-  // 2026-10-08 挪进「外观」弹窗了，引用跟着搬到了下面 appearance 那一段。
-  // 设置页（2026-10-09 从弹窗改成视图六：内容和显隐都由 views/settings.js 管）
+  // 设置页：内容和显隐都由 views/settings.js 管
   viewSettings: $('view-settings'),
   btnBackSettings: $('btn-back-settings'),
   btnSaveSettings: $('btn-save-settings'),
@@ -72,10 +67,7 @@ export const el = {
   panelCastCount: $('panel-cast-count'),
   // 「全部展开 / 全部收起」批量开关（在入口条那一行的右端）
   btnCardsAll: $('btn-cards-all'),
-  // 右侧常驻的「在场角色 / 生成参数」面板（2026-10-12 按设计稿加回的第三栏）。
-  // ⚠️ 当天晚些时候它从「一栏 + 一个盖住它的抽屉」改成了**两个页签**：
-  //    · 在场角色：每角色一块（只读，点一块开状态卡）
-  //    · 生成参数：按会话存的采样参数（原来那个 #gen-drawer 浮层搬进来了）
+  // 右侧在场角色与场景面板。
   castPanel: $('cast-panel'),
   castPanelCount: $('cast-panel-count'),
   castPanelBody: $('cast-panel-body'),
@@ -83,44 +75,23 @@ export const el = {
   castFootBook: $('cast-foot-book'),
   castFootHit: $('cast-foot-hit'),
   btnCastCollapse: $('btn-cast-collapse'),
-  btnTabCast: $('btn-tab-cast'),
-  btnTabGen: $('btn-tab-gen'),
-  // 生成参数的入口收在「⋯」菜单里（点它 = 切到第二个页签）
-  btnGenParams: $('btn-gen-params'),
-  genBody: $('gen-body'),
-  genFoot: $('gen-foot'),
-  genPreset: $('gen-preset'),
-  genTemperature: $('gen-temperature'),
-  genTemperatureValue: $('gen-temperature-value'),
-  genTopP: $('gen-topp'),
-  genTopPValue: $('gen-topp-value'),
-  genMaxTokens: $('gen-maxtokens'),
-  genMaxTokensValue: $('gen-maxtokens-value'),
-  btnGenReset: $('btn-gen-reset'),
   // 浮动状态卡的容器（铺满对话列、本身不挡鼠标，只有卡片实体可交互）
   stateCards: $('state-cards'),
   // 外观（主题配色 + 明暗管整个界面，字号 / 加粗色 / 背景图只管聊天区）
-  // ⛔ 2026-10-12 深夜：这一块从**顶栏弹窗**搬进了 设置 → 外观（#sec-appearance），
-  //    所以 btnAppearance / appearanceModal / btnCloseAppearance* 四个引用一起摘了
-  //    —— 它们对应的 DOM 已经不存在，留着只会是一堆 null（谁碰谁炸）。
-  //    下面这些控件 id **一个没变**，原样复用。
+  // 控件都在 设置 → 外观（#sec-appearance）里；下面这些 id 原样复用。
   // 「主题配色」四选一：容器里是四个 [data-accent] 按钮，选中态由 ui/theme.js 刷
   appearanceAccents: $('appearance-accents'),
   // 「明暗」两态：容器里是两个 [data-mode] 按钮，同上
   appearanceModes: $('appearance-modes'),
   // 「界面字号」三档（小 / 中 / 大）：容器里是三个 [data-uiscale] 按钮，
-  // 选中态由 views/appearance.js 的 renderAppearanceForm 刷（2026-10-12 深夜新增）
+  // 选中态由 views/appearance.js 的 renderAppearanceForm 刷
   appearanceUiScale: $('appearance-uiscale'),
   // 「字体」：一个原生 <select>（4 套本机确认存在的字体栈）
   appearanceFont: $('appearance-font'),
   appearanceFontSize: $('appearance-fontsize'),
   appearanceFontSizeValue: $('appearance-fontsize-value'),
-  // 对话区宽度：⛔ 顶栏那颗按钮 + 它的弹层（#pad-pop / 两根滑块）2026-10-12 晚**去掉了**
-  // （星宝：「聊天框里已经可以调宽度了」）。现在只剩消息区两侧的抓手。
+  // 对话区宽度：只剩消息区两侧的抓手。
   // ⚠️ 左右是**两个独立的元素**，不是同一个控件的两处引用：用户要的就是「改一边另一边不动」。
-  // 侧栏收放把手（对话列左右边缘、靠上那颗）
-  railHandleLeft: $('rail-handle-left'),
-  railHandleRight: $('rail-handle-right'),
   // 对话区左右内缩的拖动抓手（垂直居中那颗）
   padHandleLeft: $('pad-handle-left'),
   padHandleRight: $('pad-handle-right'),
@@ -187,7 +158,7 @@ export const el = {
   pickList: $('pick-list'),
   pickCancel: $('pick-cancel'),
   toast: $('toast'),
-  // 角色编辑器（视图七：2026-10-13 从弹窗改成页面）
+  // 角色编辑器（从弹窗改成了页面，占满主区域的一屏）
   charsTitle: $('chars-title'),
   charsSub: $('chars-sub'),
   // 主区域的七个视图：聊天 / 角色列表页 / 角色编辑页 / 世界书列表页 / 世界书编辑页
@@ -304,6 +275,8 @@ export const el = {
   s: {
     temp: $('s-temp'),
     maxTokens: $('s-maxtokens'),
+    thinking: $('s-thinking'),
+    topP: $('s-topp'),
     sendOnEnter: $('s-sendonenter'),
     showDate: $('s-showdate'),
     showUsage: $('s-showusage'),

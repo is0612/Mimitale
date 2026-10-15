@@ -93,6 +93,23 @@ export function initSettings(opts = {}) {
   el.btnSaveSettings.addEventListener('click', () => saveSettings(false));
   el.btnTest.addEventListener('click', testConnection);
   el.btnFetchModels.addEventListener('click', fetchModels);
+  document.addEventListener('mimitale:generation-settings-changed', () => {
+    const s = state.settings || {};
+    el.s.temp.value = s.temperature ?? 0.7;
+    el.s.maxTokens.value = s.maxTokens ?? 8192;
+    el.s.topP.value = s.topP ?? 0.95;
+    el.s.thinking.checked = s.thinking !== false;
+  });
+  for (const [key, input] of [['temperature', el.s.temp], ['maxTokens', el.s.maxTokens], ['topP', el.s.topP], ['thinking', el.s.thinking]]) {
+    input?.addEventListener('change', async () => {
+      const value = key === 'thinking' ? input.checked : Number(input.value);
+      if (key !== 'thinking' && (!input.value.trim() || !Number.isFinite(value))) return;
+      try {
+        state.settings = await api.saveSettings({ [key]: value });
+        document.dispatchEvent(new CustomEvent('mimitale:generation-settings-changed'));
+      } catch (err) { showToast((err && err.message) || '生成参数保存失败', 'error'); }
+    });
+  }
 
   // 换服务商 → 模型下拉跟着换（新服务商的列表里没有老模型，所以从第一个开始）
   el.s.imageProvider.addEventListener('change', () => {
@@ -541,6 +558,8 @@ async function applyPersonaTemplate() {
 function fillSettingsForm(settings) {
   el.s.temp.value = settings.temperature ?? 0.7;
   el.s.maxTokens.value = settings.maxTokens ?? 8192;
+  if (el.s.topP) el.s.topP.value = settings.topP ?? 0.95;
+  if (el.s.thinking) el.s.thinking.checked = settings.thinking !== false;
   el.s.sendOnEnter.checked = settings.sendOnEnter !== false;
   el.s.showDate.checked = settings.showDate !== false;
   el.s.showUsage.checked = settings.showUsage !== false;
@@ -858,6 +877,8 @@ function readSettingsForm() {
       32000,
       true
     ),
+    thinking: el.s.thinking ? el.s.thinking.checked : saved.thinking !== false,
+    topP: numberFrom(el.s.topP, saved.topP ?? 0.95, 0, 1, false),
     sendOnEnter: el.s.sendOnEnter.checked,
     showDate: el.s.showDate.checked,
     showUsage: el.s.showUsage.checked,

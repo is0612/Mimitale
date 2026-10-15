@@ -3,8 +3,7 @@
 // ============================================================================
 //  views/castPanel.js —— 右侧常驻的「在场角色」面板
 //
-//  2026-10-12 按设计稿把右栏加回来（原来 2026-09-30 撤掉过，.chat-col 的注释
-//  里还留着那句话）。它和「入口条 + 左下浮动卡」**并存**，三样各管一段：
+//  它和「入口条 + 左下浮动卡」**并存**，三样各管一段：
 //    · 入口条（panelUi.js）：消息区上面那一行头像，点开状态卡
 //    · 浮动卡（stateCard.js）：拖到任意位置的大卡，看立绘用
 //    · 这一栏：常驻在右边，一眼扫完「都有谁、各自几个数」
@@ -21,6 +20,9 @@ import { el } from '../core/dom.js';
 import { activeConvo } from '../core/util.js';
 import { h, clear } from '../ui/build.js';
 import { entityTone } from '../ui/avatarTone.js';
+import { stateCardPhoto } from '../data/expressions.js';
+import { currentScene } from '../data/currentScene.js';
+import { persistConversations } from '../data/persist.js';
 import { fieldProgress } from '../core/panel-fields.js';
 import { panelCastForDisplay, worldbookHitCount } from '../data/cast.js';
 import { characterForConvo, convoWorldbookIds, worldbookById } from '../data/library.js';
@@ -29,7 +31,8 @@ import {
   convoPanelDef,
   convoPanelFields,
   panelFieldName,
-  panelFieldOwner
+  panelFieldOwner,
+  appendPanelFields
 } from '../data/panel.js';
 import { onRefresh, refreshAll } from './refresh.js';
 import { openStateCard } from './stateCard.js';
@@ -88,7 +91,18 @@ function meterBar(convo, key) {
 }
 
 function cardFor(convo, ent) {
-  const card = h('div', { class: 'cast-card', title: `点一下打开「${ent.name}」的状态卡` });
+  const photo = ent.card ? stateCardPhoto(convo, ent.card, ent.name, panelCastForDisplay(convo).length === 1) : null;
+  const card = h('div', {
+    class: ['cast-card', photo && photo.src && 'has-portrait'],
+    role: 'button', tabindex: '0',
+    'aria-label': `打开${ent.name}的可拖动角色卡`,
+    title: `点一下打开「${ent.name}」的可拖动角色卡`
+  });
+  if (photo && photo.src) {
+    card.appendChild(h('div', { class: 'cast-portrait' },
+      h('img', { src: photo.src, alt: `${ent.name}立绘`, loading: 'lazy' }),
+      photo.label ? h('span', { class: 'cast-expression', text: photo.label }) : null));
+  }
 
   const head = h('div', { class: 'cast-card-head' });
   const avatar = h('span', {
@@ -131,63 +145,25 @@ function cardFor(convo, ent) {
 
   // 和入口条上的头像同一个动作：点开那张状态卡
   card.addEventListener('click', () => openStateCard(ent.owner));
+  card.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openStateCard(ent.owner);
+    }
+  });
   return card;
 }
 
-/**
- * 这一栏现在停在哪个页签：`'cast'`（在场角色）/ `'gen'`（生成参数）。
- *
- * ⚠️ 状态放在模块里，**不要**去读 DOM 猜（`classList.contains('hidden')` 那种）——
- *    `renderCastPanel` 每次刷新都会被叫一遍，「谁先跑」并不固定，
- *    用 DOM 当状态源两边就会互相打架。views/genParams.js 也要问这个值。
- */
-let railTab = 'cast';
-
-export function isRailTab(tab) {
-  return railTab === tab;
-}
-
-/** 切页签。收起着就顺手展开 —— 从「⋯」点「生成参数」不该只展开一条空栏。 */
-export function showRailTab(tab) {
-  railTab = tab === 'gen' ? 'gen' : 'cast';
-  if (el.castPanel) el.castPanel.classList.remove('collapsed');
-  syncCollapseBtn();
-  // 走刷新总线而不是直接调渲染函数：两个页签的内容分属两个模块
-  // （本文件 + views/genParams.js），总线是它们之间唯一该认识的接口。
-  refreshAll();
-}
-
-/**
- * 右栏「收放」那两处 chrome 跟着 `collapsed` 走：栏头那颗「›」+ 对话列右边缘的把手。
- *
- * ⚠️ 两个入口（栏头按钮 / 边缘把手）改的是同一份状态，显示也就在这一处同步 ——
- *    各写一份的下场是「用把手收起来了、栏头那颗还写着 ›」。
- * ⚠️ 别在 `if (!panel) return` 之后再加提前 return：即使栏头那颗不见了（不该发生），
- *    把手也得刷上。
- */
+/** 栏头和顶栏入口共享面板原有的 collapsed 状态。 */
 function syncCollapseBtn() {
   const panel = el.castPanel;
   if (!panel) return;
   const collapsed = panel.classList.contains('collapsed');
-
   if (el.btnCastCollapse) {
     const btn = el.btnCastCollapse;
-    btn.textContent = collapsed ? '‹' : '›';
     btn.title = collapsed ? '展开这一栏' : '收起这一栏';
-    btn.setAttribute('aria-label', collapsed ? '展开右侧面板' : '收起右侧面板');
-    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-  }
-
-  // 箭头跟着状态翻（跟栏头那颗「›」同一个字符 = 同一个动作）。
-  // ⚠️ 是**文字字符**不是 SVG 图标 —— 为什么不用 iconSvg，见 index.html 里把手那段注释。
-  // ⚠️ 变量别叫 `h`：本文件顶部 import 了 build.js 的 `h()` 建节点函数，同名会遮蔽它
-  //    （现在这个函数里不用 `h()`，但埋着给以后的人踩）。
-  if (el.railHandleRight) {
-    const handle = el.railHandleRight;
-    handle.textContent = collapsed ? '‹' : '›';
-    handle.title = collapsed ? '展开这一栏' : '收起这一栏';
-    handle.setAttribute('aria-label', handle.title);
-    handle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    btn.setAttribute('aria-label', collapsed ? '展开在场角色面板' : '收起在场角色面板');
+    btn.setAttribute('aria-expanded', String(!collapsed));
   }
 }
 
@@ -207,35 +183,39 @@ export function renderCastPanel() {
       ? character.worldbookIds.map((id) => worldbookById(id)).filter(Boolean)
       : [];
 
-  // --- 两个页签的可见性（先切，再决定整栏露不露）---
-  const genTab = railTab === 'gen';
-  if (el.btnTabCast) {
-    el.btnTabCast.classList.toggle('active', !genTab);
-    el.btnTabCast.setAttribute('aria-selected', genTab ? 'false' : 'true');
-  }
-  if (el.btnTabGen) {
-    el.btnTabGen.classList.toggle('active', genTab);
-    el.btnTabGen.setAttribute('aria-selected', genTab ? 'true' : 'false');
-  }
-  if (el.castPanelBody) el.castPanelBody.classList.toggle('hidden', genTab);
-  if (el.genBody) el.genBody.classList.toggle('hidden', !genTab);
-  if (el.castFoot) el.castFoot.classList.toggle('hidden', genTab);
-  if (el.genFoot) el.genFoot.classList.toggle('hidden', !genTab);
-
-  // 出现条件：**有会话**，且（有在场角色，或这一局绑了世界书，或正在看生成参数页签）。
-  // 默认对话两样都没有 —— 别白占 264px；而「生成参数」页签跟在场角色无关，
-  // 0 个人时也不该被藏掉（否则从「⋯」点进来什么都看不见）。
-  const show = !!convo && (entities.length > 0 || books.length > 0 || charBooks.length > 0 || genTab);
+  // 有角色、世界书或场景信息时显示。
+  const scene = currentScene(convo);
+  const show = !!convo && (entities.length > 0 || books.length > 0 || charBooks.length > 0 || scene.length > 0);
   panel.classList.toggle('hidden', !show);
-  // 右把手跟着整栏一起显隐：没栏可收的时候，它不该自己杵在正文右边。
-  // （左把手不用管 —— 左栏是常驻的，永远有得收。）
-  if (el.railHandleRight) el.railHandleRight.classList.toggle('hidden', !show);
+  syncCollapseBtn();
   if (!show) return;
 
   if (el.castPanelCount) el.castPanelCount.textContent = String(entities.length);
 
   clear(host);
   for (const ent of entities) host.appendChild(cardFor(convo, ent));
+  const sceneBlock = h('section', { class: 'current-scene', 'aria-label': '当前场景' },
+    h('h3', { text: '当前场景' }));
+  if (scene.length) {
+    for (const field of scene) sceneBlock.appendChild(h('div', { class: 'scene-field' },
+      h('span', { text: field.label }), h('b', { text: field.value })));
+    sceneBlock.appendChild(h('small', { class: 'scene-source', text: '来自本局状态字段 · 随剧情更新' }));
+  } else {
+    sceneBlock.appendChild(h('small', { class: 'scene-source', text: '尚无场景信息。启用后，模型将尝试随剧情更新地点、时间与天气。' }));
+    const enable = h('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: '启用场景追踪' });
+    enable.addEventListener('click', () => {
+      appendPanelFields(convo, ['地点', '时间', '天气'].map(name => ({
+        name, value: '', owner: 'player', group: '当前场景', type: 'text', mode: 'dynamic',
+        hint: '只记录剧情明确给出的当前场景信息；不确定时保留原值，不编造。'
+      })));
+      persistConversations(0);
+      refreshAll();
+    });
+    const tracking = convoPanelFields(convo).some(key => (convoPanelDef(convo, key) || {}).group === '当前场景');
+    if (!tracking) sceneBlock.appendChild(enable);
+    else sceneBlock.appendChild(h('small', { class: 'scene-source', text: '场景追踪已启用，等待下一次回复提供信息。' }));
+  }
+  host.appendChild(sceneBlock);
 
   if (el.castFootBook) {
     if (books.length) {
@@ -256,8 +236,7 @@ export function renderCastPanel() {
   // ⚠️ 它要跑一趟主进程（worldbooks:preview 是按关键词现场扫的），所以是**异步**的。
   //    先把这一格清空，避免上一个会话的数字挂在新的会话上；
   //    回来之后再用 token 确认「这仍然是最新那次查询」——切会话快的时候会有迟到的响应。
-  //    停在生成参数页签时那一格看不见，干脆不查。
-  renderHitCount(genTab ? null : convo, books.length > 0 || charBooks.length > 0);
+  renderHitCount(convo, books.length > 0 || charBooks.length > 0);
 }
 
 let hitToken = 0;
@@ -284,33 +263,11 @@ function renderHitCount(convo, hasBook) {
 export function initCastPanel() {
   onRefresh(renderCastPanel);
 
-  // 页签：在场角色 / 生成参数。点当前那颗不做任何事（不闪、不重排）。
-  if (el.btnTabCast) {
-    el.btnTabCast.addEventListener('click', () => {
-      if (railTab === 'cast') return;
-      showRailTab('cast');
-    });
-  }
-  if (el.btnTabGen) {
-    el.btnTabGen.addEventListener('click', () => {
-      if (railTab === 'gen') return;
-      showRailTab('gen');
-    });
-  }
-
-  // 收起 / 展开。
-  // ⚠️ 这颗按钮在 2026-10-12 之前**只是画在那儿**，点了没反应（星宝点了才发现）。
-  //    收起后收成窄条，点同一颗按钮回来 —— 收起和展开在同一个位置，
-  //    不用去别处找「怎么把它打开」。
-  //
-  // ⚠️ 2026-10-13：对话列**右边缘那颗靠上的把手**（#rail-handle-right）是同一个动作的
-  //    第二个入口。两个入口必须走同一个函数，否则两处的字 / title 会对不上。
   const togglePanel = () => {
     if (!el.castPanel) return;
     el.castPanel.classList.toggle('collapsed');
     syncCollapseBtn();
   };
-
   if (el.btnCastCollapse) el.btnCastCollapse.addEventListener('click', togglePanel);
-  if (el.railHandleRight) el.railHandleRight.addEventListener('click', togglePanel);
+  syncCollapseBtn();
 }

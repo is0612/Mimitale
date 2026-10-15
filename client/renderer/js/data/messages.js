@@ -259,20 +259,13 @@ export function dialoguePresetSampling(convo) {
  * 这一局真正要发出去的采样参数：**会话覆盖 → 预设**（再往下就交给主进程的全局设置）。
  *
  * 主进程（ipc.js 的 chat:send）的逻辑是「请求里带的 sampling 逐项覆盖全局设置」，
- * 所以这里只负责把「预设」和「会话里改过的」合成一份；**没设过的项不能出现**
- * ——出现一个 null/undefined 就会把全局值顶掉。
- *
- * 会话级那份来自生成参数抽屉（views/genParams.js，存在 convo.sampling 上）。
- * 抽屉留空 = 这一项不进 out = 继续用预设、或退回全局。
+ * 这里只传递预设中明确填写的参数；其余项采用设置页中的全局值。
+ * 旧会话的 sampling 保留在数据中，不再覆盖全局设置。
  */
 export function effectiveSampling(convo) {
   const preset = dialoguePresetSampling(convo) || {};
-  const own = convo && convo.sampling && typeof convo.sampling === 'object' ? convo.sampling : {};
   const out = { ...preset };
-  for (const key of ['temperature', 'maxTokens', 'topP']) {
-    const v = own[key];
-    if (Number.isFinite(v)) out[key] = v;
-  }
+  // Legacy conversation overrides remain on disk for compatibility, but global controls are authoritative.
   return Object.keys(out).length ? out : null;
 }
 

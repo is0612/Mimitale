@@ -55,6 +55,8 @@ export function currentViewName() {
 export function showView(name) {
   if (!VIEWS.includes(name)) return;
   currentView = name;
+  const app = el.viewChat?.closest('.app');
+  if (app) app.dataset.view = name;
 
   for (const part of VIEW_PARTS) {
     const view = el[part.view];
