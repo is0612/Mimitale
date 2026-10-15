@@ -779,7 +779,15 @@
         </header>
 
         <div class="page-body">
-          <div id="preset-page-grid" class="char-grid" role="list"></div>
+          <div class="preset-toolbar">
+            <label class="preset-search"><span data-icon="search" aria-hidden="true"></span><input id="preset-search" type="search" placeholder="搜索名称、说明或标签" aria-label="搜索预设" /></label>
+            <div class="preset-filters" role="tablist" aria-label="预设状态">
+              <button type="button" class="active" role="tab" aria-selected="true" data-preset-filter="all">全部</button>
+              <button type="button" role="tab" aria-selected="false" data-preset-filter="enabled">已启用</button>
+              <button type="button" role="tab" aria-selected="false" data-preset-filter="disabled">已停用</button>
+            </div>
+          </div>
+          <div id="preset-page-grid" class="preset-list" role="list"></div>
           <div id="preset-page-empty" class="page-empty hidden">
             <div class="page-empty-title">还没有预设</div>
             <p class="page-empty-hint">

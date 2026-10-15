@@ -58,6 +58,12 @@ import {
 } from '../data/library.js';
 import { renderWorldbookPage } from './worldbookList.js';
 import { renderAll } from './redraw.js';
+import { initWorldbookLayout, syncWorldbookLayout, resetWorldbookLayout, revealWorldbookEntry, setWorldbookPanel, worldbookEntryVisible } from './worldbookLayout.js';
+
+function syncEditorLayout() {
+  const book = currentWorldbook();
+  syncWorldbookLayout(book, currentDraft(), book ? worldbookCharacters(book).length : 0);
+}
 
 // --- 入口层注入的跨视图编排动作 ---
 // openInBook(id)：把编辑焦点切到这本书里的某个角色副本并打开角色编辑器
@@ -80,6 +86,11 @@ export function initWorldbook(opts = {}) {
   if (typeof opts.stashDraft === 'function') stashDraft = opts.stashDraft;
   if (typeof opts.importBooks === 'function') importBooks = opts.importBooks;
   if (typeof opts.aiDraftInBook === 'function') aiDraftInBook = opts.aiDraftInBook;
+
+  initWorldbookLayout({ onFilter: () => {
+    stashEntryForm();
+    renderEntryList();
+  } });
 
   // --- 编辑器本体 ---
   el.wb.btnExport.addEventListener('click', exportWorldbook);
@@ -141,6 +152,17 @@ export function initWorldbook(opts = {}) {
   // input 管文本 / 数字 / 文本域，change 管下拉和几个勾选框。
   el.wb.form.addEventListener('input', markDraftDirty);
   el.wb.form.addEventListener('change', markDraftDirty);
+  el.wb.e.content.addEventListener('input', () => {
+    stashEntryForm();
+    syncEditorLayout();
+    renderEntryList();
+  });
+  for (const control of [el.wb.e.constant, el.wb.e.recursive, el.wb.e.enabled]) {
+    control.addEventListener('change', () => {
+      stashEntryForm();
+      renderEntryList();
+    });
+  }
 
   // 条目名 / 关键词跟着左栏那一行实时走。以前这一步是「保存条目」那颗按钮干的，
   // 现在没有它了 —— 不同步的话，新建的条目会一直叫「新条目」，
@@ -247,6 +269,7 @@ function markDraftDirty() {
  * 把别的书的改动说成本书的，会让人以为点了「保存」就全存了。
  */
 function renderDirtyHint() {
+  syncEditorLayout();
   const node = el.wb.dirtyHint;
   if (!node) return;
 
@@ -374,6 +397,7 @@ const WB_COVER_WIDTH = 800;
 
 /** 画编辑器里那个封面框（有图 / 空 两态） */
 function renderWorldbookCover() {
+  syncEditorLayout();
   const box = el.wb.cover;
   if (!box) return;
 
@@ -488,10 +512,12 @@ function renderEntryList() {
   const draft = currentDraft();
   if (!draft) return;
 
-  const entries = draft.entries;
+  syncEditorLayout();
+  el.wb.entryCount.textContent = wbEntryCountText(draft.entries);
+  const entries = draft.entries.filter(worldbookEntryVisible);
   if (!entries.length) {
     el.wb.entryList.appendChild(
-      h('div', { class: 'wb-list-empty', text: '这本书还没有条目，点「＋ 条目」加一条' })
+      h('div', { class: 'wb-list-empty', text: draft.entries.length ? '没有匹配的条目' : '这本书还没有条目' })
     );
     return;
   }
@@ -503,6 +529,15 @@ function renderEntryList() {
         {
           class: ['wb-entry', entry.id === editingEntryId && 'active', entry.enabled === false && 'disabled'],
           title: entry.title,
+          tabindex: '0',
+          'aria-label': `编辑条目「${entry.title}」`,
+          onkeydown: (event) => {
+            if (event.target !== event.currentTarget) return;
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              selectEntry(entry.id);
+            }
+          },
           onclick: () => selectEntry(entry.id)
         },
         h(
@@ -535,6 +570,7 @@ function renderEntryList() {
 function showEntryForm(show) {
   el.wb.form.classList.toggle('hidden', !show);
   el.wb.formEmpty.classList.toggle('hidden', !!show);
+  syncEditorLayout();
 }
 
 function fillEntryForm(entry) {
@@ -555,6 +591,7 @@ function fillEntryForm(entry) {
   el.wb.e.enabled.checked = entry.enabled !== false;
 
   showEntryForm(true);
+  syncEditorLayout();
 }
 
 /**
@@ -589,6 +626,7 @@ function selectWorldbook(id) {
   stashEntryForm();
 
   editingWorldbookId = id;
+  resetWorldbookLayout(id);
   const book = currentWorldbook();
 
   el.wb.bookEmpty.classList.toggle('hidden', !!book);
@@ -626,8 +664,10 @@ function selectWorldbook(id) {
 function selectEntry(id) {
   stashEntryForm();
   editingEntryId = id;
+  revealWorldbookEntry(currentEntry());
   renderEntryList();
   fillEntryForm(currentEntry());
+  if (currentEntry()) el.wb.e.title.focus({ preventScroll: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -662,6 +702,7 @@ function toggleWorldbookCharsFold() {
 
 /** 画「本书角色」那一排（外加标题上的副本数 / 折叠状态） */
 export function renderWorldbookChars() {
+  syncEditorLayout();
   const host = el.wb.charList;
   if (!host) return;
   clear(host);
@@ -1089,6 +1130,7 @@ function newWorldbook() {
   // 切到新书这一步交给 openWorldbooksModal —— 它会先把旧书的表单收进旧书的草稿再切。
   // 自己在这里先写 editingWorldbookId 的话，旧书残留的书名会被写进这本新书里。
   openWorldbooksModal(book.id);
+  setWorldbookPanel('settings');
   el.wb.name.focus();
   el.wb.name.select();
 }

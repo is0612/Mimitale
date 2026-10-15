@@ -82,9 +82,25 @@ async function scenario(name, fn) {
   console.log(`[progress] ${results.length} 条断言 | 完成场景：${name}`);
 }
 
+function revealEditorControl(node) {
+  if (node.closest('#view-wb-editor')) {
+    const panel = node.closest('#wb-panel-settings, #wb-panel-characters, #wb-panel-entries');
+    if (panel?.hidden) byId(panel.id.replace('wb-panel-', 'wb-tab-'))?.click();
+  }
+  if (node.closest('#char-form')) {
+    const section = node.closest('.char-editor-panel');
+    if (section?.hidden) byId(`char-section-tab-${section.dataset.section}`)?.click();
+    const writing = node.closest('.char-writing-panel');
+    if (writing?.hidden) byId(writing.id.replace('char-writing-', 'char-writing-tab-'))?.click();
+    const details = node.closest('details');
+    if (details) details.open = true;
+  }
+}
+
 function click(target) {
   const node = typeof target === 'string' ? $(target) : target;
   if (!node) throw new Error(`找不到要点的元素：${target}`);
+  revealEditorControl(node);
   node.click();
   return node;
 }
@@ -161,6 +177,7 @@ const activeConvo = async () => {
 function setValue(target, value) {
   const node = typeof target === 'string' ? $(target) : target;
   if (!node) throw new Error(`找不到输入框：${target}`);
+  revealEditorControl(node);
   node.value = value;
   node.dispatchEvent(new Event('input', { bubbles: true }));
   // 下拉框在真实浏览器里会同时触发 input 和 change，这里补齐 ——
@@ -178,6 +195,7 @@ function setValue(target, value) {
 function setChecked(target, checked) {
   const node = typeof target === 'string' ? $(target) : target;
   if (!node) throw new Error(`找不到勾选框：${target}`);
+  revealEditorControl(node);
   node.checked = !!checked;
   node.dispatchEvent(new Event('change', { bubbles: true }));
   return node;
@@ -868,6 +886,15 @@ await scenario('角色编辑器：长文本框自动增高', async () => {
   setValue(desc, '一行字');
   await sleep(80);
   const hShort = hOf(desc);
+  desc.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  check('普通点击写作框不会误判为手动拖高', desc.dataset.growLocked !== '1');
+  click('#char-writing-tab-personality');
+  check('写作标签只显示当前字段', !byId('char-writing-personality').hidden && byId('char-writing-desc').hidden);
+  click('#char-section-tab-state');
+  check('属性独立分区不影响写作草稿', shown('#char-section-state') && desc.value === '一行字');
+  click('#char-section-tab-writing');
+  click('#char-writing-tab-desc');
+  check('切回描述保留未保存输入', desc.value === '一行字' && shown('#c-desc'));
 
   // 内容多：高度应当明显长高
   setValue(example, Array.from({ length: 14 }, (_, i) => `第 ${i + 1} 行的内容`).join('\n'));
@@ -875,19 +902,19 @@ await scenario('角色编辑器：长文本框自动增高', async () => {
   const hLong = hOf(example);
 
   check(
-    '内容少时框是矮的',
-    hShort <= 120,
-    `实际 ${hShort}px（期望 <=120px）`
+    '写作区给短内容保留足够编辑空间',
+    hShort >= 280 && hShort <= 340,
+    `实际 ${hShort}px`
   );
   check(
-    '内容多时框会自己长高',
-    hLong > hShort + 40,
+    '切换写作标签后长内容有可见编辑空间',
+    hLong >= 280,
     `长内容 ${hLong}px vs 短内容 ${hShort}px`
   );
   check(
     '长高有上限，不会把表单顶爆',
-    hLong <= 200,
-    `实际 ${hLong}px（期望 <=200px）`
+    hLong <= 500,
+    `实际 ${hLong}px（期望 <=500px）`
   );
   check(
     '超上限的内容走框内滚动（表单总长恒定）',
@@ -897,15 +924,15 @@ await scenario('角色编辑器：长文本框自动增高', async () => {
 
   // 手动拖过之后就锁定：再输入内容也不该被自动改回去。
   // 模拟「用户拖拽结束」——直接改高度再派发 mouseup（这是唯一能观察到的信号）。
-  example.style.height = '150px';
+  example.style.height = '420px';
   example.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   await sleep(50);
   setValue(example, '又变短了');
   await sleep(80);
   check(
     '拖过之后高度被锁住，输入不会拽回去',
-    Math.abs(hOf(example) - 150) <= 6,
-    `实际 ${hOf(example)}px（期望 ~150px）`
+    Math.abs(hOf(example) - 420) <= 6,
+    `实际 ${hOf(example)}px（期望 ~420px）`
   );
 
   click('#btn-close-chars');
@@ -3729,7 +3756,7 @@ await scenario('编辑弹窗的放大按钮', async () => {
   // --- 开一下、放大、还原（拿预设编辑器当样本）---
   click('#btn-presets');
   await waitFor('切到预设列表页', () => shown('#view-presets'));
-  click(buttonByText($$('#preset-page-grid .char-card')[0], '编辑'));
+  click(buttonByText($$('#preset-page-grid .preset-row')[0], '编辑'));
   await waitFor('预设编辑器打开', () => shown('#preset-modal'));
   check('刚打开时不是放大状态', !maxed('preset-modal'));
 
@@ -3753,7 +3780,7 @@ await scenario('编辑弹窗的放大按钮', async () => {
   await waitFor('预设弹窗关闭', () => !shown('#preset-modal'));
   check('关掉弹窗时放大状态被摘掉', !maxed('preset-modal'));
 
-  click(buttonByText($$('#preset-page-grid .char-card')[0], '编辑'));
+  click(buttonByText($$('#preset-page-grid .preset-row')[0], '编辑'));
   await waitFor('预设编辑器重开', () => shown('#preset-modal'));
   check('重新打开回到正常大小（不记住上次放大）', !maxed('preset-modal'));
   click('#btn-close-preset');
@@ -3915,27 +3942,33 @@ await scenario('世界书：新建条目', async () => {
   // 2026-10-13 之前书级设置和条目列表挤在同一个 268px 里，条目卡被压得只露三四张。
   // 这里钉住「谁在哪一栏」+「编辑区是不是最宽的那个」，免得以后有人挪回去。
   const wbRect = (sel) => $(sel).getBoundingClientRect();
-  check('左半边是「本书设置 + 条目列表」并排的两栏',
-    getComputedStyle($('.wb-book-wrap')).gridTemplateColumns.split(/\s+/).length === 2,
-    getComputedStyle($('.wb-book-wrap')).gridTemplateColumns);
-  check('本书设置栏在条目列表左边',
-    wbRect('.wb-book').right <= wbRect('.wb-entries').left + 1,
-    `书设置右缘 ${Math.round(wbRect('.wb-book').right)} / 条目列表左缘 ${Math.round(wbRect('.wb-entries').left)}`);
+  check('条目列表和编辑区组成双栏工作区',
+    getComputedStyle($('#wb-panel-entries')).gridTemplateColumns.split(/\s+/).length === 2,
+    getComputedStyle($('#wb-panel-entries')).gridTemplateColumns);
+  check('书籍设置与本书角色不挤占条目编辑区',
+    byId('wb-panel-settings').hidden && byId('wb-panel-characters').hidden);
   check('条目编辑区比条目列表宽（它才是主工作区）',
     wbRect('.wb-main').width > wbRect('.wb-entries').width,
     `编辑 ${Math.round(wbRect('.wb-main').width)} vs 列表 ${Math.round(wbRect('.wb-entries').width)}`);
-  check('书名 / 开场白 / 本书角色 都搬进了「本书设置」栏',
-    $('.wb-book').contains(byId('wb-name')) &&
-    $('.wb-book').contains(byId('wb-opening')) &&
-    $('.wb-book').contains($('#wb-char-list').closest('.wb-chars')),
-    '三者里有一个不在 .wb-book 里');
+  check('书籍设置和本书角色各自独立分区',
+    $('#wb-panel-settings').contains(byId('wb-name')) &&
+    $('#wb-panel-settings').contains(byId('wb-opening')) &&
+    $('#wb-panel-characters').contains($('#wb-char-list').closest('.wb-chars')));
   check('条目列表栏里不再有书级字段',
     !$('.wb-entries').contains(byId('wb-name')) && !$('.wb-entries').contains(byId('wb-opening')),
     '书名 / 开场白还留在 .wb-entries 里');
-  check('导出 / 删除本书 收在书设置栏底部',
-    $('.wb-book-foot').contains(byId('btn-export-wb')) &&
-    $('.wb-book-foot').contains(byId('btn-del-worldbook')));
+  check('导出位于页头，删除本书留在设置中',
+    $('#view-wb-editor .page-actions').contains(byId('btn-export-wb')) &&
+    $('#wb-panel-settings').contains(byId('btn-del-worldbook')));
   check('「＋ 条目」跟着条目列表走', $('.wb-entries').contains(byId('btn-new-entry')));
+  const draftText = byId('wb-e-content').value;
+  click('#wb-tab-settings');
+  check('书籍设置切换后只显示书级字段', !byId('wb-panel-settings').hidden && byId('wb-panel-entries').hidden);
+  click('#wb-tab-entries');
+  check('世界书分区切换保留条目草稿', byId('wb-e-content').value === draftText);
+  setValue('#wb-search', '世界总览');
+  check('世界书搜索过滤条目列表', $$('#wb-entry-list .wb-entry').length === 1);
+  setValue('#wb-search', '');
   check('页脚只剩那行状态提示（导出搬进书设置栏了）',
     !$('#view-wb-editor .page-foot').contains(byId('btn-export-wb')),
     $('#view-wb-editor .page-foot').textContent.trim());
@@ -4036,6 +4069,8 @@ await scenario('世界书：本书角色', async () => {
   click('#btn-close-chars');
   await sleep(120);
   check('副本保存后关闭不弹确认框', !shown('#confirm-modal'));
+  check('本书角色复用角色库相同的分区编辑器', !!byId('char-writing-tab-desc') && !!byId('char-section-tab-state'));
+  check('共享角色编辑器返回原世界书角色分区', shown('#view-wb-editor') && !byId('wb-panel-characters').hidden);
 
   // 「本书角色」标题整块是折叠开关：副本一多，那一排 chip 会把条目和开场白挤没。
   // 收起只是 CSS display:none（chip 还在 DOM 里），所以这里查 computed style 才算数。
@@ -4428,8 +4463,8 @@ await scenario('角色：头像和形象是两张图', async () => {
 
   // --- 头像 / 形象 挪到了表单最顶上，和角色名同级（不再有折叠的「图片」块）---
   check(
-    '头像 / 形象 是表单第一个区块',
-    !!$('.char-media-top') && byId('char-form').firstElementChild === $('.char-media-top')
+    '头像 / 形象 保留在角色资料栏',
+    !!$('.char-media-top') && $('.char-identity-pane').contains($('.char-media-top'))
   );
   check('没有可折叠的「图片」块了', !$('.char-media-section'));
 
@@ -4497,6 +4532,9 @@ await scenario('角色：头像和形象是两张图', async () => {
   const media = card && card.querySelector('.char-card-avatar');
   check('列表卡上铺的是形象图', !!media && !!media.querySelector('img'));
   check('列表卡上的形象能点（包在按钮里）', !!media && media.tagName === 'BUTTON');
+  check('角色卡不留外层内边距', !!card && ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'].every((key) => getComputedStyle(card)[key] === '0px'));
+  check('角色封面贴着卡片顶边与左右边', !!card && !!media && ['left', 'right', 'top'].every((key) => Math.abs(card.getBoundingClientRect()[key] - media.getBoundingClientRect()[key]) < 1));
+  check('角色封面由卡片统一裁切圆角', !!card && !!media && getComputedStyle(card).overflow === 'hidden' && getComputedStyle(media).borderTopLeftRadius === '0px');
   click(media);
   await sleep(300);
 
@@ -8300,14 +8338,21 @@ await scenario('预设：列表页渲染与新建', async () => {
   await waitFor('预设页出来了', () => shown('#view-presets'));
 
   // 两条种子预设都该在列表里
-  await waitFor('列表里有种子预设', () => $$('#preset-page-grid .char-card').length >= 2);
-  const names = $$('#preset-page-grid .char-card-name').map((n) => n.textContent.trim());
+  await waitFor('列表里有种子预设', () => $$('#preset-page-grid .preset-row').length >= 2);
+  const names = $$('#preset-page-grid .preset-row-name').map((n) => n.textContent.trim());
   check('列表里能看到「冒烟测试预设」', names.includes('冒烟测试预设'), names.join(' / '));
   check('列表里能看到「带条目的预设」', names.includes('带条目的预设'), names.join(' / '));
+  check('预设使用无头像的文字行', $$('#preset-page-grid .char-card-avatar').length === 0 && $$('#preset-page-grid .preset-row').length >= 2);
+  setValue('#preset-search', '冒烟测试预设');
+  check('预设搜索筛选名称', $$('#preset-page-grid .preset-row').length === 1 && $('#preset-page-grid').textContent.includes('冒烟测试预设'));
+  setValue('#preset-search', '');
+  click('[data-preset-filter="disabled"]');
+  check('停用筛选不显示启用预设', $$('#preset-page-grid .preset-row').every((row) => row.querySelector('.preset-row-state').textContent.includes('已停用')));
+  click('[data-preset-filter="all"]');
 
   // 「冒烟测试预设」的说明来自 description（导入形态），列表副标题该显示它而不是正文
-  const card = $$('#preset-page-grid .char-card').find((c) => {
-    const t = c.querySelector('.char-card-name');
+  const card = $$('#preset-page-grid .preset-row').find((c) => {
+    const t = c.querySelector('.preset-row-name');
     return t && t.textContent.trim() === '冒烟测试预设';
   });
   check(
@@ -8340,7 +8385,7 @@ await scenario('预设：列表页渲染与新建', async () => {
   await waitFor('保存后弹窗关上', () => !shown('#preset-modal'));
 
   await waitFor('列表里出现新建的预设', () =>
-    $$('#preset-page-grid .char-card-name').some((n) => n.textContent.trim() === '严格推进')
+    $$('#preset-page-grid .preset-row-name').some((n) => n.textContent.trim() === '严格推进')
   );
 
   // 落盘验证：走桥读回来，看主进程归一化之后还剩什么
@@ -8378,8 +8423,8 @@ await scenario('预设：编辑已有预设并落盘', async () => {
 
   // 点开「带条目的预设」的编辑
   const card = await waitFor('找到「带条目的预设」卡', () =>
-    $$('#preset-page-grid .char-card').find((c) => {
-      const t = c.querySelector('.char-card-name');
+    $$('#preset-page-grid .preset-row').find((c) => {
+      const t = c.querySelector('.preset-row-name');
       return t && t.textContent.trim() === '带条目的预设';
     })
   );
@@ -8922,16 +8967,16 @@ await scenario('预设：绑好后发一轮，正文进提示词', async () => {
 await scenario('预设：导入文件', async () => {
   click('#btn-presets');
   await waitFor('预设页出来了', () => shown('#view-presets'));
-  await waitFor('列表有种子预设', () => $$('#preset-page-grid .char-card').length >= 2);
+  await waitFor('列表有种子预设', () => $$('#preset-page-grid .preset-row').length >= 2);
 
-  const before = $$('#preset-page-grid .char-card').length;
+  const before = $$('#preset-page-grid .preset-row').length;
 
   // 「文件里的东西」由宿主侧事先塞好（测试没有真文件框），这里只管点导入。
   // 第一批要拿到的是「导入的预设甲 / 乙」（见 smoke-test.js 的 seedPresetImportQueue）。
   click('#btn-import-preset');
-  await waitFor('导入后列表变长了', () => $$('#preset-page-grid .char-card').length >= before + 2, 5000);
+  await waitFor('导入后列表变长了', () => $$('#preset-page-grid .preset-row').length >= before + 2, 5000);
 
-  const names = $$('#preset-page-grid .char-card-name').map((n) => n.textContent.trim());
+  const names = $$('#preset-page-grid .preset-row-name').map((n) => n.textContent.trim());
   check('导入的预设进了列表', names.includes('导入的预设甲') && names.includes('导入的预设乙'), names.join(' / '));
 
   // 落盘 + 归一化：正文该来自 metadata.systemPromptContent，说明该是 description
@@ -8948,14 +8993,14 @@ await scenario('预设：导入文件', async () => {
 });
 
 await scenario('预设：导入时出错要把好的收下', async () => {
-  const before = $$('#preset-page-grid .char-card').length;
+  const before = $$('#preset-page-grid .preset-row').length;
 
   // 第二批：一个能读到的 + 一条错误（见 seedPresetImportQueue）
   click('#btn-import-preset');
   await waitFor('导入的预设进了列表', () =>
-    $$('#preset-page-grid .char-card-name').some((n) => n.textContent.trim() === '导入的预设丙')
+    $$('#preset-page-grid .preset-row-name').some((n) => n.textContent.trim() === '导入的预设丙')
   , 5000);
-  check('有错误时照样把好的导入进来', $$('#preset-page-grid .char-card').length >= before + 1);
+  check('有错误时照样把好的导入进来', $$('#preset-page-grid .preset-row').length >= before + 1);
 });
 
 await scenario('预设：导出单条与全部', async () => {
@@ -8964,8 +9009,8 @@ await scenario('预设：导出单条与全部', async () => {
 
   // 单条：卡片上的「导出」按钮
   const cardEl = await waitFor('找到「带条目的预设」卡', () =>
-    $$('#preset-page-grid .char-card').find((c) => {
-      const t = c.querySelector('.char-card-name');
+    $$('#preset-page-grid .preset-row').find((c) => {
+      const t = c.querySelector('.preset-row-name');
       return t && t.textContent.trim() === '带条目的预设';
     })
   );

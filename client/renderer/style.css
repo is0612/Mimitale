@@ -8,13 +8,10 @@
    浅色写在 :root，夜间模式写在 [data-theme="dark"] 里覆盖同名变量。
    换主题只切换 <html> 上的 data-theme，不碰任何具体规则。
    ========================================================================== */
-
 :root {
   color-scheme: light;
   --bg: #fff5f8;
-  /* 暖粉底（不是中性灰） */
   --bg-side: #ffeef4;
-  /* 侧边栏：比主区再粉一点，形成层次 */
   --bg-elev: #ffffff;
   --bg-card: #ffffff;
   --bg-input: #fff7fa;
@@ -22,21 +19,16 @@
   --border-hover: #f0cbd9;
   --border-soft: #fbeaf1;
   --text: #2b1f26;
-  /* 不用纯黑：深莓褐，压在粉底上不脏 */
   --text-dim: #5f4f58;
   --text-faint: #7f6f78;
-  /* 白卡片上 4.7:1，过 WCAG AA */
   --accent: #d92968;
   --accent-hover: #e8558a;
   --accent-pressed: #b81f57;
   --on-accent: #ffffff;
-  /* 强调色 / 渐变底上的字（白） */
   --accent-soft: rgba(217, 41, 104, 0.10);
   --accent-soft-strong: rgba(217, 41, 104, 0.16);
   --accent-line: rgba(217, 41, 104, 0.35);
-  /* 心理描写左边框 */
   --accent-wash: rgba(217, 41, 104, 0.06);
-  /* 心理描写底纹 */
   --accent-border: rgba(217, 41, 104, 0.35);
   --accent-border-strong: rgba(217, 41, 104, 0.5);
   --accent-border-soft: rgba(217, 41, 104, 0.28);
@@ -63,9 +55,6 @@
   --scrollbar-hover: #e6b6c8;
   --focus-ring: 0 0 0 3px rgba(217, 41, 104, 0.18);
   --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237f6f78' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  /* 阴影带主色、但很淡 —— 扁平感有一半来自「影子是彩色的、而且铺得开」。
-     对齐设计稿：范围大一点（10px/22px）、透明度低一点（.10/.14），
-     卡片/按钮靠这一层影子分层，不靠 1px 边框。 */
   --shadow-sm: 0 1px 2px rgba(23, 18, 24, 0.05);
   --shadow-lg: 0 14px 36px rgba(23, 18, 24, 0.16);
   --art-edge: 0 0 1px rgba(0, 0, 0, 0.35);
@@ -74,15 +63,10 @@
   --ui-size: 1;
   --fs-min: 12px;
   --fs-xs: max(var(--fs-min), calc(12px * var(--ui-size)));
-  /* 最小那档：说明、时间、标签、角标 */
   --fs-sm: max(var(--fs-min), calc(14px * var(--ui-size)));
-  /* 界面主体：按钮、列表、表单、正文 */
   --fs-md: max(var(--fs-min), calc(16px * var(--ui-size)));
-  /* 小标题、强调行 */
   --fs-lg: max(var(--fs-min), calc(18px * var(--ui-size)));
-  /* 页面标题 */
   --fs-xl: max(var(--fs-min), calc(22px * var(--ui-size)));
-  /* 大标题 / 数字展示 */
   --font-ui: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
   --font-story: "Source Han Serif SC", "Noto Serif SC", "SimSun", serif;
 }
@@ -99,7 +83,6 @@
   --text: #16222e;
   --text-dim: #4a6076;
   --text-faint: #63788e;
-  /* 白卡片上 4.6:1 */
   --accent: #1670b8;
   --accent-hover: #2b8ad4;
   --accent-pressed: #125c99;
@@ -113,7 +96,6 @@
   --accent-border-faint: rgba(22, 112, 184, 0.25);
   --brand-grad: linear-gradient(135deg, #7cc4ff 0%, #4d8cff 100%);
   --brand-glow: 0 0 12px rgba(124, 196, 255, 0.7), 0 0 6px rgba(77, 140, 255, 0.55);
-  /* --danger / --danger-hover / --danger-text / --ok-* 与 :root 相同，这里不重复声明 */
   --danger-bg: #f2f7fd;
   --danger-border: #d5e3f2;
   --danger-bg-hover: #eaf2fb;
@@ -172,7 +154,6 @@
    奶绿底 + 深绿强调。同样把整套表面色重声明一遍（见上面 ② 的说明）。
    深绿当按钮底时白字 5.1:1，当正文强调色时对白底也是 5.1:1 —— 两头都过 AA。
    ========================================================================== */
-
 [data-accent='matcha'] {
   --bg: #f3faf5;
   --bg-side: #e8f5ed;
@@ -183,10 +164,8 @@
   --border-hover: #c2e2cf;
   --border-soft: #e9f5ee;
   --text: #17241d;
-  /* 深墨绿，不是纯黑 */
   --text-dim: #4d6156;
   --text-faint: #647a6d;
-  /* 白卡片上 4.6:1，过 WCAG AA */
   --accent: #1a7d52;
   --accent-hover: #22995f;
   --accent-pressed: #146342;
@@ -200,7 +179,6 @@
   --accent-border-faint: rgba(26, 125, 82, 0.25);
   --brand-grad: linear-gradient(135deg, #8fe0b4 0%, #4fbf8b 100%);
   --brand-glow: 0 0 12px rgba(143, 224, 180, 0.7), 0 0 6px rgba(79, 191, 139, 0.55);
-  /* --danger / --danger-hover / --danger-text / --ok-* 与 :root 相同，这里不重复声明 */
   --danger-bg: #f1f8f4;
   --danger-border: #d3e9dd;
   --danger-bg-hover: #e9f4ee;
@@ -224,7 +202,6 @@
 
 /* 抹茶 × 夜间：底子沿用 [data-theme='dark'] 的中性暗底，只把主色系调亮，
    和 blue 的处理方式一样（夜间不做绿底，绿底在暗色下会发脏）。 */
-
 [data-accent='matcha'][data-theme='dark'] {
   --accent: #4cc98a;
   --accent-hover: #6dd9a3;
@@ -254,9 +231,7 @@
   --text: #1b1e22;
   --text-dim: #4a5158;
   --text-faint: #6b7280;
-  /* 白卡片上 4.8:1，过 WCAG AA */
   --accent: #8a6314;
-  /* 深琥珀 —— 当按钮底时白字 5.4:1 */
   --accent-hover: #a1751a;
   --accent-pressed: #6e4f10;
   --on-accent: #ffffff;
@@ -294,7 +269,6 @@
 /* 琥珀 × 夜间：底子沿用 [data-theme='dark'] 的中性灰，这里只换主色系。
    两个值都在深底上调过：主色 on #101113 = 10.2:1，
    压在黄金底上的深字 on #e8b84b = 10.1:1 —— 小字号也站得住。 */
-
 [data-accent='amber'][data-theme='dark'] {
   --accent: #e8b84b;
   --accent-hover: #f2ce74;
@@ -318,7 +292,6 @@
   --bg-band: #191c21;
   --bg-item: #23262b;
   --accent: #fb4d74;
-  /* 暗色下略调亮一点，保证对比度 */
   --accent-hover: #fc7492;
   --accent-pressed: #e0385e;
   --accent-soft: rgba(251, 77, 116, 0.18);
@@ -345,7 +318,6 @@
   --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237d848c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
-  /* 浅色立绘压在暗底上会「发光」，反着描一圈白（见 .sc-photo img 的注释） */
   --art-edge: 0 0 1px 1px rgba(255, 255, 255, 0.55);
   --bg: #171a18;
   --bg-side: #151715;
@@ -393,7 +365,6 @@ body {
 }
 
 /* ------------------------------ 头像底色 ------------------------------ */
-
 .g1 {
   background: linear-gradient(135deg, #ffb0d0, #b98cff);
 }
@@ -419,13 +390,11 @@ body {
 }
 
 /* 「我」单独一支蓝，跟角色的暖色系分开 —— 满屏里一眼找到自己那几条 */
-
 .gme {
   background: linear-gradient(135deg, #9fd4ff, #6aa8ff);
 }
 
 /* ------------------------------ 侧边栏 ------------------------------ */
-
 .sidebar {
   position: relative;
   flex: 0 0 300px;
@@ -463,7 +432,6 @@ body {
 .sidebar-label {
   font-size: var(--fs-xs);
   color: var(--text-faint);
-  /* 拉开字距的小标签（设计稿的 .rail-cap）—— 一眼看出是「分组标题」不是列表项 */
   padding: 10px 6px 0;
   letter-spacing: .08em;
 }
@@ -479,7 +447,6 @@ body {
 }
 
 .convo-item {
-  /* position: relative 是给「当前会话」那条 2×18 的琥珀竖线当定位基准的 */
   position: relative;
   display: flex;
   align-items: center;
@@ -496,7 +463,6 @@ body {
 
 /* 当前会话不再靠左侧那条竖线标识 —— 白底卡片 + 阴影本身就够了，
    而且竖线跟圆头像挤在一起显得脏（设计稿的 .ritem.on 也只有底色和阴影）。 */
-
 .convo-item:hover {
   background: var(--bg-item, var(--bg-card));
   color: var(--text);
@@ -518,9 +484,6 @@ body {
   place-items: center;
   overflow: hidden;
   color: var(--on-accent);
-  /* 48px 时代这里写死 20px（绑固定容器，所以进了字号 lint 的白名单）。
-     回到 36 之后改用 token：首字跟着界面字号一起缩放，
-     而且不用再占白名单一个位子（不然「20px」会变成一条永远不会用到的豁免）。 */
   font-size: var(--fs-md);
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -534,7 +497,6 @@ body {
 }
 
 /* 没绑角色的（世界书会话之类）：中性点，别抢「有主」的那几条 */
-
 .convo-avatar.plain {
   background: var(--border-soft);
   color: var(--text-faint);
@@ -542,14 +504,12 @@ body {
 }
 
 /* 世界书会话的头像是**方的**（设计稿 .ava.book）—— 形状本身就是分类 */
-
 .convo-avatar.book {
   border-radius: var(--radius-sm);
 }
 
 /* 会话条目里的两行：主行是标题，副行是「谁 · 什么时候」。
    副行让条目有了信息层次，也不再需要靠左侧那条竖线标「当前」了。 */
-
 .convo-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -623,7 +583,6 @@ body {
 }
 
 /* 文字可收缩，但图标和按钮本身保持稳定，字号放大时不会撑破网格。 */
-
 .foot-label {
   flex: 1 1 auto;
   min-width: 0;
@@ -632,7 +591,6 @@ body {
 }
 
 /* ------------------------------ 按钮 ------------------------------ */
-
 .btn {
   display: inline-flex;
   align-items: center;
@@ -662,7 +620,6 @@ body {
 }
 
 /* 主按钮：一层主色底 + 淡阴影，不描边（描边正是「鼓」的来源之一） */
-
 .btn-primary {
   background: var(--accent);
   color: var(--on-accent);
@@ -693,7 +650,6 @@ body {
 
 /* 次级按钮：白底 + 一层淡阴影，同样不描边（设计稿里的 .ghost-btn）。
    顶栏那几颗是例外，在那里被单独压回透明 —— 它们要轻。 */
-
 .btn-ghost {
   background: var(--bg-card);
   color: var(--text-dim);
@@ -702,7 +658,6 @@ body {
 
 .btn-ghost:hover {
   color: var(--accent);
-  /* 悬停只需比静态按钮更清晰，不把普通控件抬成浮层。 */
   box-shadow: 0 4px 12px rgba(23, 18, 24, 0.10);
 }
 
@@ -733,19 +688,16 @@ body {
 }
 
 /* ------------------------------ 主区域 ------------------------------ */
-
 .main {
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  /* 提示条以它为定位参照，这样是居中于对话区而不是整个窗口 */
   position: relative;
 }
 
 /* main 里的两个页面，同一时刻只有一个可见。
    .hidden 带 !important，所以这里写 display:flex 也不会把隐藏的页面顶出来。 */
-
 .view {
   flex: 1 1 auto;
   display: flex;
@@ -807,13 +759,11 @@ body {
 }
 
 /* 世界书会话的头像是**方的** —— 和侧栏条目一样，形状本身就是分类 */
-
 .topbar-avatar.book {
   border-radius: var(--radius);
 }
 
 /* 什么都没绑：中性底，别假装是某个角色 */
-
 .topbar-avatar.plain {
   background: var(--border-soft);
   color: var(--text-faint);
@@ -823,7 +773,6 @@ body {
 /* 顶栏标题这一块要能「被压下去然后省略」，不能「被压下去然后逐字换行」——
    按钮多起来之后标题区会被挤到只剩几十像素，之前副标题会被挤成一列竖排的字。
    两道都要：min-width 保底不至于完全消失，overflow+ellipsis 负责剩下的一律截断。 */
-
 .topbar-title {
   flex: 1 1 auto;
   overflow: hidden;
@@ -831,7 +780,6 @@ body {
 }
 
 /* 标题那一行 = 会话名 + 胶囊。h1 要能缩（min-width:0），否则长标题会把胶囊顶出去 */
-
 .topbar-name {
   display: flex;
   align-items: center;
@@ -893,7 +841,6 @@ body {
 
 /* 顶栏按钮里的图标（外观的调色盘 / 视角的眼睛）：跟着文字走，
    和字之间留 5px（.btn 是 inline-flex，不给 margin 图标会贴着第一个字）。 */
-
 .topbar-actions .btn > svg {
   flex: 0 0 14px;
   width: 14px;
@@ -905,7 +852,6 @@ body {
 /* ------------------------------ 顶栏「⋯」菜单 ------------------------------ */
 
 /* 记忆 / 复制全文 / 导出 / 清空对话 收在「⋯」下面 —— 一排七八个按钮太挤了 */
-
 .menu-wrap {
   position: relative;
 }
@@ -915,7 +861,6 @@ body {
 }
 
 /* 「⋯」上的小圆点：菜单里藏着东西（比如压了几段记忆）时提醒一下，收起来就看不见了 */
-
 .topbar-icon .memory-badge {
   position: absolute;
   top: -6px;
@@ -943,8 +888,6 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg);
-  /* 入场：弹窗有 card-in，菜单之前是瞬现 —— 同一套「浮起来」的语言补齐。
-     translateY(-4px) 不影响定位（top 是 calc(100% + 6px)，transform 不参与）。 */
   animation: menu-in 0.14s ease-out;
 }
 
@@ -953,6 +896,7 @@ body {
     opacity: 0;
     transform: translateY(-4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -961,7 +905,6 @@ body {
 
 /* 菜单项目身是 <button>，但要长得像菜单行，不是按钮。
    选择器写成 .menu-pop .menu-item（比通用按钮规则更具体），免得按按钮的样子被压回去。 */
-
 .menu-pop .menu-item {
   display: flex;
   align-items: center;
@@ -1004,7 +947,6 @@ body {
 }
 
 /* 菜单项里的段数角标：它本来是按幽灵按钮上的位置调的，这里跟着文字走就行 */
-
 .menu-pop .memory-badge {
   margin-left: 6px;
 }
@@ -1014,7 +956,6 @@ body {
 /* 刻意不做成原生 <select>：它的下拉列表由系统画（直角、系统蓝高亮、系统字体），
    这套「大圆角 + 柔和阴影」根本管不着它。改成和「⋯」共用的 .menu-pop 弹层。
    列表内容由 views/chatList.js 的 renderModelSwitch 铺，开合在 ui/modelMenu.js。 */
-
 .model-pick {
   position: relative;
 }
@@ -1026,11 +967,9 @@ body {
   max-width: 240px;
   height: 32px;
   padding: 0 10px 0 12px;
-  /* 扁平化第 1 条：靠阴影浮起来，不描边 */
   border: 0;
   border-radius: var(--radius-sm);
   font-family: inherit;
-  /* 顶栏那一行里只有它是「实心的白块」，稍微加粗一点才压得住 */
   font-weight: 500;
   cursor: pointer;
   outline: none;
@@ -1058,7 +997,6 @@ body {
 .model-switch:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  /* 没配模型时它就不是个按钮了，收成一块「提示」而不是浮起的卡片 */
   background: transparent;
 }
 
@@ -1069,7 +1007,6 @@ body {
 }
 
 /* 箭头沿用 select 那支（--select-arrow 跟着配色走），展开时翻过来 */
-
 .model-switch-caret {
   flex: 0 0 14px;
   width: 14px;
@@ -1087,11 +1024,9 @@ body {
 }
 
 /* 弹层外壳复用 .menu-pop（跟「⋯」长得一模一样），这里只管列表自己的宽高和滚动 */
-
 .model-menu {
   min-width: 240px;
   max-width: 340px;
-  /* 服务商多的时候能排到屏幕外去，给个上限自己滚 */
   max-height: 340px;
   overflow-y: auto;
   padding: 6px;
@@ -1099,7 +1034,6 @@ body {
 
 /* 服务商分组小标题：不画分隔线（扁平化第 2 条），
    靠「小一号 + 拉开字距 + 淡色」分层，和状态卡的分组标题是同一招 */
-
 .model-menu-group {
   padding: 10px 10px 4px;
   font-size: var(--fs-xs);
@@ -1115,7 +1049,6 @@ body {
 }
 
 /* 「（还没有模型）」这种占位：是提示不是选项，别让它看起来能点 */
-
 .model-menu-empty {
   padding: 8px 10px;
   font-size: var(--fs-sm);
@@ -1124,7 +1057,6 @@ body {
 
 /* 选择器写成 .model-menu .model-menu-item —— 比通用按钮规则更具体，
    免得按按钮的样子被压回去（.menu-item 那边同理）。 */
-
 .model-menu .model-menu-item {
   display: flex;
   align-items: center;
@@ -1148,7 +1080,6 @@ body {
 }
 
 /* 当前用的那个。列表里十几行，光靠颜色不够「一眼看出是哪个」，所以再压个勾 */
-
 .model-menu .model-menu-item.is-active {
   color: var(--accent);
   font-weight: 600;
@@ -1162,7 +1093,6 @@ body {
 
 /* 勾那块位置**每行都占着**（没选中的只是透明），
    否则选中的那行文字会被顶得比别的行短一截，看着像对不齐 */
-
 .model-menu-check {
   flex: 0 0 14px;
   width: 14px;
@@ -1177,19 +1107,9 @@ body {
 .messages {
   flex: 1 1 auto;
   overflow-y: auto;
-  /* 左右内缩**分开写**：外观里的「对话宽度」两项就是这两个变量。
-     需要它是因为浮动卡片放到左下角时会挡住贴边的对话 ——
-     那种情况下只想把左边推开，右边不该跟着一起缩，所以不能写成一个对称的 padding。
-     没设过时两边都是 20px（设计稿的消息流内边距）。 */
   padding: 20px var(--chat-pad-right, 20px) 18px var(--chat-pad-left, 20px);
   display: flex;
   flex-direction: column;
-  /* 设计稿消息流 gap 16 */
-  /* 对话窗口背景图（外观设置里选的），没设就是 none */
-  /* 注意：这里不能用 scroll-behavior: smooth。
-     流式输出时每 50ms 就要把滚动条拽到底一次，而 smooth 会让每次赋值都启动
-     一段几百毫秒的平滑动画 —— 动画还没跑完就被下一个 token 重新设定目标，
-     结果就是滚动一直"追不上"，看起来一顿一顿的。 */
   scroll-behavior: auto;
   padding-top: 26px;
   padding-bottom: 24px;
@@ -1199,10 +1119,8 @@ body {
 }
 
 /* ------------------------------ 消息 ------------------------------ */
-
 .msg {
   display: flex;
-  /* 设计稿：头像与消息体间距 10 */
   width: 100%;
   gap: 15px;
 }
@@ -1232,14 +1150,12 @@ body {
 }
 
 /* 出错的这条保持警示色（也是 (0,2,0)，能盖过渐变，是故意的） */
-
 .msg.error .msg-avatar {
   background: var(--danger-bg);
   color: var(--danger);
 }
 
 /* 点「我」的头像能开状态卡：给个可点的信号（别让用户猜这里能点） */
-
 .msg-avatar.clickable {
   cursor: pointer;
   transition: box-shadow 0.15s;
@@ -1255,7 +1171,6 @@ body {
 }
 
 /* 消息体：竖排、间隙 7（设计稿）。第一行是「谁说的」，下面是正文和其它块。 */
-
 .msg-body {
   flex: 1 1 auto;
   min-width: 0;
@@ -1275,13 +1190,11 @@ body {
 }
 
 /* 弹性空隙：把时间顶到最右边（对应设计稿里的「弹性空隙」节点） */
-
 .msg-role .msg-spacer {
   flex: 1 1 auto;
 }
 
 /* 时间：等宽字体 + 表格数字，同一列上下对得齐；比角色名暗一档 */
-
 .msg-time {
   font-family: Consolas, "Courier New", monospace;
   font-size: var(--fs-xs);
@@ -1307,7 +1220,6 @@ body {
   overflow-wrap: break-word;
   word-break: break-word;
   user-select: text;
-  /* 字号来自「对话窗口」设置；里面的标题/表格/心理旁白都用 em 跟着缩。 */
   font-size: var(--chat-font-size, 13px);
   font-family: var(--font-story);
   line-height: 1.95;
@@ -1316,7 +1228,6 @@ body {
 /* 自己的消息头**整体靠右**（「你 22:43」挨在一起），所以不能留那个会把时间
    顶到最右边的弹性空隙 —— 留着的话名字会孤零零留在左边。
    设计稿里用户那侧的消息头宽度是 hug（贴着右边），和这条规则是一回事。 */
-
 .msg.user .msg-content {
   white-space: pre-wrap;
   text-align: left;
@@ -1326,12 +1237,9 @@ body {
    去气泡是为了「正文直接铺在页底上」，但报错必须一眼看见 ——
    一抹底色比一行灰字可靠得多，所以这里有意不走「无气泡」那套。
    （设计稿没画出错态，这是按用途定的取舍。） */
-
 .msg.error .bubble {
   padding: 10px 14px;
-  /* 全站唯一「有底块」的内边距，就这一处 */
   border-radius: var(--radius);
-  /* 同理：唯一给 .bubble 圆角的地方 */
   background: var(--danger-bg);
   color: var(--danger-text);
   white-space: pre-wrap;
@@ -1342,7 +1250,6 @@ body {
 /* markdown 排版。里面的尺寸都用 em —— 跟着「对话窗口」里的字号设置一起缩，
    不然把正文调到 22px 时，标题还是死的 15px，看着就不对了。
    （em 的基准是 .bubble 的 font-size；下面括号里是 14px 时的实际值） */
-
 .bubble p {
   margin: 0 0 8px;
 }
@@ -1381,7 +1288,6 @@ body {
 }
 
 /* 15px */
-
 .bubble h1:first-child {
   margin-top: 0;
 }
@@ -1433,7 +1339,6 @@ body {
 }
 
 /* 撞上限后自动续写时挂在气泡上的一行进度；续写完（或放弃）时会被移除 */
-
 .bubble .continue-tip {
   margin-top: 8px;
   padding-top: 6px;
@@ -1444,7 +1349,6 @@ body {
 }
 
 /* 就地编辑消息：气泡里换成 textarea + 保存/取消 */
-
 .msg-edit-box {
   width: 100%;
   min-height: 90px;
@@ -1467,7 +1371,6 @@ body {
 }
 
 /* 存档点：一行一个，左边说明右边操作 */
-
 .checkpoint-section {
   margin-top: 4px;
 }
@@ -1513,7 +1416,6 @@ body {
 }
 
 /* 候选翻页在消息头里也用等宽字体，和相邻的时间是一套（设计稿 11px 等宽） */
-
 .variant-nav .variant-btn {
   font-family: Consolas, "Courier New", monospace;
   font-size: var(--fs-xs);
@@ -1567,7 +1469,6 @@ body {
 }
 
 /* 块内不再受段落间距影响 */
-
 .bubble .msg-inner:first-child {
   margin-top: 0;
 }
@@ -1587,7 +1488,6 @@ body {
 .bubble code {
   font-family: Consolas, "Courier New", monospace;
   font-size: 0.89em;
-  /* 12.5px */
   background: var(--code-bg);
   color: var(--code-text);
   padding: 2px 6px;
@@ -1608,7 +1508,6 @@ body {
   background: transparent;
   padding: 0;
   font-size: 1em;
-  /* 跟 pre 里的字号走 */
 }
 
 .bubble table {
@@ -1637,7 +1536,6 @@ body {
 
 .msg-actions {
   display: flex;
-  /* 展开「⋯」之后多出来的按钮换到第二行 —— 不写的话工具条会被撑得很宽 */
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 6px;
@@ -1649,7 +1547,6 @@ body {
 /* 低频按钮的收起/展开。**纯 CSS**：按钮一直在 DOM 里，`⋯` 只是给
    .msg-actions 挂一个 .open（见 chatMessages.js 的 appendExtras）——
    换成「展开时才建节点」的话，冒烟里那几条按文字找按钮的断言会全断。 */
-
 .mini-extra {
   display: none;
 }
@@ -1705,7 +1602,6 @@ body {
 /* ---------------------- 剧情选项（跟在 AI 回复气泡下面） ----------------------
    模型每轮给几个可点选项，就画在最新一条回复的气泡下面：点一下当作玩家说了
    这句话发出去。底下一条小工具行：「⟳ 换一批」+「✕」收起。 */
-
 .msg-options {
   display: flex;
   flex-direction: column;
@@ -1718,7 +1614,6 @@ body {
 }
 
 /* 选项按钮的容器：点「换一批」时里面换成骨架屏 */
-
 .msg-options-list {
   display: flex;
   flex-direction: column;
@@ -1726,7 +1621,6 @@ body {
 }
 
 /* 换一批时的骨架屏：几条灰条占位，闪烁过渡，模型返回后被真按钮替换 */
-
 .msg-option-skeleton {
   height: 27px;
   margin: 4px 6px;
@@ -1740,13 +1634,13 @@ body {
   0% {
     background-position: 100% 50%;
   }
+
   100% {
     background-position: 0 50%;
   }
 }
 
 /* 选项常常是一句话，允许换行；箭头是装饰，豁出去不让它参与选中 */
-
 .msg-option-btn {
   display: flex;
   align-items: flex-start;
@@ -1775,7 +1669,6 @@ body {
 }
 
 /* 数字序号：输入框里按 1~9 也能选，序号印在箭头前，跟键盘对上 */
-
 .msg-option-btn .opt-index {
   flex: 0 0 auto;
   display: inline-flex;
@@ -1840,7 +1733,6 @@ body {
 }
 
 /* 思维链（deepseek-reasoner 等） */
-
 .reasoning {
   margin-bottom: 8px;
   border-left: 2px solid var(--border-hover);
@@ -1866,7 +1758,6 @@ body {
    这个伪元素每 50ms 就被重建一次，动画会不断从头开始，
    永远停在第一帧（所以之前那个 animation 其实一直没在闪，
    看起来就是一块不动的方块，还显得特别宽）。 */
-
 .bubble.streaming > .msg-content > *:last-child::after {
   content: "";
   display: inline-block;
@@ -1907,16 +1798,17 @@ body {
   0% {
     opacity: 0.25;
   }
+
   100% {
     opacity: 0.25;
   }
+
   50% {
     opacity: 1;
   }
 }
 
 /* 空状态 */
-
 .empty {
   margin: auto;
   text-align: center;
@@ -1942,12 +1834,8 @@ body {
 }
 
 /* ------------------------------ 输入区 ------------------------------ */
-
 .composer {
   flex: 0 0 auto;
-  /* ⚠️ position: relative 是给里头那两个 .pad-handle 当定位基准的
-     （拖动把手挂在输入区里，好跟着输入框的高度走 —— 输入框会 auto-grow）。
-     别删：删了把手会跑去找 .chat-col 定位，位置就飘到消息区中间去了。 */
   position: relative;
   padding: 10px var(--chat-pad-right, 20px) 12px var(--chat-pad-left, 20px);
   padding-top: 16px;
@@ -1973,7 +1861,6 @@ body {
 }
 
 /* ---------------------- 输入框：快捷短语面板 ---------------------- */
-
 .btn-quick {
   flex: 0 0 auto;
   align-self: flex-end;
@@ -2002,14 +1889,12 @@ body {
 }
 
 /* 展开态：和顶栏「切换模型」打开时同一个口径（底色留住 = 「它开着呢」） */
-
 .btn-quick[aria-expanded='true'] {
   color: var(--accent);
   background: var(--accent-soft);
 }
 
 /* 图标（由 views/quickPhrases.js 插进来的 .quick-icon）—— 输入框里的图标小一档 */
-
 .btn-quick .quick-icon {
   width: 18px;
   height: 18px;
@@ -2018,7 +1903,6 @@ body {
 
 /* 面板贴在输入框**正上方**：.menu-pop 默认是往下弹（top: calc(100% + 6px); right: 0），
    这里四条一起改 —— 顶/右要让位，底/左接上。 */
-
 .quick-menu {
   top: auto;
   right: auto;
@@ -2028,7 +1912,6 @@ body {
   max-width: 360px;
   max-height: min(60vh, 480px);
   overflow-y: auto;
-  /* 面板是往上弹的，入场动画跟着改成从下往上（反转 .menu-pop 那条 menu-in） */
   animation: quick-in 0.14s ease-out;
 }
 
@@ -2037,6 +1920,7 @@ body {
     opacity: 0;
     transform: translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2057,7 +1941,6 @@ body {
    别抢「这一行叫什么」。
    ⚠️ 名字和括注相同时**照样显示**（看图上的「继续（继续）」）——
    括注是「点了插进什么」的预览，不是解释。 */
-
 .quick-hint {
   flex: 0 1 auto;
   min-width: 0;
@@ -2069,13 +1952,11 @@ body {
 }
 
 /* 悬停整行时，括注跟着变主色 —— 和名字是同一个「选中了」的信号 */
-
 .quick-item:hover .quick-hint {
   color: inherit;
 }
 
 /* ---------------------- 「帮我想想」的建议条 ---------------------- */
-
 .suggest-close {
   flex: 0 0 auto;
   margin-left: auto;
@@ -2094,7 +1975,6 @@ body {
 }
 
 /* ⚠️ flex-direction: column 是基础段留下的、末尾覆盖层**并没有改**它 —— 合并时不能丢。 */
-
 .suggest-list {
   flex: 1 1 auto;
   min-width: 0;
@@ -2106,7 +1986,6 @@ body {
 }
 
 /* 每颗按钮左对齐、可以折行 —— 选项长短差别大，居中反而不好扫 */
-
 .suggest-btn {
   display: block;
   width: 100%;
@@ -2134,7 +2013,6 @@ body {
 }
 
 /* 气泡里的图（用户发的 / AI 生成的） */
-
 .bubble-images {
   display: flex;
   flex-wrap: wrap;
@@ -2152,7 +2030,6 @@ body {
 }
 
 /* 正在画图：整条消息轻微呼吸，给个「在干活」的反馈 */
-
 .msg.illustrating .bubble {
   animation: illustrating-pulse 1.4s ease-in-out infinite;
 }
@@ -2161,9 +2038,11 @@ body {
   0% {
     opacity: 1;
   }
+
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.62;
   }
@@ -2178,8 +2057,6 @@ body {
   font-size: var(--fs-sm);
   resize: none;
   outline: none;
-  /* 必须显式写：通用 textarea 规则里有 min-height: 104px（给设置里的大文本框用的），
-     不覆盖的话聊天输入框会被撑成 104px 高。 */
   min-height: 42px;
   max-height: 190px;
   padding: 10px;
@@ -2191,7 +2068,6 @@ body {
 
 /* 发送键：独立一颗胶囊，贴输入框底对齐（输入框长到三四行时不会浮到中间）。
    留着「发送」两个字没换成箭头 —— 中文环境里这两个字比一个图标好认。 */
-
 .btn-send {
   flex: 0 0 auto;
   align-self: flex-end;
@@ -2201,7 +2077,6 @@ body {
 }
 
 .composer-hint {
-  /* 跟输入框同宽，不居中 */
   max-width: none;
   margin: 0;
   padding: 2px;
@@ -2213,7 +2088,6 @@ body {
 }
 
 /* ------------------------------ 弹窗外壳（通用） ------------------------------ */
-
 .modal {
   position: fixed;
   inset: 0;
@@ -2231,7 +2105,6 @@ body {
 /* 表情图弹窗是从角色编辑器里点出来的，跟 AI 生成同一档：
    压在角色编辑页之上、确认框（70）之下。缺了这条会退回 .modal 的 50，
    弹窗就被页面内容整个盖住。 */
-
 #expr-modal {
   z-index: 65;
 }
@@ -2251,7 +2124,6 @@ body {
 /* 「选一条开场白」是从开聊流程里弹出来的 —— 那一刻底下还压着「你是谁」那个
    身份弹窗（worldPlay.js 里 closePlayerModal 排在 applyCharacterChoice 之后），
    不单独抬一层就会被它盖住。68：高于所有普通弹窗，仍让确认框（70）压得住。 */
-
 #pick-modal {
   z-index: 68;
 }
@@ -2260,7 +2132,6 @@ body {
 
 /* 它从角色编辑器 / 世界书编辑器里被打开，得压在两者之上；
    确认框（70）仍然在它上面 —— 生成期间关掉要问一句。 */
-
 .ai-gen-modal {
   z-index: 65;
 }
@@ -2282,7 +2153,6 @@ body {
 
 /* 状态行：生成时写「正在生成…」，出错时写原因，平时是提示。
    固定一个最小高度，免得文字在出现 / 消失时把下面的按钮顶得上下跳。 */
-
 .ai-gen-status {
   min-height: 18px;
   margin: 0;
@@ -2315,14 +2185,10 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   animation: card-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-  /* 点了「放大到窗口」时让卡片长过去，而不是啪一下跳满 —— 几个长度值之间
-     可以插值（px ↔ %），所以能平滑过渡。width 也要带上：#preset-modal 那边
-     基线是 `width: min(720px, 94vw)`，只动 max-width 的话它不会变。 */
   transition: width 0.18s ease, max-width 0.18s ease, max-height 0.18s ease, border-radius 0.18s ease;
 }
 
 /* 头部：标题 + 关闭 */
-
 .modal-head {
   flex: 0 0 auto;
   display: flex;
@@ -2337,7 +2203,6 @@ body {
 /* 撑满剩余宽度，把右边那几颗图标按钮挤到一处。
    不写这句的话，头里三个孩子（标题 / 全屏 / 关闭）会被 space-between
    平分两端 —— 全屏按钮孤零零飘在正中间，跟关闭离了十万八千里。 */
-
 .modal-heading {
   flex: 1 1 auto;
   min-width: 0;
@@ -2357,7 +2222,6 @@ body {
 }
 
 /* 右上角的圆形关闭按钮 */
-
 .icon-btn {
   flex: 0 0 auto;
   width: 32px;
@@ -2393,7 +2257,6 @@ body {
 }
 
 /* 底部：固定在底部不随内容滚动 */
-
 .modal-foot {
   flex: 0 0 auto;
   display: flex;
@@ -2427,7 +2290,6 @@ body {
 }
 
 /* ------------------------------ 确认弹窗 ------------------------------ */
-
 .confirm-card {
   max-width: 420px;
 }
@@ -2459,7 +2321,6 @@ body {
 /* --------------------------- 选一条（备选开场白） --------------------------- */
 
 /* 卡片比别人宽一点：开场白动辄几百字，预览要让人看得出是哪一条。 */
-
 .pick-card {
   max-width: 560px;
 }
@@ -2481,7 +2342,6 @@ body {
 }
 
 /* 列表自己滚，头尾不滚 —— 29 条的时候靠它把弹窗关在 86vh 里 */
-
 .pick-list {
   display: flex;
   flex-direction: column;
@@ -2526,7 +2386,6 @@ body {
 }
 
 /* 序号：让「第几条」在列表里一眼可数（用户常要按卡的顺序挑） */
-
 .pick-item-no {
   flex: 0 0 auto;
   min-width: 20px;
@@ -2548,7 +2407,6 @@ body {
 .pick-item-text {
   color: var(--text-dim);
   overflow-wrap: break-word;
-  /* 预览最多两行，长短不一的十几条扫起来才整齐 */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -2563,7 +2421,6 @@ body {
 }
 
 /* ------------------------------ 分组 ------------------------------ */
-
 .panel-section {
   padding: 16px 18px 18px;
   border: 1px solid var(--border);
@@ -2572,7 +2429,6 @@ body {
 }
 
 /* 分组标题：图标 + 标题 + 一句话说明 */
-
 .section-head {
   display: flex;
   align-items: center;
@@ -2627,7 +2483,6 @@ body {
 /* ------------------------------ 多服务商 ------------------------------ */
 
 /* 「第三方模型提供商」展开的预设列表 */
-
 .provider-presets {
   display: flex;
   flex-wrap: wrap;
@@ -2664,7 +2519,6 @@ body {
 }
 
 /* 服务商底部操作条 */
-
 .provider-actions {
   display: flex;
   align-items: center;
@@ -2678,7 +2532,6 @@ body {
 /* 「默认人设」入口行：左边是名字 + 当前状态，右边一颗「编辑…」。
    它属于「模型服务」这一节 —— 人设是按模型存的，正文往往一整段，
    所以设置页只留这一行，编辑走弹窗。 */
-
 .persona-row {
   display: flex;
   align-items: center;
@@ -2697,7 +2550,6 @@ body {
 }
 
 /* .field-label 默认带一段上留白（给 label 网格对齐用的），这一行用不上 */
-
 .persona-row-info .field-label {
   padding-top: 0;
 }
@@ -2710,7 +2562,6 @@ body {
 
 /* 「套用聊天风格模板」那一行：按钮 + 一句说明。
    放在人设框**下面** —— 用户先看见空框，再看见「不知道写什么？这儿有个起点」。 */
-
 .persona-template-row {
   display: flex;
   align-items: center;
@@ -2727,7 +2578,6 @@ body {
 }
 
 /* 「标签 + 右侧按钮」的一行 */
-
 .field-row {
   display: flex;
   align-items: center;
@@ -2736,7 +2586,6 @@ body {
 }
 
 /* 这一行里的标签不用跟输入框对齐，去掉那段顶部留白 */
-
 .field-row .field-label {
   padding-top: 0;
 }
@@ -2744,12 +2593,14 @@ body {
 /* ------------------------------ 角色库 ------------------------------ */
 
 /* 角色编辑表单：整页里唯一会滚的那块 */
-
 .char-main {
   flex: 1 1 auto;
-  padding: 20px 24px 24px;
   overflow-y: auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
 }
 
 .char-empty {
@@ -2761,6 +2612,7 @@ body {
   gap: 8px;
   min-height: 280px;
   color: var(--text-faint);
+  flex: 1;
 }
 
 .char-empty-title {
@@ -2769,7 +2621,6 @@ body {
 }
 
 /* ------------------------------ 角色列表页 ------------------------------ */
-
 .page-head {
   flex: 0 0 auto;
   display: flex;
@@ -2801,7 +2652,6 @@ body {
 /* align-items:center 是给「页头里除了按钮还放了别的东西」留的
    （世界书编辑页的「有未保存的改动」小胶囊、角色编辑页将来可能加的提示）——
    默认的 stretch 会把它抻成一整条色块。 */
-
 .page-actions {
   display: flex;
   align-items: center;
@@ -2828,7 +2678,6 @@ body {
 }
 
 /* ------------------------------ 设置页（视图六） ------------------------------ */
-
 .settings-shell {
   flex: 1 1 auto;
   display: grid;
@@ -2838,7 +2687,6 @@ body {
 
 /* 左栏：分组导航。底色比主区再深一点（--bg-side），和右栏的白卡片拉开层次；
    右缘一条分隔线，等于把「目录」和「正文」两件事界开。 */
-
 .settings-nav {
   display: flex;
   flex-direction: column;
@@ -2884,7 +2732,6 @@ body {
 
 /* 图标块：跟卡片的 .section-icon 同一套形状（方角 + 主色淡底），
    只是选中时反过来（实心底 + 白图标），一眼看出当前在哪一组。 */
-
 .settings-nav-icon {
   flex: 0 0 auto;
   width: 32px;
@@ -2997,7 +2844,6 @@ body {
 /* 没有卡片壳之后，分组头部就代表「右边这一页」——把它做成一条页内标题：
    稍大一档的字 + 底下一道通栏分隔线，和下面内容拉开。
    （只在设置这一屏生效，基础 .section-head 不动。） */
-
 .settings-content > .panel-section > .section-head {
   margin-bottom: 18px;
   padding-bottom: 14px;
@@ -3013,7 +2859,6 @@ body {
 }
 
 /* 一次只显示当前那一组（切换逻辑在 views/settings.js 的 showSettingsSection） */
-
 .settings-content > .panel-section.hidden {
   display: none;
 }
@@ -3028,7 +2873,6 @@ body {
    .field 原本是 152px 标签列的网格（那是「表单」的排法，适合密集录入），
    这里改成「标签在上、控件铺满」——铺满右栏之后，152px 的标签列
    会把输入框挤到右边一大半，而卡片本身已经把它框住了，不需要再靠列对齐。 */
-
 .settings-content > .panel-section > .field-grid > .field {
   display: flex;
   flex-direction: column;
@@ -3040,7 +2884,6 @@ body {
 }
 
 /* 卡片里的标签不用再顶那 11px 的留白（不同输入框对齐用的） */
-
 .settings-content > .panel-section > .field > .field-label {
   padding-top: 0;
   font-weight: 600;
@@ -3052,7 +2895,6 @@ body {
 }
 
 /* 说明文字也从「右侧那一列」回到整行 —— 卡片里只有一列 */
-
 .settings-content > .panel-section > .field > .field-help {
   grid-column: auto;
 }
@@ -3064,7 +2906,6 @@ body {
 /* 卡片里的输入控件不再自带边框（外层卡片就是它的框），
    只留一条底部细线当「可输入」的暗示，聚焦时整张卡片亮起来。
    ⚠️ 下面几条要压过 style.css 上半段的全局输入框规则，所以写得具体一些。 */
-
 .settings-content > .panel-section .field > input[type="text"] {
   border-radius: var(--radius);
   background: var(--bg-side);
@@ -3122,7 +2963,6 @@ body {
 
 /* 「标签 + 右侧按钮」那一行（拉取可用模型 / 生成一句 / 刷新…）：
    放进卡片后要跟标签同一行，filed-row 本来就是干这个的，这里只补一点底距。 */
-
 .settings-content > .panel-section .field > .field-row {
   margin-bottom: 2px;
 }
@@ -3131,7 +2971,6 @@ body {
    为什么换：胶囊上只塞得下一个名字，而用户挑服务商时真正要判断的是
    「这家填没填 Key / 是不是本地桥接 / 现在选的是哪家」——
    这些信息在胶囊里没地方放，只能靠 title 悬停，触屏和键盘都用不上。 */
-
 .provider-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -3162,7 +3001,6 @@ body {
 
 /* 选中态：描边 + 一颗实心圆点。不整张染粉 —— 和开关行同一个理由，
    同一屏里只能有一个东西用「整块变色」表示选中。 */
-
 .provider-card.active {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-wash);
@@ -3208,7 +3046,6 @@ body {
 }
 
 /* 选中圈：和开关同一套「圆 + 实心点」的语言 */
-
 .provider-card-radio {
   flex: 0 0 auto;
   width: 18px;
@@ -3226,7 +3063,6 @@ body {
 }
 
 /* 「第三方模型提供商」那一行：按钮 + 展开的预设，摆在卡片网格下面 */
-
 .provider-add {
   display: flex;
   gap: 8px;
@@ -3235,7 +3071,6 @@ body {
 
 /* 分组头部补一句统计（设计稿里是「已连接 4 家」这种），交给 JS 填。
    空着的时候不占位 —— :empty 一挡，没有统计的分组不会多出一道空隙。 */
-
 .section-stat {
   flex: 0 0 auto;
   padding: 4px 10px;
@@ -3253,12 +3088,12 @@ body {
 
 /* 窄窗口（比如把窗口拖得很小）：导航收成一条不占地方的横排。
    不做成汉堡菜单 —— 六个分组横着排得下，何必再多一层开合。 */
-
 @media (max-width: 720px) {
   .settings-shell {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
+
   .settings-nav {
     flex-direction: row;
     gap: 6px;
@@ -3268,10 +3103,12 @@ body {
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
+
   .settings-nav-item {
     width: auto;
     flex: 0 0 auto;
   }
+
   .settings-nav-desc {
     display: none;
   }
@@ -3294,7 +3131,6 @@ body {
 }
 
 /* 卡片网格：列宽自适应，窗口变窄自动减列（角色页和世界书页共用） */
-
 .char-grid {
   display: grid;
   gap: 16px;
@@ -3309,13 +3145,11 @@ body {
 
 .char-card {
   position: relative;
-  /* 给右上角那个悬停才出现的删除按钮定位 */
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
   padding: 16px 14px 14px;
-  /* 不描边 + 一层淡阴影（设计稿的 .kcard）：和右栏的状态卡同一套分层方式 */
   border: 0;
   border-radius: var(--radius);
   background: var(--bg-card);
@@ -3329,7 +3163,6 @@ body {
 
 /* 卡片右上角的删除：跟左侧会话列表的 × 一样，平时透明、鼠标移上来才浮出。
    用 :focus-visible 让键盘 Tab 到它时也能看见。 */
-
 .char-card-del {
   position: absolute;
   top: 6px;
@@ -3360,7 +3193,6 @@ body {
 
 /* ⚠️ 这里**不能**写 background —— 它比 `.g1`~`.g6` 这些单类 (0,1,0) 同优先级
    但位置更靠后，写了浅底就会把 JS 挂的渐变整个盖掉（表现为"浅色圆 + 主色字"）。 */
-
 .char-card-avatar {
   width: 76px;
   height: 76px;
@@ -3395,37 +3227,41 @@ body {
   box-shadow: var(--focus-ring);
 }
 
-/* --- 角色库的卡：人设图占满整宽，名字 / 来源 / 按钮排在下面 -------------------
-   世界书卡还是上面那套（「世」字块居中，卡窄一圈）—— 它没有立绘要放。
-   账号头像是圆的，卡上的人设图是**竖版方角**：圆形会把一张立绘裁掉大半。 */
-
+/* 角色封面贴边，文字与操作区各自保留内边距。 */
 #char-page-grid .char-card {
   align-items: stretch;
-  gap: 10px;
-  padding: 10px 10px 12px;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 #char-page-grid .char-card-avatar {
   width: 100%;
   height: auto;
-  /* 2:3 —— 和存下来的比例（1024×1536，以及编辑器里那个上传框）严格一致。
-     改比例要三处一起改：这里、.char-portrait，还有 characterEditor.js 的 PORTRAIT_RATIO。 */
   aspect-ratio: 2 / 3;
-  border-radius: var(--radius-sm);
+  flex: 0 0 auto;
+  border-radius: 0;
   font-size: 52px;
 }
 
 #char-page-grid .char-card-name {
-  text-align: center;
+  padding: 10px 10px 0;
+  text-align: left;
 }
 
 #char-page-grid .char-card-sub {
-  text-align: center;
+  padding: 5px 10px 0;
+  text-align: left;
+}
+
+#char-page-grid .char-card-actions {
+  margin-top: auto;
+  padding: 8px 10px 10px;
 }
 
 #char-page-grid .char-card-del {
-  top: 16px;
-  right: 16px;
+  top: 10px;
+  right: 10px;
   width: 24px;
   height: 24px;
   padding: 0;
@@ -3455,7 +3291,6 @@ body {
 }
 
 /* 这一行是「来源 · 分类标签…」，标签可能很多，所以单行截断不让卡片变形 */
-
 .char-card-sub {
   max-width: 100%;
   overflow: hidden;
@@ -3478,7 +3313,6 @@ body {
 
 /* 卡片本身就是白的，次级按钮再来一层「白底 + 阴影」会糊成一块 ——
    这里压回透明，和顶栏那几颗同一个道理（设计稿的 .kfoot button 也是纯文字）。 */
-
 .char-card-actions .btn-ghost {
   background: transparent;
   box-shadow: none;
@@ -3492,25 +3326,20 @@ body {
 /* 卡片自己**不留内边距** —— 封面要从卡片顶边一路铺到左右两边（设计稿就是这个样子），
    缩进 8px 会变成「一张图装在一个框里」，书脊的感觉就没了。
    下面那两块信息各自带自己的内边距，所以不靠卡片的 padding 撑。 */
-
 .wb-card {
   align-items: stretch;
   gap: 0;
   padding: 0;
-  /* 封面铺满顶部之后，卡片那 4px 圆角得靠这一层裁 ——
-     .char-card 本身没有 overflow，不写封面就是直角压在圆角上。 */
   overflow: hidden;
 }
 
 /* `flex: 0 0 auto`：卡片是 flex 列，显式写死基准，免得以后有人往这张卡里
    加东西时，子项按内容算高度、把 aspect-ratio 绕过去（封面就会变形）。 */
-
 .wb-card-cover {
   position: relative;
   flex: 0 0 auto;
   width: 100%;
   aspect-ratio: 2 / 3;
-  /* 不用自己的圆角：顶部两角跟着卡片的 overflow: hidden 走，免得套一层小圆角 */
   border-radius: 0;
   overflow: hidden;
   background: var(--bg-input);
@@ -3521,12 +3350,10 @@ body {
   height: 100%;
   object-fit: cover;
   display: block;
-  /* 点开看大图（和角色库那张形象一个路子） */
   cursor: zoom-in;
 }
 
 /* 底部压暗：书名压在浅色封面上时全靠它读得出来 */
-
 .wb-card-cover::after {
   content: '';
   position: absolute;
@@ -3541,7 +3368,6 @@ body {
 /* 没封面：深灰占位块 + 一个半透明的「世」字。
    ⚠️ 别改回 entityTone 那套渐变色 —— 76px 的小方块上好看，
       铺成 2:3 的大色块就太吵，而且会让人误以为那是一张图。 */
-
 .wb-card-cover.is-empty {
   display: flex;
   align-items: center;
@@ -3566,7 +3392,6 @@ body {
   font-size: var(--fs-md);
   font-weight: 700;
   color: #fff;
-  /* 白字压在图上：深色封面靠阴影，浅色封面靠上面那层压暗 */
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3576,7 +3401,6 @@ body {
 }
 
 /* 下面这两块自己带内边距（卡片本身 padding: 0，见 .wb-card 那段） */
-
 .wb-card-meta {
   flex: 0 0 auto;
   max-width: 100%;
@@ -3589,7 +3413,6 @@ body {
 }
 
 /* margin-top: auto —— 同一行里卡片等高时，按钮贴着底边（和设计稿一致） */
-
 .wb-card-actions {
   display: flex;
   gap: 8px;
@@ -3634,13 +3457,7 @@ body {
   color: var(--danger);
 }
 
-.preset-avatar {
-  border-radius: var(--radius);
-  font-size: 26px;
-}
-
 /* 进入世界前创建玩家自己的角色 */
-
 .player-card {
   max-width: 560px;
 }
@@ -3651,7 +3468,6 @@ body {
 }
 
 /* 「用角色卡当自己」下面那行预览：头像 + 会被带进世界的东西 */
-
 .player-char-preview {
   display: flex;
   align-items: center;
@@ -3667,44 +3483,28 @@ body {
   height: 26px;
   border-radius: 50%;
   object-fit: cover;
-  /* 和上面那组圆头像同一个坑：透明底素材压浅底会糊边（见 --art-edge 那段）。
-     这里圆角直接开在 img 上、没有裁切容器，描边不会被 overflow 切掉。 */
   box-shadow: var(--art-edge);
 }
 
 /* 侧边栏里表示「你正在这个页面」 */
-
 .sidebar .btn.active {
   background: var(--accent-soft);
   border-color: var(--accent-border-soft);
   color: var(--accent);
 }
 
-.char-form {
-  display: flex;
-  flex-direction: column;
-}
-
-.char-form > * {
-  flex: 0 0 auto;
-}
-
 /* 角色表单里输入框多，把 textarea 的最低高度收一点，免得一屏放不下几项 */
-
 .char-form textarea {
   min-height: 84px;
 }
 
 .char-advanced textarea {
   min-height: 70px;
+  max-height: none;
 }
 
 .char-form .field-stack > textarea {
-  /* 第二道闸：auto-grow 的上限是 160px，但手动拖高不受它管 ——
-     这里把「连拖带顶」的总高度封在 240px，五个框全拖满也不会把表单顶爆。
-     更长的内容走字段行的「放大编辑」浮层。 */
   max-height: 240px;
-  /* 右下角的斜纹把手：纯装饰，真正的拖拽靠浏览器自带的 resize */
   background-image: linear-gradient(
     135deg,
     transparent 0 46%,
@@ -3730,7 +3530,6 @@ body {
    field-head 里的 field-label 不再是 .field 的直接子级，
    上面的 `.field.field-stack > .field-label { padding-top: 0 }` 匹配不上它 ——
    这里补一条同语义的规则，不然标签会被通用规则顶下去一截。 */
-
 .char-form .field-stack > .field-head {
   display: flex;
   align-items: center;
@@ -3748,7 +3547,6 @@ body {
    图标是 field-label 的第一个 inline 子元素，vertical-align 让它和文字
    基线对齐，不必给 label 改 flex 布局（那会打乱 grid 里 label 和输入框
    的顶部对齐）。 */
-
 .field-label > .field-icon {
   width: 15px;
   height: 15px;
@@ -3763,19 +3561,16 @@ body {
   font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
-  /* 字数在跳的时候别让整行文字跟着抖 */
 }
 
 .char-expand-btn {
   margin-left: auto;
-  /* 推到行尾：左边是「字段名 角标」 */
   flex: 0 0 auto;
   color: var(--text-faint);
 }
 
 /* 备选开场白：条数不定的一列「可增删」文本框（行由 renderAltGreetings 动态铺）。
    每行 = 一行头（序号 + 字数 + ×）+ 一个自动增高的框。 */
-
 .alt-greet-list {
   display: flex;
   flex-direction: column;
@@ -3783,7 +3578,6 @@ body {
 }
 
 /* 一条都没有时不留空档，别把「＋ 添加一条」孤单地推下去 */
-
 .alt-greet-list:empty {
   display: none;
 }
@@ -3813,7 +3607,6 @@ body {
 
 /* 行上的 ×：平时淡着、扫过这一行（或 Tab 到）才亮 —— 删的只是草稿，
    点「保存角色」才落盘，反悔的办法是不保存。和世界书条目那一行同一个手感。 */
-
 .alt-greet-del {
   margin-left: auto;
   flex: 0 0 auto;
@@ -3857,7 +3650,6 @@ body {
 
 /* 放大编辑浮层：挂在 body 上、盖在角色编辑**页**之上（页面在文档流里、没有 z-index，
    浮层 65 稳稳压住它；确认框 70 —— 本来就该压着编辑页、又被确认框压着）。 */
-
 .char-expand {
   position: fixed;
   inset: 0;
@@ -3908,7 +3700,6 @@ body {
    选择器给到两个类（(0,2,0)）—— 通用 textarea 规则是 (0,0,1)、
    `textarea:focus` 是 (0,1,1) 且在文件更后面，只写一个类会被它们盖掉
    （属性区那条「看着挺具体、实际平局还输」的教训就是这来的）。 */
-
 .char-expand-card > .char-expand-text {
   flex: 1 1 auto;
   min-height: 0;
@@ -3916,7 +3707,6 @@ body {
   border: none;
   border-radius: 0;
   resize: none;
-  /* 高度由卡片定，不需要把手 */
   font-size: var(--fs-sm);
   box-shadow: none;
 }
@@ -3937,7 +3727,6 @@ body {
 }
 
 /* 脚部那条说明不在 .field 里，通用的 .field > .field-help 管不到它，得自带样式 */
-
 .char-expand-foot .field-help {
   font-size: var(--fs-xs);
   color: var(--text-faint);
@@ -3949,7 +3738,6 @@ body {
 
    视口是一块 canvas，拖动 / 缩放都是重画 —— 屏幕上的画面和最后输出的像素
    走同一套坐标，所见即所得；用 CSS transform 做的话会有对不齐的风险。 */
-
 .crop-layer {
   position: fixed;
   inset: 0;
@@ -3990,14 +3778,12 @@ body {
 }
 
 /* 视口：图片永远铺满这块，不留空白边 —— 拖到边界就停住，不会拖出一个空角 */
-
 .crop-view {
   position: relative;
   overflow: hidden;
   border-radius: var(--radius-sm);
   background: var(--bg-input);
   cursor: grab;
-  /* 指针拖拽由自己处理，别让浏览器抢去当页面滚动 */
   touch-action: none;
   user-select: none;
 }
@@ -4022,7 +3808,6 @@ body {
 }
 
 /* 滑块：和设置页那套同款拇指，但轨道不走 --range-fill（裁剪这边不追进度比例） */
-
 .crop-zoom {
   flex: 1 1 auto;
   min-width: 0;
@@ -4042,7 +3827,6 @@ body {
 
 /* 滑块 thumb / focus-visible 与设置页那三个 range 滑块共用一份（见「控件」区），
    这里只有 crop 自己那条纯色轨道跟它们不同。 */
-
 .crop-foot {
   display: flex;
   align-items: center;
@@ -4069,14 +3853,11 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--pre-bg);
-  /* 比弹窗底再深一档，读成「凹进去的一块」 */
   overflow: hidden;
-  /* 卡头底色要贴住圆角，否则四角会露出直角 */
 }
 
 /* 「套用互动模板」那一行：按钮 + 一句说明，贴在属性卡头上方。
    开场白那一行（「套用开场白模板」）用的是同一套排布，所以两个类名都挂上。 */
-
 .attr-template-bar {
   display: flex;
   align-items: center;
@@ -4102,7 +3883,6 @@ body {
 }
 
 /* 卡头：分组标签栏 */
-
 .attr-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -4111,7 +3891,6 @@ body {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--th-bg);
-  /* 再压一档，和卡身分开 */
 }
 
 .attr-tab {
@@ -4137,7 +3916,6 @@ body {
 
 /* 选中的标签要一眼认得出来 —— 一排圆角按钮里不拉开差距，
    就不知道自己正站在哪一组，也看不出「下面这几行属于谁」 */
-
 .attr-tab.active {
   background: var(--accent);
   border-color: var(--accent);
@@ -4147,7 +3925,6 @@ body {
 
 /* 组名后面的字段数：小一号、退到后面去 —— 它是旁注，不该和组名抢
    同一级注意力；但它又是判断「有没有填漏」的依据，所以也不能省。 */
-
 .attr-tab-count {
   font-size: var(--fs-xs);
   padding: 2px 6px;
@@ -4162,7 +3939,6 @@ body {
 }
 
 /* 选中标签里的数字要跟着反色，否则蓝底上压一块灰底，看着像没选中 */
-
 .attr-tab.active .attr-tab-count {
   background: rgba(255, 255, 255, 0.26);
   color: var(--on-accent);
@@ -4214,7 +3990,6 @@ body {
 }
 
 /* 展开着的时候要给存在感，否则看不出下面那条操作条是哪来的 */
-
 .attr-tab-edit.on {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -4223,7 +3998,6 @@ body {
 
 /* 分组操作条：改名输入框 + 解散按钮。贴在卡身最上面，
    用一层浅底和下面的字段列表分开 —— 它改的是**整组**，不是某个字段。 */
-
 .attr-group-edit {
   display: flex;
   align-items: center;
@@ -4243,7 +4017,6 @@ body {
 
 /* ⚠️ 带 [type="text"]（= (0,2,1)）：通用那条 `input[type="text"]` 是 (0,1,1)
    且写在文件更后面，光写 `.attr-group-edit input` 会输给它，输入框会被顶成 40px 高。 */
-
 .attr-group-edit input[type="text"] {
   flex: 1 1 auto;
   min-width: 0;
@@ -4258,14 +4031,12 @@ body {
 }
 
 /* 卡身：当前这一组的字段列表 + 加字段那一行 */
-
 .attr-body {
   padding: 10px 10px 10px;
 }
 
 /* 属性行的名字列宽。展开区（.attr-more）要靠它算左缩进，
    所以定成变量 —— 直接写死 76 和 84 的话，改了名字列宽缩进就悄悄错位。 */
-
 .attr-list {
   --attr-name-w: 76px;
   display: flex;
@@ -4275,7 +4046,6 @@ body {
 
 /* 空组得有话可说 —— 刚建的分组点进去是一片空白，看着像坏了，
    也找不到「从哪开始填」。 */
-
 .attr-empty {
   padding: 12px 4px 14px;
   font-size: var(--fs-xs);
@@ -4286,7 +4056,6 @@ body {
 /* 一个属性 = 一行（名字/值/类型/更多）+ 可展开的「范围与变化规则」。
    整项一起变色：鼠标落在值输入框上时，下面挂着的展开区也跟着亮，
    一眼看出「这块是它的」；删除按钮也才有地方落。 */
-
 .attr-item {
   display: flex;
   flex-direction: column;
@@ -4328,7 +4097,6 @@ body {
 }
 
 /* 类型选择框：文本 / 数值 / 列表 */
-
 .attr-row select.attr-type {
   flex: 0 0 auto;
   width: 64px;
@@ -4341,7 +4109,6 @@ body {
 
 /* 「更多」做成安静的次要按钮：它旁边就是个下拉框，
    两个同款灰底方块摆一起会让人分不清哪个是按钮。 */
-
 .attr-row .attr-more-btn {
   flex: 0 0 auto;
   border: 1px solid transparent;
@@ -4361,7 +4128,6 @@ body {
 }
 
 /* 展开着的时候给它一点存在感，一眼看出这一行下面还挂着一块 */
-
 .attr-row .attr-more-btn.on {
   color: var(--accent);
   background: var(--accent-soft);
@@ -4369,7 +4135,6 @@ body {
 
 /* 展开区：用一条左侧引导线挂到上面那一行上，比纯缩进更像「属于它」。
    缩进 = 名字列宽 + 行内 gap（8px），靠变量算出来而不是手填数字。 */
-
 .attr-more {
   display: flex;
   flex-direction: column;
@@ -4398,7 +4163,6 @@ body {
 }
 
 /* 「更多」里那两种小行的灰标签：数值范围 / 分组。两处共用一套排版。 */
-
 .attr-range-label {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
@@ -4421,7 +4185,6 @@ body {
 }
 
 /* 变化规则：整行铺满 */
-
 .attr-more input.attr-hint {
   width: 100%;
   min-width: 0;
@@ -4436,7 +4199,6 @@ body {
    （注意别把这条读成「通用规则写在后面所以能盖住」：通用那条是
    `input[type="text"], select`，权重 (0,1,1)，本来就不如任意两段类选择器；
    层叠里特异性优先于书写顺序。） */
-
 .attr-more select.attr-group {
   flex: 1 1 auto;
   min-width: 0;
@@ -4473,14 +4235,12 @@ body {
 
 /* .panel-del 平时是透明的，靠「悬停行」浮现 —— 属性区这一行是 .attr-row，
    得自己补一条，否则删除按钮永远看不见 */
-
 .attr-row:hover .panel-del {
   opacity: 1;
 }
 
 /* 加字段：卡身最下面一条，用虚线跟上面的字段列表分开 ——
    「往上翻是已有的，往下写是新的」，不用再读一遍占位文案。 */
-
 .attr-add-row {
   display: flex;
   gap: 6px;
@@ -4499,7 +4259,6 @@ body {
 }
 
 /* 批量粘贴区：平时收着，点「粘贴文本」才展开 */
-
 .attr-paste {
   margin-top: 8px;
   padding: 10px;
@@ -4534,19 +4293,23 @@ body {
 
 /* 图片区：头像 / 形象 + 表情图入口，放在表单最顶上，和下面的文字字段同级。
    不再是一张折叠卡 —— 要的是「一眼就看到」，不是收起来。 */
-
 .char-media-top {
   display: flex;
   flex-direction: column;
   margin-bottom: 18px;
+  margin: 0 0 20px;
 }
 
 /* 头像 / 形象下面那行「表情图 · 已设 N 条 · 管理」 */
-
 .char-expr-entry {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  padding: 22px;
+  border: 1px solid var(--ce-line);
+  background: var(--ce-surface);
+  border-radius: var(--radius);
 }
 
 .char-expr-entry .field-label {
@@ -4566,39 +4329,40 @@ body {
 }
 
 /* 文字区：角色名 / 标签 / 长文本 / 属性，纯文本，不需要额外框线 */
-
 .char-text-section {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .char-avatar-col {
+  position: relative;
   display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 14px;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding-bottom: 32px;
 }
 
 /* 每列三行：图区（固定高）/ 标签 / 清除。
    grid 的 align-items 管行内垂直方向（图片在 162px 的图区里居中），
    justify-items 管水平方向（图、标签、按钮都居中）。 */
-
 .char-media-item {
   display: grid;
-  grid-template-rows: 162px auto auto;
   justify-items: center;
   align-items: center;
   row-gap: 6px;
+  grid-template-rows: auto auto auto;
 }
 
 .char-media-label {
   font-size: var(--fs-xs);
   color: var(--text-faint);
+  display: none;
 }
 
 /* 两个上传框共用的底子：点一下弹文件框，悬停时盖一层「换…」提示 */
-
 .char-avatar {
   position: relative;
   padding: 0;
@@ -4607,14 +4371,14 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--bg-input);
-  border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   font-family: inherit;
   transition: border-color 0.15s;
-  width: 92px;
-  height: 92px;
   border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  border: 4px solid var(--ce-sidebar);
 }
 
 .char-portrait {
@@ -4630,9 +4394,9 @@ body {
   cursor: pointer;
   font-family: inherit;
   transition: border-color 0.15s;
-  width: 108px;
-  height: 162px;
   border-radius: var(--radius);
+  width: 120px;
+  height: 180px;
 }
 
 .char-avatar:hover {
@@ -4689,7 +4453,6 @@ body {
 
 /* 形象：2:3 竖版 —— 和角色库列表卡上那块（#char-page-grid .char-card-avatar）
    严格一致，上传时框出来的就是列表上看到的那块。 */
-
 .char-avatar::after {
   position: absolute;
   inset: 0;
@@ -4729,7 +4492,6 @@ body {
 }
 
 /* 形象还在“沿用头像那张图”时压淡一点，提示它不是单独设的 */
-
 .char-portrait.is-inherited {
   opacity: 0.7;
 }
@@ -4756,7 +4518,6 @@ body {
 /* 立绘容器的描边——透明底素材压在底色上，轮廓得勾出来（见 .art-edge 那段）。
    ⚠️ 必须在下面 .char-portrait 的 width/height 之后写：.art-edge 和 .char-portrait
    同为单类选择器（优先级一样），位置靠后的胜出。 */
-
 .char-avatar.art-edge {
   box-shadow: var(--art-edge);
 }
@@ -4778,20 +4539,17 @@ body {
 }
 
 /* 有图时才显示「清除」 */
-
 .char-avatar-col .btn-sm {
   padding: 4px 10px;
   font-size: var(--fs-xs);
 }
 
 /* ------------------------------ 表情图弹窗 ------------------------------ */
-
 .expr-card {
   max-width: 640px;
 }
 
 /* 头一行（计数 + 批量导入 + 添加）的间距比默认紧一点；滚动交给 .modal-body */
-
 .expr-body {
   gap: 10px;
 }
@@ -4837,7 +4595,6 @@ body {
 }
 
 /* 缩略图：1:1，和状态卡上铺的那张同画幅 */
-
 .char-expr-thumb {
   flex: 0 0 auto;
   position: relative;
@@ -4861,7 +4618,6 @@ body {
 
 /* 1px 实边也是描边，但它是主色/边框色，在浅底差分的轮廓上几乎看不出来，
    所以再补一门 --art-edge（背景色在图片下面，不受影响）。 */
-
 .char-expr-thumb:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -4888,7 +4644,6 @@ body {
 
 /* ⚠️ 带 [type="text"]（= (0,2,1)）：通用那条 input[type="text"] 是 (0,1,1)
    且写在文件更后面，只写类名的话宽高会被它盖掉。 */
-
 .char-expr-row input[type="text"] {
   width: 100%;
   min-height: 26px;
@@ -4916,7 +4671,6 @@ body {
 
 /* 默认脸开关：☆ 空 / ★ 实。和删除按钮同尺寸，行里才不会高低不齐。
    它是**单选** —— 点亮一条，别的自动熄掉（逻辑在 toggleDefaultExpression）。 */
-
 .char-expr-default {
   flex: 0 0 auto;
   width: 24px;
@@ -4948,25 +4702,28 @@ body {
 .char-head-fields {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   margin-bottom: 18px;
+  gap: 16px;
+  margin: 0;
 }
 
 /* 这里标签列不需要 152px，收窄一点让输入框更宽 */
-
 .char-head-fields .field {
-  grid-template-columns: 66px minmax(0, 1fr);
   margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
 }
 
 /* 高级选项折叠块 */
-
 .char-advanced {
   margin-top: 2px;
-  padding: 12px 14px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
-  background: var(--bg-side);
+  margin: 0;
+  padding: 20px;
+  background: var(--ce-surface);
 }
 
 .wb-advanced {
@@ -4976,6 +4733,8 @@ body {
   border-radius: var(--radius);
   background: var(--bg-side);
   flex: 0 0 auto;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
 }
 
 .char-advanced > summary {
@@ -5039,13 +4798,11 @@ body {
 }
 
 /* 折起来之后，「内容」是右栏唯一需要占高度的地方 */
-
 .wb-advanced .field {
   margin-bottom: 12px;
 }
 
 /* 说明文字里的小代码块，比如 {{user}} */
-
 .field-help code {
   padding: 0 4px;
   border-radius: var(--radius-sm);
@@ -5056,7 +4813,6 @@ body {
 }
 
 /* 有人设头像时，把字母底换成图片 */
-
 .msg-avatar.has-image {
   padding: 0;
   overflow: hidden;
@@ -5072,14 +4828,10 @@ body {
 /* ------------------------------ 字段 ------------------------------ */
 
 /* 标签在左、控件在右；标签固定 152px，右侧控件左边缘对齐成一条竖线 */
-
 .field {
   display: grid;
   grid-template-columns: 152px minmax(0, 1fr);
   align-items: start;
-  /* 行从顶排，多余空间留底部。不写这条时 align-content 默认 stretch，
-     一旦外层把字段拉高（.field-grid 里两格等高），内容不满的那个字段
-     会把隐式行均匀撑开 —— 输入框就被顶下去了，左右两格的框对不齐。 */
   align-content: start;
   column-gap: 16px;
   row-gap: 6px;
@@ -5091,7 +4843,6 @@ body {
 }
 
 /* 标签顶部留白，让它和输入框里的文字在同一水平线上 */
-
 .field-label {
   padding-top: 12px;
   font-size: var(--fs-sm);
@@ -5099,7 +4850,6 @@ body {
 }
 
 /* 说明文字跨到右侧控件那一列，左边缘和输入框对齐 */
-
 .field > .field-help {
   grid-column: 2;
   font-size: var(--fs-xs);
@@ -5107,7 +4857,6 @@ body {
 }
 
 /* 上下排列的字段（人设那种，标签在上面） */
-
 .field.field-stack {
   grid-template-columns: minmax(0, 1fr);
   row-gap: 8px;
@@ -5122,7 +4871,6 @@ body {
 }
 
 /* 控件占满右侧那一列 */
-
 .field > input {
   min-width: 0;
 }
@@ -5142,15 +4890,11 @@ body {
 /* 一行放两个字段，左右各占一半。
    这两个字段改用「标签在上」的排法：152px 的标签列会把输入框挤到只剩 130 多像素，
    把标签挪到上面，输入框和下面的说明文字就都能用满整列宽度。 */
-
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 18px;
   row-gap: 18px;
-  /* 整行本身也要占一份垂直间距：里面 .field 的 margin-bottom 被下面那条规则清零了，
-     不在这种地方补，这一行就会紧贴下一个字段（角色库「性格」和「开场白」就是这么挨上的）。
-     属于样式表的间距就写在样式表里，别用 inline style 补。 */
   margin-bottom: 20px;
 }
 
@@ -5161,15 +4905,14 @@ body {
 }
 
 /* 作为分组最后一个元素时不带尾距，和上面的 .field:last-child 语义一致 */
-
 .field-grid:last-child {
   margin-bottom: 0;
 }
 
 /* 「高级选项」里字段间距是 12px，这里跟着走 */
-
 .wb-advanced .field-grid {
   margin-bottom: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .field-grid .field > .field-label {
@@ -5181,13 +4924,11 @@ body {
 }
 
 /* 数字等宽，位数变化时不会左右抖 */
-
 .field-grid input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
 /* 输入框后面跟一个按钮：拉伸对齐，两者上下边缘齐平 */
-
 .row {
   display: flex;
   gap: 8px;
@@ -5199,7 +4940,6 @@ body {
 }
 
 /* ------------------------------ 控件 ------------------------------ */
-
 input[type="text"] {
   width: 100%;
   min-height: 44px;
@@ -5209,7 +4949,6 @@ input[type="text"] {
   color: var(--text);
   font-family: inherit;
   font-size: var(--fs-sm);
-  /* 左右各留 14px，文字不再贴边 */
   padding: 12px 14px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -5224,7 +4963,6 @@ input[type="password"] {
   color: var(--text);
   font-family: inherit;
   font-size: var(--fs-sm);
-  /* 左右各留 14px，文字不再贴边 */
   padding: 12px 14px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -5239,7 +4977,6 @@ input[type="number"] {
   color: var(--text);
   font-family: inherit;
   font-size: var(--fs-sm);
-  /* 左右各留 14px，文字不再贴边 */
   padding: 12px 14px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -5253,7 +4990,6 @@ textarea {
   color: var(--text);
   font-family: inherit;
   font-size: var(--fs-sm);
-  /* 左右各留 14px，文字不再贴边 */
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
   min-height: 104px;
@@ -5270,7 +5006,6 @@ select {
   color: var(--text);
   font-family: inherit;
   font-size: var(--fs-sm);
-  /* 左右各留 14px，文字不再贴边 */
   padding: 12px 14px;
   outline: none;
   appearance: none;
@@ -5289,7 +5024,6 @@ select {
 
 /* 下拉框：干掉系统原生箭头，改用 CSS 画一个，右侧留出足够空间，
    否则文字会顶到箭头下面去。 */
-
 select:enabled:hover {
   background-color: var(--bg-card);
 }
@@ -5364,7 +5098,6 @@ textarea::placeholder {
 }
 
 /* 数字框的上下箭头在浅色下压淡一点，更柔和 */
-
 input[type="number"]::-webkit-inner-spin-button {
   opacity: 0.45;
 }
@@ -5382,7 +5115,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* ------------------------------ 勾选项 ------------------------------ */
-
 .check {
   display: flex;
   align-items: center;
@@ -5409,7 +5141,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 开着的那行**不再整行染粉**：一行一行都染，扫下来反而看不出谁开谁关，
    而且和「激活的服务商卡」抢同一个视觉信号。留边框 + 标题变色就够了。 */
-
 .check:has(input:checked) {
   border-color: var(--accent-border);
   background: var(--bg-card);
@@ -5419,7 +5150,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
    order 把它排到文字块后面 —— HTML 里它仍写在文字之前（读屏器的顺序是
    「开关，然后它的说明」，那是对的），视觉上用 flex 顺序翻过来就行，
    不用为纯视觉去改 DOM 结构。 */
-
 .check > input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -5455,7 +5185,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 40 宽的轨道 - 左右各 2 - 滑块 16 - 1 的边框误差 = 18，刚好顶到右端 */
-
 .check > input[type="checkbox"]:checked::after {
   transform: translateX(18px);
   background: #fff;
@@ -5468,7 +5197,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 勾选项的两行文字：小标题 + 说明。
    开关挪到右边之后，文字块自己吃掉剩余宽度（flex:1），说明才不会被压成挤牙膏。 */
-
 .check-text {
   display: flex;
   flex-direction: column;
@@ -5498,14 +5226,12 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 说明里的 <b> 是重点（「每续一次会多花一次钱」这种），别让它跟正文一样淡 */
-
 .check-desc b {
   color: var(--text-dim);
   font-weight: 600;
 }
 
 /* ------------------------------ 提示条 ------------------------------ */
-
 .toast {
   position: absolute;
   top: 86px;
@@ -5520,19 +5246,18 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   max-width: 70vw;
   z-index: 100;
   box-shadow: var(--shadow-lg);
-  /* 提示条只是给人看的，绝不能挡住下面的按钮和输入框 */
   pointer-events: none;
   animation: toast-in 0.2s ease-out;
 }
 
 /* keyframes 里的 transform 必须带上 translateX(-50%) —— 否则会把定位用的
    那份 transform 整个顶掉，toast 出现的一瞬间会跳到右边去。 */
-
 @keyframes toast-in {
   from {
     opacity: 0;
     transform: translateX(-50%) translateY(-6px);
   }
+
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
@@ -5554,7 +5279,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* 选中文字的底色：跟主题走。系统的默认选区是蓝底白字，
    和琥珀/草莓/苏打/抹茶四套主题全都不搭。只给底色不给字色，
    accent-soft 本来就是各主题调好的淡主色，原字色在它上面对比足够。 */
-
 ::selection {
   background: var(--accent-soft);
 }
@@ -5562,7 +5286,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* 按压反馈：行状可点元素按下时轻微变淡，和 .btn:active 的「下沉 1px」
    是同一套手感语言。这些元素 hover 都有反馈，之前唯独缺按压 ——
    点下去界面是「死」的，这是前端手感里最明显的缺口。 */
-
 .convo-item:active {
   opacity: 0.7;
 }
@@ -5584,7 +5307,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 滚动条 */
-
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -5610,39 +5332,47 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* ------------------------------ 窄窗口 / 无障碍 ------------------------------ */
 
 /* 窗口变窄时，设置里的「标签在左」改成「标签在上」，免得输入框被挤扁 */
-
 @media (max-width: 720px) {
   .modal {
     padding: 12px;
   }
+
   .modal-card {
     max-height: 92vh;
   }
+
   .modal-head {
     padding: 16px 14px 14px;
   }
+
   .modal-body {
     padding: 14px 14px 16px;
     gap: 12px;
   }
+
   .modal-foot {
     padding: 12px 14px;
     flex-direction: column-reverse;
     align-items: stretch;
   }
+
   .foot-actions {
     justify-content: flex-end;
   }
+
   .field {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 8px;
   }
+
   .field > .field-help {
     grid-column: 1;
   }
+
   .field > .field-label {
     padding-top: 0;
   }
+
   .field-grid {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 16px;
@@ -5650,22 +5380,25 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 窄窗口：角色列表页的标题栏换上下排，按钮不跟标题挤在一行 */
-
 @media (max-width: 720px) {
   .page-head {
     flex-direction: column;
     align-items: stretch;
   }
+
   .page-actions {
     justify-content: flex-end;
   }
+
   .page-body {
     padding: 16px 14px 22px;
   }
+
   .char-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 10px;
   }
+
   .wb-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 10px;
@@ -5675,20 +5408,22 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* ------------------------------ 世界书 ------------------------------ */
 
 /* 世界书里的「本书角色」条：一排副本卡片 */
-
 .wb-chars {
   flex: 0 0 auto;
-  padding: 10px 12px;
   border-bottom: 1px solid var(--border-soft);
   background: var(--bg-side);
+  padding: 0;
+  margin: 0;
+  border: 0;
 }
 
 .wb-chars-head {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
   margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 14px;
 }
 
 .wb-chars-head .field-label {
@@ -5697,7 +5432,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 标题整块是折叠开关。收起只藏 chip 和按钮（DOM 留着），所以收起状态不影响
    程序化找元素。副本多的时候默认就是收起的，见 worldbook.js 的 WB_CHARS_COLLAPSE_AT。 */
-
 .wb-chars-toggle {
   display: flex;
   align-items: center;
@@ -5717,7 +5451,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 小三角：展开时朝下、收起时朝右。用 border 画，跟着 currentColor 走 */
-
 .wb-caret {
   flex: 0 0 auto;
   width: 0;
@@ -5746,11 +5479,10 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 按钮排不下了就换行（宁可两行，也别溢出被裁） */
-
 .wb-chars-actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .wb-chars-actions .btn {
@@ -5758,13 +5490,14 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 .wb-char-list {
-  display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
+  gap: 12px;
+  padding-top: 20px;
 }
 
 /* 没有角色时给一句引导，不用另开一个空状态元素 */
-
 .wb-char-list:empty::after {
   content: '还没有角色。点「从角色库加入」复制一个进来，或直接新建。';
   font-size: var(--fs-xs);
@@ -5772,15 +5505,16 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 .wb-char-chip {
-  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 6px 4px 4px;
   border: 1px solid var(--border);
-  border-radius: 999px;
   background: var(--bg-card);
-  max-width: 320px;
+  display: flex;
+  flex-wrap: wrap;
   min-width: 0;
+  max-width: none;
+  border-radius: 4px;
+  padding: 12px;
+  gap: 8px;
 }
 
 .wb-char-chip-avatar {
@@ -5805,13 +5539,13 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 .wb-char-chip-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-xs);
   color: var(--text);
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .wb-char-chip-btn {
@@ -5832,7 +5566,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 副本 chip 上的「显示状态」勾选框：勾了才让这个 NPC 出头像。
    做成勾选框而不是按钮 —— 它是个持久开关，勾没勾要一眼看得见。 */
-
 .wb-char-chip-show {
   flex: 0 0 auto;
   display: inline-flex;
@@ -5844,6 +5577,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   user-select: none;
   padding: 2px 4px;
   border-radius: var(--radius-sm);
+  flex-shrink: 0;
 }
 
 .wb-char-chip-show:hover {
@@ -5861,7 +5595,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 从角色库多选加入的弹窗 */
-
 .wb-picker-card {
   max-width: 520px;
 }
@@ -5952,57 +5685,63 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 .worldbook-body {
   flex: 1 1 auto;
-  display: grid;
-  grid-template-columns: 548px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
   gap: 0;
   padding: 0;
-  overflow: hidden;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .wb-book-wrap {
-  display: grid;
-  grid-template-columns: 280px 268px;
   min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .wb-book {
-  display: flex;
-  flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
-  /* NPC 一多这一栏就长，让它自己滚 */
+  display: grid;
+  grid-template-columns: 120px minmax(0, 700px);
+  align-content: start;
+  gap: 24px;
+  padding: 28px;
+  border: 0;
   overflow-y: auto;
-  border-right: 1px solid var(--border-soft);
+  min-width: 0;
 }
 
 /* 这一栏的分组标题。和侧栏那种标签一个路子（小字 + 字距）——
    一眼看出是「分组名」，不是某个字段的名字。 */
-
 .wb-book-title {
   flex: 0 0 auto;
-  padding: 12px 12px 0;
-  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-dim);
-  letter-spacing: 0.08em;
+  grid-column: 1 / -1;
+  padding: 0;
+  letter-spacing: 0;
+  font-size: var(--fs-sm);
 }
 
 /* 这一栏是上下叠的一列，块间距由各块自己的 padding 决定 ——
    .field 那 20px 的 margin-bottom 在这儿只会叠出一片空白。 */
-
 .wb-book .field {
   margin-bottom: 0;
 }
 
 .wb-cover {
   flex: 0 0 auto;
-  padding: 10px 12px 0;
+  grid-column: 1;
+  grid-row: 2 / 4;
+  padding: 0;
 }
 
 /* .field-label 自带 12px padding-top 是为了在 grid 里和右侧输入框对齐；
    这里不是 grid，去掉它 */
-
 .wb-cover > .field-label {
   padding-top: 0;
 }
@@ -6011,25 +5750,24 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   display: flex;
   gap: 10px;
   margin-top: 6px;
+  flex-direction: column;
 }
 
 /* 说明文字通栏放在下面：挤在封面框右边那一小条里会折成三行 */
-
 .wb-cover-help {
-  display: block;
   margin-top: 6px;
+  display: none;
 }
 
 .wb-cover-frame {
   position: relative;
-  flex: 0 0 96px;
+  flex: none;
   width: 96px;
   aspect-ratio: 2 / 3;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  /* 空态是虚线框（「这里可以放东西」），有图就收成实线细边 */
   border: 1px dashed var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
@@ -6073,30 +5811,29 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   padding: 10px 12px 0;
 }
 
-.wb-book-actions {
-  flex: 0 0 auto;
-  padding: 10px 12px 0;
-}
-
 .wb-book-foot {
-  position: sticky;
   bottom: 0;
   z-index: 1;
   display: flex;
   gap: 8px;
-  margin-top: auto;
-  padding: 10px 12px;
   border-top: 1px solid var(--border-soft);
   background: var(--bg-elev);
+  grid-column: 1 / -1;
+  position: static;
+  justify-content: flex-end;
+  padding: 18px 0 0;
+  margin-top: 8px;
 }
 
 .wb-entries {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  /* 和右边条目编辑区之间的那条线（左边那条画在 .wb-book 上） */
   border-right: 1px solid var(--border-soft);
   overflow: hidden;
+  min-width: 0;
+  background: var(--bg-side);
+  padding-top: 16px;
 }
 
 .wb-opening {
@@ -6108,10 +5845,9 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   flex: 0 0 auto;
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  padding: 12px 12px 0;
-  /* 左栏只有 268px，「N 条条目 · M 条启用」长起来时这一行必须能折 */
   flex-wrap: wrap;
+  padding: 0 16px 12px;
+  gap: 8px;
 }
 
 .wb-entry-head .btn {
@@ -6121,9 +5857,10 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 .wb-entry-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-left: auto;
   align-self: center;
+  margin-left: 0;
+  width: 100%;
+  gap: 4px;
 }
 
 .wb-entry-head .field-label {
@@ -6131,7 +5868,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 书名输入比别的字段高一点（它是这一栏里最常用的一颗输入框） */
-
 .wb-book-name input {
   min-height: 34px;
   font-size: var(--fs-sm);
@@ -6146,21 +5882,23 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 .wb-entry-list {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 8px;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
   min-height: 0;
+  padding: 0 8px 12px;
+  gap: 2px;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  max-height: none;
 }
 
 .wb-entry {
   position: relative;
-  /* 右侧留出 × 的位置，常驻 / 停用那两个徽章不会被压在它下面 */
-  padding: 8px 26px 8px 10px;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
   cursor: pointer;
   min-width: 0;
+  flex-shrink: 0;
+  padding: 13px 30px 13px 10px;
+  border-radius: 3px;
 }
 
 .wb-entry:hover {
@@ -6179,13 +5917,10 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 行上的 ×：平时淡着、鼠标扫过来（或键盘 Tab 到）才亮 —— 点一下直接删，
    不问确认框（删的只是草稿，点「保存」才落盘，反悔的办法是不保存）。 */
-
 .wb-entry-del {
   position: absolute;
   top: 4px;
   right: 4px;
-  width: 18px;
-  height: 18px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -6198,6 +5933,8 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   opacity: 0.45;
   cursor: pointer;
   transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+  width: 24px;
+  height: 24px;
 }
 
 .wb-entry:hover .wb-entry-del {
@@ -6231,7 +5968,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 常驻条目给个标记，一眼能认出来 */
-
 .wb-badge {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
@@ -6262,24 +5998,25 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 .wb-main {
-  padding: 16px 16px;
   overflow-y: auto;
   min-height: 0;
+  min-width: 0;
+  padding: 18px 28px 28px;
+  background: var(--bg-elev);
 }
 
 /* 让条目表单撑满右栏，内容框跟着变高 */
-
 .wb-form {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  min-height: 0;
+  gap: 0;
 }
 
 /* 「内容」是这里的主要工作区：占满剩余高度，min-height 兜住矮窗口 */
-
 .wb-form > .field-stack:has(#wb-e-content) {
-  flex: 1 1 auto;
   min-height: 0;
+  flex: 0 0 auto;
 }
 
 .wb-form textarea {
@@ -6292,56 +6029,52 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 弹窗里标签列窄一点，给输入框留够宽度 */
-
 .wb-form .field {
-  grid-template-columns: 118px minmax(0, 1fr);
-  column-gap: 12px;
-}
-
-.wb-form .field.field-stack {
-  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
 }
 
 .wb-form .field-label {
-  font-size: var(--fs-sm);
+  padding-top: 0;
+  font-size: var(--fs-xs);
 }
 
 .wb-checks {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 4px 0 14px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 0 0 22px;
 }
 
 .wb-form-foot {
-  position: sticky;
   bottom: 0;
   z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: auto;
   padding: 10px 0;
   border-top: 1px solid var(--border-soft);
   background: var(--bg-elev);
+  position: static;
+  margin-top: 18px;
+  flex-wrap: wrap;
 }
 
 .wb-form-foot-hint {
   font-size: var(--fs-xs);
   color: var(--text-faint);
-  text-align: right;
+  text-align: left;
 }
 
 /* 底部「有未保存的改动」：保存前一直亮着，保存完自己消失 */
-
 .wb-dirty {
   font-size: var(--fs-xs);
   color: var(--accent);
   background: var(--accent-soft);
   padding: 4px 10px;
-  border-radius: 999px;
-  white-space: nowrap;
+  white-space: normal;
+  border-radius: 3px;
 }
 
 .pr-dirty {
@@ -6354,20 +6087,23 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 #preset-modal .modal-card {
-  width: min(720px, 94vw);
+  width: min(620px, 100%);
+  max-width: 620px;
+  height: 100%;
+  max-height: 100%;
+  border-radius: 0;
+  border-width: 0 0 0 1px;
 }
 
 /* 正文写「回复要遵循什么规则」，通常比说明长，给个能写几行的起始高度；
    ⚠️ 高度由 HTML 的 rows 定（不是这里的 min-height），调小是为了让下面的「启用」
    和「采样参数」也进画面 —— 顶出可视区的话，不滚一下根本不知道还能设采样参数。 */
-
 #preset-modal #pr-content {
-  min-height: 130px;
   resize: vertical;
+  min-height: 240px;
 }
 
 /* 「采样参数」折叠区：默认收起，展开后是一小组数字输入 */
-
 .preset-sampling {
   margin-top: 18px;
   border: 1px solid var(--border-soft);
@@ -6391,7 +6127,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 展开箭头：收起时指右、展开时指下 */
-
 .preset-sampling > summary::before {
   content: '▸';
   display: inline-block;
@@ -6409,7 +6144,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 折叠区里的内容是最后一块，别再把 20px 的尾距带出来 */
-
 .preset-sampling > .field-grid {
   margin-bottom: 12px;
 }
@@ -6423,14 +6157,10 @@ input[type="number"]:hover::-webkit-outer-spin-button {
    一场对话可以同时挂多条预设，所以不是单选下拉，而是一列带勾选框的行。
    下面是状态说明 + 偶尔出现的「有条目被跳过」提示。
    -------------------------------------------------------------------------- */
-
 .preset-pick {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  /* 预设多起来时别把弹窗撑破，超出就自己滚。
-     ⚠️ 只设 max-height、不设 height —— 条目少的时候盒子要贴着内容收，
-     不然底下会空出一大块，看着像坏了。 */
   max-height: 210px;
   overflow-y: auto;
   padding: 6px;
@@ -6440,7 +6170,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 一行 = 一个勾选框 + 名字（+ 可选徽标）。整行都可点，热区比单点方框大得多 */
-
 .preset-pick-row {
   display: flex;
   align-items: center;
@@ -6469,7 +6198,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  /* 让长名字能触发下面 name 的省略号 */
 }
 
 .preset-pick-name {
@@ -6481,7 +6209,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 「可全局」徽标：提醒这条在没手动配过的会话里会自动带上 */
-
 .preset-pick-badge {
   flex: none;
   padding: 2px 6px;
@@ -6493,7 +6220,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 状态说明：「跟随全局」还是「这一场单独配置」—— 用户得知道自己处在哪一档 */
-
 .preset-pick-state {
   padding: 6px 10px 2px;
   font-size: var(--fs-xs);
@@ -6501,13 +6227,11 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 手动配过之后语气要重一点（这和「跟随全局」是两种不同的状态） */
-
 .preset-pick-state.is-manual {
   color: var(--accent);
 }
 
 /* 绑着但已被删/停用的条目：只是提示，不是错误，用警示黄而不是红 */
-
 .preset-pick-gone {
   padding: 6px 10px 2px;
   font-size: var(--fs-xs);
@@ -6521,59 +6245,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   color: var(--text-faint);
 }
 
-@media (max-width: 1330px) {
-  .worldbook-body {
-    grid-template-columns: 268px minmax(0, 1fr);
-  }
-  .wb-book-wrap {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-  /* 收成一栏之后，书设置和条目列表之间改画横线 */
-  .wb-book {
-    border-right: none;
-    border-bottom: 1px solid var(--border-soft);
-    /* 别让「本书角色」一多就把下面的条目列表挤没 */
-    max-height: 300px;
-  }
-}
-
-/* 真机够不到这里（窗口 minWidth 1040，媒体查询看的是视口）——
-   纯兜底：整页变上下一条流，自己滚。 */
-
-@media (max-width: 900px) {
-  .worldbook-body {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
-    overflow-y: auto;
-  }
-  .wb-book-wrap {
-    grid-template-rows: none;
-  }
-  .wb-book {
-    max-height: none;
-  }
-  /* 编辑页本来就铺满主区域，这里只把正文框收矮一点
-     （弹窗时代那两条 height / max-height 随 .worldbook-card 一起删了）。 */
-  .wb-form textarea {
-    min-height: 150px;
-  }
-  /* 条目列表用行的形式排 */
-  .wb-entries {
-    border-right: none;
-    border-bottom: 1px solid var(--border-soft);
-  }
-  .wb-entry-list {
-    flex-direction: row;
-    flex-wrap: wrap;
-    max-height: 190px;
-  }
-  .wb-entry {
-    flex: 0 0 auto;
-    max-width: 200px;
-  }
-}
-
 /* --------------------------- 状态卡入口条 --------------------------- */
 
 /* 一行装完：在场角色 N + 那排头像 + 全部展开。跟着对话列左右留 22px（和顶栏对齐）。
@@ -6584,7 +6255,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 「全部展开 / 全部收起」。批量开关**不是**另一种模式 ——
    它只是把每张卡一次拨到同一个开合状态，拨完每张卡照样能各开各的。 */
-
 .panel-all {
   flex: 0 0 auto;
   padding: 0;
@@ -6607,7 +6277,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 「本局有谁」：我 + 出现过的角色卡。点头像开那张状态卡。
    （AI 现编的 NPC 没卡，不进这里。）flex:1 把「全部展开」顶到最右。 */
-
 .panel-cast {
   flex: 1 1 auto;
   display: flex;
@@ -6660,7 +6329,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* 浮层铺满整个对话列，但**本身不挡鼠标** —— 只有卡片实体可交互。
    这样卡片可以盖在正文上，正文该滚动照滚。
    （`.chat-col` 已经是 position:relative，所以这里绝对定位就是贴着它。） */
-
 .state-cards {
   position: absolute;
   inset: 0;
@@ -6671,12 +6339,9 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* 白底 + 一层**厚一点的**阴影，**不描边**。
    浮在正文上，阴影是它唯一的分层手段 —— 这里不能省成 --shadow-sm，
    不然白色卡片压在白色气泡上会糊在一起。 */
-
 .state-card {
   position: absolute;
-  /* 宽度定死：定位和「并排铺开」都按这个数算（stateCard.js 的 CARD_W） */
   width: 320px;
-  /* 高度上限：卡里要装一张 3:2 的角色图 + 字段列表，所以比一般浮层给得高 */
   max-height: 86vh;
   display: flex;
   flex-direction: column;
@@ -6689,14 +6354,12 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 收起的卡只有一行标题，阴影浅一点，让展开的那张更"浮" */
-
 .state-card:not(.open) {
   box-shadow: var(--shadow-sm);
 }
 
 /* 标题行是**拖动把手**（stateCard.js 的 wireDrag）——
    光标给 grab，别让用户猜这里能拖。 */
-
 .sc-head {
   flex: 0 0 auto;
   display: flex;
@@ -6717,7 +6380,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   aspect-ratio: 1 / 1;
   background: var(--border-soft);
   overflow: hidden;
-  /* 卡上铺的是透明底立绘，底色浅时轮廓会糊掉 —— 描边见 .art-edge 那段 */
   box-shadow: var(--art-edge);
 }
 
@@ -6731,7 +6393,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 表情名小标签：只在按关键词命中表情时出现，压在图的右下角 ——
    「为什么现在显示这张」看一眼就知道。 */
-
 .sc-photo-tag {
   position: absolute;
   right: 8px;
@@ -6750,7 +6411,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* 30px 而不是设计稿 .ava.sm 的 38：这张卡的头里要塞下「名字 + 编辑 + 收起 + ✕」
    四样（设计稿只放了名字 + 收起），38 会把名字挤成省略号。
    30 和上面那排 34 的头像同族，一眼看得出是一个人。 */
-
 .sc-avatar {
   flex: 0 0 auto;
   width: 30px;
@@ -6835,8 +6495,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 .sc-body {
-  /* ⚠️ 卡片是浮动的，靠 max-height:62vh 封顶 —— 字段多了**必须在这一层滚**，
-     否则内容会把卡片撑出屏幕。min-height:0 是 flex 子项能滚的前提。 */
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -6867,7 +6525,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 字段行：也**不画行分隔线**。
    一屏里十几行，每行一条线就是一张表格 —— 那正是「不够扁平」的观感来源。 */
-
 .sc-row {
   display: flex;
   flex-wrap: wrap;
@@ -6885,7 +6542,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 值用 600 + 等宽数字（设计稿的 .s-row b）：一列数字上下能对齐，
    而且和左边的字段名拉开层次，不用靠颜色硬撑。 */
-
 .sc-value {
   flex: 1 1 auto;
   min-width: 0;
@@ -6921,14 +6577,12 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 编辑态：字段名单独一行，下面才是输入框（窄卡片里挤一行看不清） */
-
 .sc-row.editing .sc-name {
   flex: 1 1 100%;
 }
 
 /* ⚠️ 选择器必须给到两个类 (0,2,0)：通用 input[type="text"] 是 (0,1,1)
    且写在文件更后面，只写 .sc-input 会被它盖掉（width/min-height/padding）。 */
-
 .state-card .sc-input {
   flex: 1 1 auto;
   min-width: 0;
@@ -6977,7 +6631,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   flex: 0 0 auto;
   padding: 6px 12px;
   font-size: var(--fs-xs);
-  /* 不描边：主色浅底已经够说明「这颗能点」（卡片里其它按钮全是纯文字） */
   border: 0;
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
@@ -7003,7 +6656,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 删除按钮平时不显示，悬停或键盘聚焦时出现，避免界面显得吵 */
-
 .panel-del:focus-visible {
   opacity: 1;
 }
@@ -7020,7 +6672,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 「主题配色」和「明暗」并排一行。单栏堆着的话弹窗会长出可视区，
    底部那几样得滚动才看得见。两栏比例靠配色那边宽些（四个色点比两颗按钮宽）。 */
-
 .appearance-global {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
@@ -7085,7 +6736,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 夜间档的色点。值对齐各配色 [data-accent='…'][data-theme='dark'] 里的 --accent。 */
-
 [data-theme='dark'] .accent-swatch[data-accent='amber'] .accent-dot {
   background: #e8b84b;
 }
@@ -7105,7 +6755,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* 「白天 / 夜间」——分段控件的画法：一条淡底轨道，选中项填主题色。
    ⚠️ 外层 .field 是 grid，item 默认 stretch 会把轨道拉满整行，
    所以必须 justify-self: start（写成 align-self 在 grid 里不管用）。 */
-
 .seg-group {
   display: inline-flex;
   justify-self: start;
@@ -7145,7 +6794,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 外观弹窗里「管整个界面」和「只管聊天区」之间那道分界线 */
-
 .appearance-divider {
   margin: 2px 0 14px;
   border: 0;
@@ -7188,7 +6836,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 一行控件：滑块/色盘 + 输入框 + 按钮 */
-
 .appearance-row {
   display: flex;
   align-items: center;
@@ -7242,11 +6889,9 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   appearance: none;
   width: 16px;
   height: 16px;
-  /* 让 16px 的拇指在 6px 的轨道上居中：(6 - 16) / 2 */
   margin-top: -4px;
   border-radius: 50%;
   background: var(--accent);
-  /* 外面套一圈面板底色，拇指看起来就是「浮」在轨道上的 */
   border: 2px solid var(--bg-elev);
   box-shadow: 0 1px 3px rgba(23, 37, 66, 0.25);
 }
@@ -7256,11 +6901,9 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   appearance: none;
   width: 16px;
   height: 16px;
-  /* 让 16px 的拇指在 6px 的轨道上居中：(6 - 16) / 2 */
   margin-top: -4px;
   border-radius: 50%;
   background: var(--accent);
-  /* 外面套一圈面板底色，拇指看起来就是「浮」在轨道上的 */
   border: 2px solid var(--bg-elev);
   box-shadow: 0 1px 3px rgba(23, 37, 66, 0.25);
 }
@@ -7270,11 +6913,9 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   appearance: none;
   width: 16px;
   height: 16px;
-  /* 让 16px 的拇指在 6px 的轨道上居中：(6 - 16) / 2 */
   margin-top: -4px;
   border-radius: 50%;
   background: var(--accent);
-  /* 外面套一圈面板底色，拇指看起来就是「浮」在轨道上的 */
   border: 2px solid var(--bg-elev);
   box-shadow: 0 1px 3px rgba(23, 37, 66, 0.25);
 }
@@ -7310,7 +6951,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
    不固定的话两根滑块的起点会错开一两个像素，看着像没对齐。 */
 
 /* 「大小」那个百分比标签：跟在 label 文字后面，小而弱 */
-
 .field-badge {
   margin-left: 6px;
   font-size: var(--fs-xs);
@@ -7320,7 +6960,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 色盘：原生控件的默认外观在各平台差很多，这里统一成一个小方块 */
-
 .appearance-row input[type="color"] {
   flex: 0 0 auto;
   width: 38px;
@@ -7353,7 +6992,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* ------------------------------ 视角设置弹窗 ------------------------------ */
-
 .perspective-card {
   max-width: 560px;
 }
@@ -7365,7 +7003,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* ------------------------------ 请求记录 ------------------------------ */
 
 /* 左列表 + 右详情，所以比普通弹窗宽 */
-
 .requests-card {
   max-width: 880px;
   width: min(880px, 92vw);
@@ -7393,7 +7030,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 一条记录 = 时间 + 模型 / 我问的那句 / 带了多少条 + 采样参数 */
-
 .requests-item {
   display: flex;
   flex-direction: column;
@@ -7480,7 +7116,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 原样 JSON：等宽、可换行、自己能滚。放在这儿是为了「一个字段都没加工」看得出来 */
-
 .requests-json {
   flex: 1;
   margin: 0;
@@ -7500,7 +7135,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* ------------------------------ 记忆（分段摘要） ------------------------------ */
 
 /* 顶栏「记忆」按钮上的段数角标 */
-
 .memory-badge {
   display: inline-block;
   margin-left: 6px;
@@ -7557,7 +7191,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 摘要卡片：head 和 actions 是同一张卡的两行 */
-
 .memory-card .memory-card-title {
   font-size: var(--fs-sm);
   font-weight: 600;
@@ -7593,7 +7226,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 摘要正文：保留换行和空行 */
-
 .memory-card-text {
   padding: 10px 12px;
   border-radius: var(--radius-sm);
@@ -7615,7 +7247,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 「编辑」按钮的激活态 */
-
 .btn.active {
   border-color: var(--accent-border-strong);
   color: var(--accent);
@@ -7625,13 +7256,12 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* ------------------------------ 角色自带的世界书 ------------------------------ */
 
 /* 角色编辑器里那一块：清单 + 绑定按钮 + 开关 */
-
 .char-worldbook-box {
-  margin: 4px 0 14px;
   padding: 12px 14px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   background: var(--bg-side);
+  margin: 0;
 }
 
 .cwb-head {
@@ -7701,7 +7331,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 选择世界书的浮层 */
-
 .cwb-picker {
   position: fixed;
   inset: 0;
@@ -7793,7 +7422,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
    铺满一层深色底看图：滚轮 / 按钮缩放，按住拖动平移，双击切换。
    遮罩固定用深色 —— 看图时深底不干扰画面，两种主题下都一样。
    ========================================================================== */
-
 .lightbox {
   position: fixed;
   inset: 0;
@@ -7804,7 +7432,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   overflow: hidden;
   background: rgba(10, 13, 19, 0.92);
   cursor: grab;
-  /* 拖动由自己处理，别让浏览器抢去当滚动；顺带禁掉选中和长按菜单 */
   touch-action: none;
   user-select: none;
 }
@@ -7818,7 +7445,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   max-height: 84vh;
   border-radius: var(--radius-sm);
   box-shadow: 0 16px 56px rgba(0, 0, 0, 0.55);
-  /* 解码完才显出来，免得先闪一下空白 */
   opacity: 0;
   transition: opacity 0.15s;
   will-change: transform;
@@ -7870,7 +7496,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 工具条上的按钮全是图标 —— 尺寸压到 28px，比页面上的 .icon-btn 小一档，
    免得一条胶囊里挤得慌。图标本身的粗细由 stroke-width 控制（见 ui/icons.js）。 */
-
 .lightbox-bar .btn.icon-btn {
   width: 28px;
   height: 28px;
@@ -7892,7 +7517,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 「适应 / 实际大小」那个切换按钮：两个状态给一样的样式 —— 它本身就是个开关，
    高亮哪一档反而会让人以为另一档不能用。这里只留一个 hover 反馈。 */
-
 .lightbox-pct {
   min-width: 46px;
   text-align: center;
@@ -7910,58 +7534,76 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   .modal {
     animation: none;
   }
+
   .modal-card {
     animation: none;
     transition: none;
   }
+
   .waiting::after {
     animation: none;
   }
+
   .menu-pop {
     animation: none;
   }
+
   .toast {
     animation: none;
   }
+
   .msg-option-skeleton {
     animation: none;
   }
+
   .msg.illustrating .bubble {
     animation: none;
   }
+
   .btn {
     transition: none;
   }
+
   .icon-btn {
     transition: none;
   }
+
   .mini-btn {
     transition: none;
   }
+
   .btn-quick {
     transition: none;
   }
+
   .quick-item {
     transition: none;
   }
+
   .check {
     transition: none;
   }
+
   .check-title {
     transition: none;
   }
+
   input {
     transition: none;
   }
+
   textarea {
     transition: none;
   }
+
   select {
     transition: none;
   }
+
   .check > input[type="checkbox"] {
     transition: none;
   }
+
   .check > input[type="checkbox"]::after {
     transition: none;
   }
@@ -7988,7 +7630,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 开头那句总纲 —— 全文最要紧的一句，给它一块底 */
-
 .help-doc .help-lead {
   margin: 0 0 22px;
   padding: 14px 18px;
@@ -8004,7 +7645,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 目录：标题一行，下面条目自动换行 */
-
 .help-doc .help-toc {
   display: block;
   margin: 0 0 28px;
@@ -8046,7 +7686,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 小节 */
-
 .help-doc .help-sec {
   margin: 0 0 34px;
   scroll-margin-top: 14px;
@@ -8090,7 +7729,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 对照框：草料 / 一栋房子，描述 / 示范 …… 左右两栏 */
-
 .help-doc .help-compare {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -8139,7 +7777,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 单栏的示例框（07 / 08 / 09 直接用 .help-box，外面没有对照栏） */
-
 .help-doc .help-plain {
   margin: 14px 0 16px;
 }
@@ -8149,7 +7786,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 关键词那一行比正文淡一档，用三层类压过 `.help-box > p` 的 margin:0 */
-
 .help-doc .help-box .help-keys {
   margin: 0 0 8px;
   font-size: var(--fs-xs);
@@ -8161,7 +7797,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 编号步骤清单（自己画序号，所以不要浏览器的 list-style） */
-
 .help-doc .help-steps {
   margin: 12px 0 16px;
   padding: 0 0 0 4px;
@@ -8198,7 +7833,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 圆点清单 */
-
 .help-doc .help-list {
   margin: 12px 0 16px;
   padding: 0;
@@ -8228,7 +7862,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 「这些别再写了」：整条压暗一档，点换成红色 */
-
 .help-doc .help-list-bad > li {
   color: var(--text-faint);
 }
@@ -8239,7 +7872,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 发布前清单：点换成对勾 */
-
 .help-doc .help-list-check > li::before {
   content: '\2713';
   left: 2px;
@@ -8254,7 +7886,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 分工表：一行一类，配一枚小标签 */
-
 .help-doc .help-tags {
   margin: 12px 0 16px;
   padding: 0;
@@ -8287,7 +7918,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 引文（三个问题下面那几句示例回答） */
-
 .help-doc .help-quote {
   margin: 10px 0 14px;
   padding: 8px 14px;
@@ -8299,7 +7929,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 问答式笔记（05 节 Marek 那段） */
-
 .help-doc .help-qa {
   margin: 0;
 }
@@ -8323,7 +7952,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 长度尺度条：绿到红的那条渐变 + 一个「甜区」框 */
-
 .help-doc .help-scale {
   margin: 12px 0 10px;
 }
@@ -8422,7 +8050,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 出处 */
-
 .help-doc .help-credit {
   margin-top: 30px;
   padding-top: 16px;
@@ -8446,7 +8073,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
    ⚠️ 不能直接用 .check —— 那是整行卡片（label 撑满、开关甩到最右），
       三个叠起来会占掉三行、像三个并列的开关。这里改成「勾选框 + 文字」挨在一起
       的小块，横排放得下，也不跟上面那组开关抢视觉。 */
-
 .pet-gesture-row {
   display: flex;
   flex-wrap: wrap;
@@ -8479,7 +8105,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 勾：用 ::after 画一条折线（旋转 45° 的 L 形）。
    未选中时 scale(0) 藏起来 —— 不用 display 切换，那样没有过渡动画。 */
-
 .check.check-inline > input[type="checkbox"]::after {
   content: "";
   position: absolute;
@@ -8511,7 +8136,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 配置读不出来（比如刚删了文件）时的兜底外观：别让一个空区块看着像坏了 */
-
 .pet-missing .field {
   opacity: 0.45;
   pointer-events: none;
@@ -8528,7 +8152,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 预览框：多行文本 + 保留换行（宠物是一句一行地说的，挤成一坨就看不出句数） */
-
 .pet-preview {
   margin-top: 8px;
   padding: 10px 12px;
@@ -8549,7 +8172,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 记忆列表 */
-
 .pet-memory {
   margin-top: 8px;
   max-height: 220px;
@@ -8579,7 +8201,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 左边那道小竖线按记忆种类上色：一眼分清哪些是它说过的话、哪些是它记下的事 */
-
 .pet-memory-item.kind-say {
   border-left-color: var(--accent-border);
 }
@@ -8593,7 +8214,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 时间行 + 右侧的删除按钮 */
-
 .pet-memory-head {
   display: flex;
   align-items: center;
@@ -8607,7 +8227,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 每条右侧那个小「×」。平时低调（避免一堆红叉糊满列表），悬停才现出危险色 */
-
 .pet-memory-del {
   flex: none;
   width: 18px;
@@ -8640,7 +8259,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* ---- 聊天这一屏改成「对话列 + 右侧在场角色面板」两栏 ----
    ⚠️ 只覆盖 #view-chat：角色库 / 世界书 / 设置那几个视图仍然是上下单列。 */
-
 .cast-panel {
   flex: 0 0 300px;
   display: flex;
@@ -8745,7 +8363,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 一个在场角色 = 一块。全空的时候整栏收起来（.hidden），不占那 280px。 */
-
 .cast-card {
   flex: 0 0 auto;
   display: flex;
@@ -8912,7 +8529,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* ---- 侧栏品牌行的版本号 ---- */
-
 .brand-version {
   flex: 0 0 auto;
   font-family: Consolas, "Courier New", monospace;
@@ -8937,8 +8553,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   background: var(--bg-input);
   color: var(--text-faint);
   cursor: col-resize;
-  /* 常驻但别太吵：它一直挂在正文两边，0.45 在深底上几乎看不见（出图时差点
-     被当成「没渲染出来」），0.8 是既能看见、又不抢正文的档。 */
   opacity: 0.8;
   transition: opacity 0.15s, color 0.15s, border-color 0.15s;
 }
@@ -8967,7 +8581,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 拖动时显示的那个「左内缩 224px · 可拖动」小标签 */
-
 .pad-badge {
   position: absolute;
   z-index: 21;
@@ -8996,14 +8609,12 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* 拖动时那条虚线：**落在松开后会到的地方**，不是跟着鼠标走。
    竖直范围由 chatPad.js 按消息区算（top/height），不然会穿过顶栏和输入框。 */
-
 .pad-guide {
   position: absolute;
   width: 0;
   border-left: 1px dashed var(--accent);
   opacity: 0.85;
   pointer-events: none;
-  /* 比抓手低一层：虚线是提示，抓手才是能按的东西 */
   z-index: 19;
 }
 
@@ -9030,7 +8641,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 拖宽度的时候：整页锁定指针样式、别选中正文（不然拖一下就糊一片蓝） */
-
 body.pad-dragging {
   cursor: col-resize;
   user-select: none;
@@ -9038,7 +8648,6 @@ body.pad-dragging {
 
 /* ---- 日期分隔（「——— 今天 · 第 12 轮 ———」）----
    只在跨天时出现，是那一段消息的抬头。两条线各自撑满剩余宽度，文字居中。 */
-
 .msg-date-sep {
   flex: 0 0 auto;
   display: flex;
@@ -9085,7 +8694,6 @@ body.pad-dragging {
 }
 
 /* 收起 / 展开按钮：常态在品牌行右端，收起后挪到窄条正中间 */
-
 .sidebar-toggle {
   position: absolute;
   z-index: 2;
@@ -9173,7 +8781,6 @@ body.pad-dragging {
 }
 
 /* 右端那个时间：今天给时刻、昨天给「昨天」、一周内给星期几、更早给日期 */
-
 .convo-time {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
@@ -9184,7 +8791,6 @@ body.pad-dragging {
 }
 
 /* 输入框自己在 .composer-box 里，不要再画一层框 */
-
 .composer-box #input {
   background: none;
   border: none;
@@ -9235,7 +8841,6 @@ body.pad-dragging {
 
 /* 酒馆叙事布局。保留现有 DOM / 数据契约；所有色彩继续服从外观主题。
    聊天左右内缩仍只由 --chat-pad-left/right 控制，不增加 max-width。 */
-
 [data-theme='dark'][data-accent='amber'] {
   --accent: #a8b997;
   --accent-hover: #c1ceaf;
@@ -9341,7 +8946,6 @@ body.pad-dragging {
 }
 
 /* 宽度拖拽与浮动卡继续使用原定位和指针逻辑。 */
-
 .cast-tab.active {
   color: var(--text);
   background: transparent;
@@ -9653,7 +9257,6 @@ body.pad-dragging {
 }
 
 /* 整列只有一张景色和一层共同遮罩；各区域不再分别叠色。 */
-
 .chat-col::before {
   content: '';
   position: absolute;
@@ -9672,7 +9275,6 @@ body.pad-dragging {
 }
 
 /* 品牌与收放按钮在窄栏中分两行，列表独立滚动，创作入口始终置底。 */
-
 .sidebar.collapsed {
   width: 66px;
   flex: 0 0 66px;
@@ -9826,7 +9428,6 @@ body.pad-dragging {
 }
 
 /* sidebar / main / inspector 是应用根层的三个并列区域。 */
-
 .app > .main {
   min-height: 0;
 }
@@ -9850,15 +9451,19 @@ body.pad-dragging {
     padding-left: 12px;
     padding-right: 12px;
   }
+
   .cast-panel {
     flex-basis: 250px;
   }
+
   .topbar {
     padding: 17px 22px;
   }
+
   .cast-body {
     padding: 15px;
   }
+
   .cast-portrait {
     height: 210px;
   }
@@ -9871,29 +9476,946 @@ body.pad-dragging {
     padding-left: 10px;
     padding-right: 10px;
   }
+
   .sidebar-foot {
     grid-template-columns: 1fr;
     gap: 1px;
   }
+
   .sidebar-foot .btn {
     padding: 6px 10px;
   }
+
   .cast-panel:not(.collapsed) {
     flex-basis: 220px;
   }
+
   .cast-head {
     padding-left: 10px;
     padding-right: 10px;
   }
+
   .cast-tabs {
     gap: 10px;
   }
+
   .topbar {
     padding: 14px 18px;
     flex-wrap: wrap;
   }
+
   .scene-context {
     padding-left: 18px;
     padding-right: 18px;
+  }
+}
+
+/* Character editor only. All colors follow the selected application theme. */
+#view-char-editor {
+  --ce-surface: var(--bg-card);
+  --ce-sidebar: var(--bg-side);
+  --ce-line: var(--border);
+  --ce-muted: var(--text-faint);
+}
+
+#view-char-editor #char-form.char-editor-layout {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#view-char-editor #char-form.hidden,
+#view-char-editor .char-editor-panel[hidden],
+#view-char-editor .char-writing-panel[hidden] {
+  display: none;
+}
+
+#view-char-editor .char-identity-pane {
+  min-width: 0;
+  padding: 26px 24px;
+  overflow-y: auto;
+  border-right: 1px solid var(--ce-line);
+  background: var(--ce-sidebar);
+}
+
+#view-char-editor .char-media-item:first-child {
+  position: absolute;
+  left: 0;
+  top: 150px;
+  z-index: 1;
+}
+
+#view-char-editor .char-avatar .char-avatar-empty {
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+#view-char-editor .char-avatar::after {
+  font-size: 9px;
+}
+
+#view-char-editor .char-media-item .btn {
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
+#view-char-editor .char-avatar-col .char-media-item:last-child {
+  gap: 4px;
+}
+
+#view-char-editor .char-head-fields .field-label {
+  padding: 0;
+  font-size: var(--fs-xs);
+}
+
+#view-char-editor .char-head-fields input {
+  width: 100%;
+  min-width: 0;
+}
+
+#view-char-editor .char-identity-hint {
+  margin: 7px 0 0;
+  color: var(--ce-muted);
+  font-size: var(--fs-xs);
+}
+
+#view-char-editor .char-section-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 17px;
+  margin-top: 24px;
+  border-top: 1px solid var(--ce-line);
+}
+
+#view-char-editor .char-section-button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  padding: 12px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+#view-char-editor .char-writing-tab {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 12px 0 15px;
+  border-bottom: 2px solid transparent;
+}
+
+#view-char-editor .char-section-button:hover {
+  background: var(--accent-wash);
+  color: var(--text);
+}
+
+#view-char-editor .char-section-button[aria-selected="true"] {
+  background: var(--accent-soft-strong);
+  color: var(--text);
+}
+
+#view-char-editor .char-section-button:focus-visible,
+#view-char-editor .char-writing-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+#view-char-editor .char-editor-content {
+  min-width: 0;
+  overflow-y: auto;
+  padding: 30px 40px 36px;
+  container-type: inline-size;
+}
+
+#view-char-editor .char-editor-panel {
+  min-width: 0;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+#view-char-editor .char-panel-heading {
+  margin-bottom: 26px;
+}
+
+#view-char-editor .char-panel-heading h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+#view-char-editor .char-panel-heading p {
+  margin: 7px 0 0;
+  color: var(--ce-muted);
+  font-size: var(--fs-xs);
+}
+
+#view-char-editor .char-writing-tabs {
+  display: flex;
+  gap: 25px;
+  overflow-x: auto;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--ce-line);
+}
+
+#view-char-editor .char-writing-tab[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+#view-char-editor .char-writing-tab:hover {
+  color: var(--accent);
+}
+
+#view-char-editor .char-writing-panel > .field {
+  margin-bottom: 22px;
+}
+
+#view-char-editor .char-writing-panel > .field > textarea {
+  min-height: 300px;
+  max-height: none;
+  padding: 20px 22px;
+  line-height: 1.9;
+  background-color: var(--ce-surface);
+  border-color: var(--ce-line);
+}
+
+#view-char-editor .char-writing-panel > .field > .field-help {
+  margin-top: 10px;
+  line-height: 1.8;
+}
+
+#view-char-editor .char-writing-panel .field-head {
+  margin-bottom: 8px;
+}
+
+#view-char-editor .attr-add-row,
+#view-char-editor .attr-row,
+#view-char-editor .attr-range,
+#view-char-editor .attr-group-row,
+#view-char-editor .attr-mode-row,
+#view-char-editor .attr-group-edit,
+#view-char-editor .attr-template-bar,
+#view-char-editor .field-template-bar {
+  flex-wrap: wrap;
+}
+
+@container (max-width: 560px) {
+  #view-char-editor .attr-more {
+    margin-left: 0;
+  }
+
+  #view-char-editor .attr-row input.attr-value {
+    flex-basis: 120px;
+  }
+
+  #view-char-editor .attr-name {
+    text-align: left;
+  }
+}
+
+#view-char-editor .page-foot {
+  gap: 12px;
+}
+
+@media (max-width: 1050px) {
+  #view-char-editor #char-form.char-editor-layout {
+    grid-template-columns: 212px minmax(0, 1fr);
+  }
+
+  #view-char-editor .char-identity-pane {
+    padding: 22px 16px;
+  }
+
+  #view-char-editor .char-editor-content {
+    padding: 26px 24px;
+  }
+
+  #view-char-editor .char-writing-tabs {
+    gap: 18px;
+  }
+}
+
+@media (max-width: 720px) {
+  #view-char-editor .char-main {
+    overflow-y: auto;
+    display: block;
+  }
+
+  #view-char-editor #char-form.char-editor-layout {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  #view-char-editor #char-form.hidden {
+    display: none;
+  }
+
+  #view-char-editor .char-identity-pane {
+    overflow: visible;
+    padding: 20px;
+    border-right: 0;
+    border-bottom: 1px solid var(--ce-line);
+  }
+
+  #view-char-editor .char-media-top {
+    float: left;
+    width: 110px;
+    margin: 0 20px 8px 0;
+  }
+
+  #view-char-editor .char-avatar-col {
+    padding-bottom: 32px;
+  }
+
+  #view-char-editor .char-portrait {
+    width: 92px;
+    height: 138px;
+  }
+
+  #view-char-editor .char-avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  #view-char-editor .char-media-item:first-child {
+    top: 108px;
+  }
+
+  #view-char-editor .char-head-fields {
+    min-width: 0;
+    gap: 12px;
+  }
+
+  #view-char-editor .char-head-fields .field {
+    gap: 5px;
+  }
+
+  #view-char-editor .char-identity-hint {
+    overflow: hidden;
+  }
+
+  #view-char-editor .char-section-nav {
+    clear: both;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 4px;
+    margin-top: 20px;
+    padding-top: 12px;
+  }
+
+  #view-char-editor .char-section-button {
+    flex: 0 0 auto;
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+
+  #view-char-editor .char-editor-content {
+    overflow: visible;
+    padding: 24px 20px;
+  }
+
+  #view-char-editor .char-panel-heading {
+    margin-bottom: 18px;
+  }
+
+  #view-char-editor .char-writing-tabs {
+    gap: 22px;
+    margin-bottom: 22px;
+  }
+
+  #view-char-editor .char-writing-panel > .field > textarea {
+    min-height: 280px;
+    padding: 14px;
+  }
+
+  #view-char-editor .page-head {
+    padding: 16px 20px;
+    flex-wrap: wrap;
+  }
+
+  #view-char-editor .page-foot {
+    padding: 12px 20px;
+    flex-wrap: wrap;
+  }
+
+  #view-char-editor .page-foot .foot-hint {
+    flex-basis: 100%;
+  }
+
+  #view-char-editor .page-foot .foot-actions {
+    margin-left: auto;
+  }
+}
+
+/* Worldbook editor: all changes stay inside the existing view. */
+#view-wb-editor {
+  min-width: 0;
+  letter-spacing: 0;
+}
+
+#view-wb-editor [hidden] {
+  display: none !important;
+}
+
+#view-wb-editor .page-head {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+#view-wb-editor .page-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#view-wb-editor .wb-bookbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 28px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+#view-wb-editor .wb-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding-bottom: 16px;
+}
+
+#view-wb-editor .wb-summary-cover {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 51px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+#view-wb-editor .wb-summary-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#view-wb-editor .wb-summary-text {
+  min-width: 0;
+}
+
+#view-wb-editor .wb-summary-text strong {
+  display: block;
+  max-width: 320px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+#view-wb-editor .wb-summary-text small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+#view-wb-editor .wb-tabs {
+  display: flex;
+  align-self: stretch;
+  gap: 24px;
+  flex-shrink: 0;
+}
+
+#view-wb-editor .wb-tab {
+  padding: 0 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  border-radius: 0;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+
+#view-wb-editor .wb-tab.active {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+
+#view-wb-editor .wb-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+#view-wb-editor .wb-workspace {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+#view-wb-editor .wb-entry-actions .btn {
+  padding: 5px 7px;
+}
+
+#view-wb-editor .wb-search {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: calc(100% - 32px);
+  margin: 0 16px 10px;
+  box-sizing: border-box;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-xs);
+}
+
+#view-wb-editor .wb-state {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: calc(100% - 32px);
+  margin: 0 16px 10px;
+  box-sizing: border-box;
+}
+
+#view-wb-editor .wb-search:focus {
+  outline: 2px solid var(--accent-border);
+  outline-offset: -1px;
+}
+
+#view-wb-editor .wb-entry-list .wb-entry {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
+#view-wb-editor .wb-entry:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+#view-wb-editor .wb-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 25px;
+  margin-bottom: 10px;
+}
+
+#view-wb-editor .wb-list-back {
+  display: none;
+}
+
+#view-wb-editor .wb-content-count {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+#view-wb-editor #wb-e-content {
+  height: 340px;
+  min-height: 260px;
+  resize: vertical;
+  line-height: 1.8;
+}
+
+#view-wb-editor .wb-form .field-help {
+  display: none;
+}
+
+#view-wb-editor .wb-checks .check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: 24px;
+}
+
+#view-wb-editor .wb-checks .check input[type='checkbox'] {
+  order: 0;
+  appearance: auto;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+  flex: 0 0 15px;
+}
+
+#view-wb-editor .wb-checks .check input[type='checkbox']::before,
+#view-wb-editor .wb-checks .check input[type='checkbox']::after {
+  content: none;
+}
+
+#view-wb-editor .wb-checks .check-text {
+  display: inline;
+}
+
+#view-wb-editor .wb-checks .check-desc {
+  display: none;
+}
+
+#view-wb-editor .wb-checks .check-title {
+  font-size: var(--fs-xs);
+  font-weight: 400;
+}
+
+#view-wb-editor .wb-advanced summary {
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  margin-bottom: 14px;
+}
+
+#view-wb-editor .wb-book-name, #view-wb-editor .wb-opening {
+  grid-column: 2;
+  padding: 0;
+  min-width: 0;
+}
+
+#view-wb-editor #wb-opening {
+  min-height: 240px;
+  resize: vertical;
+}
+
+#view-wb-editor .wb-character-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px;
+}
+
+@media (max-width: 1000px) {
+  #view-wb-editor .wb-bookbar {
+    gap: 12px;
+    padding: 14px 20px 0;
+    flex-wrap: wrap;
+  }
+
+  #view-wb-editor .wb-tabs {
+    min-height: 40px;
+  }
+
+  #view-wb-editor .wb-workspace {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+
+  #view-wb-editor .wb-main {
+    padding: 18px 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  #view-wb-editor .page-head {
+    padding: 16px;
+  }
+
+  #view-wb-editor .page-actions {
+    gap: 6px;
+  }
+
+  #view-wb-editor .wb-bookbar {
+    padding: 12px 16px 0;
+  }
+
+  #view-wb-editor .wb-summary {
+    width: 100%;
+    padding-bottom: 0;
+  }
+
+  #view-wb-editor .wb-summary-text strong {
+    max-width: 100%;
+  }
+
+  #view-wb-editor .wb-tabs {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  #view-wb-editor .wb-workspace {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #view-wb-editor .wb-workspace[data-mobile="detail"] .wb-entries {
+    display: none;
+  }
+
+  #view-wb-editor .wb-workspace:not([data-mobile="detail"]) .wb-main {
+    display: none;
+  }
+
+  #view-wb-editor .wb-entries {
+    flex: 1;
+    border: 0;
+  }
+
+  #view-wb-editor .wb-main {
+    flex: 1;
+    padding: 14px 16px 24px;
+  }
+
+  #view-wb-editor .wb-list-back {
+    display: inline-flex;
+  }
+
+  #view-wb-editor #wb-e-content {
+    height: 310px;
+    min-height: 240px;
+  }
+
+  #view-wb-editor .wb-book {
+    grid-template-columns: 90px minmax(0, 1fr);
+    padding: 20px 16px;
+    gap: 18px;
+  }
+
+  #view-wb-editor .wb-cover-frame {
+    width: 82px;
+    flex-basis: auto;
+  }
+
+  #view-wb-editor .wb-opening {
+    grid-column: 1 / -1;
+  }
+
+  #view-wb-editor .wb-character-panel {
+    padding: 20px 16px;
+  }
+
+  #view-wb-editor .wb-advanced .field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+#view-presets .preset-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px 28px;
+  margin-bottom: 22px;
+}
+
+#view-presets .preset-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: min(360px, 100%);
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+
+#view-presets .preset-search:focus-within {
+  border-color: var(--accent);
+}
+
+#view-presets .preset-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 11px 0;
+}
+
+#view-presets .preset-search .field-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+}
+
+#view-presets .preset-filters {
+  display: flex;
+  gap: 22px;
+  align-self: stretch;
+}
+
+#view-presets .preset-filters button {
+  padding: 9px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+
+#view-presets .preset-filters button.active {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+
+#view-presets .preset-filters button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+#view-presets .preset-list {
+  display: flex;
+  flex-direction: column;
+}
+
+#view-presets .preset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px auto;
+  align-items: center;
+  gap: 24px;
+  padding: 22px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+#view-presets .preset-row:hover {
+  background: var(--accent-wash);
+}
+
+#view-presets .preset-row-main {
+  min-width: 0;
+}
+
+#view-presets .preset-row-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+#view-presets .preset-row-name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+#view-presets .preset-row-badge {
+  font-size: var(--fs-xs);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  padding: 0 5px;
+  border-radius: 2px;
+}
+
+#view-presets .preset-row-summary {
+  margin: 6px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#view-presets .preset-row-tags {
+  margin-top: 7px;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+#view-presets .preset-row-state {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+#view-presets .preset-row-state small {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+#view-presets .preset-row-actions {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+#view-presets .preset-row-actions .btn {
+  background: transparent;
+  box-shadow: none;
+}
+
+#view-presets .preset-row-delete {
+  color: var(--text-faint);
+}
+
+#view-presets .preset-row-delete:hover {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+#preset-modal {
+  justify-content: flex-end;
+  padding: 0;
+}
+
+#preset-modal .modal-body {
+  padding: 24px;
+}
+
+#preset-modal .modal-foot {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+@media (max-width: 1050px) {
+  #view-presets .preset-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+
+  #view-presets .preset-row-state {
+    grid-row: 2;
+  }
+
+  #view-presets .preset-row-actions {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+}
+
+@media (max-width: 650px) {
+  #view-presets .preset-row {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 18px 0;
+  }
+
+  #view-presets .preset-row-actions {
+    grid-column: 1;
+    grid-row: 3;
+    justify-content: flex-end;
+  }
+
+  #view-presets .preset-row-state {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 }

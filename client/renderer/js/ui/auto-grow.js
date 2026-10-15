@@ -72,11 +72,17 @@ function measureHeight(el) {
  * 按内容调整一个文本框的高度。
  * 已经「锁定」（用户手动拖过）的框直接跳过。
  */
-export function autoGrow(el) {
-  if (!el || el.dataset.growLocked === '1') return;
+function naturalHeight(el) {
+  const style = window.getComputedStyle(el);
+  const minimum = Math.max(GROW_MIN, parseFloat(style.minHeight) || 0);
+  const maximum = Math.max(minimum, Math.min(GROW_MAX, parseFloat(style.maxHeight) || Infinity));
+  return Math.min(maximum, Math.max(minimum, measureHeight(el)));
+}
 
-  const need = measureHeight(el);
-  const next = Math.min(GROW_MAX, Math.max(GROW_MIN, need));
+export function autoGrow(el) {
+  if (!el || el.dataset.growLocked === '1' || !el.getClientRects().length) return;
+
+  const next = naturalHeight(el);
 
   // 只在真的变了才写 —— 否则每次输入都触发一次样式重算
   if (el.style.height !== `${next}px`) el.style.height = `${next}px`;
@@ -117,7 +123,7 @@ export function attachAutoGrow(el, opts) {
     const h = Math.round(el.getBoundingClientRect().height);
     if (h <= 0) return;
     // 和「内容自适应应该得到的高度」不一样 → 说明用户手动调过
-    const natural = Math.min(GROW_MAX, Math.max(GROW_MIN, measureHeight(el)));
+    const natural = naturalHeight(el);
     if (Math.abs(h - natural) > 4) {
       el.dataset.growLocked = '1';
       el.style.height = `${h}px`;

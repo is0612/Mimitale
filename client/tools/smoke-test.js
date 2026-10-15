@@ -3695,6 +3695,8 @@ app.whenReady().then(async () => {
   if (shotArg) {
     try {
       win.show();
+      const viewport = process.argv.find((arg) => arg.startsWith('--shot-viewport='))?.split('=')[1]?.match(/^(\d+)x(\d+)$/);
+      if (viewport) win.setContentSize(Number(viewport[1]), Number(viewport[2]));
       if (shotMode) {
         // 点真实的明暗按钮（只点按钮，不调内部函数）。
         // 控件在外观弹窗里 —— 不用先把弹窗打开，click() 对隐藏元素照样生效。
@@ -3935,7 +3937,7 @@ app.whenReady().then(async () => {
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
           $('#btn-presets')?.click();
           await nap(500);
-          const card = $$('#preset-page-grid .char-card')[0];
+          const card = $$('#preset-page-grid .preset-row')[0];
           const del = card && card.querySelector('.char-card-del');
           if (del) del.style.opacity = '1';
           await nap(250);
@@ -3946,7 +3948,7 @@ app.whenReady().then(async () => {
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
           $('#btn-presets')?.click();
           await nap(500);
-          const card = $$('#preset-page-grid .char-card')[0];
+          const card = $$('#preset-page-grid .preset-row')[0];
           const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (btn) btn.click();
           await nap(650);
@@ -4186,7 +4188,7 @@ app.whenReady().then(async () => {
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
           $('#btn-presets')?.click();
           await nap(500);
-          const card = $$('#preset-page-grid .char-card')[0];
+          const card = $$('#preset-page-grid .preset-row')[0];
           const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (btn) btn.click();
           await nap(650);
@@ -4670,6 +4672,10 @@ app.whenReady().then(async () => {
         console.log(`  未知截图场景「${shotArg}」，可用：${Object.keys(DRIVERS).join(' / ')}`);
       } else {
         await win.webContents.executeJavaScript(`(async () => { ${driver}\n return true; })()`);
+        const panel = process.argv.find((arg) => arg.startsWith('--shot-panel='))?.split('=')[1];
+        if (panel) {
+          await win.webContents.executeJavaScript(`document.getElementById(${JSON.stringify(panel)})?.click(); true`);
+        }
         await new Promise((r) => setTimeout(r, 700));
         // 出图前把主题和几个关键底色打出来。截图最容易骗人的地方就是
         // 「看着像暗色、其实没切过去」—— 那是白跑一趟，而且会让人照着
@@ -4723,7 +4729,9 @@ app.whenReady().then(async () => {
         // 明暗同理：显式指定了哪一档就缀上哪一档（-dark / -light），
         // 都不给 = 出厂默认档，不加后缀。
         const modeTag = shotMode ? `-${shotMode}` : '';
-        const shotName = `${shotArg}${accentTag}${modeTag}.png`;
+        const viewportTag = viewport ? `-${viewport[0]}` : '';
+        const panelTag = panel ? `-${panel.replace(/[^a-z0-9-]/gi, '')}` : '';
+        const shotName = `${shotArg}${panelTag}${accentTag}${modeTag}${viewportTag}.png`;
         fs.writeFileSync(path.join(dir, shotName), (await win.webContents.capturePage()).toPNG());
         console.log(`  截图: tools/shots/${shotName}`);
       }

@@ -68,6 +68,8 @@ import {
 import { openAiGenModal } from './aiGen.js';
 import { attachAutoGrow, syncAutoGrowAll, autoGrow } from '../ui/auto-grow.js';
 import { pickAndCrop } from '../ui/imageCrop.js';
+import { initCharacterEditorLayout, showCharacterField } from './characterEditorLayout.js';
+export { showCharacterField } from './characterEditorLayout.js';
 
 // ---------------------------------------------------------------------------
 //  长文本框：自动增高 + 拖拽高度记忆
@@ -1050,6 +1052,7 @@ function startCharDraft(preset) {
   fillCharForm(character);
   updateCharEditorScopeUi();
 
+  showCharacterField('c-desc');
   el.c.name.focus();
   el.c.name.select();
 }
@@ -1257,9 +1260,12 @@ async function deleteCharacter() {
 
 /** 打开编辑器，编辑指定角色（scope 省略 = 角色库） */
 export function openCharacterEditor(id, scope = 'library') {
-  charEditorScope = scope === 'worldbook' ? 'worldbook' : 'library';
+  const nextScope = scope === 'worldbook' ? 'worldbook' : 'library';
+  const different = charEditorScope !== nextScope || editingCharacterId !== (id || null);
+  charEditorScope = nextScope;
   editingCharacterId = id || null;
   openCharsModal();
+  if (different) showCharacterField('c-desc');
 }
 
 /** 在当前世界书作用域下起草一个新角色（世界书编辑器里的「新建本书角色」） */
@@ -1468,6 +1474,9 @@ function onAltListInput(event) {
 /** 绑编辑器自己的所有按钮。rerender 由入口层注入 */
 export function initCharacterEditor(injected) {
   actions = { rerender: () => {}, ...(injected || {}) };
+  initCharacterEditorLayout({
+    onReveal: () => syncAutoGrowAll(longTextAreas().map((pair) => pair[0]).concat(altGreetTextAreas()))
+  });
 
   el.btnCloseChars.addEventListener('click', leaveCharacterEditor);
   el.btnNewChar.addEventListener('click', newCharacter);
