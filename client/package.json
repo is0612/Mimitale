@@ -13,7 +13,9 @@
     "diag": "electron --no-sandbox tools/diag-page.js",
     "audit": "node tools/check-dom-ids.js && node tools/audit-buttons.js && node tools/check-imports.js",
     "test:pet": "node tools/test-pet-window.js && node tools/test-pet-store.js",
-    "test:png": "node tools/test-png.js"
+    "test:png": "node tools/test-png.js",
+    "check:integrity": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/clear-low-integrity.ps1",
+    "fix:integrity": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/clear-low-integrity.ps1 -Fix"
   },
   "devDependencies": {
     "electron": "^44.4.3"

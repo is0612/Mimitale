@@ -4,6 +4,113 @@
 
 ---
 
+## 2026-10-16 定论：导入角色卡弹「你当前无权访问该文件夹」—— 项目文件夹又被打上了低完整性标签
+
+### 症状
+
+点「导入角色卡」时弹一个 Windows 的框（用户给的截图）：
+
+> **Desktop**
+> 你当前无权访问该文件夹。
+> 单击"继续"获取永久访问该文件夹的权限。
+> 【继续】【取消】
+
+「以前都没有的」。10-08 / 10-10 查过的「你没有权限在此位置中保存文件…改为保存到图片
+文件夹」是同一个根因的另一个表现 —— 那次卡在**写**，这次卡在**读**。
+
+### 那句框不是我方弹的
+
+框的标题是**文件夹的名字**（Windows KB 950934 讲的就是这个框：标题跟着文件夹走；
+点「继续」之后 UAC 会用后台进程把这个文件夹连同子项授权给当前用户）。
+本例里就是 `C:\Users\54628\Desktop` —— 用户的角色卡（`林可可.json` / `樱川大学.json` /
+`露西娅.json` / `大学生日常模拟.json`）就在桌面上，导入时自然会浏览到那里。
+我方文件框自己在桌面上的那个，标题是 `characters:import` 传的「选择角色卡或世界书」，
+是**另一个**窗口。
+
+### 复现（本机实测，2026-10-16）
+
+在工作区里放一个最小 Electron 探针（它自己报了
+`Mandatory Label\Low Mandatory Level S-1-16-4096`），调
+
+```js
+dialog.showOpenDialog({ title: '选择角色卡或世界书', defaultPath: 'C:\\Users\\54628\\Desktop', … })
+```
+
+然后枚举窗口：
+
+| 窗口 | 标题（caption） | 拥有者窗口 | 子控件 |
+|---|---|---|---|
+| 系统文件框 | 选择角色卡或世界书 | — | … 导入 / 取消 / 地址栏 … |
+| 权限框（同一个进程） | **Desktop** | 选择角色卡或世界书 | **继续 / 取消** |
+
+同一个探针里的读 / 写矩阵（Node 的错误码）：
+
+| 位置 | 读、列目录 | 写 |
+|---|---|---|
+| `C:\Users\54628\Desktop` | **EPERM（列不出）** | **EPERM** |
+| Documents / Downloads / Pictures / Videos\Desktop / Public\Desktop / `.dsh` | OK | EPERM |
+| `E:\xxxx\电子魅魔角色卡\角色扮演` | OK | EPERM |
+| `%TEMP%` / `%APPDATA%` | — | EPERM |
+| 程序自己那棵树（`D:\AI\Mimitale\client\…`） | OK | OK |
+
+即：低完整性进程**写不了任何中完整性的位置**（10-10 的结论），而且**连桌面都读不了**
+（别的中完整性目录能读能列）—— 系统文件框一进桌面就弹那个框，正是这个原因。
+
+### 现场状态
+
+`tools\clear-low-integrity.ps1`（本次新增）报出来的：
+
+| 对象 | 完整性标签 |
+|---|---|
+| `client\` | Low(NW) |
+| `client\node_modules\electron\dist\electron.exe` | Low(NW) |
+| `client\data` | Low(NW) |
+| `C:\Users\54628\Desktop`（对照） | 无标签 |
+
+进程完整性 = **min(启动它的令牌, exe 文件自己的标签)**，`electron.exe` 自己是 Low，
+所以从哪启动、用什么身份启动都一样是 Low（10-10 那条结论没变，双击桌面快捷方式也一样）。
+`.mimitale-no-sandbox` 的时间是 **10-13 19:49** ——「以前都没有」的时间点也对得上：
+会话沙箱那天又给工作区打了一遍标签。
+
+### 怎么办（环境侧，代码不绕）
+
+1. **清标签**（推荐）：`client\tools\clear-low-integrity.ps1` —— 不带参数只报告，
+   加 `-Fix` 才清。清标签要 `SeSecurityPrivilege`，**必须用管理员身份**跑；
+   `npm run check:integrity` / `npm run fix:integrity` 是同一件事的两个入口。
+   它只动完整性标签（`LABEL_SECURITY_INFORMATION` + 空 SACL），不碰属主 / 权限项 /
+   文件内容，清完还会复查（顺便建一个临时目录、看新建对象是否还继承 Low）。
+   要恢复标签就是 `icacls <目录> /setintegritylevel (OI)(CI)Low /T`。
+   （**2026-10-16 现场实清**：`D:\AI\Mimitale` 整棵 **2999 个对象，0 失败**，复查全部变
+   「无标签」；清完拿一个跑在 `client\` 里的 Electron 探针复验 —— 进程
+   `Medium Mandatory Level`、桌面 `readdir` 29 项 OK、桌面写 OK，同一个
+   `showOpenDialog(defaultPath = 桌面)` **不再弹权限框**。）
+2. **或者搬走**：把整个 Mimitale 文件夹**复制**到没被沙箱动过的地方（如 `D:\Mimitale`）
+   再启动 —— 复制出来的文件继承新位置的标签，就不是 Low 了（复制靠资源管理器做即可）。
+3. 清完之后可以加 `-ResetSandboxMarker` 把 `.mimitale-no-sandbox` 删掉，让启动器重新试一次
+   Electron 自带的沙箱；要又崩（返回码 `-2147483645`），启动器会自己写回来。
+
+标签是**会被会话沙箱再次打上**的（10-08 清过一次，10-13 又回来了），所以复发就重跑一次脚本；
+`node tools\diag-write-lock.js` 也能当「是不是又 Low 了」的快检。
+
+### 代码侧只加了工具与文案
+
+- 新增 `client\tools\clear-low-integrity.ps1`：报告 → 清理 → 复查（含新建对象复查）一条龙。
+- `client\package.json` 加 `check:integrity` / `fix:integrity` 两个入口。
+- `使用说明.md` 排查表加一行（导入弹这个框怎么认、怎么修）。
+- 应用逻辑**一行没改**：这个框是 Windows 在系统文件框里弹的，应用这边既拦不到也修不了；
+  和写盘那条一样，代码侧只负责「失败时说实话」。
+
+### 踩到的两个坑（留给下次）
+
+- 强制完整性标签 ACE 里的 SID 是**内联**在 ACE 里的（偏移 8，形状 Rev+个数+颁发者+子权限），
+  **不是指针**：按指针读会拿到垃圾地址，紧接着就是 `AccessViolationException`
+  （这个脚本第一版就是这么崩的）。
+- 本机实测 `GetSidSubAuthority()` 读出来的子权限是**错的**（同一个对象两次调用能给出
+  `0` 和 `0x50` 两个值）。改成直接按 ACE 字节拼小端 DWORD 之后才稳定正确 ——
+  脚本里那段注释写着，别再改回去。
+
+---
+
 ## 2026-10-15 第三十一批：删掉帮助页、配色只留琥珀一套
 
 一句话：把两个「留着也没人用」的东西摘干净 —— 帮助页整页下线（视图 + 样式 +
