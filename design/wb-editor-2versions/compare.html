@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>编辑世界书页 · 两版并排对比</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: var(--fs-sm); }
+  h1 { margin: 0 0 4px; font-size: var(--fs-lg); }
+  p.note { margin: 0 0 20px; font-size: var(--fs-xs); color: var(--text-faint); }
+  h2 { margin: 28px 0 12px; font-size: var(--fs-md); }
+  h2 span { margin-left: 8px; font-size: var(--fs-xs); font-weight: 400; color: var(--text-faint); }
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  figure { margin: 0; }
+  figure img { display: block; width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); }
+  figcaption { margin-top: 6px; font-size: var(--fs-xs); color: var(--text-dim); }
+  .rule { margin: 32px 0 0; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<h1>编辑世界书页 · 两版并排对比</h1>
+<p class="note">A 稿「条目工作台」= 给条目一台三栏工具，书退成一条信息条；B 稿「书籍工作台」= 书级主控头常驻 + 左目录贯穿三屏。每版都出三屏（条目 / 书籍设置 / 本书角色）。</p>
+
+<h2>A 稿 · 条目工作台 <span>1440×900 · 夜间</span></h2>
+<div class="pair">
+  <figure><img src="a-01-entries.png" alt="A 稿条目"><figcaption>条目：三栏 —— 条目列表 336 / 正文 640 / 本条属性 248</figcaption></figure>
+  <figure><img src="a-02-book.png" alt="A 稿书籍设置"><figcaption>书籍设置：两栏 —— 稿纸 + 本书信息与危险区</figcaption></figure>
+  <figure><img src="a-03-characters.png" alt="A 稿本书角色"><figcaption>本书角色：卡片网格（有内容的样子）</figcaption></figure>
+  <figure><img src="a-04-entries-light.png" alt="A 稿白天"><figcaption>白天主题</figcaption></figure>
+  <figure><img src="a-05-narrow.png" alt="A 稿窄屏"><figcaption>窄屏 1180×820：属性栏折到底部横排，正文拿回 42 字/行</figcaption></figure>
+  <figure><img src="a-06-tall.png" alt="A 稿高屏"><figcaption>高屏 1440×1024</figcaption></figure>
+</div>
+
+<div class="rule"></div>
+
+<h2>B 稿 · 书籍工作台 <span>1440×900 · 夜间</span></h2>
+<div class="pair">
+  <figure><img src="b-01-entries.png" alt="B 稿条目"><figcaption>条目：书籍头 96 + 左目录 304 + 正文；属性收成正文上方一条横条</figcaption></figure>
+  <figure><img src="b-02-book.png" alt="B 稿书籍设置"><figcaption>书籍设置：左栏锚点 + 稿纸；危险区在内容流里</figcaption></figure>
+  <figure><img src="b-03-characters.png" alt="B 稿本书角色"><figcaption>本书角色：空态（引导卡）</figcaption></figure>
+  <figure><img src="b-04-entries-light.png" alt="B 稿白天"><figcaption>白天主题</figcaption></figure>
+  <figure><img src="b-05-narrow.png" alt="B 稿窄屏"><figcaption>窄屏 1180×820</figcaption></figure>
+</div>
+
+</body>
+</html>

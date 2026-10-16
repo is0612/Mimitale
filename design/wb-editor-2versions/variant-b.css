@@ -1,0 +1,178 @@
+/* ==========================================================================
+   B 稿「书籍工作台」
+   主张：一条条目 / 一项设置 / 一个角色，本质是同一本书的三个面 ——
+         所以三屏共用一副骨架：**书级主控头（96）常驻 + 左目录（260）贯穿三屏**。
+         切分区只换「左边清单」和「右边内容」，不动骨架。
+         条目的属性不再占一栏，改成正文上方一条**横向属性条**（一眼看全）。
+
+   垂直预算（1440×900）：页头 56 + 书籍头 96 = 152 → 内容 748
+   横向预算：260 | minmax(0,1fr)，右栏文字列 max-width 680 ≈ 46 字/行
+   （比 A 稿的 640 稍宽，换来的是书籍头始终可见、三屏骨架一致）
+   ========================================================================== */
+
+/* ------------------------------- 书籍主控头 ------------------------------- */
+
+.b-bookhead {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+  height: 96px;
+  padding: 12px 24px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+
+.b-cover {
+  flex: none;
+  width: 48px;
+  height: 72px;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.b-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+.b-id { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.b-id-top { display: flex; align-items: center; gap: 8px; }
+.b-bookname { margin: 0; font-size: var(--fs-lg); font-weight: 600; white-space: nowrap; }
+.b-id-note { font-size: var(--fs-xs); color: var(--text-faint); }
+
+.b-head-acts { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+/* ------------------------------- 左目录（贯穿三屏） ------------------------------- */
+
+.b-work { display: grid; grid-template-columns: 304px minmax(0, 1fr); flex: 1; min-height: 0; }
+
+.b-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 14px 16px 0;
+  background: var(--bg-side);
+  border-right: 1px solid var(--border);
+}
+
+/* 分区目录：三行固定，哪一屏都在同一位置 */
+.b-sections { display: flex; flex-direction: column; gap: 2px; flex: none; }
+
+.b-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.b-section svg { width: 16px; height: 16px; flex: none; }
+.b-section .n { margin-left: auto; font-size: var(--fs-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.b-section:hover { color: var(--text); background: var(--bg-elev); }
+.b-section[aria-current='true'] { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.b-section[aria-current='true'] .n { color: var(--accent); }
+
+.b-rail-sep { flex: none; height: 1px; background: var(--border-soft); }
+.b-rail-scroll { flex: 1; min-height: 0; margin: 0 -8px; padding: 0 8px 14px; }
+
+/* 设置屏 / 角色屏的锚点列表 */
+.b-anchor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.b-anchor:hover { color: var(--text); background: var(--bg-elev); }
+.b-anchor[aria-current='true'] { color: var(--accent); background: var(--accent-soft); }
+
+/* ------------------------------- 右内容 ------------------------------- */
+
+.b-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; padding: 16px 24px 24px; }
+.b-measure { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 680px; min-height: 0; margin: 0 auto; }
+
+/* 横向属性条：一条目 / 一设置的全部开关与数字，一行放完。
+   和下面的稿纸同宽同轴 —— 两块的左右边缘必须对齐，不然「条」会显得飘。 */
+.b-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.b-strip .switch { padding: 0; }
+.b-strip .switch + .switch { border-top: 0; }
+.b-strip .switch-track { margin-top: 0; }
+.b-strip .switch-name { white-space: nowrap; }
+
+.b-strip-sep { width: 1px; height: 20px; background: var(--border); }
+
+.b-strip-num { display: flex; align-items: center; gap: 6px; }
+.b-strip-num input { width: 72px; padding: 4px 8px; }
+.b-strip-num span { font-size: var(--fs-xs); color: var(--text-faint); white-space: nowrap; }
+
+.b-strip-tail { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+/* 标识卡：名称 + 关键词并排 */
+.b-ident { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 12px; }
+
+/* 设置屏：封面 + 书名 同一张卡 */
+.b-cover-row { display: flex; gap: 16px; align-items: flex-start; }
+.b-cover-big {
+  flex: none;
+  width: 96px;
+  aspect-ratio: 2 / 3;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  background: var(--bg-input);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.b-cover-big img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.b-cover-fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
+
+/* 角色屏 */
+.b-char-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.b-char-bar .hint { margin-left: auto; font-size: var(--fs-xs); color: var(--text-faint); }
+
+@media (max-width: 1100px) {
+  .b-work { grid-template-columns: 220px minmax(0, 1fr); }
+  .b-bookhead { height: auto; flex-wrap: wrap; gap: 12px; padding: 12px; }
+  .b-head-acts { margin-left: 0; }
+}

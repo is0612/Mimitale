@@ -1,0 +1,157 @@
+/* ==========================================================================
+   A 稿「条目工作台」
+   主张：一天里九成时间在写条目，所以给条目一台三栏工具 —— 列表 / 正文 / 属性。
+         书本身很少改，于是它退成一条 64px 的信息条 + 两个二级页。
+         条目 / 书籍设置 / 本书角色 三屏各用各自最合适的结构（三栏 / 两栏 / 卡片网格）。
+
+   垂直预算（1440×900）：页头 56 + 书籍条 64 + 分区标签 44 = 164
+                        （现状 78 + 100 + 47 = 225，省 61px 全给正文）
+   横向预算：条目屏 320 | minmax(0,1fr) | 248 → 正文 608 ≈ 43 字/行
+   ========================================================================== */
+
+/* ------------------------------- 书籍条 ------------------------------- */
+
+.a-bookbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: 64px;
+  padding: 10px 24px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+
+.a-cover {
+  flex: none;
+  width: 28px;
+  height: 42px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.a-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.a-cover-glyph { display: flex; align-items: center; justify-content: center; height: 100%; font-size: var(--fs-xs); color: var(--text-faint); }
+
+.a-bookname { margin: 0; font-size: var(--fs-md); font-weight: 600; white-space: nowrap; }
+.a-book-sub { font-size: var(--fs-xs); color: var(--text-faint); white-space: nowrap; }
+.a-bookbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+/* ------------------------------- 分区标签 ------------------------------- */
+
+.a-tabs {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  gap: 24px;
+  height: 44px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.a-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.a-tab .n { font-size: var(--fs-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.a-tab:hover { color: var(--text); }
+.a-tab[aria-selected='true'] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.a-tab[aria-selected='true'] .n { color: var(--accent); }
+
+/* ------------------------------- 屏 1 · 条目（三栏） ------------------------------- */
+
+.a-work {
+  display: grid;
+  grid-template-columns: 336px minmax(0, 1fr) 248px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 左：条目列表 */
+.a-list { display: flex; flex-direction: column; gap: 10px; min-height: 0; padding: 14px 16px 0; background: var(--bg-side); border-right: 1px solid var(--border); }
+.a-list .entry-search { flex: none; }
+.a-list-scroll { flex: 1; min-height: 0; margin: 0 -8px; padding: 0 8px 14px; }
+
+/* 中：正文 —— 收进舒适阅读宽度，两侧留白 */
+.a-doc { min-width: 0; padding: 16px 24px 24px; }
+.a-measure { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 640px; margin: 0 auto; }
+
+/* 标识：名称 + 关键词并排 —— 这两个是「这条怎么被认出来」，不是正文 */
+.a-ident { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 12px; }
+
+/* 右：本条目属性 */
+.a-aside { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 14px 16px 16px; background: var(--bg-side); border-left: 1px solid var(--border); }
+.a-aside-card { padding: 12px; background: var(--bg-card); border: 1px solid var(--border-soft); border-radius: var(--radius); }
+.a-aside-card h3 { margin: 0 0 8px; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
+.a-predict { margin: 0; font-size: var(--fs-xs); color: var(--text-faint); }
+
+/* ------------------------------- 屏 2 · 书籍设置（两栏） ------------------------------- */
+
+.a-set { display: grid; grid-template-columns: minmax(0, 1fr) 320px; flex: 1; min-height: 0; }
+.a-set-main { min-width: 0; padding: 16px 24px 24px; }
+.a-set-aside { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 16px; background: var(--bg-side); border-left: 1px solid var(--border); }
+.a-set-aside .danger-zone { margin-top: auto; }
+
+.a-cover-cell { display: flex; gap: 12px; align-items: flex-start; }
+.a-cover-big {
+  flex: none;
+  width: 96px;
+  aspect-ratio: 2 / 3;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  background: var(--bg-input);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.a-cover-big img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.a-cover-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+/* ------------------------------- 屏 3 · 本书角色（卡片网格） ------------------------------- */
+
+.a-chars { flex: 1; min-height: 0; padding: 16px 24px 24px; }
+.a-chars-inner { display: flex; flex-direction: column; gap: 12px; max-width: 1100px; }
+.a-chars-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.a-chars-bar .hint { margin-left: auto; font-size: var(--fs-xs); color: var(--text-faint); }
+
+/* ------------------------------- 窄屏：右栏折到下面横排 ------------------------------- */
+/* 1180 窗宽下（侧栏 224）：「列表固定 + 正文舒适宽 + 属性固定」三者不可能同时满足 ——
+   正文会被挤到 22 字/行。与其把三栏等比压小，不如让**属性栏从右边折到下面**、
+   横排成一条：正文拿回舒适宽度，属性也没有被藏掉。 */
+@media (max-width: 1280px) {
+  .a-work {
+    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-areas: 'list doc' 'aside aside';
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .a-list { grid-area: list; }
+  .a-doc { grid-area: doc; }
+  .a-aside {
+    grid-area: aside;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+  .a-aside-card { flex: 1 0 240px; }
+  .a-ident { grid-template-columns: minmax(0, 1fr); }
+}

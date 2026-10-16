@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="zh-CN" data-accent="amber" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>如我所书 · 编辑世界书页两版方案</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="variant-a.css">
+<link rel="stylesheet" href="variant-b.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="app-nav">
+    <div class="brand">
+      <img src="assets/brand-logo.png" alt="">
+      <span class="brand-name">如我所书<small>MIMITALE</small></span>
+    </div>
+    <button type="button" class="new-convo">＋ <span>开启新篇章</span></button>
+    <div class="space-label">创作空间</div>
+    <nav aria-label="主导航">
+      <button type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-1.5a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V20"/><circle cx="9" cy="7" r="3.5"/><path d="M22 20v-1.5a4 4 0 0 0-3-3.87"/><path d="M16 3.6a4 4 0 0 1 0 7.8"/></svg><span>角色库</span></button>
+      <button type="button" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10.5 5 8.5 4.5 4 4.5v13c4.5 0 6.5.5 8 2 1.5-1.5 3.5-2 8-2v-13c-4.5 0-6.5.5-8 2Z"/><path d="M12 6.5v13"/></svg><span>世界书</span></button>
+      <button type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/></svg><span>预设</span></button>
+      <button type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg><span>设置</span></button>
+    </nav>
+    <div class="nav-foot"><span class="dot"></span><span>本地工作空间</span></div>
+  </aside>
+
+  <main class="stage">
+
+    <!-- ================================================================
+         A 稿「条目工作台」
+         ================================================================ -->
+
+    <!-- ---------------- A · 屏 1：条目（三栏） ---------------- -->
+    <section class="view" id="view-a-entries" aria-label="编辑世界书 · A 稿 条目">
+      <header class="page-head">
+        <div class="head-left">
+          <p class="crumb">世界书 <span>/</span> 阿多利翁</p>
+          <h1 class="page-title">编辑世界书<span class="title-variant">A 稿 · 条目工作台</span></h1>
+        </div>
+        <div class="head-right">
+          <span class="metric-inline" id="a-metric">全文 2 506 字</span>
+          <span class="save-state" data-state="saved">所有更改已保存</span>
+          <button type="button" class="btn btn-ghost btn-sm">返回</button>
+          <button type="button" class="btn btn-primary btn-sm">保存世界书</button>
+        </div>
+      </header>
+
+      <div class="a-bookbar">
+        <button type="button" class="a-cover" title="换封面"><img src="assets/forest.jpg" alt=""></button>
+        <h2 class="a-bookname">阿多利翁</h2>
+        <span class="a-book-sub">51 条 · 51 启用 · 12 常驻 · 3 角色</span>
+        <div class="a-bookbar-right">
+          <button type="button" class="btn btn-ghost btn-sm">预览命中</button>
+          <button type="button" class="btn btn-ghost btn-sm">导出</button>
+        </div>
+      </div>
+
+      <nav class="a-tabs" aria-label="世界书分区">
+        <button type="button" class="a-tab" data-sec="entries" aria-selected="true">条目 <span class="n">51</span></button>
+        <button type="button" class="a-tab" data-sec="book">书籍设置</button>
+        <button type="button" class="a-tab" data-sec="chars">本书角色 <span class="n">3</span></button>
+      </nav>
+
+      <div class="a-work">
+        <aside class="a-list">
+          <div class="entry-search">
+            <input type="search" placeholder="搜索条目">
+            <select aria-label="条目状态筛选">
+              <option>全部</option><option>已启用</option><option>已停用</option><option>常驻</option>
+            </select>
+          </div>
+          <p class="side-title">条目 <span class="count">51 条 · 全部启用</span></p>
+          <div class="a-list-scroll scroll-v" id="a-entry-list"><!-- mock.js 铺 51 行 --></div>
+        </aside>
+
+        <main class="a-doc scroll-v">
+          <div class="a-measure">
+            <section class="sheet">
+              <div class="sheet-head">
+                <span class="sheet-no">1</span>
+                <h2 class="sheet-name">这条怎么被认出来</h2>
+                <span class="sheet-count">关键词 3 个</span>
+              </div>
+              <div class="sheet-body a-ident">
+                <label class="field">
+                  <span class="field-label">条目名称</span>
+                  <input type="text" value="阿多利翁">
+                </label>
+                <label class="field">
+                  <span class="field-label">关键词（任一命中就注入，用 / 分隔）</span>
+                  <input type="text" value="阿多利翁 / Adolion / adolion">
+                </label>
+              </div>
+            </section>
+
+            <section class="sheet sheet-lead">
+              <div class="sheet-head">
+                <span class="sheet-no">2</span>
+                <h2 class="sheet-name">内容</h2>
+                <span class="sheet-kind">纯文本</span>
+                <span class="sheet-count">51 字</span>
+              </div>
+              <textarea class="sheet-input" rows="9" spellcheck="false">阿多利翁是一个大型奇幻世界，包含精灵、恶魔、人类、矮人、哥布林等多种种族。拥有中世纪科技、魔法和怪物。</textarea>
+              <details class="fold">
+                <summary>这一栏怎么写</summary>
+                <div class="fold-body">
+                  <p>一段话把这个世界「是什么」立住：地理尺度 → 有谁 → 技术/魔法的边界在哪。写具体的名词（<code>阿多利翁</code>、<code>星辉历</code>），模型才接得住。</p>
+                  <p>别在这里写剧情，剧情属于条目之间的组合 —— 那部分交给「附加条件」和顺序。</p>
+                </div>
+              </details>
+            </section>
+          </div>
+        </main>
+
+        <aside class="a-aside">
+          <div class="a-aside-card">
+            <h3>这条什么时候生效</h3>
+            <div class="switch" data-on="true">
+              <span class="switch-track"><i></i></span>
+              <span class="switch-text"><span class="switch-name">启用</span></span>
+            </div>
+            <div class="switch" data-on="true">
+              <span class="switch-track"><i></i></span>
+              <span class="switch-text"><span class="switch-name">常驻</span><p class="switch-note">每轮都注入，不等关键词</p></span>
+            </div>
+            <div class="switch" data-on="false">
+              <span class="switch-track"><i></i></span>
+              <span class="switch-text"><span class="switch-name">递归</span><p class="switch-note">命中后再扫一遍别的条目</p></span>
+            </div>
+          </div>
+
+          <div class="a-aside-card">
+            <h3>插在哪 · 多大概率</h3>
+            <div class="num-row"><input type="number" value="100"><span class="num-unit">顺序，小的先插</span></div>
+            <div class="num-row"><input type="number" value="100"><span class="num-unit">% 命中概率</span></div>
+            <label class="field" style="margin-top:10px">
+              <span class="field-label">附加条件</span>
+              <input type="text" placeholder="留空即无条件注入">
+            </label>
+          </div>
+
+          <div class="a-aside-card">
+            <h3>本条目</h3>
+            <dl class="facts">
+              <div><dt>字数</dt><dd>51</dd></div>
+              <div><dt>最近修改</dt><dd>9/30 17:00</dd></div>
+            </dl>
+            <p class="a-predict">只有绑了这本书的会话、且喂进去的话里出现上面任一关键词，这段才进提示词。</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ---------------- A · 屏 2：书籍设置（两栏） ---------------- -->
+    <section class="view" id="view-a-book" aria-label="编辑世界书 · A 稿 书籍设置">
+      <header class="page-head">
+        <div class="head-left">
+          <p class="crumb">世界书 <span>/</span> 阿多利翁</p>
+          <h1 class="page-title">编辑世界书<span class="title-variant">A 稿 · 条目工作台</span></h1>
+        </div>
+        <div class="head-right">
+          <span class="metric-inline">全文 2 506 字</span>
+          <span class="save-state" data-state="saved">所有更改已保存</span>
+          <button type="button" class="btn btn-ghost btn-sm">返回</button>
+          <button type="button" class="btn btn-primary btn-sm">保存世界书</button>
+        </div>
+      </header>
+
+      <div class="a-bookbar">
+        <button type="button" class="a-cover" title="换封面"><img src="assets/forest.jpg" alt=""></button>
+        <h2 class="a-bookname">阿多利翁</h2>
+        <span class="a-book-sub">51 条 · 51 启用 · 12 常驻 · 3 角色</span>
+        <div class="a-bookbar-right">
+          <button type="button" class="btn btn-ghost btn-sm">预览命中</button>
+          <button type="button" class="btn btn-ghost btn-sm">导出</button>
+        </div>
+      </div>
+
+      <nav class="a-tabs" aria-label="世界书分区">
+        <button type="button" class="a-tab" data-sec="entries">条目 <span class="n">51</span></button>
+        <button type="button" class="a-tab" data-sec="book" aria-selected="true">书籍设置</button>
+        <button type="button" class="a-tab" data-sec="chars">本书角色 <span class="n">3</span></button>
+      </nav>
+
+      <div class="a-set">
+        <main class="a-set-main scroll-v">
+          <div class="a-measure">
+            <section class="sheet">
+              <div class="sheet-head">
+                <span class="sheet-no">1</span>
+                <h2 class="sheet-name">封面与书名</h2>
+              </div>
+              <div class="sheet-body a-cover-cell">
+                <button type="button" class="a-cover-big" title="点击换封面"><img src="assets/forest.jpg" alt="封面"></button>
+                <div class="a-cover-side">
+                  <label class="field">
+                    <span class="field-label">书名</span>
+                    <input type="text" value="阿多利翁">
+                  </label>
+                  <label class="field">
+                    <span class="field-label">标签</span>
+                    <input type="text" value="奇幻, 中世纪, 高魔">
+                  </label>
+                  <span class="field-help">封面显示在世界书列表的卡片上；2:3 竖版最合适。</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="sheet sheet-lead">
+              <div class="sheet-head">
+                <span class="sheet-no">2</span>
+                <h2 class="sheet-name">开场白</h2>
+                <span class="sheet-count">96 字</span>
+              </div>
+              <textarea class="sheet-input" rows="9" spellcheck="false">你在一间靠海的旧旅店里醒来。窗外是阿多利翁常见的灰蓝色海，浪声很轻。柜台后的老人正在擦一只铜壶，见你睁眼，只说了句：「潮汐还没退，急不得。」
+
+你身上只有一把生锈的短刀。镇上的人说着你听不全懂的话，但都绕着你走。</textarea>
+              <details class="fold">
+                <summary>这一栏怎么写</summary>
+                <div class="fold-body">
+                  <p>进这个世界的第一条消息。写清三件事：<b>你在哪</b>、<b>你手上有什么</b>、<b>周围人怎么看你</b> —— 这三样齐了，第一轮不用模型替你补设定。</p>
+                  <p>留一句「急不得」这类没说完的话，比把剧情写满更容易接上。</p>
+                </div>
+              </details>
+            </section>
+          </div>
+        </main>
+
+        <aside class="a-set-aside">
+          <div class="a-aside-card">
+            <h3>本书信息</h3>
+            <dl class="facts">
+              <div><dt>条目</dt><dd>51 条 · 51 启用</dd></div>
+              <div><dt>常驻条目</dt><dd>12 条</dd></div>
+              <div><dt>本书角色</dt><dd>3 个</dd></div>
+              <div><dt>总字数</dt><dd>2 506 字</dd></div>
+              <div><dt>最后修改</dt><dd>9/30 17:00</dd></div>
+            </dl>
+          </div>
+          <div class="danger-zone">
+            <h3>删除这本书</h3>
+            <p>会连同 51 条条目和 3 个角色副本一起删掉，不可恢复。想留底先用书籍头的「导出」。</p>
+            <button type="button" class="btn btn-danger btn-sm">删除本书</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ---------------- A · 屏 3：本书角色（卡片网格） ---------------- -->
+    <section class="view" id="view-a-chars" aria-label="编辑世界书 · A 稿 本书角色">
+      <header class="page-head">
+        <div class="head-left">
+          <p class="crumb">世界书 <span>/</span> 阿多利翁</p>
+          <h1 class="page-title">编辑世界书<span class="title-variant">A 稿 · 条目工作台</span></h1>
+        </div>
+        <div class="head-right">
+          <span class="metric-inline">全文 2 506 字</span>
+          <span class="save-state" data-state="saved">所有更改已保存</span>
+          <button type="button" class="btn btn-ghost btn-sm">返回</button>
+          <button type="button" class="btn btn-primary btn-sm">保存世界书</button>
+        </div>
+      </header>
+
+      <div class="a-bookbar">
+        <button type="button" class="a-cover" title="换封面"><img src="assets/forest.jpg" alt=""></button>
+        <h2 class="a-bookname">阿多利翁</h2>
+        <span class="a-book-sub">51 条 · 51 启用 · 12 常驻 · 3 角色</span>
+        <div class="a-bookbar-right">
+          <button type="button" class="btn btn-ghost btn-sm">预览命中</button>
+          <button type="button" class="btn btn-ghost btn-sm">导出</button>
+        </div>
+      </div>
+
+      <nav class="a-tabs" aria-label="世界书分区">
+        <button type="button" class="a-tab" data-sec="entries">条目 <span class="n">51</span></button>
+        <button type="button" class="a-tab" data-sec="book">书籍设置</button>
+        <button type="button" class="a-tab" data-sec="chars" aria-selected="true">本书角色 <span class="n">3</span></button>
+      </nav>
+
+      <div class="a-chars scroll-v">
+        <div class="a-chars-inner">
+          <div class="a-chars-bar">
+            <button type="button" class="btn btn-ghost btn-sm">＋ 从角色库加入</button>
+            <button type="button" class="btn btn-ghost btn-sm">AI 生成</button>
+            <button type="button" class="btn btn-ghost btn-sm">＋ 新建</button>
+            <button type="button" class="btn btn-ghost btn-sm">同步属性</button>
+            <span class="hint">3 个角色 · 副本只属于这本书，改它不动角色库</span>
+          </div>
+
+          <div class="char-grid">
+            <article class="char-card">
+              <img src="assets/portrait.jpg" alt="">
+              <div class="char-body">
+                <h3 class="char-name">卡莎 <span class="local-tag">本书副本</span></h3>
+                <p class="char-line">22 岁雇佣兵信使，只有一把生锈的短刀。在阿多利翁替人送那些没人愿意送的信。</p>
+                <div class="char-acts">
+                  <button type="button" class="btn btn-ghost btn-sm">编辑</button>
+                  <button type="button" class="btn btn-ghost btn-sm">移出本书</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="char-card">
+              <img src="assets/portrait.jpg" alt="">
+              <div class="char-body">
+                <h3 class="char-name">杜兰 <span class="local-tag">本书副本</span></h3>
+                <p class="char-line">白鸦港的老铁匠。认识所有来修刀的人，但从不问刀是哪来的。</p>
+                <div class="char-acts">
+                  <button type="button" class="btn btn-ghost btn-sm">编辑</button>
+                  <button type="button" class="btn btn-ghost btn-sm">移出本书</button>
+                </div>
+              </div>
+            </article>
+
+            <article class="char-card">
+              <img src="assets/portrait.jpg" alt="">
+              <div class="char-body">
+                <h3 class="char-name">薇拉 <span class="local-tag">本书副本</span></h3>
+                <p class="char-line">圣盾城的守夜人。值夜班的时候会把火神教的祷词念错，没人纠正她。</p>
+                <div class="char-acts">
+                  <button type="button" class="btn btn-ghost btn-sm">编辑</button>
+                  <button type="button" class="btn btn-ghost btn-sm">移出本书</button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         B 稿「书籍工作台」
+         ================================================================ -->
+
+    <!-- ---------------- B · 屏 1：条目（左目录贯穿 + 横向属性条） ---------------- -->
+    <section class="view" id="view-b-entries" aria-label="编辑世界书 · B 稿 条目">
+      <header class="page-head">
+        <div class="head-left">
+          <p class="crumb">世界书 <span>/</span> 阿多利翁 <span>/</span> 条目</p>
+          <h1 class="page-title">编辑世界书<span class="title-variant">B 稿 · 书籍工作台</span></h1>
+        </div>
+        <div class="head-right">
+          <span class="save-state" data-state="saved">所有更改已保存</span>
+          <button type="button" class="btn btn-ghost btn-sm">返回</button>
+          <button type="button" class="btn btn-primary btn-sm">保存世界书</button>
+        </div>
+      </header>
+
+      <div class="b-bookhead">
+        <button type="button" class="b-cover" title="换封面"><img src="assets/forest.jpg" alt=""></button>
+        <div class="b-id">
+          <div class="b-id-top">
+            <h2 class="b-bookname">阿多利翁</h2>
+            <button type="button" class="btn-icon" aria-label="改书名">改名</button>
+          </div>
+          <div class="chip-row">
+            <span class="chip">51 条条目</span>
+            <span class="chip">51 启用</span>
+            <span class="chip">12 常驻</span>
+            <span class="chip">3 角色</span>
+            <span class="chip chip-mute">2 506 字</span>
+          </div>
+        </div>
+        <div class="b-head-acts">
+          <button type="button" class="btn btn-ghost btn-sm">预览命中</button>
+          <button type="button" class="btn btn-ghost btn-sm">导出</button>
+          <button type="button" class="btn btn-danger btn-sm">删除本书</button>
+        </div>
+      </div>
+
+      <div class="b-work">
+        <aside class="b-rail">
+          <nav class="b-sections" aria-label="世界书分区">
+            <button type="button" class="b-section" data-sec="entries" aria-current="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+              条目 <span class="n">51</span>
+            </button>
+            <button type="button" class="b-section" data-sec="book">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 6.5C10.5 5 8.5 4.5 4 4.5v13c4.5 0 6.5.5 8 2 1.5-1.5 3.5-2 8-2v-13c-4.5 0-6.5.5-8 2Z"/><path d="M12 6.5v13"/></svg>
+              书籍设置
+            </button>
+            <button type="button" class="b-section" data-sec="chars">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M16 20v-1.5a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V20"/><circle cx="9" cy="7" r="3.5"/><path d="M22 20v-1.5a4 4 0 0 0-3-3.87"/></svg>
+              本书角色 <span class="n">3</span>
+            </button>
+          </nav>
+
+          <div class="b-rail-sep"></div>
+
+          <div class="entry-search">
+            <input type="search" placeholder="搜索条目">
+          </div>
+
+          <div class="b-rail-scroll scroll-v" id="b-entry-list"><!-- mock.js 铺 51 行 --></div>
+        </aside>
+
+        <main class="b-main scroll-v">
+          <div class="b-strip">
+            <div class="switch" data-on="true"><span class="switch-track"><i></i></span><span class="switch-name">启用</span></div>
+            <div class="switch" data-on="true"><span class="switch-track"><i></i></span><span class="switch-name">常驻</span></div>
+            <div class="switch" data-on="false"><span class="switch-track"><i></i></span><span class="switch-name">递归</span></div>
+            <span class="b-strip-sep"></span>
+            <label class="b-strip-num"><input type="number" value="100"><span>顺序</span></label>
+            <label class="b-strip-num"><input type="number" value="100"><span>% 概率</span></label>
+            <span class="b-strip-sep"></span>
+            <label class="b-strip-num" style="flex:1;min-width:160px"><input type="text" placeholder="附加条件：留空即无条件" style="flex:1"></label>
+          </div>
+
+          <div class="b-measure">
+            <section class="sheet">
+              <div class="sheet-head">
+                <span class="sheet-no">1</span>
+                <h2 class="sheet-name">这条怎么被认出来</h2>
+                <span class="sheet-count">关键词 3 个</span>
+              </div>
+              <div class="sheet-body b-ident">
+                <label class="field">
+                  <span class="field-label">条目名称</span>
+                  <input type="text" value="阿多利翁">
+                </label>
+                <label class="field">
+                  <span class="field-label">关键词（任一命中就注入，用 / 分隔）</span>
+                  <input type="text" value="阿多利翁 / Adolion / adolion">
+                </label>
+              </div>
+            </section>
+
+            <section class="sheet sheet-lead">
+              <div class="sheet-head">
+                <span class="sheet-no">2</span>
+                <h2 class="sheet-name">内容</h2>
+                <span class="sheet-kind">纯文本</span>
+                <span class="sheet-count">51 字</span>
+              </div>
+              <textarea class="sheet-input" rows="10" spellcheck="false">阿多利翁是一个大型奇幻世界，包含精灵、恶魔、人类、矮人、哥布林等多种种族。拥有中世纪科技、魔法和怪物。</textarea>
+              <details class="fold">
+                <summary>这一栏怎么写</summary>
+                <div class="fold-body">
+                  <p>一段话把这个世界「是什么」立住：地理尺度 → 有谁 → 技术/魔法的边界在哪。写具体的名词（<code>阿多利翁</code>、<code>星辉历</code>），模型才接得住。</p>
+                </div>
+              </details>
+            </section>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <!-- ---------------- B · 屏 2：书籍设置 ---------------- -->
+    <section class="view" id="view-b-book" aria-label="编辑世界书 · B 稿 书籍设置">
+      <header class="page-head">
+        <div class="head-left">
+          <p class="crumb">世界书 <span>/</span> 阿多利翁 <span>/</span> 书籍设置</p>
+          <h1 class="page-title">编辑世界书<span class="title-variant">B 稿 · 书籍工作台</span></h1>
+        </div>
+        <div class="head-right">
+          <span class="save-state" data-state="saved">所有更改已保存</span>
+          <button type="button" class="btn btn-ghost btn-sm">返回</button>
+          <button type="button" class="btn btn-primary btn-sm">保存世界书</button>
+        </div>
+      </header>
+
+      <div class="b-bookhead">
+        <button type="button" class="b-cover" title="换封面"><img src="assets/forest.jpg" alt=""></button>
+        <div class="b-id">
+          <div class="b-id-top">
+            <h2 class="b-bookname">阿多利翁</h2>
+            <button type="button" class="btn-icon" aria-label="改书名">改名</button>
+          </div>
+          <div class="chip-row">
+            <span class="chip">51 条条目</span>
+            <span class="chip">51 启用</span>
+            <span class="chip">12 常驻</span>
+            <span class="chip">3 角色</span>
+            <span class="chip chip-mute">2 506 字</span>
+          </div>
+        </div>
+        <div class="b-head-acts">
+          <button type="button" class="btn btn-ghost btn-sm">预览命中</button>
+          <button type="button" class="btn btn-ghost btn-sm">导出</button>
+          <button type="button" class="btn btn-danger btn-sm">删除本书</button>
+        </div>
+      </div>
+
+      <div class="b-work">
+        <aside class="b-rail">
+          <nav class="b-sections" aria-label="世界书分区">
+            <button type="button" class="b-section" data-sec="entries">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+              条目 <span class="n">51</span>
+            </button>
+            <button type="button" class="b-section" data-sec="book" aria-current="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 6.5C10.5 5 8.5 4.5 4 4.5v13c4.5 0 6.5.5 8 2 1.5-1.5 3.5-2 8-2v-13c-4.5 0-6.5.5-8 2Z"/><path d="M12 6.5v13"/></svg>
+              书籍设置
+            </button>
+            <button type="button" class="b-section" data-sec="chars">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M16 20v-1.5a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V20"/><circle cx="9" cy="7" r="3.5"/><path d="M22 20v-1.5a4 4 0 0 0-3-3.87"/></svg>
+              本书角色 <span class="n">3</span>
+            </button>
+          </nav>
+
+          <div class="b-rail-sep"></div>
+
+          <p class="side-title">本书设置</p>
+          <div class="b-rail-scroll">
+            <div class="entry-list">
+              <button type="button" class="b-anchor" aria-current="true">封面与书名</button>
+              <button type="button" class="b-anchor">开场白</button>
+              <button type="button" class="b-anchor">高级选项</button>
+              <button type="button" class="b-anchor">删除这本书</button>
+            </div>
+          </div>
+        </aside>
+
+        <main class="b-main scroll-v">
+          <div class="b-measure">
+            <section class="sheet">
+              <div class="sheet-head">
+                <span class="sheet-no">1</span>
+                <h2 class="sheet-name">封面与书名</h2>
+              </div>
+              <div class="sheet-body b-cover-row">
+                <button type="button" class="b-cover-big" title="点击换封面"><img src="assets/forest.jpg" alt="封面"></button>
+                <div class="b-cover-fields">
+                  <label class="field">
+                    <span class="field-label">书名</span>
+                    <input type="text" value="阿多利翁">
+                  </label>
+                  <label class="field">
+                    <span class="field-label">标签</span>
+                    <input type="text" value="奇幻, 中世纪, 高魔">
+                  </label>
+                  <span class="field-help">封面显示在世界书列表的卡片上；2:3 竖版最合适。</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="sheet sheet-lead">
+              <div class="sheet-head">
+                <span class="sheet-no">2</span>
+                <h2 class="sheet-name">开场白</h2>
+                <span class="sheet-count">96 字</span>
+              </div>
+              <textarea class="sheet-input" rows="8" spellcheck="false">你在一间靠海的旧旅店里醒来。窗外是阿多利翁常见的灰蓝色海，浪声很轻。柜台后的老人正在擦一只铜壶，见你睁眼，只说了句：「潮汐还没退，急不得。」
+
+你身上只有一把生锈的短刀。镇上的人说着你听不全懂的话，但都绕着你走。</textarea>
+              <details class="fold">
+                <summary>这一栏怎么写</summary>
+                <div class="fold-body">
+                  <p>进这个世界的第一条消息。写清三件事：<b>你在哪</b>、<b>你手上有什么</b>、<b>周围人怎么看你</b>。</p>
+                </div>
+              </details>
+            </section>
+
+            <div class="danger-zone">
+              <h3>删除这本书</h3>
+              <p>会连同 51 条条目和 3 个角色副本一起删掉，不可恢复。想留底先用上面的「导出」。</p>
+              <button type="button" class="btn btn-danger btn-sm">删除本书</button>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <!-- ---------------- B · 屏 3：本书角色（空态） ---------------- -->
+    <section class="view" id="view-b-chars" aria-label="编辑世界书 · B 稿 本书角色">
+      <header class="page-head">
+        <div class="head-left">
+          <p class="crumb">世界书 <span>/</span> 阿多利翁 <span>/</span> 本书角色</p>
+          <h1 class="page-title">编辑世界书<span class="title-variant">B 稿 · 书籍工作台</span></h1>
+        </div>
+        <div class="head-right">
+          <span class="save-state" data-state="saved">所有更改已保存</span>
+          <button type="button" class="btn btn-ghost btn-sm">返回</button>
+          <button type="button" class="btn btn-primary btn-sm">保存世界书</button>
+        </div>
+      </header>
+
+      <div class="b-bookhead">
+        <button type="button" class="b-cover" title="换封面"><img src="assets/forest.jpg" alt=""></button>
+        <div class="b-id">
+          <div class="b-id-top">
+            <h2 class="b-bookname">阿多利翁</h2>
+            <button type="button" class="btn-icon" aria-label="改书名">改名</button>
+          </div>
+          <div class="chip-row">
+            <span class="chip">51 条条目</span>
+            <span class="chip">51 启用</span>
+            <span class="chip">12 常驻</span>
+            <span class="chip chip-mute">0 角色</span>
+            <span class="chip chip-mute">2 506 字</span>
+          </div>
+        </div>
+        <div class="b-head-acts">
+          <button type="button" class="btn btn-ghost btn-sm">预览命中</button>
+          <button type="button" class="btn btn-ghost btn-sm">导出</button>
+          <button type="button" class="btn btn-danger btn-sm">删除本书</button>
+        </div>
+      </div>
+
+      <div class="b-work">
+        <aside class="b-rail">
+          <nav class="b-sections" aria-label="世界书分区">
+            <button type="button" class="b-section" data-sec="entries">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+              条目 <span class="n">51</span>
+            </button>
+            <button type="button" class="b-section" data-sec="book">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 6.5C10.5 5 8.5 4.5 4 4.5v13c4.5 0 6.5.5 8 2 1.5-1.5 3.5-2 8-2v-13c-4.5 0-6.5.5-8 2Z"/><path d="M12 6.5v13"/></svg>
+              书籍设置
+            </button>
+            <button type="button" class="b-section" data-sec="chars" aria-current="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M16 20v-1.5a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V20"/><circle cx="9" cy="7" r="3.5"/><path d="M22 20v-1.5a4 4 0 0 0-3-3.87"/></svg>
+              本书角色 <span class="n">0</span>
+            </button>
+          </nav>
+
+          <div class="b-rail-sep"></div>
+
+          <p class="side-title">本书角色 <span class="count">0 个</span></p>
+          <div class="b-rail-scroll">
+            <p class="field-help">还没有角色。从角色库复制一个进来，或直接新建一个只属于这本书的。</p>
+          </div>
+        </aside>
+
+        <main class="b-main scroll-v">
+          <div class="b-measure">
+            <div class="b-char-bar">
+              <button type="button" class="btn btn-ghost btn-sm">＋ 从角色库加入</button>
+              <button type="button" class="btn btn-ghost btn-sm">AI 生成</button>
+              <button type="button" class="btn btn-ghost btn-sm">＋ 新建</button>
+              <button type="button" class="btn btn-ghost btn-sm">同步属性</button>
+            </div>
+
+            <div class="empty-card">
+              <h3>这本书还没有角色</h3>
+              <p>世界书里的角色只在绑定了这本书的会话里出现，和角色库相互独立 —— 在这里改，不会动到角色库里的原卡。</p>
+              <div class="empty-acts">
+                <button type="button" class="btn btn-primary btn-sm">从角色库加入</button>
+                <button type="button" class="btn btn-ghost btn-sm">新建一个</button>
+              </div>
+              <span class="hint">「AI 生成」会按这本书已有的 51 条设定起一个草稿，通常比从零写快。</span>
+            </div>
+          </div>
+        </main>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="mock.js"></script>
+</body>
+</html>
