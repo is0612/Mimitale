@@ -366,7 +366,6 @@ body {
 }
 
 .convo-del:hover,
-.btn-danger,
 .mi-btn--danger > .mi-btn__control,
 .msg.error .msg-avatar,
 .char-card-del:hover,
@@ -389,27 +388,33 @@ body {
   border: none;
 }
 
-.sidebar-foot .btn {
+/* 侧栏底部入口：迁成 m-button 后，尺寸（height/min-height/min-width）归宿主，
+   文字排版（white-space/overflow/justify-content/gap/padding/font-size）和观感
+   （background/border/box-shadow）都归里层 —— 里层才是实际排图标 + 文字的 inline-flex。 */
+.sidebar-foot m-button {
   height: 36px;
+  min-height: 35px;
+  min-width: 0;
+}
+
+.sidebar-foot m-button > .mi-btn__control {
   white-space: nowrap;
   overflow: hidden;
   background: transparent;
   border: 1px solid transparent;
   box-shadow: none;
-  min-width: 0;
   justify-content: flex-start;
   gap: 8px;
-  min-height: 35px;
   padding: 8px 8px;
   font-size: var(--fs-sm);
 }
 
-.sidebar-foot .btn:hover {
+.sidebar-foot m-button > .mi-btn__control:hover {
   color: var(--text);
   background: var(--bg-item, var(--bg-card));
 }
 
-.sidebar-foot .btn svg {
+.sidebar-foot m-button .mi-btn__control svg {
   flex: 0 0 18px;
   opacity: 0.75;
   width: 16px;
@@ -426,11 +431,8 @@ body {
 }
 
 /* ------------------------------ 按钮 ------------------------------ */
-/* ⚠️ 这一段里每个选择器都挂着**两个**：`.btn` 一族是还没迁移的老页面，
-   `.mi-btn__*` 是组件（components/button.js）。这是刻意的 —— 按钮的外观
-   **只有这一份定义**，迁移期两套入口共用它；等 `.btn` 退役，把逗号左边那半删掉
-   就完事，不会留下"另一份长得差不多"的规则。 */
-.btn,
+/* 按钮外观**只有这一份定义**，全部挂在组件里层 `.mi-btn__control` 上；
+   原生 `.btn` 一族已在 2026-10-17 全部退役。 */
 .mi-btn__control {
   display: inline-flex;
   align-items: center;
@@ -450,43 +452,46 @@ body {
   position: relative;
 }
 
-.btn-block,
 .mi-btn--block > .mi-btn__control {
   width: 100%;
 }
 
-.btn-sm,
 .mi-btn--sm > .mi-btn__control {
   padding: 6px 12px;
   font-size: var(--fs-xs);
 }
 
 /* 主按钮：一层主色底 + 淡阴影，不描边（描边正是「鼓」的来源之一） */
-.btn-primary,
 .mi-btn--primary > .mi-btn__control {
   background: var(--accent);
   color: var(--on-accent);
   box-shadow: var(--shadow-sm);
 }
 
-.btn-primary:hover,
 .mi-btn--primary > .mi-btn__control:hover {
   background: var(--accent-hover);
 }
 
-.btn-primary:active,
 .mi-btn--primary > .mi-btn__control:active {
   background: var(--accent-pressed);
 }
 
-.btn-new {
-  height: 32px;
+/* 「开启新篇章」：一颗**特殊形态**的主按钮 —— 不是 primary 的实底，而是柔和底
+   （accent-soft-strong）+ 描边。它迁成 m-button 后 `btn-new` 这个专属类留在宿主上，
+   所以尺寸归宿主、观感归里层，分两条写（原来全压在同一条 `.btn-new` 上）。 */
+m-button.btn-new {
+  min-height: 42px;
+}
+
+m-button.btn-new > .mi-btn__control {
+  /* ⚠️ 原来是 height:32px + min-height:42px 压在同一颗 .btn 上 —— min-height 赢，
+     实际渲染 42px 高。拆到宿主/里层后里层不能再写死 height（显式 32px 会压过
+     宿主 stretch，按钮矮 10px，像素比对当场抓到）。里层交给 stretch 拉满宿主。 */
   padding: 0 10px;
   gap: 6px;
   border-radius: var(--radius);
   font-size: var(--fs-sm);
   font-weight: 600;
-  min-height: 42px;
   background: var(--accent-soft-strong);
   border: 1px solid var(--accent-border);
   color: var(--text);
@@ -495,21 +500,18 @@ body {
 
 /* 次级按钮：白底 + 一层淡阴影，同样不描边（设计稿里的 .ghost-btn）。
    顶栏那几颗是例外，在那里被单独压回透明 —— 它们要轻。 */
-.btn-ghost,
 .mi-btn--ghost > .mi-btn__control {
   background: var(--bg-card);
   color: var(--text-dim);
   box-shadow: var(--shadow-sm);
 }
 
-.btn-ghost:hover,
 .mi-btn--ghost > .mi-btn__control:hover {
   color: var(--accent);
   box-shadow: 0 4px 12px rgba(23, 18, 24, 0.10);
 }
 
 
-.btn-danger:hover,
 .mi-btn--danger > .mi-btn__control:hover {
   background: var(--danger-bg-hover);
   color: var(--danger-hover);
@@ -519,7 +521,6 @@ body {
    18 处曾经各写一份（.btn / .icon-btn / .preset-chip / .char-avatar …），
    合并成一条选择器列表；这些选择器各自只此一条 :focus-visible 规则，
    带 .art-edge 的头像另有「描边 + 光环」组合规则且位置更靠后，照旧覆盖。 */
-.btn:focus-visible,
 .mi-btn__control:focus-visible,
 .btn-quick:focus-visible,
 .suggest-btn:focus-visible,
@@ -542,12 +543,10 @@ body {
   box-shadow: var(--focus-ring);
 }
 
-.btn:active:not(:disabled),
 .mi-btn__control:active:not(:disabled) {
   transform: translateY(1px);
 }
 
-.btn:disabled,
 .mi-btn__control:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -558,20 +557,40 @@ body {
 /* ============================================================================
    组件库的宿主与尺寸（renderer/js/components/）
 
-   上面那半段是**皮肤**（按钮那一族和 .btn 共用）。这里只管宿主怎么摆、
-   尺寸档多大 —— 输入类的皮肤更是完全不用写：里层就是原生 input / textarea /
-   select，style.css 里那条全局控件规则已经在管它们的边框、底色、内边距、
-   聚焦环和下拉箭头了。
+   上面那半段是**皮肤**（全部落在组件里层 .mi-btn__control 上）。这里只管宿主
+   怎么摆、尺寸档多大 —— 输入类的皮肤更是完全不用写：里层就是原生 input /
+   textarea / select，style.css 里那条全局控件规则已经在管它们的边框、底色、
+   内边距、聚焦环和下拉箭头了。
 
    一句总结这套组件的分工：
      宿主 = 布局盒 + 类名 + 属性转发     里层原生控件 = 外观 + 键盘 + 原生事件
    ============================================================================ */
 
-/* m-button：宿主 stretch 让里层填满，于是它在原先放 .btn 的位置上行为一致
-   （flex 容器里它就是一个 flex item，`.row .btn` 那类布局规则照旧落在里层上） */
+/* m-button：宿主 stretch 让里层竖向填满，于是它在原先放 .btn 的位置上行为一致
+   （flex 容器里它就是一个 flex item，`.row m-button` 那类布局规则照旧落在宿主上） */
 m-button {
   display: inline-flex;
   align-items: stretch;
+}
+
+/* ⚠️ 里层还得**横向**跟着宿主撑满 —— `align-items: stretch` 只管纵向，
+   横向的 `flex: 0 1 auto`（默认）会让里层缩成「文字那么宽」。
+   宿主宽度是父容器给的时候看不出问题（比如页头那几颗：宿主 = 内容 = 里层），
+   但宿主被父容器**抻开**时就露馅了：角色库卡片的动作行是 `flex: 1 1 0` 平分两格，
+   宿主 96px、里层只有 50px —— 按钮看着比槽位短一截、字还靠左，而且不报错。
+   2026-10-16 迁移角色库页时量出来的（宿主 96 / 里层 50）。
+   `flex: 1 1 auto` 而不是 `width: 100%`：宿主自然宽度时 basis 就是内容宽，
+   没有多余空间可长，所以页头那几颗的数字一个都不变。 */
+m-button > .mi-btn__control {
+  flex: 1 1 auto;
+}
+
+/* 组件 render() 会无条件塞一颗 <span class="mi-btn__label"> 进里层；文字在
+   .foot-label 这类自有结构里的按钮（侧栏入口），宿主没有裸文本 → 这颗 label
+   是空的。它宽 0 但仍是一个 flex item，占掉一个 gap 槽（侧栏入口因此少了
+   8px，像素比对抓到的）。空的不许参与布局；setLabel 填进文字后自动回来。 */
+.mi-btn__label:empty {
+  display: none;
 }
 
 m-button[block] {
@@ -794,33 +813,17 @@ m-textarea > .mi-textarea__control {
   gap: 8px;
 }
 
-.topbar-actions .btn-ghost:not(.topbar-icon) {
-  background: transparent;
-  box-shadow: none;
-}
-
-.topbar-actions .btn-ghost:not(.topbar-icon):hover,
 .menu-pop .menu-item:hover,
 .model-menu .model-menu-item:hover,
 .btn-quick:hover,
 .btn-quick[aria-expanded='true'],
-.char-card-actions .btn-ghost:hover,
+.char-card-actions .mi-btn--ghost > .mi-btn__control:hover,
 .attr-row .attr-more-btn.on,
 .char-expr-default.is-on,
 .sc-edit:hover,
-.wb-card-actions .btn-ghost:hover {
+.wb-card-actions .mi-btn--ghost > .mi-btn__control:hover {
   background: var(--accent-soft);
   color: var(--accent);
-}
-
-/* 顶栏按钮里的图标（外观的调色盘 / 视角的眼睛）：跟着文字走，
-   和字之间留 5px（.btn 是 inline-flex，不给 margin 图标会贴着第一个字）。 */
-.topbar-actions .btn > svg {
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
-  margin-right: 6px;
-  opacity: 0.85;
 }
 
 /* ------------------------------ 顶栏「⋯」菜单 ------------------------------ */
@@ -2035,9 +2038,12 @@ m-textarea > .mi-textarea__control {
 
 /* 发送键：独立一颗胶囊，贴输入框底对齐（输入框长到三四行时不会浮到中间）。
    留着「发送」两个字没换成箭头 —— 中文环境里这两个字比一个图标好认。 */
-.btn-send {
+m-button.btn-send {
   flex: 0 0 auto;
   align-self: flex-end;
+}
+
+m-button.btn-send > .mi-btn__control {
   height: 40px;
   padding: 0 22px;
   border-radius: 999px;
@@ -3179,15 +3185,21 @@ m-textarea > .mi-textarea__control {
   width: 100%;
 }
 
-.char-card-actions .btn,
-.wb-card-actions .btn {
+/* ⚠️ `flex` 基准挂在**宿主**上（宿主就是 .char-card-actions 那个 flex 行里的 item），
+   不是里层那颗 —— 写 `> .mi-btn__control` 会完全不起作用（里层不是 flex item）。
+   角色库页和世界书页的卡都已全迁到 m-button，原生 `.btn` 半边已删。 */
+.char-card-actions m-button,
+.wb-card-actions m-button {
   flex: 1 1 0;
 }
 
 /* 卡片本身就是白的，次级按钮再来一层「白底 + 阴影」会糊成一块 ——
-   这里压回透明，和顶栏那几颗同一个道理（设计稿的 .kfoot button 也是纯文字）。 */
-.char-card-actions .btn-ghost,
-.wb-card-actions .btn-ghost {
+   这里压回透明，和顶栏那几颗同一个道理（设计稿的 .kfoot button 也是纯文字）。
+   ⚠️ 这条是**里层观感**，所以必须写到 `> .mi-btn__control` 上（宿主上写 background 没用：
+   发光的是里层那颗原生 button）。选择器权重与 `.mi-btn--ghost > .mi-btn__control:hover`
+   持平、位置更靠后，行为和老 `.btn-ghost` 那版严格一致（悬停阴影同样被压掉）。 */
+.char-card-actions .mi-btn--ghost > .mi-btn__control,
+.wb-card-actions .mi-btn--ghost > .mi-btn__control {
   background: transparent;
   box-shadow: none;
 }
@@ -3307,8 +3319,10 @@ m-textarea > .mi-textarea__control {
   box-shadow: var(--art-edge);
 }
 
-/* 侧边栏里表示「你正在这个页面」 */
-.sidebar .btn.active {
+/* 侧边栏里表示「你正在这个页面」。
+   ⚙ 2026-10-16 迁 m-button：高亮态落在里层 .mi-btn__control（观感归里层），
+   hover 那条在 .sidebar-foot m-button > .mi-btn__control:hover 附近。 */
+.sidebar-foot m-button.active > .mi-btn__control {
   background: var(--accent-soft);
   border-color: var(--accent-border-soft);
   color: var(--accent);
@@ -3545,7 +3559,7 @@ m-textarea > .mi-textarea__control {
   gap: 8px;
 }
 
-.crop-foot-btns .btn {
+.crop-foot-btns m-button {
   flex: 0 0 auto;
 }
 
@@ -3724,7 +3738,7 @@ m-textarea > .mi-textarea__control {
   min-width: 0;
 }
 
-.attr-group-edit .btn {
+.attr-group-edit m-button {
   flex: 0 0 auto;
 }
 
@@ -3963,7 +3977,7 @@ m-textarea > .mi-textarea__control {
   margin: 0;
 }
 
-.attr-paste-foot .btn {
+.attr-paste-foot m-button {
   flex: 0 0 auto;
 }
 
@@ -3998,10 +4012,14 @@ m-textarea > .mi-textarea__control {
   min-width: 0;
 }
 
-.char-expr-entry .btn-sm {
+/* 管理表情图那颗：flex 基准挂宿主（它是 .char-expr-entry 这行 flex 的 item），
+   内边距挂里层（观感）。font-size 不用再写 —— size="sm" 的皮肤本来就有 var(--fs-xs)。 */
+.char-expr-entry m-button {
   flex: 0 0 auto;
+}
+
+.char-expr-entry m-button > .mi-btn__control {
   padding: 4px 10px;
-  font-size: var(--fs-xs);
 }
 
 /* 文字区：角色名 / 标签 / 长文本 / 属性，纯文本，不需要额外框线 */
@@ -4179,10 +4197,9 @@ m-textarea > .mi-textarea__control {
   box-shadow: var(--art-edge), var(--focus-ring);
 }
 
-/* 有图时才显示「清除」 */
-.char-avatar-col .btn-sm {
+/* 有图时才显示「清除」（字号沿 size="sm" 皮肤的 var(--fs-xs)，这里只压内边距） */
+.char-avatar-col m-button > .mi-btn__control {
   padding: 4px 10px;
-  font-size: var(--fs-xs);
 }
 
 /* ------------------------------ 表情图弹窗 ------------------------------ */
@@ -4212,10 +4229,14 @@ m-textarea > .mi-textarea__control {
   min-width: 0;
 }
 
-.char-expr-head .btn-sm {
+.char-expr-head m-button {
   flex: 0 0 auto;
+}
+
+.char-expr-head m-button > .mi-btn__control {
+  /* 比 .mi-btn--sm 更紧凑一档：表情管理头部的按钮要小内边距才不显臃肿。
+     原是 `.char-expr-head .btn-sm` 的 padding:4px 10px，迁 m-button 后落到里层。 */
   padding: 4px 10px;
-  font-size: var(--fs-xs);
 }
 
 .char-expr-list {
@@ -4505,7 +4526,10 @@ m-textarea > .mi-textarea__control {
   align-items: stretch;
 }
 
-.row .btn {
+/* `.row` 里的按钮不伸缩、保持内容宽。m-button 默认 `display:inline-flex`，
+   作为 flex item 的基准已经接近 `0 auto`，这里显式钉死，免得将来有人给里层加
+   尺寸规则把按钮意外抻开。 */
+.row m-button {
   flex: 0 0 auto;
 }
 
@@ -4869,7 +4893,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   background: var(--accent-soft);
 }
 
-/* 按压反馈：行状可点元素按下时轻微变淡，和 .btn:active 的「下沉 1px」
+/* 按压反馈：行状可点元素按下时轻微变淡，和 .mi-btn__control:active 的「下沉 1px」
    是同一套手感语言。这些元素 hover 都有反馈，之前唯独缺按压 ——
    点下去界面是「死」的，这是前端手感里最明显的缺口。 */
 .convo-item:active {
@@ -4995,9 +5019,8 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   flex-wrap: wrap;
 }
 
-.wb-chars-actions .btn {
-  white-space: nowrap;
-}
+/* （原 `.wb-chars-actions .btn { white-space: nowrap }` 已删：
+   共用皮肤本来就在 `.mi-btn__control` 上给了 nowrap，这里再写一遍是死声明。） */
 
 .wb-char-list {
   flex-wrap: wrap;
@@ -5237,7 +5260,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   gap: 8px;
 }
 
-.wb-entry-head .btn {
+.wb-entry-head m-button {
   align-self: center;
 }
 
@@ -6518,8 +6541,9 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   resize: vertical;
 }
 
-/* 「编辑」按钮的激活态 */
-.btn.active {
+/* 「编辑」按钮的激活态（记忆摘要卡片的「取消编辑」）。
+   ⚙ 2026-10-17 迁 m-button：观感落里层 .mi-btn__control。 */
+.memory-card-actions m-button.active > .mi-btn__control {
   border-color: var(--accent-border-strong);
   color: var(--accent);
   background: var(--accent-soft);
@@ -6767,22 +6791,27 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 工具条上的按钮全是图标 —— 尺寸压到 28px，比页面上的 .icon-btn 小一档，
-   免得一条胶囊里挤得慌。图标本身的粗细由 stroke-width 控制（见 ui/icons.js）。 */
-.lightbox-bar .btn.icon-btn {
+   免得一条胶囊里挤得慌。图标本身的粗细由 stroke-width 控制（见 ui/icons.js）。
+   ⚙ 2026-10-17 lightbox.js 不再挂 `.btn btn-ghost btn-sm`（纯图标按钮不套组件），
+   原来从 ghost 底座吃到的「白底 + 淡阴影 + 文字色」搬进这条 —— 像素比对抓到过
+   「白底没了」的差异，这三行就是那个底座。 */
+.lightbox-bar .icon-btn {
   width: 28px;
   height: 28px;
   min-width: 28px;
   padding: 0;
   border-radius: var(--radius-sm);
   color: var(--text-faint);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
 }
 
-.lightbox-bar .btn.icon-btn svg {
+.lightbox-bar .icon-btn svg {
   width: 17px;
   height: 17px;
 }
 
-.lightbox-bar .btn.icon-btn:hover {
+.lightbox-bar .icon-btn:hover {
   background: var(--bg-side);
   color: var(--text);
 }
@@ -6828,7 +6857,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
     animation: none;
   }
 
-  .btn {
+  .mi-btn__control {
     transition: none;
   }
 
@@ -7541,19 +7570,22 @@ body.pad-dragging {
   flex: 0 0 34px;
 }
 
-.sidebar.collapsed .sidebar-foot .btn {
-  justify-content: center;
+.sidebar.collapsed .sidebar-foot m-button {
   width: 34px;
   height: 34px;
   min-height: 34px;
   padding: 0;
 }
 
+.sidebar.collapsed .sidebar-foot m-button > .mi-btn__control {
+  justify-content: center;
+}
+
 .sidebar.collapsed .foot-label {
   display: none;
 }
 
-.sidebar.collapsed .sidebar-foot .btn svg {
+.sidebar.collapsed .sidebar-foot m-button .mi-btn__control svg {
   opacity: 1;
   flex: 0 0 18px;
   width: 18px;
@@ -7599,8 +7631,11 @@ body.pad-dragging {
   min-height: 62px;
 }
 
-.composer-box .btn-send {
+.composer-box m-button.btn-send {
   flex: 0 0 auto;
+}
+
+.composer-box m-button.btn-send > .mi-btn__control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7666,7 +7701,7 @@ body.pad-dragging {
   margin-top: 6px;
 }
 
-.btn-new:hover {
+m-button.btn-new > .mi-btn__control:hover {
   background: var(--accent-soft-strong);
   border-color: var(--accent);
   color: var(--accent);
@@ -7854,14 +7889,13 @@ body.pad-dragging {
 }
 
 .sidebar-foot #btn-settings {
-  border-top: 1px solid var(--border);
   margin-top: 8px;
-  padding-top: 14px;
   min-height: 44px;
 }
 
-.sidebar-foot #btn-folder {
-  color: var(--text-faint);
+.sidebar-foot #btn-settings > .mi-btn__control {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
 }
 
 .story-eyebrow {
@@ -7890,6 +7924,18 @@ body.pad-dragging {
 .topbar-icon .field-icon {
   width: 18px;
   height: 18px;
+}
+
+/* 「⋯」按钮（btn-more）2026-10-16 回退成纯图标按钮（去了 .btn 族类名），
+   原来靠 `.topbar-actions .btn > svg` 吃到的 14px + margin + 85% 透明度随之失效
+   （尺寸落进了 .topbar-icon 的 18px 档，点变大变深，像素比对抓到）。
+   这里按原值补回，观感与迁移前一致。 */
+.menu-toggle .field-icon {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  opacity: 0.85;
 }
 
 .model-switch::before {
@@ -8018,9 +8064,12 @@ body.pad-dragging {
 }
 
 .sidebar.collapsed .sidebar-foot #btn-settings {
-  border: 0;
   margin: 0;
   min-height: 34px;
+}
+
+.sidebar.collapsed .sidebar-foot #btn-settings > .mi-btn__control {
+  border: 0;
   padding: 0;
 }
 
@@ -8067,6 +8116,12 @@ body.pad-dragging {
   width: 38px;
   height: 38px;
   min-height: 38px;
+}
+
+/* ⚙ 收起态只留 + 图标：font-size:0 / padding:0 / gap:0 是**观感**，必须落里层 ——
+   压在宿主上会被里层共用皮肤的 font-size: var(--fs-sm) 拦住（文字「开启新篇章」
+   整个漏出来，rail 场景像素比对抓到）。 */
+.sidebar.collapsed #btn-new > .mi-btn__control {
   padding: 0;
   gap: 0;
   font-size: 0;
@@ -8280,8 +8335,12 @@ body.pad-dragging {
   margin-bottom: 2px;
 }
 
-#view-char-editor .char-rail-foot .btn {
+/* 「导出 / 删除角色」铺满栏宽（宿主），文字靠左是里层的对齐 —— 写在宿主上没效果。 */
+#view-char-editor .char-rail-foot m-button {
   width: 100%;
+}
+
+#view-char-editor .char-rail-foot m-button > .mi-btn__control {
   justify-content: flex-start;
 }
 
@@ -8681,7 +8740,7 @@ body.pad-dragging {
   overflow: hidden;
 }
 
-#view-wb-editor .wb-entry-actions .btn {
+#view-wb-editor .wb-entry-actions m-button > .mi-btn__control {
   padding: 6px 8px;
 }
 
@@ -8956,12 +9015,18 @@ body.pad-dragging {
   flex-wrap: wrap;
 }
 
-#view-presets .preset-row-actions .btn {
+#view-presets .preset-row-actions m-button > .mi-btn__control {
   background: transparent;
   box-shadow: none;
 }
 
 #view-presets .preset-row-delete {
+  color: var(--text-faint);
+}
+
+/* 迁 m-button 后 color 得落到里层（观感长在 .mi-btn__control 上，
+   宿主上写 color 会被里层共用皮肤的字号/颜色拦掉）。 */
+#view-presets .preset-row-actions m-button.preset-row-delete > .mi-btn__control {
   color: var(--text-faint);
 }
 

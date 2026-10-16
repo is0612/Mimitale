@@ -60,10 +60,13 @@ export function openLightbox(src, { title = '' } = {}) {
 
   // 图标按钮：文案只有图标，名字（title / aria-label）由下面的函数按状态挂。
   // 图标是我们自己登在 ui/icons.js 里的静态字符串，insertAdjacentHTML 是安全的。
+  // ⚙ 2026-10-17 去掉 `.btn btn-ghost btn-sm`：这是纯图标按钮（不套组件），
+  //   `.icon-btn` 自己定义了完整底座（inline-flex/对齐/过渡/描边/内边距），
+  //   那三个 `.btn` 族类名是冗余的 —— `.btn` 退役后它们就没皮肤了。
   const iconButton = (id, icon, titleText, extraClass) => {
     const btn = h('button', {
       id,
-      class: ['btn', 'btn-ghost', 'btn-sm', 'icon-btn', extraClass].filter(Boolean),
+      class: ['icon-btn', extraClass].filter(Boolean),
       type: 'button',
       title: titleText,
       'aria-label': titleText
@@ -113,7 +116,7 @@ export function openLightbox(src, { title = '' } = {}) {
     const label = actual ? '适应窗口' : '实际大小（1:1）';
     const svg = iconHtml(icon);
     if (svg) btnFit.innerHTML = svg;
-    btnFit.className = ['btn', 'btn-ghost', 'btn-sm', 'icon-btn', actual ? 'is-fit' : 'is-actual'].join(' ');
+    btnFit.className = ['icon-btn', actual ? 'is-fit' : 'is-actual'].join(' ');
     btnFit.title = label;
     btnFit.setAttribute('aria-label', label);
   }

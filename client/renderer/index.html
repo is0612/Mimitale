@@ -20,7 +20,7 @@
         <button id="btn-sidebar-toggle" class="sidebar-toggle" data-icon="panel-left" type="button" title="收起侧栏" aria-label="收起侧栏" aria-controls="sidebar" aria-expanded="true"></button>
       </div>
 
-      <button id="btn-new" class="btn btn-primary btn-block btn-new" data-icon="plus" aria-label="创建新对话">开启新篇章</button>
+      <m-button id="btn-new" variant="primary" block class="btn-new" data-icon="plus" aria-label="创建新对话">开启新篇章</m-button>
 
       <div id="convo-cap" class="sidebar-label">最近会话</div>
       <div id="convo-list" class="convo-list" role="list"></div>
@@ -30,10 +30,10 @@
            文字直接裸在 button 里就没法单独隐藏，只能整颗 display:none。 -->
       <div class="sidebar-foot">
         <div class="sidebar-section-title">创作空间</div>
-        <button id="btn-chars" class="btn btn-ghost btn-block" data-icon="users" aria-label="打开角色库"><span class="foot-label">角色库</span></button>
-        <button id="btn-worldbooks" class="btn btn-ghost btn-block" data-icon="book-open" aria-label="打开世界书"><span class="foot-label">世界书</span></button>
-        <button id="btn-presets" class="btn btn-ghost btn-block" data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span></button>
-        <button id="btn-settings" class="btn btn-ghost btn-block" data-icon="settings" aria-label="打开设置"><span class="foot-label">设置</span></button>
+        <m-button id="btn-chars" variant="ghost" block data-icon="users" aria-label="打开角色库"><span class="foot-label">角色库</span></m-button>
+        <m-button id="btn-worldbooks" variant="ghost" block data-icon="book-open" aria-label="打开世界书"><span class="foot-label">世界书</span></m-button>
+        <m-button id="btn-presets" variant="ghost" block data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span></m-button>
+        <m-button id="btn-settings" variant="ghost" block data-icon="settings" aria-label="打开设置"><span class="foot-label">设置</span></m-button>
       </div>
 
       <!-- 收起态图标轨最下面那颗：当前会话的头像（稿子屏 2，y≈866 那个 20px 方角图）。
@@ -96,7 +96,7 @@
                   title="视角：叙述模式 / 推进节奏 / GM 模式" aria-label="打开视角设置"></button>
 
           <div class="menu-wrap">
-            <button id="btn-more" class="btn btn-ghost btn-sm menu-toggle topbar-icon" type="button"
+            <button id="btn-more" class="menu-toggle topbar-icon" type="button"
                     aria-label="更多操作" data-icon="ellipsis" aria-haspopup="menu" aria-expanded="false"></button>
             <div id="topbar-more" class="menu-pop hidden" role="menu" aria-label="更多操作">
 
@@ -109,7 +109,7 @@
               <button id="btn-clear" class="menu-item menu-item-danger" type="button" role="menuitem">清空对话</button>
             </div>
           </div>
-          <button id="btn-stop" class="btn btn-danger btn-sm hidden" aria-label="停止生成回复">停止生成</button>
+          <m-button id="btn-stop" variant="danger" size="sm" class="hidden" aria-label="停止生成回复">停止生成</m-button>
         </div>
       </header>
 
@@ -142,7 +142,7 @@
           <m-textarea id="input" rows="2" placeholder="写下你的回应，让故事继续……" aria-label="输入消息"></m-textarea>
           <div class="compose-tools">
             <span class="writing-mode">故事，由你续写</span>
-            <button id="btn-send" class="btn btn-primary btn-send" data-icon="arrow-up" title="发送回应" aria-label="发送消息"></button>
+            <m-button id="btn-send" variant="primary" class="btn-send" data-icon="arrow-up" title="发送回应" aria-label="发送消息"></m-button>
           </div>
         </div>
         <div class="composer-hint">
@@ -178,9 +178,9 @@
             <p id="chars-page-sub" class="page-sub"></p>
           </div>
           <div class="page-actions">
-            <button id="btn-import-card" class="btn btn-ghost btn-sm" type="button">导入角色卡</button>
-            <button id="btn-ai-char" class="btn btn-ghost btn-sm" type="button">AI 生成</button>
-            <button id="btn-new-char" class="btn btn-primary btn-sm" type="button">＋ 新建角色</button>
+            <m-button id="btn-import-card" variant="ghost" size="sm">导入角色卡</m-button>
+            <m-button id="btn-ai-char" variant="ghost" size="sm">AI 生成</m-button>
+            <m-button id="btn-new-char" variant="primary" size="sm">＋ 新建角色</m-button>
           </div>
         </header>
 
@@ -205,8 +205,8 @@
           </div>
           <div class="page-actions">
             <span id="char-save-state" class="save-pill" data-state="saved" hidden>所有更改已保存</span>
-            <button id="btn-close-chars" class="btn btn-ghost btn-sm" type="button" title="返回上一屏（Esc）">返回</button>
-            <button id="btn-save-char" class="btn btn-primary btn-sm" type="button">保存角色</button>
+            <m-button id="btn-close-chars" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
+            <m-button id="btn-save-char" variant="primary" size="sm">保存角色</m-button>
           </div>
         </header>
 
@@ -225,14 +225,14 @@
                     <span class="char-avatar-empty">点击上传</span>
                   </button>
                   <span class="char-media-label">头像</span>
-                  <button id="btn-clear-avatar" class="btn btn-ghost btn-sm hidden" type="button">清除</button>
+                  <m-button id="btn-clear-avatar" variant="ghost" size="sm" class="hidden">清除</m-button>
                 </div>
                 <div class="char-media-item">
                   <button id="char-portrait" class="char-portrait art-edge" type="button" title="点击上传角色形象（竖版立绘，显示在角色库列表上）" aria-label="上传角色形象">
                     <span class="char-avatar-empty">点击上传</span>
                   </button>
                   <span class="char-media-label">形象</span>
-                  <button id="btn-clear-portrait" class="btn btn-ghost btn-sm hidden" type="button">清除</button>
+                  <m-button id="btn-clear-portrait" variant="ghost" size="sm" class="hidden">清除</m-button>
                 </div>
               </div>
 
@@ -241,8 +241,8 @@
               <div class="char-expr-entry">
                 <span class="field-label" data-icon="smile">表情图</span>
                 <span id="char-expr-summary" class="field-help">还没有表情图</span>
-                <button id="btn-manage-expr" class="btn btn-ghost btn-sm" type="button"
-                        title="打开表情图管理（加 / 删 / 批量导入 / 设默认脸）">管理表情图</button>
+                <m-button id="btn-manage-expr" variant="ghost" size="sm"
+                        title="打开表情图管理（加 / 删 / 批量导入 / 设默认脸）">管理表情图</m-button>
                 <div id="char-expr-preview" class="char-expr-preview" hidden></div>
               </div>
             </div>
@@ -351,8 +351,8 @@
                    文案在 characterEditor.js 的 FIRST_MES_TEMPLATE。 -->
               <m-textarea id="c-first" rows="3" spellcheck="false" placeholder="第一句话。绑定角色时如果对话还是空的，会自动作为角色的开场消息插入。"></m-textarea>
               <div class="field-template-bar">
-                <button id="btn-first-template" class="btn btn-ghost btn-sm" type="button"
-                        title="把开场白的骨架填进输入框（已有内容会先问一句）">套用开场白模板</button>
+                <m-button id="btn-first-template" variant="ghost" size="sm"
+                        title="把开场白的骨架填进输入框（已有内容会先问一句）">套用开场白模板</m-button>
                 <span class="field-template-hint">定场 · 登场 · 留个话头</span>
               </div>
               <details class="char-fold">
@@ -388,8 +388,8 @@
               </details>
               <div id="c-alt-list" class="alt-greet-list"></div>
               <div class="field-template-bar">
-                <button id="btn-alt-add" class="btn btn-ghost btn-sm" type="button"
-                        title="加一条备选开场白">＋ 添加一条</button>
+                <m-button id="btn-alt-add" variant="ghost" size="sm"
+                        title="加一条备选开场白">＋ 添加一条</m-button>
               </div>
             </div>
 
@@ -425,8 +425,8 @@
               <!-- 官方「互动模板」：一键种入预设分组（状态栏 / 关系 / 背包）和默认字段，
                    字段可再改名 / 修改 / 删除。放在整块最上面，一眼就能看到。 -->
               <div class="attr-template-bar">
-                <button id="btn-attr-template" class="btn btn-ghost btn-sm" type="button"
-                        title="一键加进官方模板的状态栏 / 关系 / 背包分组和默认字段">套用互动模板</button>
+                <m-button id="btn-attr-template" variant="ghost" size="sm"
+                        title="一键加进官方模板的状态栏 / 关系 / 背包分组和默认字段">套用互动模板</m-button>
                 <span class="attr-template-hint">状态栏 · 关系 · 背包</span>
               </div>
 
@@ -450,8 +450,8 @@
                        组件那边用 reflectProperties 把那一段桥到里层原生 input（见 components/base.js）。 -->
                   <div class="attr-add-row">
                     <m-input id="c-attr-new" class="attr-new" size="sm" placeholder="属性名，比如 金币" aria-label="新属性名"></m-input>
-                    <button id="btn-add-attr" class="btn btn-ghost btn-sm" type="button">添加</button>
-                    <button id="btn-attr-paste" class="btn btn-ghost btn-sm" type="button" title="把一段文本一次解析成多条属性">粘贴文本</button>
+                    <m-button id="btn-add-attr" variant="ghost" size="sm">添加</m-button>
+                    <m-button id="btn-attr-paste" variant="ghost" size="sm" title="把一段文本一次解析成多条属性">粘贴文本</m-button>
                   </div>
                 </div>
               </div>
@@ -465,7 +465,7 @@
                     认「<code>金币：9900</code>」「<code>【金币】：9900</code>」「<code>金币 9900</code>」这几种写法；<br />
                     同名会覆盖值，认不出来的行自动跳过。
                   </span>
-                  <button id="btn-attr-paste-apply" class="btn btn-primary btn-sm" type="button">解析并加入</button>
+                  <m-button id="btn-attr-paste-apply" variant="primary" size="sm">解析并加入</m-button>
                 </div>
               </div>
 
@@ -519,7 +519,7 @@
             <div id="c-worldbook-box" class="char-worldbook-box">
               <div class="cwb-head">
                 <span class="field-label" data-icon="book">自带世界书</span>
-                <button id="c-wb-add-btn" class="btn btn-ghost btn-sm" type="button">＋ 绑定</button>
+                <m-button id="c-wb-add-btn" variant="ghost" size="sm">＋ 绑定</m-button>
               </div>
               <div id="c-wb-list" class="cwb-list"></div>
               <label class="check" id="c-wb-switch">
@@ -560,8 +560,8 @@
                 id 一个都不能改（characterEditor.js 直接按 id 取用）。 -->
         <div id="char-rail-foot" class="char-rail-foot">
           <span id="char-foot-hint" class="foot-hint">角色卡只保存在你自己电脑上</span>
-          <button id="btn-export-char" class="btn btn-ghost btn-sm" type="button" title="存成 PNG 卡（酒馆可直接导入）或 JSON">导出</button>
-          <button id="btn-del-char" class="btn btn-danger btn-sm" type="button">删除角色</button>
+          <m-button id="btn-export-char" variant="ghost" size="sm" title="存成 PNG 卡（酒馆可直接导入）或 JSON">导出</m-button>
+          <m-button id="btn-del-char" variant="danger" size="sm">删除角色</m-button>
         </div>
       </section>
 
@@ -573,8 +573,8 @@
             <p id="wb-page-sub" class="page-sub"></p>
           </div>
           <div class="page-actions">
-            <button id="btn-import-lorebook" class="btn btn-ghost btn-sm" type="button">导入世界书</button>
-            <button id="btn-new-worldbook" class="btn btn-primary btn-sm" type="button">＋ 新建世界书</button>
+            <m-button id="btn-import-lorebook" variant="ghost" size="sm">导入世界书</m-button>
+            <m-button id="btn-new-worldbook" variant="primary" size="sm">＋ 新建世界书</m-button>
           </div>
         </header>
 
@@ -599,8 +599,8 @@
           </div>
           <div class="page-actions">
             <span id="wb-dirty-hint" class="wb-dirty hidden"></span>
-            <button id="btn-close-worldbooks" class="btn btn-ghost btn-sm" type="button" title="返回上一屏（Esc）">返回</button>
-            <button id="btn-save-wb" class="btn btn-primary btn-sm" type="button" title="把这本书的书名 / 开场白 / 条目写进磁盘">保存</button>
+            <m-button id="btn-close-worldbooks" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
+            <m-button id="btn-save-wb" variant="primary" size="sm" title="把这本书的书名 / 开场白 / 条目写进磁盘">保存</m-button>
           </div>
         </header>
 
@@ -623,7 +623,7 @@
                 <span class="wb-cover-empty">点击上传</span>
               </button>
               <div class="wb-cover-side">
-                <button id="btn-clear-wb-cover" class="btn btn-ghost btn-sm hidden" type="button">清除</button>
+                <m-button id="btn-clear-wb-cover" variant="ghost" size="sm" class="hidden">清除</m-button>
               </div>
             </div>
             <span class="field-help wb-cover-help">点图片上传或更换；没封面时卡片上是「世」字块。</span>
@@ -659,27 +659,27 @@
                 <span id="wb-char-count" class="wb-count"></span>
               </button>
               <div class="wb-chars-actions">
-                <button id="btn-add-wb-chars" class="btn btn-ghost btn-sm" type="button">＋ 从角色库加入</button>
-                <button id="btn-ai-wb-char" class="btn btn-ghost btn-sm" type="button"
-                        title="按这本书的设定生成一个 NPC（酒馆的小二、咖啡店的老板娘这类），生成完可以自己改">AI 生成</button>
-                <button id="btn-new-wb-char" class="btn btn-ghost btn-sm" type="button">＋ 新建</button>
-                <button id="btn-sync-wb-attrs" class="btn btn-ghost btn-sm" type="button"
-                        title="按名字找角色库里同名的卡，把它的属性补进这里的副本（副本是快照，加进来之后角色库又补了属性的话，副本不会自己跟着变）">↻ 同步属性</button>
+                <m-button id="btn-add-wb-chars" variant="ghost" size="sm">＋ 从角色库加入</m-button>
+                <m-button id="btn-ai-wb-char" variant="ghost" size="sm"
+                        title="按这本书的设定生成一个 NPC（酒馆的小二、咖啡店的老板娘这类），生成完可以自己改">AI 生成</m-button>
+                <m-button id="btn-new-wb-char" variant="ghost" size="sm">＋ 新建</m-button>
+                <m-button id="btn-sync-wb-attrs" variant="ghost" size="sm"
+                        title="按名字找角色库里同名的卡，把它的属性补进这里的副本（副本是快照，加进来之后角色库又补了属性的话，副本不会自己跟着变）">↻ 同步属性</m-button>
               </div>
             </div>
             <div id="wb-char-list" class="wb-char-list"></div>
           </div>
 
           <div class="wb-book-actions">
-            <button id="btn-preview-wb" class="btn btn-ghost btn-sm" type="button">预览命中</button>
+            <m-button id="btn-preview-wb" variant="ghost" size="sm">预览命中</m-button>
           </div>
 
           <!-- 书级那两颗「进 / 出」：导出会在布局初始化时挪进书籍头（它是「这本书自己的动作」），
                这一栏只剩「删除本书」—— 做成危险区，删之前先看见后果。 -->
           <div class="wb-book-foot">
             <span class="wb-book-foot-hint">删除会连同这本书的条目和角色副本一起删掉，不可恢复。想留底先用书籍头的「导出」。</span>
-            <button id="btn-export-wb" class="btn btn-ghost btn-sm" type="button" title="导出成酒馆能直接导入的 JSON">导出</button>
-            <button id="btn-del-worldbook" class="btn btn-danger btn-sm" type="button">删除本书</button>
+            <m-button id="btn-export-wb" variant="ghost" size="sm" title="导出成酒馆能直接导入的 JSON">导出</m-button>
+            <m-button id="btn-del-worldbook" variant="danger" size="sm">删除本书</m-button>
           </div>
         </section>
 
@@ -692,15 +692,15 @@
             <!-- 这一栏 268px：三颗按钮正好一行放得下，放不下就靠 flex-wrap 折行，
                  别被 overflow:hidden 切掉（这条从单栏时代就成立，别把列宽压到 268 以下）。 -->
             <div class="wb-entry-actions">
-              <button id="btn-new-entry" class="btn btn-ghost btn-sm" type="button">＋ 条目</button>
+              <m-button id="btn-new-entry" variant="ghost" size="sm">＋ 条目</m-button>
               <!-- 世界书条目模板：一键种入世界模拟类卡最常用的四条骨架。
                    文案在 worldbook.js 的 WB_ENTRY_TEMPLATE。 -->
-              <button id="btn-wb-entry-template" class="btn btn-ghost btn-sm" type="button"
-                      title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</button>
+              <m-button id="btn-wb-entry-template" variant="ghost" size="sm"
+                      title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</m-button>
               <!-- 「＋ 事件」：一条一个事件、靠关键词激活（和上面那条常驻的「事件表」配套：
                    前者给地图，后者给开关）。文案在 worldbook.js 的 WB_EVENT_CONTENT。 -->
-              <button id="btn-wb-add-event" class="btn btn-ghost btn-sm" type="button"
-                      title="新建一条「事件」条目：填上关键词，聊到就把这段演出来">＋ 事件</button>
+              <m-button id="btn-wb-add-event" variant="ghost" size="sm"
+                      title="新建一条「事件」条目：填上关键词，聊到就把这段演出来">＋ 事件</m-button>
             </div>
           </div>
           <div id="wb-entry-list" class="wb-entry-list"></div>
@@ -793,7 +793,7 @@
             </div>
 
             <div class="wb-form-foot">
-              <button id="btn-del-entry" class="btn btn-danger btn-sm" type="button">删除条目</button>
+              <m-button id="btn-del-entry" variant="danger" size="sm">删除条目</m-button>
               <!-- 条目没有自己的「保存」：书名 / 开场白 / 条目一起算这本书的内容，
                    改动先落在草稿里，点页头那颗「保存」才一起写进磁盘。 -->
               <span class="wb-form-foot-hint">条目改动跟着整本书一起保存</span>
@@ -815,9 +815,9 @@
             <p id="preset-page-sub" class="page-sub"></p>
           </div>
           <div class="page-actions">
-            <button id="btn-import-preset" class="btn btn-ghost btn-sm" type="button">导入</button>
-            <button id="btn-export-presets" class="btn btn-ghost btn-sm" type="button">导出全部</button>
-            <button id="btn-new-preset" class="btn btn-primary btn-sm" type="button">＋ 新建预设</button>
+            <m-button id="btn-import-preset" variant="ghost" size="sm">导入</m-button>
+            <m-button id="btn-export-presets" variant="ghost" size="sm">导出全部</m-button>
+            <m-button id="btn-new-preset" variant="primary" size="sm">＋ 新建预设</m-button>
           </div>
         </header>
 
@@ -853,8 +853,8 @@
           </div>
           <div class="page-actions">
 
-            <button id="btn-back-settings" class="btn btn-ghost btn-sm" type="button" title="返回上一屏（Esc）">返回</button>
-            <button id="btn-save-settings" class="btn btn-primary btn-sm" type="button" aria-label="保存设置">保存</button>
+            <m-button id="btn-back-settings" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
+            <m-button id="btn-save-settings" variant="primary" size="sm" aria-label="保存设置">保存</m-button>
           </div>
         </header>
 
@@ -964,7 +964,7 @@
           <div class="settings-content page-body settings-body">
         <section class="panel-section" id="sec-support">
           <div class="section-head"><span class="section-heading"><span class="section-title">本地数据</span><span class="section-desc">本机数据管理。</span></span></div>
-          <div class="field field-stack"><span class="field-label">本地数据</span><p class="field-help">打开本机数据文件夹，查看或备份应用数据。</p><button id="btn-folder" class="btn btn-ghost" data-icon="folder" type="button" aria-label="打开数据文件夹">打开数据文件夹</button></div>
+          <div class="field field-stack"><span class="field-label">本地数据</span><p class="field-help">打开本机数据文件夹，查看或备份应用数据。</p><m-button id="btn-folder" variant="ghost" data-icon="folder" aria-label="打开数据文件夹">打开数据文件夹</m-button></div>
         </section>
         <!-- 每个大版块一张卡，一次只显示一张 —— 由左栏导航切换（逻辑在
              views/settings.js 的 showSettingsSection）。下面这些内容保持原样，
@@ -987,7 +987,7 @@
           <div id="provider-tabs" class="provider-cards" role="radiogroup" aria-label="模型提供商"></div>
 
           <div class="provider-add">
-            <button id="btn-add-provider" class="btn btn-ghost btn-sm" type="button" aria-expanded="false">＋ 第三方模型提供商</button>
+            <m-button id="btn-add-provider" variant="ghost" size="sm" aria-expanded="false">＋ 第三方模型提供商</m-button>
           </div>
           <div id="provider-presets" class="provider-presets hidden"></div>
 
@@ -1011,15 +1011,15 @@
           <div class="field field-stack">
             <div class="field-row">
               <span class="field-label">可用模型</span>
-              <button id="btn-fetch-models" class="btn btn-ghost btn-sm" type="button" aria-label="从接口拉取模型列表">拉取可用模型</button>
+              <m-button id="btn-fetch-models" variant="ghost" size="sm" aria-label="从接口拉取模型列表">拉取可用模型</m-button>
             </div>
             <m-textarea id="p-models" rows="4" spellcheck="false" aria-label="模型列表" placeholder="一行一个模型名，例如：&#10;deepseek-chat&#10;deepseek-reasoner"></m-textarea>
             <span class="field-help">一行一个模型。聊天窗口右上角的下拉框里可以随时切换。</span>
           </div>
 
           <div class="provider-actions">
-            <button id="btn-del-provider" class="btn btn-danger btn-sm" type="button">删除这个模型提供商</button>
-            <button id="btn-test" class="btn btn-ghost btn-sm" type="button">测试当前模型提供商</button>
+            <m-button id="btn-del-provider" variant="danger" size="sm">删除这个模型提供商</m-button>
+            <m-button id="btn-test" variant="ghost" size="sm">测试当前模型提供商</m-button>
           </div>
 
           <!-- 默认人设：没绑定角色卡、也没进世界的对话里「AI 是谁」，按模型各存一份。
@@ -1029,7 +1029,7 @@
               <span class="field-label">默认人设</span>
               <span class="field-help" id="s-assistant-hint">—</span>
             </div>
-            <button id="btn-assistant-persona" class="btn btn-ghost btn-sm" type="button">编辑</button>
+            <m-button id="btn-assistant-persona" variant="ghost" size="sm">编辑</m-button>
           </div>
         </section>
 
@@ -1328,7 +1328,7 @@
               <input id="appearance-boldcolor" type="color" value="#409eff" aria-label="选择加粗字颜色" />
               <m-input id="appearance-boldcolor-text"
                      placeholder="留空 = 跟随主题配色。" aria-label="加粗字颜色（十六进制）"></m-input>
-              <button id="btn-boldcolor-reset" class="btn btn-ghost btn-sm" type="button">默认</button>
+              <m-button id="btn-boldcolor-reset" variant="ghost" size="sm">默认</m-button>
             </div>
             <span class="field-help">
               回复里 <code>**加粗**</code> 的是<b>角色说出口的台词</b>，默认用<b>主题配色</b>显示 ——
@@ -1340,9 +1340,9 @@
           <div class="field field-stack">
             <span class="field-label">对话窗口背景图</span>
             <div class="appearance-row">
-              <button id="btn-pick-bg" class="btn btn-ghost btn-sm" type="button">选择图片</button>
-              <button id="btn-default-bg" class="btn btn-ghost btn-sm" type="button">雾境皮肤</button>
-              <button id="btn-clear-bg" class="btn btn-ghost btn-sm" type="button">清除</button>
+              <m-button id="btn-pick-bg" variant="ghost" size="sm">选择图片</m-button>
+              <m-button id="btn-default-bg" variant="ghost" size="sm">雾境皮肤</m-button>
+              <m-button id="btn-clear-bg" variant="ghost" size="sm">清除</m-button>
             </div>
             <div id="appearance-bg-preview" class="appearance-bg-preview hidden"></div>
             <span class="field-help">
@@ -1447,9 +1447,9 @@
               <span class="field-help" id="s-pet-status">—</span>
             </div>
             <div class="pet-actions">
-              <button id="btn-pet-visible" class="btn btn-ghost btn-sm" type="button">隐藏桌宠</button>
-              <button id="btn-pet-mute" class="btn btn-ghost btn-sm" type="button">静音 1 小时</button>
-              <button id="btn-pet-speak" class="btn btn-ghost btn-sm" type="button">现在说一句</button>
+              <m-button id="btn-pet-visible" variant="ghost" size="sm">隐藏桌宠</m-button>
+              <m-button id="btn-pet-mute" variant="ghost" size="sm">静音 1 小时</m-button>
+              <m-button id="btn-pet-speak" variant="ghost" size="sm">现在说一句</m-button>
             </div>
           </div>
 
@@ -1497,7 +1497,7 @@
           <div class="field field-stack">
             <div class="field-row">
               <span class="field-label">人格设定</span>
-              <button id="btn-pet-persona-reset" class="btn btn-ghost btn-sm" type="button">还原成默认</button>
+              <m-button id="btn-pet-persona-reset" variant="ghost" size="sm">还原成默认</m-button>
             </div>
             <m-textarea id="s-pet-persona" rows="7" spellcheck="false" aria-label="桌宠人格设定"></m-textarea>
             <span class="field-help">
@@ -1511,8 +1511,8 @@
             <div class="field-row">
               <span class="field-label">预览</span>
               <div class="pet-actions">
-                <button id="btn-pet-preview" class="btn btn-ghost btn-sm" type="button">生成一句</button>
-                <button id="btn-pet-say" class="btn btn-ghost btn-sm" type="button" disabled>让桌宠说出这句</button>
+                <m-button id="btn-pet-preview" variant="ghost" size="sm">生成一句</m-button>
+                <m-button id="btn-pet-say" variant="ghost" size="sm" disabled>让桌宠说出这句</m-button>
               </div>
             </div>
             <div id="s-pet-preview" class="pet-preview">点「生成一句」看看它现在会怎么说 —— 用来试人格和温度，不用等轮数。预览不写记忆、也不写对话记录。</div>
@@ -1522,10 +1522,10 @@
             <div class="field-row">
               <span class="field-label">记忆</span>
               <div class="pet-actions">
-                <button id="btn-pet-memory-refresh" class="btn btn-ghost btn-sm" type="button">刷新</button>
-                <button id="btn-pet-memory-export" class="btn btn-ghost btn-sm" type="button">导出</button>
-                <button id="btn-pet-memory-reset" class="btn btn-ghost btn-sm" type="button">重置</button>
-                <button id="btn-pet-memory-clear" class="btn btn-danger btn-sm" type="button">清空</button>
+                <m-button id="btn-pet-memory-refresh" variant="ghost" size="sm">刷新</m-button>
+                <m-button id="btn-pet-memory-export" variant="ghost" size="sm">导出</m-button>
+                <m-button id="btn-pet-memory-reset" variant="ghost" size="sm">重置</m-button>
+                <m-button id="btn-pet-memory-clear" variant="danger" size="sm">清空</m-button>
               </div>
             </div>
             <div id="s-pet-memory" class="pet-memory"></div>
@@ -1573,9 +1573,9 @@
       <div class="modal-body expr-body">
         <div class="char-expr-head">
           <span id="expr-count" class="field-help"></span>
-          <button id="btn-batch-expr" class="btn btn-ghost btn-sm" type="button"
-            title="选一个文件夹，按文件名里的情绪词自动命名（shy 和 害羞 都认），从顶部对齐裁成正方形">批量导入</button>
-          <button id="btn-add-expr" class="btn btn-ghost btn-sm" type="button">＋ 添加表情</button>
+          <m-button id="btn-batch-expr" variant="ghost" size="sm"
+            title="选一个文件夹，按文件名里的情绪词自动命名（shy 和 害羞 都认），从顶部对齐裁成正方形">批量导入</m-button>
+          <m-button id="btn-add-expr" variant="ghost" size="sm">＋ 添加表情</m-button>
         </div>
         <div id="char-expr-list" class="char-expr-list"></div>
       </div>
@@ -1583,7 +1583,7 @@
       <footer class="modal-foot">
         <span class="foot-hint">改完回角色编辑器点「保存角色」才会写回这张卡</span>
         <div class="foot-actions">
-          <button id="btn-expr-done" class="btn btn-primary" type="button">完成</button>
+          <m-button id="btn-expr-done" variant="primary">完成</m-button>
         </div>
       </footer>
     </div>
@@ -1687,9 +1687,9 @@
       <footer class="modal-foot">
         <span id="pr-foot-hint" class="foot-hint">预设只保存在你自己电脑上</span>
         <div class="foot-actions">
-          <button id="btn-del-preset" class="btn btn-ghost" type="button">删除</button>
-          <button id="btn-save-preset" class="btn btn-primary" type="button">保存</button>
-          <button id="btn-close-preset-2" class="btn btn-ghost" type="button">关闭</button>
+          <m-button id="btn-del-preset" variant="ghost">删除</m-button>
+          <m-button id="btn-save-preset" variant="primary">保存</m-button>
+          <m-button id="btn-close-preset-2" variant="ghost">关闭</m-button>
         </div>
       </footer>
     </div>
@@ -1718,7 +1718,7 @@
         <div class="requests-detail">
           <div class="requests-detail-head">
             <span id="requests-summary" class="requests-summary">从左边选一次请求</span>
-            <button id="btn-copy-request" class="btn btn-sm" type="button" disabled>复制 JSON</button>
+            <m-button id="btn-copy-request" size="sm" disabled>复制 JSON</m-button>
           </div>
           <pre id="requests-json" class="requests-json">发一条消息，这里就会出现它实际发出去的完整内容。</pre>
         </div>
@@ -1727,7 +1727,7 @@
       <footer class="modal-foot">
         <span class="foot-hint">system 提示词、带进去的每一轮、以及采样参数，都是原样</span>
         <div class="foot-actions">
-          <button id="btn-clear-requests" class="btn btn-ghost" type="button">清空记录</button>
+          <m-button id="btn-clear-requests" variant="ghost">清空记录</m-button>
         </div>
       </footer>
     </div>
@@ -1803,7 +1803,7 @@
       <footer class="modal-foot">
         <span class="foot-hint">设置跟着当前会话保存</span>
         <div class="foot-actions">
-          <button id="btn-close-perspective-2" class="btn btn-ghost" type="button">关闭</button>
+          <m-button id="btn-close-perspective-2" variant="ghost">关闭</m-button>
         </div>
       </footer>
     </div>
@@ -1831,8 +1831,8 @@
         </div>
 
         <div class="memory-actions">
-          <button id="btn-summarize-now" class="btn btn-primary btn-sm" type="button">立即压缩较早的对话</button>
-          <button id="btn-memory-clear" class="btn btn-danger btn-sm" type="button">清空全部摘要</button>
+          <m-button id="btn-summarize-now" variant="primary" size="sm">立即压缩较早的对话</m-button>
+          <m-button id="btn-memory-clear" variant="danger" size="sm">清空全部摘要</m-button>
         </div>
 
         <p class="field-help">
@@ -1858,7 +1858,7 @@
           </div>
 
           <div class="memory-actions">
-            <button id="btn-save-checkpoint" class="btn btn-ghost btn-sm" type="button">存一个档</button>
+            <m-button id="btn-save-checkpoint" variant="ghost" size="sm">存一个档</m-button>
           </div>
 
           <p class="field-help">
@@ -1874,7 +1874,7 @@
       <footer class="modal-foot">
         <span id="memory-foot-hint" class="foot-hint">摘要只保存在你自己电脑上</span>
         <div class="foot-actions">
-          <button id="btn-close-memory-2" class="btn btn-ghost" type="button">关闭</button>
+          <m-button id="btn-close-memory-2" variant="ghost">关闭</m-button>
         </div>
       </footer>
     </div>
@@ -1927,8 +1927,8 @@
       <footer class="modal-foot">
         <span class="foot-hint" id="player-foot-hint"></span>
         <div class="foot-actions">
-          <button id="btn-cancel-player" class="btn btn-ghost" type="button">取消</button>
-          <button id="btn-start-play" class="btn btn-primary" type="button">开始游玩</button>
+          <m-button id="btn-cancel-player" variant="ghost">取消</m-button>
+          <m-button id="btn-start-play" variant="primary">开始游玩</m-button>
         </div>
       </footer>
     </div>
@@ -1954,8 +1954,8 @@
       <footer class="modal-foot">
         <span id="wb-char-picker-hint" class="foot-hint"></span>
         <div class="foot-actions">
-          <button id="btn-cancel-wb-char-picker" class="btn btn-ghost" type="button">取消</button>
-          <button id="btn-confirm-wb-char-picker" class="btn btn-primary" type="button">加入</button>
+          <m-button id="btn-cancel-wb-char-picker" variant="ghost">取消</m-button>
+          <m-button id="btn-confirm-wb-char-picker" variant="primary">加入</m-button>
         </div>
       </footer>
     </div>
@@ -2007,7 +2007,7 @@
         <!-- 人设是这一侧**唯一**的系统提示词：API 不像 chat.deepseek.com 那样自带官方那层
              「友好、自然、有温度」的语气设定，想要那种聊天感只能自己写。这个按钮给一段起点。 -->
         <div class="persona-template-row">
-          <button id="btn-persona-template" class="btn btn-sm" type="button">套用聊天风格模板</button>
+          <m-button id="btn-persona-template" size="sm">套用聊天风格模板</m-button>
           <span class="persona-template-hint">
             想让回复更像「网页版那种聊天」就从这儿起步 —— 已有内容时会先问你一句再覆盖。
           </span>
@@ -2017,8 +2017,8 @@
       <footer class="modal-foot">
         <span class="foot-hint" id="persona-foot-hint">改动只影响上面选中的那个模型</span>
         <div class="foot-actions">
-          <button id="btn-cancel-persona" class="btn btn-ghost" type="button">取消</button>
-          <button id="btn-save-persona" class="btn btn-primary" type="button">保存</button>
+          <m-button id="btn-cancel-persona" variant="ghost">取消</m-button>
+          <m-button id="btn-save-persona" variant="primary">保存</m-button>
         </div>
       </footer>
     </div>
@@ -2032,8 +2032,8 @@
         <p id="confirm-message"></p>
       </div>
       <div class="confirm-foot">
-        <button id="confirm-cancel" class="btn btn-ghost" type="button">取消</button>
-        <button id="confirm-ok" class="btn btn-primary" type="button">确定</button>
+        <m-button id="confirm-cancel" variant="ghost">取消</m-button>
+        <m-button id="confirm-ok" variant="primary">确定</m-button>
       </div>
     </div>
   </div>
@@ -2047,7 +2047,7 @@
       </div>
       <div id="pick-list" class="pick-list"></div>
       <div class="pick-foot">
-        <button id="pick-cancel" class="btn btn-ghost" type="button">取消</button>
+        <m-button id="pick-cancel" variant="ghost">取消</m-button>
       </div>
     </div>
   </div>

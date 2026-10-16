@@ -19,6 +19,7 @@
 import { el } from '../core/dom.js';
 import { activeConvo } from '../core/util.js';
 import { h, clear, button } from '../ui/build.js';
+import { mButton } from '../components/index.js';
 import { entityTone } from '../ui/avatarTone.js';
 import { stateCardPhoto } from '../data/expressions.js';
 import { currentScene } from '../data/currentScene.js';
@@ -202,7 +203,7 @@ export function renderCastPanel() {
     sceneBlock.appendChild(h('small', { class: 'scene-source', text: '来自本局状态字段 · 随剧情更新' }));
   } else {
     sceneBlock.appendChild(h('small', { class: 'scene-source', text: '尚无场景信息。启用后，模型将尝试随剧情更新地点、时间与天气。' }));
-    const enable = button({
+    const enable = mButton({
       variant: 'ghost',
       size: 'sm',
       text: '启用场景追踪',

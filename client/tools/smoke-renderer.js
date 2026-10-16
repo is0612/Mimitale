@@ -580,6 +580,36 @@ await scenario('设置页', async () => {
   check('设置是一个视图、不是弹窗', !!$('#view-settings') && !$('#settings-modal'));
   check('设置页有页头和「返回 / 保存」两颗按钮', !!$('#view-settings .page-head') && !!byId('btn-back-settings') && !!byId('btn-save-settings'));
 
+  // 2026-10-16：设置域 22 颗 .btn 全换 <m-button>（页头 2 + 本地数据 1 + 模型 5 +
+  // 外观 4 + 桌宠 10）。除了结构，重点盯两件组件化之后最容易悄悄坏掉的事：
+  //   ① 「测试中… / 获取中…」那条链路是 `btn.disabled = true` + `btn.textContent = …`
+  //      直接设属性 —— 宿主上写坏了不报错，只是按钮不禁用、文案不变；
+  //   ② btn-folder 的 `data-icon`：applyFieldIcons 把 svg 插进来时必须落到**里层**，
+  //      否则图标会出现在按钮底色方块的外面。
+  const settingsBtnIds = ['btn-back-settings','btn-save-settings','btn-folder','btn-add-provider','btn-fetch-models','btn-del-provider','btn-test','btn-assistant-persona','btn-boldcolor-reset','btn-pick-bg','btn-default-bg','btn-clear-bg','btn-pet-visible','btn-pet-mute','btn-pet-speak','btn-pet-persona-reset','btn-pet-preview','btn-pet-say','btn-pet-memory-refresh','btn-pet-memory-export','btn-pet-memory-reset','btn-pet-memory-clear'];
+  const notMButton = settingsBtnIds.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
+  check('设置域 22 颗按钮都是 m-button 宿主', notMButton.length === 0, notMButton.join(', ') || '全部是');
+  // ⚠️ #panel-box（各弹窗的容器）嵌在 #view-settings 里、这批还没迁，
+  //     所以「没有原生 .btn」要把 panel-box 排除掉再数。
+  check('设置域不再有原生 .btn 按钮（弹窗容器 panel-box 除外）',
+    ![...document.querySelectorAll('#view-settings .btn')].some((b) => !b.closest('#panel-box')));
+  const folderCtrl = byId('btn-folder').control;
+  check(
+    'btn-folder 的图标落在了里层控件里',
+    !!folderCtrl && !!folderCtrl.querySelector(':scope > svg.field-icon'),
+    folderCtrl ? folderCtrl.innerHTML.slice(0, 60) : '(没有里层)'
+  );
+  check('禁用的桌宠按钮里层也带着 disabled', byId('btn-pet-say').control.disabled === true);
+  const testBtn = byId('btn-test');
+  testBtn.textContent = '测试中…';
+  testBtn.disabled = true;
+  check('改宿主 textContent / disabled 落到里层（「测试中…」那条链路）',
+    testBtn.control.textContent === '测试中…' && testBtn.control.disabled === true,
+    `文案=${testBtn.control.textContent} disabled=${testBtn.control.disabled}`);
+  testBtn.textContent = '测试当前模型提供商';
+  testBtn.disabled = false;
+  check('还原后里层一并还原', testBtn.control.textContent === '测试当前模型提供商' && testBtn.control.disabled === false);
+
   // 大版块是**左导航 + 右内容**（2026-10-10）。这里是整套冒烟里第一次打开设置，
   // 所以正好验默认那一条：默认选中第一组「模型服务」、其余组收着。
   const visible = (node) => !!node && node.offsetParent !== null;
@@ -793,15 +823,15 @@ await scenario('角色库：放弃新建', async () => {
   click('#btn-close-chars');
   await waitFor('弹出放弃确认框', () => shown('#confirm-modal'));
   check('确认框里带了刚输入的名字', byId('confirm-message').textContent.includes('半途而废'), byId('confirm-message').textContent);
-  check('确认框默认聚焦取消', document.activeElement === byId('confirm-cancel'));
+  check('确认框默认聚焦取消', asControl(document.activeElement) === asControl(byId('confirm-cancel')));
   const confirmKey = (key, shiftKey = false) => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
   confirmKey('Tab', true);
-  check('Shift+Tab 循环到确认', document.activeElement === byId('confirm-ok'));
+  check('Shift+Tab 循环到确认', asControl(document.activeElement) === asControl(byId('confirm-ok')));
   confirmKey('Tab');
-  check('Tab 循环回取消', document.activeElement === byId('confirm-cancel'));
+  check('Tab 循环回取消', asControl(document.activeElement) === asControl(byId('confirm-cancel')));
   byId('c-name').focus();
   byId('c-name').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-  check('确认框打开时焦点不会进入背景', document.activeElement === byId('confirm-cancel'));
+  check('确认框打开时焦点不会进入背景', asControl(document.activeElement) === asControl(byId('confirm-cancel')));
   confirmKey('Enter');
   await waitFor('回车取消确认', () => !shown('#confirm-modal'));
   check('取消后编辑内容保留', shown('#view-char-editor') && byId('c-name').value === '半途而废');
@@ -835,6 +865,31 @@ await scenario('角色库：放弃新建', async () => {
 //  ⚠️ 高度靠 getBoundingClientRect 读 —— 那是布局完成后的实高，
 //     比读 style.height 可信（style 里可能写着值但被别的规则压回去）。
 // ---------------------------------------------------------------------------
+await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
+  click('#btn-chars');
+  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
+
+  // 2026-10-16：这一页 14 颗 .btn 全换 <m-button>。除结构外盯两件容易悄悄坏掉的：
+  //   ① 左栏「导出 / 删除角色」要铺满栏宽、文字靠左 —— width 挂宿主、
+  //      justify-content 挂里层，写反了不报错、只是按钮缩成一行文字那么宽；
+  //   ② 三颗「清除」带着 hidden 类 —— 宿主上 `.hidden` 的 display:none !important
+  //      必须照样压过 m-button 自己的 display（不然按钮删不掉地常驻）。
+  const CHAR_BTN_IDS = ['btn-close-chars','btn-save-char','btn-clear-avatar','btn-clear-portrait','btn-manage-expr','btn-first-template','btn-alt-add','btn-attr-template','btn-add-attr','btn-attr-paste','btn-attr-paste-apply','c-wb-add-btn','btn-export-char','btn-del-char'];
+  const bad = CHAR_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
+  check('角色编辑器 14 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
+  // ⚠️ 这里**仍不能**断言「页面里没有 .btn」：属性面板那几颗**图标按钮**
+  //    （attr-tab / attr-tab-edit / attr-more-btn / panel-del 等）是 JS 用
+  //    `button({ class: ... })` 现渲染的（不带 variant 就不生成 .btn 底座，见
+  //    ui/build.js 文件头那条「图标按钮不套组件」的边界）。「解散这一组」已迁
+  //    m-button —— 它不再带 `.btn-danger`，断言里按 `#c-attr-group-edit m-button` 找。
+  const railBtn = byId('btn-export-char');
+  check('左栏「导出」铺满栏宽', railBtn.getBoundingClientRect().width > 150, Math.round(railBtn.getBoundingClientRect().width));
+  check('左栏「导出」文字靠左（对齐写在里层）', getComputedStyle(railBtn.control).justifyContent === 'flex-start', getComputedStyle(railBtn.control).justifyContent);
+  check('「清除」的 hidden 照样生效', byId('btn-clear-avatar').classList.contains('hidden') && getComputedStyle(byId('btn-clear-avatar')).display === 'none');
+});
+
 await scenario('角色编辑器：五个写作框的高度', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
@@ -3592,7 +3647,7 @@ await scenario('侧栏：入口网格与收起', async () => {
   // 232 → 280（2026-10-12 晚）→ 300（底部入口图标 18 / 字 14px 之后需要的列宽）
   check('侧栏宽度 224', Math.round(sidebar.getBoundingClientRect().width) === 224, String(Math.round(sidebar.getBoundingClientRect().width)));
 
-  const foot = $$('.sidebar-foot .btn');
+  const foot = $$('.sidebar-foot m-button');
   check('侧栏保留四个创作入口', foot.length === 4, String(foot.length));
   check('数据按钮位于设置页', !!byId('btn-folder')?.closest('#view-settings'));
   check(
@@ -3647,8 +3702,10 @@ await scenario('侧栏：入口网格与收起', async () => {
       '底部入口是纯 ghost（无底、无边框，稿子 2:47）',
       // 边框宽度用 > 0.5 判定：125% 显示缩放下 Chromium 会把 1px 取整成 0.8px（实测），
       // 那不是样式变了。颜色仍然必须是透明的 —— 那才是「纯 ghost」的本体。
+      // ⚙ 2026-10-16 迁 m-button：边框/背景长在里层 .mi-btn__control 上，宿主本身没边框，
+      //    所以要读 b.control（里层原生 button），而不是宿主（否则取到 currentColor）。
       foot.every((b) => {
-        const cs = getComputedStyle(b);
+        const cs = getComputedStyle(b.control);
         return (
           cs.backgroundColor === 'rgba(0, 0, 0, 0)' &&
           parseFloat(cs.borderTopWidth) > 0.5 &&
@@ -3656,7 +3713,7 @@ await scenario('侧栏：入口网格与收起', async () => {
           (cs.borderTopColor === 'rgba(0, 0, 0, 0)' || b.id === 'btn-settings')
         );
       }),
-      foot.map((b) => `${getComputedStyle(b).backgroundColor}/${getComputedStyle(b).borderTopColor}`).join(' ')
+      foot.map((b) => `${getComputedStyle(b.control).backgroundColor}/${getComputedStyle(b.control).borderTopColor}`).join(' ')
     );
     // 这一组上面有一条**通栏**分隔线（稿子 2:28，1px #2a2e34）——
     // 用 ::before 画的，所以得读伪元素的计算样式。
@@ -3954,6 +4011,15 @@ await scenario('世界书：新建条目', async () => {
   click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
   await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
 
+  // 2026-10-16：这一页 14 颗 .btn 全换 <m-button>。`.wb-entry-actions` 那三颗的
+  // 内边距（6px 8px）写在**里层**上 —— 写到宿主上不报错，只是按钮瘦不下来。
+  const WB_BTN_IDS = ['btn-close-worldbooks','btn-save-wb','btn-clear-wb-cover','btn-add-wb-chars','btn-ai-wb-char','btn-new-wb-char','btn-sync-wb-attrs','btn-preview-wb','btn-export-wb','btn-del-worldbook','btn-new-entry','btn-wb-entry-template','btn-wb-add-event','btn-del-entry'];
+  const wbBad = WB_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
+  check('世界书编辑器 14 颗按钮都是 m-button 宿主', wbBad.length === 0, wbBad.join(', ') || '全部是');
+  // ⚠️ 同角色编辑器：JS 渲染的 .btn 还在这页上（NPC 属性面板共用同一套），
+  //    「没有原生 .btn」要等 JS 侧调用点迁完才能上。
+  check('条目行按钮的内边距落在里层（6px 8px）', getComputedStyle(byId('btn-new-entry').control).paddingLeft === '8px', getComputedStyle(byId('btn-new-entry').control).padding);
+
   click('#btn-new-entry');
   setValue('#wb-e-title', '冒烟测试条目');
   setValue('#wb-e-keys', '冒烟');
@@ -4159,6 +4225,51 @@ await scenario('AI 生成角色：角色库', async () => {
 
   // 列表页确实多了一个入口，而且它不会顺手创建什么
   check('角色库有「AI 生成」按钮', !!byId('btn-ai-char'));
+
+  // 2026-10-16：这一页的三颗按钮换成了 <m-button>（组件库的第一批按钮用户，
+  // 迁移试点的验收就落在这里）。断言的靶子是**宿主与里层对不对得上** ——
+  // 按钮刚组件化时最容易静默失效的正是这一段：页面里到处是「建好之后再
+  // 直接设属性」的写法（`btn.disabled = true`、`btn.textContent = '导入中…'`，
+  // 见 characterImport.js 的 pickImportFiles），宿主上写坏了**不报错**，
+  // 只是文案不变、禁用不生效 —— 正是本项目最怕的那类「不报错的错」。
+  const importBtn = byId('btn-import-card');
+  check('导入角色卡已经是 m-button 宿主', importBtn.tagName === 'M-BUTTON', importBtn.tagName);
+  check(
+    '外观类名落在宿主上',
+    importBtn.classList.contains('mi-btn') &&
+      importBtn.classList.contains('mi-btn--ghost') &&
+      importBtn.classList.contains('mi-btn--sm'),
+    importBtn.className
+  );
+  const importCtrl = importBtn.control;
+  check('宿主里有一颗原生 button + label', importCtrl && importCtrl.tagName === 'BUTTON' && !!importCtrl.querySelector('.mi-btn__label'));
+  importBtn.textContent = '导入中…';
+  importBtn.disabled = true;
+  check('改宿主 textContent 会落到里层文案', importCtrl.textContent === '导入中…', importCtrl.textContent);
+  check('宿主 disabled 会落到里层', importCtrl.disabled === true);
+  importBtn.textContent = '导入角色卡';
+  importBtn.disabled = false;
+  check('还原后里层一并还原', importCtrl.textContent === '导入角色卡' && importCtrl.disabled === false);
+  check('「＋ 新建角色」是 primary 那一档', byId('btn-new-char').classList.contains('mi-btn--primary'));
+  check('角色库页不再有原生 .btn 按钮', !$('#view-chars .btn'));
+
+  // ⚠️ 按钮组件化之后**发光的是里层**（底色 / 边框 / 圆角都在 `.mi-btn__control` 上）。
+  // 卡片的动作行用 `flex: 1 1 0` 把两颗按钮平分两格 —— 里层若不跟着宿主撑满，
+  // 按钮就只有「文字那么宽」：看着比槽位短一截，字还靠左，而且**不报错**。
+  // 这条就是 2026-10-16 量出来那次（宿主 96 / 里层 50）的回归闸门。
+  const cardRow = $('#char-page-grid .char-card .char-card-actions');
+  check('角色库页有卡片（动作行在）', !!cardRow);
+  if (cardRow) {
+    for (const node of cardRow.children) {
+      const ctrl = node.control || node;
+      const w = (n) => n.getBoundingClientRect().width;
+      check(
+        `卡片按钮「${node.textContent.trim()}」的里层撑满了宿主`,
+        Math.abs(w(ctrl) - w(node)) <= 1,
+        `宿主 ${Math.round(w(node))} / 里层 ${Math.round(w(ctrl))}`
+      );
+    }
+  }
 
   click('#btn-ai-char');
   await waitFor('生成弹窗打开', () => shown('.ai-gen-modal'));
@@ -4999,7 +5110,7 @@ await scenario('角色属性：分组改名与解散', async () => {
   // 并组/改名完成后操作条会自动收起来（免得留在那儿被误点第二次），
   // 所以要重新点开「⋯」再拿里面的按钮。
   await openGroupEdit();
-  click($('#c-attr-group-edit .btn-danger'));
+  click($('#c-attr-group-edit m-button'));
   await waitFor('确认弹窗出现', () => shown('#confirm-modal'));
   check(
     '确认弹窗把「属性会退回未分组」说清楚了',
@@ -5013,7 +5124,7 @@ await scenario('角色属性：分组改名与解散', async () => {
   // --- 空分组直接删，不该弹确认 ---
   await newGroup('临时');
   await openGroupEdit();
-  click($('#c-attr-group-edit .btn-danger'));
+  click($('#c-attr-group-edit m-button'));
   await waitFor('空分组被删掉', () => tabLabels().join() === '未分组 2');
   check('删空分组不弹确认（没什么可丢的）', !shown('#confirm-modal'));
 
@@ -9864,9 +9975,10 @@ await scenario('控件：自研下拉（原生 select 与组件 m-select 两条�
 //  这里在真页面里临时搭一棵树（不碰应用自己的 DOM），跑完删掉。
 //
 //  三件最要紧的事：
-//    · 组件皮肤必须和老 `.btn` **一模一样**（共用一份声明，不是抄了一份）
 //    · 里层原生控件的属性转发 / 事件冒泡 / .value 代理都要通
 //    · m-select 里的原生 <select> 也要被自研列表接上（两层自动组合）
+//   （原「组件皮肤和老 .btn 一致」那条已删：2026-10-17 `.btn` 皮肤半边退役，
+//    皮肤现在只有 `.mi-btn__control` 一份定义，没有可比的第二份了。）
 // ---------------------------------------------------------------------------
 await scenario('组件库：自定义元素（m-button / m-input / m-textarea / m-select）', async () => {
   const tags = ['m-button', 'm-input', 'm-textarea', 'm-select'];
@@ -9880,11 +9992,6 @@ await scenario('组件库：自定义元素（m-button / m-input / m-textarea / 
   host.className = 'smoke-component-host';
   document.body.appendChild(host);
 
-  const csOf = (node) => {
-    const s = getComputedStyle(node);
-    return [s.color, s.backgroundColor, s.borderRadius, s.paddingTop, s.paddingLeft, s.fontSize, s.boxShadow].join(' | ');
-  };
-
   // ---- m-button ----
   const btn = document.createElement('m-button');
   btn.setAttribute('variant', 'primary');
@@ -9897,16 +10004,6 @@ await scenario('组件库：自定义元素（m-button / m-input / m-textarea / 
   check('外观类名拼对了', btn.classList.contains('mi-btn') && btn.classList.contains('mi-btn--primary'), btn.className);
   check('标签形态的文字收进了 label', btn.querySelector('.mi-btn__label').textContent === '保存');
   check('宿主里只剩那颗按钮（没留下游离文本节点）', btn.childNodes.length === 1, String(btn.childNodes.length));
-
-  const legacyBtn = document.createElement('button');
-  legacyBtn.className = 'btn btn-primary';
-  host.appendChild(legacyBtn);
-  check(
-    '组件皮肤和老 .btn 完全一致（一条规则两个选择器，不是抄了一份）',
-    csOf(innerBtn) === csOf(legacyBtn),
-    `组件 ${csOf(innerBtn)} ／ 老 ${csOf(legacyBtn)}`
-  );
-  legacyBtn.remove();
 
   let clicked = 0;
   btn.addEventListener('click', () => {

@@ -2,6 +2,7 @@
 
 import { el } from '../core/dom.js';
 import { button, h, renderListPage } from '../ui/build.js';
+import { mButton } from '../components/index.js';
 import { dialoguePresets } from '../data/library.js';
 
 let openEditor = () => {};
@@ -72,9 +73,9 @@ function presetRow(preset) {
       h('small', { text: preset.global === true ? '未配置的会话自动带上' : '按会话选用' })
     ),
     h('div', { class: 'preset-row-actions' },
-      button({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => openEditor(preset.id) }),
-      button({ variant: 'ghost', size: 'sm', text: '导出', onClick: () => exportOne(preset.id) }),
-      button({
+      mButton({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => openEditor(preset.id) }),
+      mButton({ variant: 'ghost', size: 'sm', text: '导出', onClick: () => exportOne(preset.id) }),
+      mButton({
         variant: 'ghost',
         size: 'sm',
         class: 'preset-row-delete',

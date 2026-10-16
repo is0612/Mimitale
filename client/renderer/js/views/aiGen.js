@@ -30,7 +30,7 @@ import { h, button } from '../ui/build.js';
 // 字段（标签 + 控件 + 说明）的规范件，见 ui/controls.js
 import { field } from '../ui/controls.js';
 // 组件库：生成弹窗里的两个多行框（见 components/index.js）
-import { mTextarea } from '../components/index.js';
+import { mTextarea, mButton } from '../components/index.js';
 import { showToast } from '../ui/toast.js';
 import { currentEndpoint, isBridgeProvider } from '../data/providers.js';
 import { worldbookCharacters } from '../data/library.js';
@@ -447,10 +447,10 @@ function buildLayer() {
 
   const status = h('p', { class: 'ai-gen-status' });
 
-  const stopBtn = button({ variant: 'ghost', text: '中止', onClick: stopGen });
+  const stopBtn = mButton({ variant: 'ghost', text: '中止', onClick: stopGen });
   stopBtn.classList.add('hidden');
 
-  const goBtn = button({ variant: 'primary', text: '开始生成', onClick: generate });
+  const goBtn = mButton({ variant: 'primary', text: '开始生成', onClick: generate });
 
   const card = h(
     'div',

@@ -145,6 +145,12 @@ export function iconHtml(name, cls = 'field-icon') {
  * 静态 HTML 由入口层在启动时对整个 document 调一次；动态渲染出来的标签
  * （以后别的视图要复用的话）在渲染完成后自己再对那一段调一次即可。
  *
+ * ⚠️ 组件宿主（`m-button` 这类，有 `.control`）要把图标插到**里层控件**里：
+ * 按钮的底色 / 边框 / 圆角都在里层那颗上，图标落在宿主上会出现在按钮
+ * 「方块」的外面。两个时机都对 —— 图标先插、组件后 render 时，render 会把
+ * 非文本子节点一起搬进里层；图标后插（静态 HTML 的实际情况，入口层启动时
+ * 组件早已连接）就靠这里的判断落到里层。
+ *
  * @param {ParentNode} [root] 扫描范围，默认整个 document
  */
 export function applyFieldIcons(root = document) {
@@ -152,6 +158,9 @@ export function applyFieldIcons(root = document) {
     if (el.dataset.iconDone === '1') continue;
     el.dataset.iconDone = '1';
     const svg = iconSvg(el.getAttribute('data-icon'));
-    if (svg) el.insertAdjacentHTML('afterbegin', svg);
+    if (!svg) continue;
+    const control = el.control;
+    const target = control && control !== el ? control : el;
+    target.insertAdjacentHTML('afterbegin', svg);
   }
 }

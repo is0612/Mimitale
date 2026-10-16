@@ -31,7 +31,7 @@ import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear } from '../ui/build.js';
 // 组件库：就地编辑一段摘要用的多行框（见 components/index.js）
-import { mTextarea } from '../components/index.js';
+import { mTextarea, mButton } from '../components/index.js';
 import { persistConversations } from '../data/persist.js';
 import { convoPanel, convoPanelDefs, convoPanelFields, normalizePanelDefs } from '../data/panel.js';
 import {
@@ -155,35 +155,39 @@ function buildMemoryCard(convo, seg, index, total) {
 
   const isEditing = memoryEditingId === seg.id;
 
-  const editBtn = document.createElement('button');
-  editBtn.type = 'button';
-  editBtn.className = `btn btn-ghost btn-sm${isEditing ? ' active' : ''}`;
-  editBtn.textContent = isEditing ? '取消编辑' : '编辑';
-  editBtn.addEventListener('click', () => {
-    memoryEditingId = isEditing ? null : seg.id;
-    renderMemoryModal();
+  const editBtn = mButton({
+    variant: 'ghost',
+    size: 'sm',
+    class: isEditing ? 'active' : '',
+    text: isEditing ? '取消编辑' : '编辑',
+    onClick: () => {
+      memoryEditingId = isEditing ? null : seg.id;
+      renderMemoryModal();
+    }
   });
 
-  const regenBtn = document.createElement('button');
-  regenBtn.type = 'button';
-  regenBtn.className = 'btn btn-ghost btn-sm';
-  regenBtn.textContent = '重新生成';
-  regenBtn.title = '用这段对应的原文重新压一次';
-  regenBtn.disabled = !!convo.summaryBusy;
-  regenBtn.addEventListener('click', async () => {
-    regenBtn.disabled = true;
-    regenBtn.textContent = '生成中…';
-    const ok = await regenerateSummary(convo, seg.id);
-    renderMemoryModal();
-    if (ok) showToast('已重新生成', 'ok');
+  const regenBtn = mButton({
+    variant: 'ghost',
+    size: 'sm',
+    text: '重新生成',
+    title: '用这段对应的原文重新压一次',
+    disabled: !!convo.summaryBusy,
+    onClick: async () => {
+      regenBtn.disabled = true;
+      regenBtn.textContent = '生成中…';
+      const ok = await regenerateSummary(convo, seg.id);
+      renderMemoryModal();
+      if (ok) showToast('已重新生成', 'ok');
+    }
   });
 
-  const delBtn = document.createElement('button');
-  delBtn.type = 'button';
-  delBtn.className = 'btn btn-danger btn-sm';
-  delBtn.textContent = '删除';
-  delBtn.title = '删掉这段摘要，对应的原文会重新进入上下文';
-  delBtn.addEventListener('click', () => deleteSummarySegment(convo, seg.id));
+  const delBtn = mButton({
+    variant: 'danger',
+    size: 'sm',
+    text: '删除',
+    title: '删掉这段摘要，对应的原文会重新进入上下文',
+    onClick: () => deleteSummarySegment(convo, seg.id)
+  });
 
   actions.append(editBtn, regenBtn, delBtn);
 
@@ -202,26 +206,27 @@ function buildMemoryCard(convo, seg, index, total) {
     const editActions = document.createElement('div');
     editActions.className = 'memory-card-actions';
 
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'button';
-    saveBtn.className = 'btn btn-primary btn-sm';
-    saveBtn.textContent = '保存';
-    saveBtn.addEventListener('click', async () => {
-      const target = convoSummaries(convo).find((s) => s.id === seg.id);
-      if (!target) return;
-      let text = box.value.trim();
-      if (text.length > MAX_SUMMARY_CHARS) text = `${text.slice(0, MAX_SUMMARY_CHARS)}…`;
-      if (!text) {
-        showToast('摘要不能为空，要删就点「删除」', 'error');
-        return;
+    const saveBtn = mButton({
+      variant: 'primary',
+      size: 'sm',
+      text: '保存',
+      onClick: async () => {
+        const target = convoSummaries(convo).find((s) => s.id === seg.id);
+        if (!target) return;
+        let text = box.value.trim();
+        if (text.length > MAX_SUMMARY_CHARS) text = `${text.slice(0, MAX_SUMMARY_CHARS)}…`;
+        if (!text) {
+          showToast('摘要不能为空，要删就点「删除」', 'error');
+          return;
+        }
+        target.text = text;
+        target.at = now();
+        convo.updatedAt = now();
+        memoryEditingId = null;
+        persistConversations(0);
+        renderMemoryModal();
+        showToast('摘要已保存', 'ok');
       }
-      target.text = text;
-      target.at = now();
-      convo.updatedAt = now();
-      memoryEditingId = null;
-      persistConversations(0);
-      renderMemoryModal();
-      showToast('摘要已保存', 'ok');
     });
 
     editActions.appendChild(saveBtn);
@@ -503,8 +508,8 @@ function renderCheckpoints(convo) {
           // 档名里已经写了条数，这里就只报时间，不重复
           h('div', { class: 'checkpoint-time', text: when })
         ),
-        button({ variant: 'primary', size: 'sm', text: '读档', onClick: () => restoreCheckpoint(point.id) }),
-        button({ variant: 'ghost', size: 'sm', text: '删除', onClick: () => deleteCheckpoint(point.id) })
+        mButton({ variant: 'primary', size: 'sm', text: '读档', onClick: () => restoreCheckpoint(point.id) }),
+        mButton({ variant: 'ghost', size: 'sm', text: '删除', onClick: () => deleteCheckpoint(point.id) })
       )
     );
   }

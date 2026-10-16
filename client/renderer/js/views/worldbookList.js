@@ -27,6 +27,7 @@
 
 import { el } from '../core/dom.js';
 import { h, button, renderListPage } from '../ui/build.js';
+import { mButton } from '../components/index.js';
 import { openLightbox } from '../ui/lightbox.js';
 import { worldbooks, worldbookCharacters, worldbookCover } from '../data/library.js';
 import { openPlayerModal } from './player.js';
@@ -104,8 +105,8 @@ function worldbookCard(book) {
     h(
       'div',
       { class: 'wb-card-actions' },
-      button({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => openEditor(book.id) }),
-      button({ variant: 'primary', size: 'sm', text: '游玩', onClick: () => openPlayerModal(book.id) })
+      mButton({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => openEditor(book.id) }),
+      mButton({ variant: 'primary', size: 'sm', text: '游玩', onClick: () => openPlayerModal(book.id) })
     )
   );
 }

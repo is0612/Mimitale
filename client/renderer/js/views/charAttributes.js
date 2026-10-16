@@ -30,7 +30,7 @@ import { h, button, clear, append } from '../ui/build.js';
 import { input } from '../ui/controls.js';
 import { MAX_PANEL_FIELDS, panelFieldAllowed } from '../data/panel.js';
 // 组件库：属性行里的控件（三个下拉 + 五个输入框）。见 components/index.js
-import { mInput, mSelect } from '../components/index.js';
+import { mInput, mSelect, mButton } from '../components/index.js';
 import { setCharSectionCount } from './characterEditorLayout.js';
 
 /** 编辑器里的字段类型选择框（文本 / 数值 / 列表） */
@@ -470,7 +470,7 @@ function renderAttrGroupEdit(list, bucket) {
   append(el.c.attrGroupEdit, [
     h('span', { class: 'attr-group-edit-label', text: '分组名' }),
     nameInput,
-    button({
+    mButton({
       variant: 'danger',
       size: 'sm',
       text: '解散这一组',

@@ -16,7 +16,9 @@
 // ============================================================================
 
 import { el } from '../core/dom.js';
-import { button, card, renderListPage } from '../ui/build.js';
+import { card, h, renderListPage } from '../ui/build.js';
+// 组件库：卡片上「编辑 / 聊天」是通用按钮，走工厂建 m-button（见 components/index.js）
+import { mButton } from '../components/index.js';
 import { entityTone } from '../ui/avatarTone.js';
 import { openLightbox } from '../ui/lightbox.js';
 import { characters, characterPortrait } from '../data/library.js';
@@ -68,19 +70,23 @@ function characterCard(c) {
     onMediaClick: portrait ? () => openLightbox(portrait, { title: c.name }) : null,
     // 删除：静止时是透明的，鼠标移上来才浮出来 —— 跟左侧会话列表的 × 同一套。
     // 这样卡片平时还是干净的「编辑 / 聊天」两个按钮，不至于误点。
-    extra: button({
+    // ⚠️ 它是**图标按钮**（靠 .char-card-del 自己定义外形），不走 m-button：
+    //    套上组件宿主会多一层壳，而 .char-card-del 的内边距/圆角是直接落在
+    //    `<button>` 自己身上的（components/button.js 文件头写了这条边界）。
+    extra: h('button', {
+      type: 'button',
       class: 'char-card-del',
       text: '×',
       title: '删除这个角色',
-      ariaLabel: `删除角色：${c.name}`,
-      onClick: (event) => {
+      'aria-label': `删除角色：${c.name}`,
+      onclick: (event) => {
         event.stopPropagation();
         actions.remove(c.id, 'library');
       }
     }),
     actions: [
-      button({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => actions.edit(c.id) }),
-      button({ variant: 'primary', size: 'sm', text: '聊天', onClick: () => actions.chat(c.id) })
+      mButton({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => actions.edit(c.id) }),
+      mButton({ variant: 'primary', size: 'sm', text: '聊天', onClick: () => actions.chat(c.id) })
     ]
   });
 }

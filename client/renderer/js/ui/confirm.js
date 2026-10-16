@@ -7,6 +7,7 @@
 // ============================================================================
 
 import { el } from '../core/dom.js';
+import { hostOf } from '../components/index.js';
 
 let activeCleanup = null;
 
@@ -18,7 +19,9 @@ export function confirmDialog(options) {
   el.confirmTitle.textContent = opts.title || '确认';
   el.confirmMessage.textContent = opts.message || '';
   el.confirmOk.textContent = opts.confirmText || '确定';
-  el.confirmOk.className = `btn ${opts.danger ? 'btn-danger' : 'btn-primary'}`;
+  // confirm-ok 现在是 <m-button>：改外观走 `variant` 属性，不能 `className = …`
+  // （那会把组件名给抹了，且 confirm-ok 是组件时「danger 换红色」得落在 variant 上）。
+  el.confirmOk.variant = opts.danger ? 'danger' : 'primary';
 
   el.confirmModal.classList.remove('hidden');
   el.confirmCancel.focus();
@@ -51,9 +54,9 @@ export function confirmDialog(options) {
       if (event.key === 'Escape') {
         cleanup(false);
       } else if (event.key === 'Enter') {
-        if (!event.repeat) cleanup(document.activeElement === el.confirmOk);
+        if (!event.repeat) cleanup(hostOf(document.activeElement) === el.confirmOk);
       } else {
-        const next = document.activeElement === el.confirmCancel ? el.confirmOk : el.confirmCancel;
+        const next = hostOf(document.activeElement) === el.confirmCancel ? el.confirmOk : el.confirmCancel;
         next.focus();
       }
     }

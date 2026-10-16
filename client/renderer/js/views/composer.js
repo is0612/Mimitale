@@ -22,7 +22,7 @@ import { h, button, clear } from '../ui/build.js';
 // 「该量/该写高度的那颗」：组件（<m-textarea>）要落到里层那颗原生框上
 import { controlOf } from '../ui/auto-grow.js';
 // 组件库：就地编辑那条消息用工厂建多行框（见 components/index.js）
-import { mTextarea } from '../components/index.js';
+import { mTextarea, mButton } from '../components/index.js';
 import { persistConversations } from '../data/persist.js';
 import { ensureConvoEndpoint, isBridgeProvider } from '../data/providers.js';
 import { buildApiMessages, characterContextForConvo, effectiveSampling } from '../data/messages.js';
@@ -210,8 +210,8 @@ export function editMessage(index) {
     renderAll({ forceScroll: false });
   };
 
-  const save = button({ variant: 'primary', size: 'sm', text: '保存', onClick: () => finish(true) });
-  const cancel = button({ variant: 'ghost', size: 'sm', text: '取消', onClick: () => finish(false) });
+  const save = mButton({ variant: 'primary', size: 'sm', text: '保存', onClick: () => finish(true) });
+  const cancel = mButton({ variant: 'ghost', size: 'sm', text: '取消', onClick: () => finish(false) });
 
   textarea.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {

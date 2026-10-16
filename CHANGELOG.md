@@ -4,6 +4,314 @@
 
 ---
 
+## 2026-10-17 按钮第七批：删 `.btn` 半边皮肤 —— **按钮外观只剩 `.mi-btn__control` 一份定义**
+
+第六批让运行时 `.btn` 彻底绝迹后，`style.css` 里那批「`.btn,` / `.mi-btn__*` 共用声明」
+的逗号左半边全成了死代码。本批把半边删掉，并清掉所有只认 `.btn` 族的死声明：
+
+**共用声明删左半边（10 条）**：`.btn, .mi-btn__control`（底座）、`.btn-block,` / `.btn-sm,` /
+`.btn-primary,`（+hover/active）/ `.btn-ghost,`（+hover）/ `.btn-danger,`（hover）/
+`.btn:focus-visible,` / `.btn:active:not(:disabled),` / `.btn:disabled,` 全改只留
+`.mi-btn__*`；另 `.convo-del:hover, .btn-danger, …` 那条共用列表里的 `.btn-danger,` 一并删。
+
+**死声明整条删（5 条）**：
+- `.topbar-actions .btn-ghost:not(.topbar-icon)`（顶栏早已无 ghost 文字按钮，全是图标按钮）；
+- `.topbar-actions .btn > svg`（顶栏无 `.btn` 元素，图标按钮的 14px+opacity 早由
+  `.menu-toggle .field-icon` 补回）；
+- `.sidebar-foot #btn-folder`（`#btn-folder` 已搬进设置视图「本地数据」，不在侧栏脚）；
+- `.wb-card-actions .btn` / `.wb-card-actions .btn-ghost`（世界书卡按钮也已迁 m-button，
+  左半边 `.btn` 删掉，注释从「世界书还没迁」改成「都迁了」）。
+
+**上下文规则的 `.btn` 半边删（4 条）**：`.crop-foot-btns .btn,` / `.attr-group-edit .btn,` /
+`.row .btn,` / `#view-presets .preset-row-actions .btn,` 各留 m-button 半边。
+
+**`.btn.active` 半边删**（记忆「取消编辑」激活态，m-button 半边上一批已补）。
+
+**reduced-motion 里 `.btn { transition: none }` → `.mi-btn__control`**。
+
+**补了一处上一批遗漏的观感**：`.char-expr-head .btn-sm`（`padding: 4px 10px`）迁 m-button
+时丢了 —— 表情管理头部的按钮比 `.mi-btn--sm` 更紧凑一档，本批拆成
+`.char-expr-head m-button`（flex 基准）+ `> .mi-btn__control`（padding 4px 10px）。
+
+同步更新迁移期注释（主皮肤区、宿主/尺寸分区、按压反馈参照等），不再出现「等 .btn 退役再删」
+这类过期说明。
+
+**验证**
+- `check-css.js` 仍只报历史遗留的 3 处重复选择器（`.wb-card-actions` / `textarea` / `select`），
+  本批无新增重复。
+- 冒烟 **1546/1546 通过，控制台 0 报错**（删了 1 条过时断言：「组件皮肤和老 .btn 完全一致」——
+  它守的是「`.btn` 和 `.mi-btn__control` 共用一份声明」，皮肤半边删掉后没了可比的第二份，
+  使命已完成，连同临时搭的老 `.btn` 对照节点一起移除）。
+
+---
+
+## 2026-10-17 按钮第六批：JS 侧 15 颗通用按钮迁 `<m-button>` —— **`.btn` 运行时彻底绝迹**
+
+静态清零之后扫 JS 侧，`button()` 工厂带 `variant/size` 的调用点 **15 处**全换 `mButton()`：
+图片裁剪 2（取消 / 用这块）、AI 配图 2（中止 / 开始生成）、状态卡 1（启用场景追踪）、
+属性分组 1（解散这一组）、消息编辑 2（保存 / 取消）、记忆检查点 2（读档 / 删除）、
+预设列表 3（编辑 / 导出 / 删除）、世界书列表 2（编辑 / 游玩）。
+
+**另外揪出 6 处绕过工厂的漏网 `.btn`**（grep `button({` 找不到的那种）：
+- `memoryUi.js` 4 颗**硬编码 `className = 'btn btn-…'`** 的摘要卡片按钮
+  （编辑（带 `active` 态）/ 重新生成 / 删除 / 保存）→ `mButton()`。
+  `regenBtn.disabled = true` / `regenBtn.textContent = '生成中…'` 这些动态写法
+  组件都有桥（reflectProperties / textContent setter），原样保留。
+- `worldbookLayout.js` 的 `wb-list-back`（「条目列表」返回钮，`make('button', 'btn btn-ghost btn-sm …')`）
+  → `mButton()`。
+- `lightbox.js` 的 4+1 颗工具条图标按钮**挂着多余的 `.btn btn-ghost btn-sm`** ——
+  这是纯图标按钮，`.icon-btn` 自带完整底座；但 ghost 的「白底 + 淡阴影」是真实设计
+  （第一版去掉后像素比对当场抓到 2331 像素差异），于是类名去掉、观感搬进
+  `.lightbox-bar .icon-btn`（含 `color: text-faint` —— 第二版写成 text-dim 又被抓到，
+  那是老规则里 `.lightbox-bar .btn.icon-btn` 的覆盖值）。教训：**图标按钮去掉 `.btn`
+  底座时，被底座盖着的观感要逐一搬走，不能只看选择器匹配不匹配。**
+
+配套 CSS：`.crop-foot-btns`、`.attr-group-edit`、`.wb-card-actions`（flex / ghost 观感 /
+hover 三条）、`.preset-row-actions`（透明底 + 删除键的 text-faint 落里层）、
+`.btn.active`（记忆「取消编辑」激活态 → `.memory-card-actions m-button.active > .mi-btn__control`）。
+
+**现状**：`build.js` 的 `button()` 只剩 18 处**纯图标按钮**调用点（`char-card-del` /
+`convo-del` / `sc-*` / `variant-btn` / `attr-tab` / `mini-*` 等，不带 variant 就不生成
+`.btn` 底座）—— 这正是「图标按钮不套组件」的边界，它们**保持原生**。
+运行时不再有任何元素带 `.btn` 类（`push('btn')` 无触发点）。
+
+**验证**
+- 逐像素：`presets` / `worldbooks` / `charAttrs` / `stateCard` **四个场景完全相同**；
+  `lightbox` 仅剩最大通道差 2 的阴影取整噪声（203 万像素里 529 个，肉眼不可见）。
+- 冒烟 **1547/1547 通过，控制台 0 报错**（中途修了一条断言：
+  「解散这一组」迁走后 `#c-attr-group-edit .btn-danger` 选择器失去目标 → `m-button`）。
+
+---
+
+## 2026-10-17 按钮第五批：顶栏 + 侧栏最后 8 颗 —— **静态 `.btn` 清零**，像素比对揪出三个真问题
+
+`btn-new`、侧栏 4 颗（chars / worldbooks / presets / settings）、`btn-stop`、`btn-send`
+换成 `<m-button>`；`btn-more` 按「长得不像按钮的按钮」边界**回退成纯图标按钮**
+（去掉 `btn-ghost btn-sm`，和 btn-memory / btn-perspective 同构）。
+**`index.html` 的静态 `.btn` 从 89 → 0**，页上 `<m-button>` **88** 颗。
+
+上下文规则照例一拆二（尺寸归宿主 / 观感归里层）：`.btn-new`、`.btn-send`、
+`.sidebar-foot .btn`、`.sidebar.collapsed` 一族、`#btn-settings`、active 高亮态
+（`.sidebar .btn.active` → `.sidebar-foot m-button.active > .mi-btn__control`）。
+
+**像素比对这次没让它过 —— 三个「不报错、悄悄变差」被逐一抓出来：**
+
+1. **btn-new 矮了 10px**：老规则 `height:32px + min-height:42px` 压在同一颗 `.btn` 上，
+   min-height 赢、实际渲染 42px。拆到宿主/里层后里层照抄了 `height: 32px` ——
+   显式 height 压过宿主 stretch，按钮真的变成 32px。修：里层删掉 height，交给 stretch。
+2. **侧栏入口文字集体偏移 8px**：组件 `render()` 无条件塞一颗
+   `<span class="mi-btn__label">` 进里层；文字在 `.foot-label` 里的按钮宿主没有裸文本，
+   这颗 label 是**空的** —— 宽 0 但仍是一个 flex item，白占一个 gap 槽。
+   修：`.mi-btn__label:empty { display: none }`（setLabel 填字后自动回来）。
+3. **收起态「开启新篇章」文字漏出来 / 「⋯」图标变大变深**：
+   - `font-size: 0` 压在宿主上会被里层共用皮肤的 `font-size: var(--fs-sm)` 拦住
+     （裸文本时代直接继承，span 时代被里层的显式字号截胡）→ 拆到里层；
+   - btn-more 回退掉 `.btn` 族类名后，`.topbar-actions .btn > svg` 的
+     `14px + margin + 0.85 透明度` 全部失效（落进 `.topbar-icon` 的 18px 档）
+     → `.menu-toggle .field-icon` 按原值补回。
+
+**验证**
+- 逐像素：`rail`（收起态图标轨）**完全相同**；`chat` 除消息时间戳（动态时钟）外完全相同。
+- 冒烟 **1547/1547 通过，控制台 0 报错**（侧栏断言的选择器跟着迁到 `.sidebar-foot m-button`，
+  「纯 ghost」断言改读里层 `.control` 的边框/背景）。
+- `check-dom-ids` / `audit-buttons` / `check-imports` 干净。
+
+**剩余**：JS 侧 33 处 `button()`（15 通用 + 18 图标）是最后一批；迁完删 `.btn` 那半边皮肤
+（共用声明 10 条 + 约 25 条上下文规则里的 `.btn` 半边）。
+
+---
+
+## 2026-10-17 按钮第四批：弹窗 + 列表页 28 颗换 `<m-button>` + 修掉 confirm.js 一个真 bug
+
+世界书列表页 2、预设列表页 3、以及**各弹窗 23 颗**（批量表情 3、预设编辑器 3、
+请求记录 2、视角 1、记忆 3、游玩 2、世界书角色选择 2、人设 3、确认 2、选择 1）
+全部换成 `<m-button>`。`index.html` 的 `.btn` 一族 **36 → 8**（剩下的 8 颗都是
+带 `data-icon` / `btn-block` / 特殊类的顶栏 + 侧栏按钮，下一批单独处理），
+页上 `<m-button>` 已有 **81** 颗。
+
+**🔴 修掉一个生产 bug：confirm.js 动态写 `className` 会抹掉组件类名**
+`ui/confirm.js` 的 `confirmDialog()` 原来有这一行：
+```js
+el.confirmOk.className = `btn ${opts.danger ? 'btn-danger' : 'btn-primary'}`;
+```
+`confirm-ok` 迁成 `<m-button>` 之后，这行会在每次弹确认框时把宿主的 `mi-btn mi-btn--primary`
+整个**覆盖**成 `btn btn-primary` —— 组件名没了，样式退回老类名，而且「危险操作变红」
+那条路也断了。这是典型的「不报错、悄悄变差」：确认框的按钮外观退化成半套老样式。
+
+修法照组件口径：外观走 `el.confirmOk.variant = opts.danger ? 'danger' : 'primary'`，
+不碰 `className`。同文件里焦点判断也从 `document.activeElement === el.confirmOk`
+改成 `hostOf(document.activeElement) === el.confirmOk`（组件化之后 activeElement 是
+里层按钮，直接比宿主永远不相等 —— 否则 Enter 确认、Tab 循环都会失效）。
+
+**⚠️ 又一条上下文规则要补**：`.row .btn { flex: 0 0 auto }` —— 弹窗里大量 `.row`
+容器，按钮迁成 m-button 后这条规则失去目标。补上 `.row m-button`（m-button 默认
+`display:inline-flex`，行为本来就接近，但显式钉死免得将来被里层尺寸规则意外抻开）。
+
+**验证**
+- 出图 + **逐像素：`worldbooks` / `presets` / `presetEditor` 三个场景与迁移前完全相同**。
+- 冒烟 **1547/1547 通过，控制台 0 报错**。
+- `test:ui` 82/82；`check-dom-ids` / `check-el-refs` / `check-imports` / `check-css`
+  （仍 3 处存量）/ `audit-css-dead` 全部干净。
+
+**规模更新**：`index.html` 还剩 **8** 个静态 `.btn` —— `btn-new`（primary block +
+data-icon）、侧栏 4 颗（ghost block + data-icon + 内层 `<span class="foot-label">`）、
+`btn-more`（topbar-icon）、`btn-stop`（danger sm hidden）、`btn-send`（primary +
+data-icon）。这些带 `data-icon` / `btn-block` / 特殊类，下一批单独做。
+JS 侧仍 33 处 `button()`（15 通用 + 18 图标），最后一批迁完再删 `.btn` 那半边皮肤。
+
+---
+
+## 2026-10-16 按钮第三批：两个编辑器页 28 颗换 `<m-button>` —— 四个场景逐像素完全相同
+
+角色编辑器（`#view-char-editor`）**14 颗** + 世界书编辑器（`#view-wb-editor`）**14 颗**
+静态 `.btn` 全部换成 `<m-button>`。`index.html` 的 `.btn` 一族 **64 → 36**，
+页上 `<m-button>` 已有 **53** 颗。
+
+这批的特点是**上下文规则一拆二**：好几条老规则一句话里同时写了「尺寸」和「对齐」，
+组件化之后它们要落在**不同层**上 ——
+- `#view-char-editor .char-rail-foot .btn { width: 100%; justify-content: flex-start }`：
+  `width` 是宿主的（flex item 尺寸），`justify-content` 是**里层**的（它才是 inline-flex、
+  文字在它里面居中）—— 写反了不报错，只是「导出 / 删除角色」缩成一行文字那么宽。
+  拆成 `char-rail-foot m-button { width: 100% }` + `… m-button > .mi-btn__control
+  { justify-content: flex-start }` 两条。
+- 同样拆的还有 `.char-expr-entry .btn-sm`（flex 归宿主 / padding 归里层）。
+- 纯里层观感的整条搬过去：`.char-avatar-col .btn-sm`（padding）、
+  `#view-wb-editor .wb-entry-actions .btn`（padding 6px 8px）。
+- 纯宿主布局的整条搬过去：`.attr-paste-foot .btn`、`.wb-entry-head .btn`（align-self）。
+- **删掉一条死声明**：`.wb-chars-actions .btn { white-space: nowrap }` —— 共用皮肤本来就在
+  `.mi-btn__control` 上给了 nowrap，这里再写一遍两边都罩不住（这条规则对老 `.btn` 是真的，
+  对组件是多余的），留注释说明。
+
+三颗「清除」带着 `hidden` 类迁过去 —— 宿主上的 `.hidden`（`display:none !important`）
+照样压过 `m-button` 自己的 `display:inline-flex`（类选择器权重高于元素选择器），
+冒烟里加了断言盯着这件事。
+
+**⚠️ 断言口径的一个坑（这轮踩的）**：不能写「这一页不再有原生 `.btn`」——
+属性面板那几颗（「解散这一组」等）是 **JS 用 `button()` 现渲染的**，JS 侧的 33 处调用点
+还没迁，它们仍会往这两个页面渲染 `.btn`。断言改成按 id 点名（14 颗缺一颗就报 id），
+「页面无 .btn」这种断言要等 JS 侧迁完才能上。（设置页那条能成立是因为它的 JS 按钮
+全在 `#panel-box` 里，当时就排除了。）
+
+**验证**
+- 出图 + **逐像素：`charEditorPage` / `charAttrs` / `charGroupEdit` / `wbEditorPage`
+  四个场景与迁移前完全相同**。
+- 冒烟 **1547/1547 通过，控制台 0 报错**（1541 → +6：两页各 3 条 —— id 点名、
+  左栏铺满栏宽 + 文字靠左（里层）、`hidden` 生效 / 条目行内边距落里层）。
+- `test:ui` 82/82；`check-dom-ids` / `check-el-refs` / `check-imports` / `check-css`
+  （仍 3 处存量）/ `audit-css-dead` 全部干净。
+
+**规模更新**：`index.html` 还剩 **36** 个静态 `.btn`（`#panel-box` 各弹窗 23、侧栏 5、
+预设页 3、聊天页 2、世界书页 2、messages 1）；JS 侧 33 处。
+下一步建议：**`#panel-box` 那 23 颗弹窗按钮**（都是 ghost/primary 成对，一次能清掉大头），
+然后侧栏 5 颗（`data-icon` + `btn-block` + `<span class="foot-label">` 单独一批），
+最后 JS 侧 15 个通用按钮 + 删 `.btn` 半边皮肤。
+
+---
+
+## 2026-10-16 按钮第二批：设置域 22 颗换 `<m-button>` + `data-icon` 落到里层 —— 三个场景逐像素完全相同
+
+设置域（`#view-settings` 直属 + `sec-support` / `sec-models` / `sec-appearance` / `pet-section`）
+的 **22 颗 `.btn`** 全部换成 `<m-button>`：页头「返回 / 保存」、本地数据「打开数据文件夹」、
+模型服务 5 颗（＋ 提供商 / 拉取模型 / 删除 / 测试 / 编辑人设）、外观 4 颗（重置加粗色 /
+选背景 / 雾境皮肤 / 清除）、桌宠 10 颗。
+`index.html` 的 `.btn` 一族 **89 → 64**。
+
+**⚠️ 缺口 10：`data-icon` 的图标要插进**里层**，不是宿主**（`ui/icons.js` 一处判断）
+`applyFieldIcons` 把 svg 插到元素最前面 —— 但按钮组件的底色 / 边框 / 圆角都在
+**里层** `.mi-btn__control` 上，图标落在宿主上会出现在按钮「方块」的**外面**。
+改成：宿主有 `.control` 且不是它自己 → 插到里层。两个时机都成立 ——
+图标先插、组件后 `render()` 时，`render()` 本来就会把非文本子节点搬进里层；
+图标后插（静态 HTML 的实际情况，入口层启动时组件早已连接）就靠这个判断。
+本批唯一的图标按钮 `btn-folder`（本地数据那颗）靠它落位。
+
+顺带：这批给了 `btn.disabled = true` + `btn.textContent = '…'` 这条链路第一批真实用户
+（`btnTest` 的「测试中…」、`btnFetchModels` 的「获取中…」、`btn-pet-say` 的初始禁用）——
+这三样正是按钮组件化之后最容易**静默失效**的写法。
+
+**冒烟新增 6 条**（挂在「设置页」场景里）：22 颗都是 m-button 宿主（缺一颗就报 id）、
+设置域无原生 `.btn`（`#panel-box` 弹窗容器嵌在里面还没迁，排除掉再数）、
+btn-folder 图标在里层、`btn-pet-say` 的禁用落到里层、`textContent`/`disabled` 写宿主落到里层、
+还原后一并还原。
+
+**验证**
+- 出图 + **逐像素：`settings` / `appearance` / `petSettings` 三个场景与迁移前完全相同**。
+  （`btn-folder` 的图标也在其中 —— 证明 `icons.js` 那处判断落对了地方。）
+- 冒烟 **1541/1541 通过，控制台 0 报错**（1535 → +6）。
+- `test:ui` 82/82；`check-dom-ids` / `check-el-refs` / `check-imports` / `check-css`（仍 3 处存量）/
+  `audit-css-dead` 全部干净。
+
+**规模更新**：`index.html` 还剩 **64** 个静态 `.btn`（角色编辑器 14、世界书编辑器 14、
+`#panel-box` 各弹窗 23、侧栏 5、预设页 3、聊天页 2、世界书页 2、messages 1）；
+JS 侧 33 处 `button()` 调用点（15 通用 + 18 图标）。
+下一批建议：**角色编辑器页 + 世界书编辑器页**（28 颗，都是同一形态的 ghost/danger × sm），
+或者先把 `#panel-box` 那 23 颗弹窗按钮清掉（都是 `btn-ghost` / `btn-primary` 成对出现）。
+
+---
+
+## 2026-10-16 按钮试点：角色库页 6 颗（3 静态 + 3 JS）换 `<m-button>` —— 逐像素完全相同
+
+按钮这一批**先拿角色库页（`#view-chars`）做试点**，因为它是「静态按钮 + JS 按钮 +
+上下文 CSS」三者齐全的最小闭环，卡片那一组还顺带含一个图标按钮。
+
+**⚠️ 先修正一个记错的规模**：交接单上写的是「按钮 39 处 `button({…})` 调用点」，
+那只数了 JS 那一侧。真实规模是 ——
+
+| 部分 | 数量 | 说明 |
+| --- | --- | --- |
+| `index.html` 静态 `.btn` | **89** | 其中 23 个带 `data-icon`（集中在侧栏 5 颗 + 发送 1 颗） |
+| JS 侧 `button()` 调用点 | 36 | = **17 通用**（给了 variant/size）+ 19 图标（只有 class） |
+| 含 `.btn` 的 CSS 选择器 | 35 | 其中约 25 条是上下文规则（`.sidebar-foot .btn` / `.row .btn` …） |
+
+本批搬的是：**3 个静态**（导入角色卡 / AI 生成 / ＋ 新建角色）+ **2 个通用 JS**
+（卡片上的编辑 / 聊天）+ 1 个图标按钮（`char-card-del` 改用 `h()`）。
+
+**⚠️ 缺口 9：里层没有**横向**撑满**（`m-button > .mi-btn__control { flex: 1 1 auto }`）
+`m-button` 宿主只有 `align-items: stretch` —— 那管的是**纵向**。横向的默认是
+`flex: 0 1 auto`，里层会缩成「文字那么宽」。宿主宽度由内容决定时看不出问题
+（页头那几颗：宿主 86 / 里层 86），但宿主被父容器**抻开**时就露馅了：
+卡片动作行是 `flex: 1 1 0` 平分两格，实测**宿主 96px、里层只有 50px** ——
+按钮看着比槽位短一截、字还靠左，而且**不报错**。
+
+补在组件区：用 `flex: 1 1 auto` 而不是 `width: 100%` —— 宿主自然宽度时 basis 就是
+内容宽、没有多余空间可长，所以页头那几颗的数字一个都不变。
+
+**上下文 CSS 怎么落**（这是本批真正要立的规矩，后面每页照抄）
+
+| 规则说的是 | 挂在谁身上 | 例子 |
+| --- | --- | --- |
+| 尺寸 / 位置（flex 基准、margin、order） | **宿主** | `.char-card-actions m-button { flex: 1 1 0 }` |
+| 观感（背景、阴影、内边距、圆角） | **里层** `.mi-btn__control` | `.char-card-actions .mi-btn--ghost > .mi-btn__control { background: transparent }` |
+
+写反了不会报错，只会**悄悄没效果**（在宿主上写 `background` 发光的是里层；
+在里层上写 `flex` 里层压根不是 flex item）。本批把这两条从原来和世界书页合并的
+规则里**拆开**了：`.char-card-actions` 已全迁，`.char-card-actions .btn*` 直接删掉；
+`.wb-card-actions .btn`（世界书页没迁）留着。
+
+**图标按钮的边界**：`.char-card-del` 这类「长得不像按钮的按钮」**不套组件**
+（`components/button.js` 文件头就写了这条）：它们的形态是自己的类直接落在
+`<button>` 上，套一层宿主会把内边距和圆角顶掉。本批它改用 `h('button', …)`，
+`characterList.js` 从此不再 import `build.js` 的 `button()`。
+
+**验证**
+- 出图 + **逐像素：`chars` / `charArt` 两个场景与迁移前逐像素完全相同**（0 差异）。
+  方法照旧：迁移前后各拍一次、两次都跑完整套断言。
+- 冒烟 **1535/1535 通过，控制台 0 报错**（1524 → +11：8 条 m-button 宿主/里层行为断言
+  + 1 条「角色库页有卡片」+ 2 条「里层撑满宿主」回归闸门）。
+- `npm run test:ui` **82/82**；静态自检：`check-dom-ids` / `check-el-refs` / `check-imports`
+  干净，`check-css` 3 处、`check-dead-code` 12 条均为存量（本轮引入 0 处，选择器 1350 → 1351）。
+
+**剩下的**（试点之外）
+- `index.html` 还有 **86 个**静态 `.btn`：`#view-char-editor` 38 个（最集中）、
+  `#view-wb-editor`、设置页、顶栏、侧栏 5 颗（`btn-block` + `data-icon` + 内层
+  `<span class="foot-label">`）、`#btn-send`。
+- JS 侧 33 处：15 个通用按钮 + 18 个图标按钮。
+- `data-icon` 那条路还没碰：`applyFieldIcons` 在启动时把 svg 插到元素最前面，
+  而自定义元素的 `render()` 在连接时就跑完了 —— 图标会落在宿主上而不是里层，
+  `.sidebar-foot .btn svg` 那类规则也要跟着改。侧栏那 5 颗单独做一批。
+- 全搬完之后再删 `.btn` 那半边皮肤（10 条共用声明 + 约 25 条上下文规则）。
+
+---
+
 ## 2026-10-16 多行框清零：index.html 17 个 + JS 侧 4 处全换 `<m-textarea>`
 
 `index.html` 里那 **17 个 `<textarea>`** 全部换成 `<m-textarea>`：`#input`（聊天输入）、

@@ -18,6 +18,7 @@
 // ============================================================================
 
 import { h, button } from './build.js';
+import { mButton } from '../components/index.js';
 import { api } from '../core/api.js';
 import { showToast } from './toast.js';
 
@@ -314,8 +315,8 @@ export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = '�
         h('span', { class: 'crop-zoom-label', text: '大' })
       );
 
-      const btnCancel = button({ id: 'crop-cancel', variant: 'ghost', size: 'sm', text: '取消' });
-      const btnOk = button({ id: 'crop-ok', variant: 'primary', size: 'sm', text: '用这块' });
+      const btnCancel = mButton({ id: 'crop-cancel', variant: 'ghost', size: 'sm', text: '取消' });
+      const btnOk = mButton({ id: 'crop-ok', variant: 'primary', size: 'sm', text: '用这块' });
 
       const foot = h(
         'div',

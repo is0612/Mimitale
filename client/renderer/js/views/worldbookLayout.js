@@ -1,4 +1,5 @@
 // Layout only: original controls retain their IDs, values and event handlers.
+import { mButton } from '../components/index.js';
 let layout;
 
 export function initWorldbookLayout({ onFilter }) {
@@ -81,8 +82,7 @@ export function initWorldbookLayout({ onFilter }) {
   filter.addEventListener('change', onFilter);
 
   const detailHead = make('div', 'wb-detail-head');
-  const back = make('button', 'btn btn-ghost btn-sm wb-list-back', 'wb-list-back', '条目列表');
-  back.type = 'button';
+  const back = mButton({ variant: 'ghost', size: 'sm', class: 'wb-list-back', id: 'wb-list-back', text: '条目列表' });
   back.addEventListener('click', () => { workspace.dataset.mobile = 'list'; search.focus(); });
   const headTitle = make('strong', 'wb-detail-title', '', '条目设定');
   const contentCount = make('small', 'wb-content-count', 'wb-content-count');
