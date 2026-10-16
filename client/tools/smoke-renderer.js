@@ -867,7 +867,26 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
     check('通用输入框圆角 = --radius-sm', radiusOf('#c-name') === RSM, radiusOf('#c-name'));
   }
 
-  const hOf = (node) => Math.round(node.getBoundingClientRect().height);
+  // ⚙ 组件化（2026-10-16）：多行框的**高**长在里层那颗原生框上（宿主管布局），
+  //    量宿主会得到「宿主盒子的高」：没有地板、也不滚动 —— 三条断言一起假红。
+  // ⚙ 缺口（2026-10-16 迁多行框时挖出来的）：
+  //    `label[for]` 的「点标签 = 聚焦那个控件」**只对原生可标记元素成立**
+  //    （button/input/meter/output/progress/select/textarea），组件是自定义元素 ——
+  //    实测 `label.control === null`，点标签什么都不会发生。组件库因此在 document
+  //    上挂了一条捕获段监听把这个行为补回来，这里钉住它别再掉。
+  {
+    const label = $('label.char-sheet-label[for="c-desc"]');
+    check('写作字段的标签是 label[for]（点标题聚焦输入框）', !!label);
+    if (label) label.click();
+    await sleep(40);
+    check(
+      '点「角色描述」标签，焦点落到里层那颗原生框',
+      document.activeElement === asControl(desc),
+      document.activeElement ? document.activeElement.tagName : '(无)'
+    );
+  }
+
+  const hOf = (node) => Math.round(asControl(node).getBoundingClientRect().height);
 
   // 内容少：高度应当停在「下限」附近
   setValue(desc, '一行字');
@@ -904,7 +923,7 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
   // 内容多：把**描述**填满 —— 它那格的地板是 264px，比 GROW_MAX(160) 高，
   // 所以它是完全刚性的：塞多少行都不动高度，多出来的在框内滚。
   // （地板低于 160 的格子会在地板和 160 之间随内容浮动，那是有意的宽松度。）
-  const floorOf = (id) => Math.round(parseFloat(getComputedStyle(byId(id)).minHeight) || 0);
+  const floorOf = (id) => Math.round(parseFloat(getComputedStyle(asControl(byId(id))).minHeight) || 0);
   setValue(desc, Array.from({ length: 24 }, (_, i) => `第 ${i + 1} 行的内容`).join('\n'));
   await sleep(200);
   const hDescLong = hOf(desc);
@@ -926,13 +945,15 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
   );
   check(
     '超上限的内容走框内滚动（表单总长恒定）',
-    desc.scrollHeight > desc.clientHeight + 10,
-    `scrollHeight ${desc.scrollHeight} vs clientHeight ${desc.clientHeight}`
+    // 「滚的是框自己」：量里层那颗原生框（宿主不滚）
+    asControl(desc).scrollHeight > asControl(desc).clientHeight + 10,
+    `scrollHeight ${asControl(desc).scrollHeight} vs clientHeight ${asControl(desc).clientHeight}`
   );
 
   // 手动拖过之后就锁定：再输入内容也不该被自动改回去。
   // 模拟「用户拖拽结束」——直接改高度再派发 mouseup（这是唯一能观察到的信号）。
-  example.style.height = '420px';
+  // ⚙ 高度写在里层那颗上（auto-grow 也量里层），mouseup 派在宿主上（监听器挂宿主）。
+  asControl(example).style.height = '420px';
   example.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   await sleep(50);
   setValue(example, '又变短了');
@@ -2339,7 +2360,9 @@ await scenario('输入框：快捷短语面板', async () => {
     input.selectionStart === 4 && input.selectionEnd === 4,
     String(input.selectionStart)
   );
-  check('插入后焦点回到输入框（接着就能打字）', document.activeElement === input);
+  // ⚙ 组件化之后 #input 是 `<m-textarea>` 的宿主，焦点在**里层那颗原生框**上 ——
+  //    直接拿宿主比 `document.activeElement` 恒不相等（假红，坏的是断言自己）。
+  check('插入后焦点回到输入框（接着就能打字）', document.activeElement === asControl(input));
   check('插入不会直接发消息', $$('#messages .msg').length === msgsBefore, `${msgsBefore} → ${$$('#messages .msg').length}`);
   check('收起后按钮不再是展开态', btn.getAttribute('aria-expanded') === 'false');
 
@@ -2375,7 +2398,7 @@ await scenario('输入框：快捷短语面板', async () => {
   await waitFor('面板展开（等 Esc）', () => !menu.classList.contains('hidden'));
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await waitFor('Esc 收起面板', () => menu.classList.contains('hidden'));
-  check('Esc 收起后焦点仍在输入框', document.activeElement === input);
+  check('Esc 收起后焦点仍在输入框', document.activeElement === asControl(input));
 
   // --- 点别处收起 ---
   click('#btn-quick');
@@ -2416,6 +2439,27 @@ await scenario('输入框：快捷短语面板', async () => {
   click('#btn-quick');
   check('展开快捷短语会关闭其它菜单', !shown('#topbar-more') && shown('#quick-menu'));
   document.body.click();
+
+  // --- 输入框跟着内容长高（composer.autoGrowInput）---
+  //  ⚙ 2026-10-16 组件化时**这条链路原来是零覆盖**：`autoGrowInput` 曾经读写
+  //    `el.input.style.height / scrollHeight`，而组件化之后宿主不是那颗被量/被写的
+  //    元素 —— 改成过 controlOf() 才继续有效。没有断言的话，这类「静默失效」
+  //    （不报错、框就是不长高）只能靠人肉发现。
+  {
+    const box = asControl(input);
+    setValue('#input', '');
+    await sleep(80);
+    const h0 = Math.round(box.getBoundingClientRect().height);
+    setValue('#input', Array.from({ length: 8 }, (_, i) => `第 ${i + 1} 行`).join('\n'));
+    await sleep(80);
+    const h1 = Math.round(box.getBoundingClientRect().height);
+    check('输入框跟着内容长高', h1 > h0, `${h0} → ${h1}px`);
+    check('长高有上限（CONFIG.MAX_INPUT_HEIGHT = 190）', h1 <= 190, `${h1}px`);
+    setValue('#input', '');
+    await sleep(80);
+    check('清空后缩回原始高度', Math.abs(Math.round(box.getBoundingClientRect().height) - h0) <= 2,
+      `${h0} → ${Math.round(box.getBoundingClientRect().height)}px`);
+  }
 
   // 收尾：别把字留给后面的场景
   setValue('#input', '');
@@ -9978,7 +10022,7 @@ await scenario('组件库：自定义元素（m-button / m-input / m-textarea / 
   const defaultArea = document.createElement('m-textarea');
   host.appendChild(defaultArea);
   await waitFor('缺省 rows 的多行框升级', () => !!defaultArea.querySelector('textarea'));
-  check('rows 缺省是 3（和 ui/controls.js 的 textarea() 同一个口径）', defaultArea.querySelector('textarea').getAttribute('rows') === '3');
+  check('rows 缺省是 3（和 index.html 里那些多行框字段同一个口径）', defaultArea.querySelector('textarea').getAttribute('rows') === '3');
 
   // ---- m-select（和自研下拉列表自动组合）----
   const picker = document.createElement('m-select');

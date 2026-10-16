@@ -124,6 +124,7 @@ export function toggleAttr(node, name, on) {
  * rest 的口径：
  *   · `onXxx` → addEventListener('xxx')
  *   · `value` / `checked` → **property**（attribute 只算初始值）
+ *   · `dataset` → `el.dataset`（和 ui/build.js 的 h() 同一个口径）
  *   · 其余 → setAttribute（`maxlength`、`rows`、`placeholder`、`aria-label`…）
  */
 export function applyOptions(el, opts = {}) {
@@ -159,6 +160,10 @@ export function applyOptions(el, opts = {}) {
     }
     if (key === 'value') el.value = value;
     else if (key === 'checked') el.checked = value;
+    // data-* 得走 dataset：走 setAttribute 会把 `dataset="[object Object]"` 写成
+    // 一个真实属性（不报错，但读 `node.dataset.index` 永远是 undefined）——
+    // 2026-10-16 迁备选开场白那几行时差点就这么踩进去（h() 一直支持它，工厂没跟上）。
+    else if (key === 'dataset' && typeof value === 'object') Object.assign(el.dataset, value);
     else setAttr(el, key, value);
   }
   return el;
@@ -350,6 +355,19 @@ export class MiControl extends HTMLElement {
     return this._callControlMethod('setSelectionRange', start, end, direction);
   }
 
+  /**
+   * `setRangeText()` —— 同样是原生文本控件专有的方法：把一段区间替换成新文本。
+   *
+   * 为什么也转发：它就是「选中一段直接改写」这件事的**原生写法**（而且不会像
+   * `value = …` 那样清掉撤销栈）。页面今天还没用到，但冒烟里模拟「选中一段打字覆盖」
+   * 走的就是它 —— 没转发时 `input.setRangeText is not a function` 直接把整个场景打断。
+   * 与其让调用方各自记得先取里层控件，不如把这一族（select / setSelectionRange /
+   * setRangeText）一次补全：组件的口径是「宿主 = 原生控件的替身」。
+   */
+  setRangeText(replacement, start, end, mode) {
+    return this._callControlMethod('setRangeText', replacement, start, end, mode);
+  }
+
   /** 转发到里层原生控件；没有这个方法就**当场报错**，不做静默空转 */
   _callControlMethod(name, ...args) {
     const control = this.control;
@@ -357,6 +375,26 @@ export class MiControl extends HTMLElement {
     console.error(`<${this.tagName.toLowerCase()}> 里层控件没有 ${name}()（它不是文本输入类控件？）`);
     return undefined;
   }
+}
+
+/**
+ * 事件委托里把「里层那颗原生控件」还原成**组件宿主**。
+ *
+ * 为什么需要：`input` / `change` 这些事件从里层冒泡上来，`event.target` 是里层那颗
+ * **原生**控件 —— 于是两件在原生控件时代理所当然的事都不成立了：
+ *   · `event.target.id` 是空的（id 在宿主上）→ 靠 id 约定找角标的地方**静默失效**
+ *     （角色编辑器那五个字数角标就是这么掉的：抱着空 id 去查角标，永远查不到；
+ *      而代码里写的是「找不到角标就静默跳过」，于是错得很安静）；
+ *   · `event.target.classList` / `dataset` 是**宿主**上的类名与 data-*，
+ *     里层那颗只有 `mi-*-control`（备选开场白的行内输入靠 `.alt-greet-text` 认行，
+ *     不还原就会**静默丢改动**）。
+ *
+ * 口径：传进来的就是里层控件（它的父级正好是宿主）→ 返回宿主；否则原样返回。
+ * 认的是「父级的 control 是我」而不是「类名像组件」，所以嵌套的普通结构不会误判。
+ */
+export function hostOf(node) {
+  const parent = node && node.parentElement;
+  return parent && parent.control === node ? parent : node;
 }
 
 /**

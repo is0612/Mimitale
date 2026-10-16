@@ -67,6 +67,8 @@ import {
 } from './charExpressions.js';
 import { openAiGenModal } from './aiGen.js';
 import { attachAutoGrow, syncAutoGrowAll } from '../ui/auto-grow.js';
+// 组件库：备选开场白那几行是动态铺的，用工厂建多行框（见 components/index.js）
+import { mTextarea, hostOf } from '../components/index.js';
 import { pickAndCrop } from '../ui/imageCrop.js';
 import { initCharacterEditorLayout, showCharacterField, setCharSectionCount, setCharSourceChip, refreshCharSectionCounts } from './characterEditorLayout.js';
 export { showCharacterField } from './characterEditorLayout.js';
@@ -118,9 +120,17 @@ function wireAutoGrow() {
 //  浮层写长内容。编辑页改成整屏之后框本身就够大了，那颗按钮已撤掉。
 // ---------------------------------------------------------------------------
 
-/** 一个长文本框的字数角标节点（id 约定：<textarea id>-count） */
+/**
+ * 一个长文本框的字数角标节点（id 约定：宿主 id + `-count`）。
+ *
+ * ⚙ 组件化（2026-10-16）之后这个函数会被两种东西叫到：`longTextAreas()` 给的是**宿主**，
+ * 而 input 事件委托递过来的是**里层那颗原生框**（id 挂在宿主上，里层那颗没有 id）。
+ * 不还原成宿主就会去查 `.getElementById('-count')` —— 查不到，而这句写的是
+ * 「找不到角标就静默跳过」，于是角标**再也不刷新**（不报错、没人发现）。
+ */
 function charCountNode(textarea) {
-  return textarea ? document.getElementById(`${textarea.id}-count`) : null;
+  const node = hostOf(textarea);
+  return node && node.id ? document.getElementById(`${node.id}-count`) : null;
 }
 
 /** 刷新一个框的角标。找不到角标（比如别的页面的 textarea）就静默跳过 */
@@ -1341,10 +1351,12 @@ function renderAltGreetings() {
 
   clear(list);
   charAltGreetings.forEach((text, i) => {
-    const ta = h('textarea', {
+    const ta = mTextarea({
       class: 'alt-greet-text',
       // id 约定见 charCountNode：`<textarea id>-count` 就是它的字数角标，
       // 这样 charForm 的 input 委托能顺手把角标刷掉，不用另接一套。
+      // ⚙ 组件化之后 id 挂在**宿主**上，事件里拿到的是里层那颗原生框 ——
+      //   所以下面刷新角标时得先过一道 hostOf()（见 updateCharCount 那里）。
       id: `c-alt-${i}`,
       rows: 3,
       spellcheck: 'false',
@@ -1421,7 +1433,9 @@ function onAltListClick(event) {
 }
 
 function onAltListInput(event) {
-  const ta = event.target;
+  // ⚙ 组件化之后 `event.target` 是里层那颗原生框：`.alt-greet-text` 与 `data-index`
+  //   都在**宿主**上 —— 不还原成宿主，这里会直接 return（静默把改动丢了）。
+  const ta = hostOf(event.target);
   if (!ta || !ta.classList || !ta.classList.contains('alt-greet-text')) return;
   const i = Number(ta.dataset.index);
   if (Number.isInteger(i) && i >= 0 && i < charAltGreetings.length) charAltGreetings[i] = ta.value;
@@ -1489,7 +1503,15 @@ export function initCharacterEditor(injected) {
   // 字数角标 + 保存状态：手动输入时刷新（回填路径在 fillCharForm 里统一刷过）
   el.charForm.addEventListener('input', (event) => {
     setCharSaveState('dirty');
-    if (event.target instanceof HTMLTextAreaElement) updateCharCount(event.target);
+    // ⚙ 多行框组件化之后 input 有两个来源：真人敲字时 target 是**里层那颗原生框**，
+    //    程序派发（比如快捷短语往宿主上 dispatch input）时 target 是**宿主**。
+    //    只认 `instanceof HTMLTextAreaElement` 的话后者会被漏掉，角标就停在旧值 ——
+    //    这种 bug 没人会立刻发现（界面看着一切正常）。判据写成「它自己就是多行框，
+    //    或它的里层控件是多行框」，不写 tagName 字面量。
+    const node = event.target;
+    if (node instanceof HTMLTextAreaElement || (node && node.control instanceof HTMLTextAreaElement)) {
+      updateCharCount(node);
+    }
     // 左栏徽章（已写 x/5）与右栏字段目录的字数都跟着输入走，不然它们是开局那一刻的快照
     refreshCharSectionCounts();
   });

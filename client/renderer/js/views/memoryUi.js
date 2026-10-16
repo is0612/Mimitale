@@ -30,6 +30,8 @@ import { uid, now, activeConvo } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear } from '../ui/build.js';
+// 组件库：就地编辑一段摘要用的多行框（见 components/index.js）
+import { mTextarea } from '../components/index.js';
 import { persistConversations } from '../data/persist.js';
 import { convoPanel, convoPanelDefs, convoPanelFields, normalizePanelDefs } from '../data/panel.js';
 import {
@@ -189,10 +191,13 @@ function buildMemoryCard(convo, seg, index, total) {
   body.className = 'memory-card-body';
 
   if (isEditing) {
-    const box = document.createElement('textarea');
-    box.className = 'memory-edit-box';
-    box.value = String(seg.text || '');
-    box.spellcheck = false;
+    // ⚙ 组件化（2026-10-16）：就地编辑摘要用的多行框走工厂形态；
+    //    `.memory-edit-box` 留在宿主持布局，观感那条规则跟着改成 `> textarea`。
+    const box = mTextarea({
+      class: 'memory-edit-box',
+      value: String(seg.text || ''),
+      spellcheck: 'false'
+    });
 
     const editActions = document.createElement('div');
     editActions.className = 'memory-card-actions';

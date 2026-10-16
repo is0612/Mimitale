@@ -35,6 +35,10 @@
 //  4) 单靠 `input` 事件不够：**程序回填**（打开编辑器往框里塞值）不走 input，
 //     所以打开时得显式调一次 syncAutoGrowAll。
 //
+//  ⚠️ 2026-10-16 起这里的框**都是组件**（`<m-textarea>`）。宿主只占位，
+//  描边 / 内边距 / min-height / 要写的高度全在里层那颗原生框上 ——
+//  所以「量」和「写」都必须过 `controlOf()`（见下面它的注释）。
+//
 //  ⚠️ 两个坑：① 别给这些框加 CSS transition:height（过渡会让高度停在初始值）；
 //  ② 量高度必须在元素可见之后（display:none 的 scrollHeight 是 0，量到下限）。
 // ============================================================================
@@ -43,6 +47,24 @@
 const GROW_MAX = 160;
 // 每次重算的最小高度（px）。太矮的话一行都没有，看着像坏了。
 const GROW_MIN = 84;
+
+/**
+ * 「该量、该写高度的那颗元素」—— 组件化之后，**它不是传进来的那个**。
+ *
+ * `<m-textarea>` = 宿主 + 里面一颗原生 `<textarea>`。宿主只管占位与布局，
+ * 描边 / 内边距 / min-height / 以及这里要写的高度**全在里层那颗上**。
+ * 拿宿主量 scrollHeight 会拿到「当前渲染出来的高度」而不是内容高度，
+ * 写上去的 `style.height` 也压不到里层那颗 —— 症状是**不报错、框就是不长高**
+ * （2026-10-16 迁多行框时踩到）。
+ *
+ * 口径：节点上带 `control`（= 本库组件的里层控件）就用它，否则原样返回。
+ * ⚠️ 调用方传进来的仍然是**宿主**（`el.c.desc` 这种，id / dataset 都挂在宿主上），
+ * 只有「量 / 写高度」这两件事要落到里层 —— 别在调用点各自 `node.control` 一次，
+ * 那样漏一处就又变成静默失效。
+ */
+export function controlOf(node) {
+  return node && node.control ? node.control : node;
+}
 
 /**
  * 量一次文本框内容需要多高。
@@ -61,16 +83,17 @@ const GROW_MIN = 84;
  * 不写死 —— 免得以后改了边框宽度这里就对不上。
  */
 function measureHeight(el) {
-  const prevH = el.style.height;
-  const rows = el.getAttribute('rows');
+  const box = controlOf(el);
+  const prevH = box.style.height;
+  const rows = box.getAttribute('rows');
 
-  el.style.height = 'auto';
-  if (rows !== null) el.removeAttribute('rows');
-  const scroll = el.scrollHeight;
-  if (rows !== null) el.setAttribute('rows', rows);
-  el.style.height = prevH;
+  box.style.height = 'auto';
+  if (rows !== null) box.removeAttribute('rows');
+  const scroll = box.scrollHeight;
+  if (rows !== null) box.setAttribute('rows', rows);
+  box.style.height = prevH;
 
-  const cs = window.getComputedStyle(el);
+  const cs = window.getComputedStyle(box);
   const border = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
   return scroll + border;
 }
@@ -84,7 +107,7 @@ function measureHeight(el) {
  * 上下限重合，就成了刚性框。
  */
 function naturalHeight(el) {
-  const style = window.getComputedStyle(el);
+  const style = window.getComputedStyle(controlOf(el));
   const minimum = Math.max(GROW_MIN, parseFloat(style.minHeight) || 0);
   const maximum = Math.max(minimum, Math.min(GROW_MAX, parseFloat(style.maxHeight) || Infinity));
   return Math.min(maximum, Math.max(minimum, measureHeight(el)));
@@ -96,12 +119,13 @@ function naturalHeight(el) {
  * 内部用，不对外导出 —— 外面要的是 attachAutoGrow。
  */
 function autoGrow(el) {
-  if (!el || el.dataset.growLocked === '1' || !el.getClientRects().length) return;
+  const box = controlOf(el);
+  if (!el || el.dataset.growLocked === '1' || !box.getClientRects().length) return;
 
   const next = naturalHeight(el);
 
   // 只在真的变了才写 —— 否则每次输入都触发一次样式重算
-  if (el.style.height !== `${next}px`) el.style.height = `${next}px`;
+  if (box.style.height !== `${next}px`) box.style.height = `${next}px`;
 }
 
 /**
@@ -122,7 +146,7 @@ export function attachAutoGrow(el, opts) {
   // 先按上次拖过的位置恢复（如果有），没有就走内容自适应
   const saved = heightOf(key);
   if (saved) {
-    el.style.height = `${saved}px`;
+    controlOf(el).style.height = `${saved}px`;
     el.dataset.growLocked = '1';
   }
 
@@ -136,13 +160,14 @@ export function attachAutoGrow(el, opts) {
   // 用 mouseup 而不是 resize —— 没有 resize 事件可用，而拖拽结束
   // 唯一能观察到的信号就是鼠标松开。
   el.addEventListener('mouseup', () => {
-    const h = Math.round(el.getBoundingClientRect().height);
+    const box = controlOf(el);
+    const h = Math.round(box.getBoundingClientRect().height);
     if (h <= 0) return;
     // 和「内容自适应应该得到的高度」不一样 → 说明用户手动调过
     const natural = naturalHeight(el);
     if (Math.abs(h - natural) > 4) {
       el.dataset.growLocked = '1';
-      el.style.height = `${h}px`;
+      box.style.height = `${h}px`;
       rememberHeight(key, h);
     }
   });
@@ -162,7 +187,7 @@ export function syncAutoGrowAll(list) {
   for (const el of list || []) {
     if (!el) continue;
     if (el.dataset.growLocked === '1') continue;
-    el.style.height = '';
+    controlOf(el).style.height = '';
     autoGrow(el);
   }
 }

@@ -136,7 +136,10 @@
                   title="快捷短语：插进输入框" aria-label="快捷短语"
                   aria-haspopup="menu" aria-expanded="false"></button>
           <div id="quick-menu" class="menu-pop quick-menu hidden" role="menu" aria-label="快捷短语"></div>
-          <textarea id="input" rows="2" placeholder="写下你的回应，让故事继续……" aria-label="输入消息"></textarea>
+          <!-- ⚙ 输入框也是组件（2026-10-16）。注意它的「描边/底色归零、内边距」
+               那几条样式现在挂在**里面那颗原生框**上（选择器多一层），
+               见 style.css 的 `#input > textarea` / `.composer-box #input > textarea`。 -->
+          <m-textarea id="input" rows="2" placeholder="写下你的回应，让故事继续……" aria-label="输入消息"></m-textarea>
           <div class="compose-tools">
             <span class="writing-mode">故事，由你续写</span>
             <button id="btn-send" class="btn btn-primary btn-send" data-icon="arrow-up" title="发送回应" aria-label="发送消息"></button>
@@ -280,7 +283,10 @@
                   <span class="field-count" id="c-desc-count">0 字</span>
                 </span>
               </label>
-              <textarea id="c-desc" rows="5" spellcheck="false" placeholder="这个角色是谁、长什么样、有什么经历……&#10;可以用 {{char}} 表示角色自己，{{user}} 表示你。"></textarea>
+              <!-- ⚙ 多行框也是组件（2026-10-16）：宿主带 id，里层那颗原生 textarea
+                   才是「看着是输入框」的那一层 —— 描边 / 内边距 / min-height 全在它上面，
+                   样式里的选择器因此多一层（见 style.css 的「编辑角色 · 写作纸」）。 -->
+              <m-textarea id="c-desc" rows="5" spellcheck="false" placeholder="这个角色是谁、长什么样、有什么经历……&#10;可以用 {{char}} 表示角色自己，{{user}} 表示你。"></m-textarea>
               <details class="char-fold">
                 <summary>这一栏怎么写</summary>
                 <div class="char-fold-body">
@@ -302,7 +308,7 @@
                   <span class="field-count" id="c-personality-count">0 字</span>
                 </span>
               </label>
-              <textarea id="c-personality" rows="3" spellcheck="false" placeholder="开朗、爱笑、有点冒失……"></textarea>
+              <m-textarea id="c-personality" rows="3" spellcheck="false" placeholder="开朗、爱笑、有点冒失……"></m-textarea>
               <details class="char-fold">
                 <summary>这一栏怎么写</summary>
                 <div class="char-fold-body">
@@ -321,7 +327,7 @@
                   <span class="field-count" id="c-scenario-count">0 字</span>
                 </span>
               </label>
-              <textarea id="c-scenario" rows="3" spellcheck="false" placeholder="你们正在哪里、干什么"></textarea>
+              <m-textarea id="c-scenario" rows="3" spellcheck="false" placeholder="你们正在哪里、干什么"></m-textarea>
               <details class="char-fold">
                 <summary>这一栏怎么写</summary>
                 <div class="char-fold-body">
@@ -343,7 +349,7 @@
               <!-- 开场白骨架：一键填进「定场 → 登场 → 留个话头」三段。
                    这套骨架是从社区卡的写法里归纳的（150 张开场白里约九成都是这个形状），
                    文案在 characterEditor.js 的 FIRST_MES_TEMPLATE。 -->
-              <textarea id="c-first" rows="3" spellcheck="false" placeholder="第一句话。绑定角色时如果对话还是空的，会自动作为角色的开场消息插入。"></textarea>
+              <m-textarea id="c-first" rows="3" spellcheck="false" placeholder="第一句话。绑定角色时如果对话还是空的，会自动作为角色的开场消息插入。"></m-textarea>
               <div class="field-template-bar">
                 <button id="btn-first-template" class="btn btn-ghost btn-sm" type="button"
                         title="把开场白的骨架填进输入框（已有内容会先问一句）">套用开场白模板</button>
@@ -395,7 +401,7 @@
                   <span class="field-count" id="c-example-count">0 字</span>
                 </span>
               </label>
-              <textarea id="c-example" rows="4" spellcheck="false" placeholder="{{user}}: 你好&#10;{{char}}: 你好呀～今天感觉怎么样？"></textarea>
+              <m-textarea id="c-example" rows="4" spellcheck="false" placeholder="{{user}}: 你好&#10;{{char}}: 你好呀～今天感觉怎么样？"></m-textarea>
               <details class="char-fold">
                 <summary>这一栏怎么写</summary>
                 <div class="char-fold-body">
@@ -452,8 +458,8 @@
 
               <!-- 批量粘贴：一行一项，比一条条手打快得多 -->
               <div id="c-attr-paste" class="attr-paste hidden">
-                <textarea id="c-attr-paste-text" rows="5" spellcheck="false"
-                          placeholder="一行一项，例如：&#10;金币：9900&#10;【上衣】：衬衫&#10;年龄 16"></textarea>
+                <m-textarea id="c-attr-paste-text" rows="5" spellcheck="false"
+                          placeholder="一行一项，例如：&#10;金币：9900&#10;【上衣】：衬衫&#10;年龄 16"></m-textarea>
                 <div class="attr-paste-foot">
                   <span class="field-help">
                     认「<code>金币：9900</code>」「<code>【金币】：9900</code>」「<code>金币 9900</code>」这几种写法；<br />
@@ -529,18 +535,18 @@
             <div class="char-advanced">
               <label class="field field-stack">
                 <span class="field-label">角色专属系统提示词</span>
-                <textarea id="c-system" rows="3" spellcheck="false" placeholder="留空则使用通用扮演规则"></textarea>
+                <m-textarea id="c-system" rows="3" spellcheck="false" placeholder="留空则使用通用扮演规则"></m-textarea>
                 <span class="field-help">这张卡专属的开场设定，留空则只用通用扮演规则。</span>
               </label>
 
               <label class="field field-stack">
                 <span class="field-label">对话后指令</span>
-                <textarea id="c-post" rows="2" spellcheck="false" placeholder="放在整段对话最后，用来强调格式或语气要求"></textarea>
+                <m-textarea id="c-post" rows="2" spellcheck="false" placeholder="放在整段对话最后，用来强调格式或语气要求"></m-textarea>
               </label>
 
               <label class="field field-stack">
                 <span class="field-label">作者备注</span>
-                <textarea id="c-notes" rows="2" spellcheck="false" placeholder="只给你自己看，不会发给模型"></textarea>
+                <m-textarea id="c-notes" rows="2" spellcheck="false" placeholder="只给你自己看，不会发给模型"></m-textarea>
               </label>
             </div>
           </div>
@@ -631,7 +637,7 @@
           <!-- 开场白：进这个世界时自动作为第一条消息 -->
           <label class="field field-stack wb-opening">
             <span class="field-label">开场白</span>
-            <textarea id="wb-opening" rows="3" spellcheck="false" placeholder="进这个世界时自动作为第一条消息。留空则让 AI 按设定现生成一段开局。"></textarea>
+            <m-textarea id="wb-opening" rows="3" spellcheck="false" placeholder="进这个世界时自动作为第一条消息。留空则让 AI 按设定现生成一段开局。"></m-textarea>
           </label>
 
           <!-- 本书信息：条数 / 启用 / 常驻 / 字数 / 来源 —— 由 worldbook.js 按草稿实时铺 -->
@@ -722,7 +728,7 @@
 
             <label class="field field-stack">
               <span class="field-label">内容</span>
-              <textarea id="wb-e-content" rows="12" spellcheck="false" placeholder="关键词命中时要塞给模型的设定。写成一个能独立看懂的段落。"></textarea>
+              <m-textarea id="wb-e-content" rows="12" spellcheck="false" placeholder="关键词命中时要塞给模型的设定。写成一个能独立看懂的段落。"></m-textarea>
             </label>
 
             <!-- 次要字段折起来，把高度让给「内容」这个真正要长时间写的框 -->
@@ -1007,7 +1013,7 @@
               <span class="field-label">可用模型</span>
               <button id="btn-fetch-models" class="btn btn-ghost btn-sm" type="button" aria-label="从接口拉取模型列表">拉取可用模型</button>
             </div>
-            <textarea id="p-models" rows="4" spellcheck="false" aria-label="模型列表" placeholder="一行一个模型名，例如：&#10;deepseek-chat&#10;deepseek-reasoner"></textarea>
+            <m-textarea id="p-models" rows="4" spellcheck="false" aria-label="模型列表" placeholder="一行一个模型名，例如：&#10;deepseek-chat&#10;deepseek-reasoner"></m-textarea>
             <span class="field-help">一行一个模型。聊天窗口右上角的下拉框里可以随时切换。</span>
           </div>
 
@@ -1493,7 +1499,7 @@
               <span class="field-label">人格设定</span>
               <button id="btn-pet-persona-reset" class="btn btn-ghost btn-sm" type="button">还原成默认</button>
             </div>
-            <textarea id="s-pet-persona" rows="7" spellcheck="false" aria-label="桌宠人格设定"></textarea>
+            <m-textarea id="s-pet-persona" rows="7" spellcheck="false" aria-label="桌宠人格设定"></m-textarea>
             <span class="field-help">
               这就是桌宠的「角色卡」——它是什么性格、怎么说话、什么时候该闭嘴。
               <b>人格跟形象绑定</b>：换形象就换一套人格，各形象互不干扰。
@@ -1628,8 +1634,8 @@
 
         <label class="field field-stack">
           <span class="field-label">指令正文</span>
-          <textarea id="pr-content" rows="6" spellcheck="false"
-            placeholder="写「回复要遵循什么规则」，例如：&#10;每轮至少推进一个具体事件，不要停在原地互相观望。&#10;对话占篇幅的一半以内，其余留给动作和环境。"></textarea>
+          <m-textarea id="pr-content" rows="6" spellcheck="false"
+            placeholder="写「回复要遵循什么规则」，例如：&#10;每轮至少推进一个具体事件，不要停在原地互相观望。&#10;对话占篇幅的一半以内，其余留给动作和环境。"></m-textarea>
           <span class="field-help">
             这一段会作为「【预设 · 名称】」整块加进系统提示词，紧跟扮演规则之后。<br />
             可以用 <code>{{char}}</code> / <code>{{user}}</code>，发送时会替换成角色名和你的名字。
@@ -1910,7 +1916,7 @@
 
         <label class="field field-stack">
           <span class="field-label">你的设定</span>
-          <textarea id="player-profile" rows="7" spellcheck="false" placeholder="你是谁、长什么样、什么来头、会什么……&#10;例如：来自异世界的旅人，背着一把用旧的长剑，对这个世界几乎一无所知，但学得很快。"></textarea>
+          <m-textarea id="player-profile" rows="7" spellcheck="false" placeholder="你是谁、长什么样、什么来头、会什么……&#10;例如：来自异世界的旅人，背着一把用旧的长剑，对这个世界几乎一无所知，但学得很快。"></m-textarea>
           <span class="field-help">
             这段会作为「玩家角色」每轮注入提示词，让 AI 知道你是谁。<br />
             留空也行 —— 那样就只用名字，名字也留空就用「你」。
@@ -1990,7 +1996,7 @@
 
         <label class="field field-stack">
           <span class="field-label">人设</span>
-          <textarea id="persona-text" rows="12" spellcheck="false" aria-label="默认人设正文" placeholder="例如：&#10;你是……&#10;性格：……&#10;说话习惯：……"></textarea>
+          <m-textarea id="persona-text" rows="12" spellcheck="false" aria-label="默认人设正文" placeholder="例如：&#10;你是……&#10;性格：……&#10;说话习惯：……"></m-textarea>
           <span class="field-help">
             写法和「角色卡」一样：你是谁、什么性格、怎么说话。<b>留空就是通用助手</b>（不扮演任何角色）。<br />
             只对<b>没绑定角色卡、也没进世界</b>的对话生效 —— 一旦在某张卡上点了「聊天」、

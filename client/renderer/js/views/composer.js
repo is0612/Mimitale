@@ -19,6 +19,10 @@ import { el } from '../core/dom.js';
 import { activeConvo, uid, now } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { h, button, clear } from '../ui/build.js';
+// 「该量/该写高度的那颗」：组件（<m-textarea>）要落到里层那颗原生框上
+import { controlOf } from '../ui/auto-grow.js';
+// 组件库：就地编辑那条消息用工厂建多行框（见 components/index.js）
+import { mTextarea } from '../components/index.js';
 import { persistConversations } from '../data/persist.js';
 import { ensureConvoEndpoint, isBridgeProvider } from '../data/providers.js';
 import { buildApiMessages, characterContextForConvo, effectiveSampling } from '../data/messages.js';
@@ -68,10 +72,15 @@ function setStreaming(on) {
   el.btnSend.disabled = on;
 }
 
-/** 输入框跟着内容长高（上限见 CONFIG.MAX_INPUT_HEIGHT） */
+/** 输入框跟着内容长高（上限见 CONFIG.MAX_INPUT_HEIGHT）
+ *  ⚙ 组件化（2026-10-16）之后 `el.input` 是 `<m-textarea>` 的**宿主**：量高度、写高度
+ *    都得落到里层那颗原生框上（过 controlOf）—— 对宿主写 style.height 是写在一个
+ *    不画描边的空盒子上，量 scrollHeight 也只会拿到「现在渲染出来的高度」，
+ *    症状是**不报错但框永远不长高**。 */
 export function autoGrowInput() {
-  el.input.style.height = 'auto';
-  el.input.style.height = `${Math.min(el.input.scrollHeight, CONFIG.MAX_INPUT_HEIGHT)}px`;
+  const box = controlOf(el.input);
+  box.style.height = 'auto';
+  box.style.height = `${Math.min(box.scrollHeight, CONFIG.MAX_INPUT_HEIGHT)}px`;
 }
 
 /**
@@ -163,12 +172,15 @@ export function editMessage(index) {
 
   const original = String(message.content || '');
 
-  const textarea = h('textarea', {
+  // ⚙ 组件化（2026-10-16）：这个框是就地建/就地扔的，用工厂形态。
+  //    `.msg-edit-box` 留在宿主持布局，观感那条规则跟着改成 `.msg-edit-box > textarea`。
+  //    keydown / value / focus / setSelectionRange 这几样都由组件代理或冒泡，调用点不用改。
+  const textarea = mTextarea({
     class: 'msg-edit-box',
     spellcheck: 'false',
-    'aria-label': '编辑消息内容'
+    'aria-label': '编辑消息内容',
+    value: original
   });
-  textarea.value = original;
 
   const finish = (save) => {
     if (save) {

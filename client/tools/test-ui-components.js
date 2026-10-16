@@ -44,6 +44,13 @@ globalThis.document = {
   },
   createTextNode(text) {
     return { nodeType: 3, textContent: String(text) };
+  },
+  // 组件运行时会在 document 上挂一条捕获段监听（label[for] 的焦点转发，见
+  // components/index.js 的 wireLabelForwarding）。纯 node 下没有真 document，
+  // 这里记下来即可 —— 那条行为本身由冒烟里的真浏览器钉（「点标签聚焦里层控件」）。
+  labelClickHandlers: [],
+  addEventListener(type, fn, capture) {
+    this.labelClickHandlers.push({ type, fn, capture });
   }
 };
 
@@ -91,6 +98,8 @@ function fakeNode(tag) {
       return Object.prototype.hasOwnProperty.call(attrs, name);
     },
     attributes: attrs,
+    dataset: {},
+    parentElement: null,
     addEventListener(type, fn) {
       listeners.push({ type, fn });
     }
@@ -247,6 +256,15 @@ test('applyOptions：class 支持数组和空格串，假值不会变成名叫 "
   assert.equal(M.applyOptions(fakeNode('m-button'), { class: 'x y' }).className, 'x y');
 });
 
+test('applyOptions：dataset 走 dataset，不是 dataset="[object Object]"', () => {
+  // 2026-10-16 迁备选开场白那几行时发现的：h() 一直支持 dataset，工厂没跟上 ——
+  // 走 setAttribute 会写成一个真实属性（不报错），而 `node.dataset.index` 永远是 undefined，
+  // 事件委托里按行号回写草稿的那条链路就会静默失效。
+  const node = M.applyOptions(fakeNode('m-textarea'), { dataset: { index: 3 }, 'aria-label': '第 4 条' });
+  assert.deepEqual(node.dataset, { index: 3 });
+  assert.equal(node.getAttribute('dataset'), null);
+});
+
 test('applyOptions：disabled / block 是「存在即真」', () => {
   const node = M.applyOptions(fakeNode('m-button'), { disabled: true, block: true });
   assert.ok(node.hasAttribute('disabled'));
@@ -329,6 +347,65 @@ test('reflectProperties：已有的访问器（value / disabled）绝不能被�
   });
   M.reflectProperties(WithValue, ['value', 'disabled']);
   assert.equal(new WithValue().value, '自己的');
+});
+
+// ---------------------------------------------------------------------------
+//  事件里的 target 还原 + 文本方法转发
+// ---------------------------------------------------------------------------
+
+test('hostOf：里层那颗原生控件还原成宿主，别的原样返回', () => {
+  // 为什么要有它：input / change 从里层冒上来，event.target 是**原生**控件 ——
+  // 而 id / class / dataset 全挂在宿主上（角标靠 id 约定、备选开场白靠 class 认行）。
+  const control = { tagName: 'TEXTAREA' };
+  const host = { tagName: 'M-TEXTAREA', control };
+  control.parentElement = host;
+  assert.equal(M.hostOf(control), host);
+  assert.equal(M.hostOf(host), host, '宿主自己传进来原样返回');
+
+  // 父级只是普通容器（身上没有 control）时不能误判
+  const plain = { tagName: 'TEXTAREA', parentElement: { tagName: 'DIV' } };
+  assert.equal(M.hostOf(plain), plain);
+  assert.equal(M.hostOf(null), null);
+});
+
+test('文本方法转发：select / setSelectionRange / setRangeText 落到里层那颗原生控件上', () => {
+  // 只借原型方法用（node 里没有 HTMLElement，实例化会炸）。
+  // 先挂自己的 `control` 再设原型 —— 反过来的话会被原型上那个同名 getter 挡住。
+  const calls = [];
+  const control = {
+    select: () => calls.push(['select']),
+    setSelectionRange: (...args) => calls.push(['setSelectionRange', ...args]),
+    setRangeText: (...args) => calls.push(['setRangeText', ...args])
+  };
+  const host = { control, tagName: 'M-TEXTAREA' };
+  Object.setPrototypeOf(host, M.MiControl.prototype);
+  host.select();
+  host.setSelectionRange(3, 3);
+  host.setRangeText('雨停了。', 0, 2, 'end');
+  assert.deepEqual(calls, [
+    ['select'],
+    // 第三个参数是原生的可选 direction：不传时**照样透传 undefined**
+    //（口径是「原样转发」，不替调用方编一个默认值）
+    ['setSelectionRange', 3, 3, undefined],
+    ['setRangeText', '雨停了。', 0, 2, 'end']
+  ]);
+});
+
+test('文本方法转发：里层没有这个方法时**当场报错**，不静默空转', () => {
+  const original = console.error;
+  const seen = [];
+  console.error = (msg) => seen.push(String(msg));
+  let out;
+  try {
+    const host = { control: {}, tagName: 'M-TEXTAREA' };
+    Object.setPrototypeOf(host, M.MiControl.prototype);
+    out = host.setRangeText('x', 0, 0);
+  } finally {
+    console.error = original;
+  }
+  assert.equal(out, undefined);
+  assert.equal(seen.length, 1);
+  assert.ok(seen[0].includes('setRangeText'), seen[0]);
 });
 
 // ---------------------------------------------------------------------------

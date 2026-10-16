@@ -18,7 +18,7 @@
 //    接上，不是代码依赖。）
 // ============================================================================
 
-import { MiControl, MiValueControl, applyOptions, componentClass, setAttr, toggleAttr, reflectProperties, VARIANTS, SIZES } from './base.js';
+import { MiControl, MiValueControl, applyOptions, componentClass, setAttr, toggleAttr, reflectProperties, hostOf, VARIANTS, SIZES } from './base.js';
 import { MiButton, mButton } from './button.js';
 import { MiInput, mInput, INPUT_TYPES } from './input.js';
 import { MiTextarea, mTextarea } from './textarea.js';
@@ -43,7 +43,44 @@ export function defineComponents() {
     customElements.define(tag, ctor);
     count += 1;
   }
+  wireLabelForwarding();
   return count;
+}
+
+/**
+ * 让 `label[for="…"]` 也能点出焦点 —— **组件不是可标记元素（labelable）**。
+ *
+ * `label` 的「点标签 = 聚焦那个控件」只对七个原生可标记元素成立
+ * （button / input / meter / output / progress / select / textarea）；
+ * 换成 `<m-textarea>` 之后 `label.control` 是 **null**，点标签什么都不会发生
+ * （2026-10-16 实测确认；同一个页面上原生 `<textarea>` 那侧照常聚焦）。
+ * 而角色编辑器那五栏就是 `label.char-sheet-label[for="c-desc"]` 的写法，
+ * HTML 注释里写明「点『角色描述』四个字照样聚焦输入框」是刻意保留的行为 ——
+ * 不补这一手就是**静默的功能回退**。
+ *
+ * 做法：document 上挂**一个**捕获段监听（不为每个组件各挂一个）。
+ * 命中 `label[for]` 且那个 for 指向的是本库组件时才手动 `focus()`
+ * （组件的 focus() 自己会转发到里层原生控件）；
+ * `label.control` 有值（原生控件）的一律跳过 —— 那种浏览器自己会处理，
+ * 我们再 focus 一次等于把浏览器的行为盖掉。
+ *
+ * 包在 `<label>` 里（不带 for）的写法不用管：那种情况下浏览器会转发给
+ * **内部第一个可标记的后代** —— 也就是里层那颗原生控件，本来就通。
+ */
+function wireLabelForwarding() {
+  if (wireLabelForwarding.done) return;
+  wireLabelForwarding.done = true;
+  document.addEventListener(
+    'click',
+    (event) => {
+      const target = event.target;
+      const label = target && target.closest ? target.closest('label[for]') : null;
+      if (!label || label.control) return;
+      const node = document.getElementById(label.getAttribute('for'));
+      if (node instanceof MiControl) node.focus();
+    },
+    true
+  );
 }
 
 export {
@@ -61,6 +98,8 @@ export {
   mSelect,
   // m-input 支持哪些 type（调用方要自己校验时也用它，别各写一份白名单）
   INPUT_TYPES,
+  // 事件委托里把里层原生控件还原成宿主（`event.target` 在组件化之后不是宿主）
+  hostOf,
   // 外观词表：写新组件时对照它，别自己发明一套 variant 名字
   VARIANTS,
   SIZES,

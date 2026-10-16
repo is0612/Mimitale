@@ -35,8 +35,13 @@ for (const f of files) {
     names.add(m[1]);
   }
   // export { a, b }
+  // ⚠️ 先把注释剥掉再按逗号切：导出表里常给每个名字配一行 `// 说明`，
+  //    而那段说明会跟着名字粘在同一个「逗号之间的片段」里 —— 不剥的话
+  //    `// 说明\n  hostOf` 整段被当成一个名字，于是**明明导出了却报「没导出」**
+  //    （2026-10-16 加 hostOf 时就是这么被误报的）。
   for (const m of src.matchAll(/^export\s*\{([^}]*)\}/gm)) {
-    for (const part of m[1].split(',')) {
+    const body = m[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    for (const part of body.split(',')) {
       const n = part.trim().split(/\s+as\s+/).pop().trim();
       if (n) names.add(n);
     }

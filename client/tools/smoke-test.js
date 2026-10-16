@@ -3694,7 +3694,24 @@ app.whenReady().then(async () => {
       : '';
   if (shotArg) {
     try {
-      win.show();
+      // 出图**默认不弹窗**（2026-10-16）。
+      // 以前这里是 `win.show()`，窗口会真的冒到屏幕上、抢走焦点 —— 一边在玩全屏游戏
+      // 一边让会话跑核对，等于每出一张图就被踢出游戏一次。
+      // 但**不能只是不 show**：Chromium 不给隐藏窗口出帧，capturePage 抓到的是空白
+      // （这正是当初写成 show() 的原因）。
+      // 所以走「隐形显示」：真的 show（有帧可比），但
+      //   · setOpacity(0)   整窗全透明，屏幕上什么都不出现
+      //   · showInactive()  不激活、不抢焦点（正在打字/玩游戏的手不被拽走）
+      //   · skipTaskbar     不在任务栏闪一下
+      // 要真的看着它跑（调布局时偶尔需要）就加 `--shot-visible`。
+      const shotVisible = process.argv.includes('--shot-visible');
+      if (shotVisible) {
+        win.show();
+      } else {
+        win.setOpacity(0);
+        win.setSkipTaskbar(true);
+        win.showInactive();
+      }
       const viewport = process.argv.find((arg) => arg.startsWith('--shot-viewport='))?.split('=')[1]?.match(/^(\d+)x(\d+)$/);
       if (viewport) win.setContentSize(Number(viewport[1]), Number(viewport[2]));
       if (shotMode) {
@@ -4791,6 +4808,13 @@ app.whenReady().then(async () => {
         const probe = await win.webContents.executeJavaScript(`(() => {
           const bg = (sel) => { const n = document.querySelector(sel); return n ? getComputedStyle(n).backgroundColor : '(无)'; };
           const h = (sel) => { const n = document.querySelector(sel); return n ? Math.round(n.getBoundingClientRect().height) : 0; };
+          // 「宿主/里层」两段的实高（见下面 desc 那几行的注释）
+          const pair = (sel) => {
+            const n = document.querySelector(sel);
+            if (!n) return '(无)';
+            const inner = n.control ? n.control : n;
+            return Math.round(n.getBoundingClientRect().height) + '/' + Math.round(inner.getBoundingClientRect().height);
+          };
           return {
             theme: document.documentElement.getAttribute('data-theme') || 'light',
             accent: document.documentElement.getAttribute('data-accent') || '(没设)',
@@ -4877,11 +4901,14 @@ app.whenReady().then(async () => {
             value: bg('.attr-row input.attr-value'),
             // 长文本框的实高：光看截图分不清「自动长高了」和「本来就这个高」，
             // 这里把五个框的量出来，一眼能看出收窄/增高有没有真的发生。
-            desc: h('#c-desc'),
-            personality: h('#c-personality'),
-            scenario: h('#c-scenario'),
-            first: h('#c-first'),
-            example: h('#c-example'),
+            // ⚙ 2026-10-16 多行框组件化之后，「框自己的高」在里层那颗原生框上
+            //   （宿主只占位），所以这里量的是**宿主/里层**两个数 —— 两个数不一致
+            //   就说明宿主多出了一层行高的空隙（那种坑截图上看不出来）。
+            desc: pair('#c-desc'),
+            personality: pair('#c-personality'),
+            scenario: pair('#c-scenario'),
+            first: pair('#c-first'),
+            example: pair('#c-example'),
             // 左栏「有没有长出栏内滚动条」：这是 V2 布局的一条硬要求
             // （左栏固定、右列独立滚动），光看截图那根细细的滚动条很容易看漏。
             // scrollHeight > clientHeight 就是长了，给数字比看图可靠。
@@ -4913,7 +4940,7 @@ app.whenReady().then(async () => {
         if (probe.attrProbe) console.log(`  属性行控件=${JSON.stringify(probe.attrProbe)}`);
         if (probe.cardProbe) console.log(`  卡片/工具条控件=${JSON.stringify(probe.cardProbe)}`);
         if (shotArg === 'charTextareas') {
-          console.log(`  长文本框实高(px) 描述=${probe.desc} 性格=${probe.personality} 场景=${probe.scenario} 开场白=${probe.first} 示例对话=${probe.example}`);
+          console.log(`  长文本框实高(px) 宿主/里层 描述=${probe.desc} 性格=${probe.personality} 场景=${probe.scenario} 开场白=${probe.first} 示例对话=${probe.example}`);
         }
         if (probe.railScroll) {
           const [sh, ch] = String(probe.railScroll).split('/');

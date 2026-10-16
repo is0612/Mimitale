@@ -446,11 +446,6 @@ test('input：调用方给的 type / spellcheck 能盖过默认值', () => {
   assert.equal(box.getAttribute('max'), '6');
 });
 
-test('textarea：rows 默认 3，能覆盖', () => {
-  assert.equal(controls.textarea({}).getAttribute('rows'), '3');
-  assert.equal(controls.textarea({ rows: 8 }).getAttribute('rows'), '8');
-});
-
 test('field：标签 + 控件 + 说明，默认两列（不加 field-stack）', () => {
   const box = controls.field({ label: '书名', control: controls.input({ id: 'wb-name' }) });
   assert.equal(box.tagName, 'LABEL');
@@ -462,9 +457,12 @@ test('field：标签 + 控件 + 说明，默认两列（不加 field-stack）', 
 });
 
 test('field：stack / hint / icon 各自落到该落的地方', () => {
+  // 控件传什么都行（这条测的是 field 那套骨架）。多行框现在一律走组件
+  // （`mTextarea`，见 components/textarea.js）—— 原来这里用的 `controls.textarea()`
+  // 2026-10-16 已随迁移删掉（生产代码里零调用点，留着就是第二套实现）。
   const box = controls.field({
     label: '开场白',
-    control: controls.textarea({}),
+    control: controls.input({}),
     hint: '留空就让 AI 现生成',
     stack: true,
     icon: 'message-circle'

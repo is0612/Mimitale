@@ -6,6 +6,9 @@
 //  为什么要有它：控件这块以前是「每处各写一遍」——
 //    · `h('input', …)` 13 处、`h('textarea', …)` 4 处，每处都得自己记得
 //      `spellcheck="false"`；值要走 property 而不是 attribute（h() 里的 PROPS）
+//      ⚙ 2026-10-16：多行框那半已经整批迁到组件库（`mTextarea`），本文件的
+//        `textarea()` 帮手随之删掉（没有调用点了，留着就是第二套实现）；
+//        `input()` 还剩一个调用点（charAttributes.js 的行内小输入框）。
 //    · `.field`（标签 + 控件 + 说明）这套骨架动态建过好几遍，还得记住
 //      「标签在第一列、说明在第二列」这条 grid 约定（style.css 的 `.field`）
 //    · 「清空 → 逐条 append → 选中值要留着 → 一项都没有就禁用」这套铺选项的
@@ -32,12 +35,6 @@ import { h, clear } from './build.js';
 export function input(opts = {}) {
   const { type = 'text', class: className, spellcheck = 'false', ...rest } = opts;
   return h('input', { type, spellcheck, class: className, ...rest });
-}
-
-/** 多行框。rows 默认 3（和 index.html 里那些字段一个口径） */
-export function textarea(opts = {}) {
-  const { rows = 3, class: className, spellcheck = 'false', ...rest } = opts;
-  return h('textarea', { rows, spellcheck, class: className, ...rest });
 }
 
 /**

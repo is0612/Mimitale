@@ -4,6 +4,72 @@
 
 ---
 
+## 2026-10-16 多行框清零：index.html 17 个 + JS 侧 4 处全换 `<m-textarea>`
+
+`index.html` 里那 **17 个 `<textarea>`** 全部换成 `<m-textarea>`：`#input`（聊天输入）、
+角色编辑器 9 个（描述 / 性格 / 场景 / 开场白 / 示例对话 / 属性粘贴 / 系统提示 / 附加 / 备注）、
+世界书与预设与设置与人设 7 个（`wb-opening` / `wb-e-content` / `p-models` / `s-pet-persona` /
+`pr-content` / `player-profile` / `persona-text`）。**`grep -c "<textarea" renderer/index.html`
+→ 0**，页面上的原生多行框清零。JS 侧动态生成的多行框（备选开场白行、消息编辑框、
+记忆编辑框、AI 生成的两个框）也一并换掉。
+
+**⚠️ 缺口 5：`event.target` 在组件化之后是里层原生控件**（新增 `hostOf()`）
+`input` / `change` 从里层冒泡上来时，`event.target` 是里层那颗**原生**控件，于是两件在
+原生控件时代理所当然的事都不成立了：
+- `event.target.id` 是**空**的（id 在宿主上）→ 靠 id 约定找角标的地方**静默失效**
+  （角色编辑器那五个字数角标就是这么掉的：抱着空 id 去查 `-count`，永远查不到，
+  而代码里写的是「找不到角标就静默跳过」，于是错得很安静）；
+- `event.target.classList` / `dataset` 是**宿主**上的（里层只有 `mi-*-control`）——
+  备选开场白靠 `.alt-greet-text` 认行，不还原就会**静默丢改动**。
+
+底座补 `hostOf(node)`：传进来的里层控件，父级的 `control` 正好是它 → 返宿主；否则原样返回。
+认的是「父级的 control 是我」而不是「类名像组件」，所以嵌套的普通结构不会误判。
+
+**⚠️ 缺口 6：组件不是 labelable 元素** → `label.control === null`
+`<label for="x">` 点上去不会聚焦了 —— 这是原生 `<input>` / `<textarea>` 白给的能力，
+包一层就没了。`components/index.js` 补 `wireLabelForwarding()`：document 一条**捕获段**
+监听，`label.control` 有值就跳过（原生那路照旧），否则 `getElementById(for)` 命中
+`MiControl` 时对它 `focus()`。
+
+**⚠️ 缺口 7：`setRangeText` 也要代理**
+`quickPhrases` 往光标处插短语会用到它，属「原生控件的方法」那一类（前几轮补过 `select` /
+`setSelectionRange`），这轮补上第四个方法（缺方法时**当场报错**，不静默）。
+
+**⚠️ 缺口 8：多行框的基线是**下外边距**边**
+`<textarea>` 的默认对齐让它比里层高约 **3px**（`<input>` / `<select>` 不会）——
+描述框「宿主 267 / 里层 264」就是这么来的。靠 `m-textarea > .mi-textarea__control
+{ display: block; }` 压平，复测 **264/264**。这几 px 正是「看起来没错、量起来多一圈」的
+那类静默膨胀。
+> 选择器刻意写成 `宿主 > 类` 而不是光写类名：`.mi-textarea__control` 上面那条已经用过一次，
+> 同一个类出现在两条里会被 `check-css` 记成「重复选择器」。
+
+**auto-grow 与组件化的对接**：`ui/auto-grow.js` 全部过 `controlOf(node)`
+（`node.control ? node.control : node`）—— 量 `scrollHeight` / 读 `min-height|max-height` /
+写 `box.style.height` 都落到里层那颗，否则高度算出个寂寞。
+
+**验证**
+- **多行框实高（宿主/里层）逐项核到 CSS 地板**：描述 264/264、性格 120/120、场景 100/100、
+  开场白 160/160、示例对话 160/160 —— 同时证明 auto-grow 与组件化都对上了。
+- 隐形出图核对：`charEditorPage`（写作纸无描边、角标 11 字）、`charTextareas`
+  （角标 18 / 4 / 131 字）、`charDescFull`（926 字封顶矮框 + 框内滚动 + 右下 resize 手柄）、
+  `chat`（输入框胶囊内无多余描边）、`wbEditorPage` / `presetEditor` / `petSettings`。
+- 冒烟 **1524/1524 通过，控制台 0 报错**（从 1519 涨上来：+2「点标签聚焦里层控件」、
+  +3「输入框跟着内容长高」—— 后者原来**零覆盖**）。
+- `npm run test:ui` **82/82**（+3：`dataset` 走 dataset、`hostOf` 还原、三个文本方法转发 &
+  缺方法当场报错）。
+- 静态自检：`check-dom-ids` / `check-el-refs` / `check-imports` 干净；`check-css` 3 处、
+  `check-dead-code` 12 条均为**存量**，本轮引入 0 处。
+
+**顺手：出图不再弹窗**
+`tools/smoke-test.js` 的出图路径原来 `win.show()` 会真的弹窗、抢焦点（星宝在玩游戏时被打扰）。
+改成默认**隐形**：`setOpacity(0)` + `showInactive()` + `setSkipTaskbar(true)`
+（Chromium 不给**隐藏**窗口出帧，所以是「隐形但仍出帧」）；另留 `--shot-visible` 逃生门，
+需要肉眼看着跑的时候加上。
+
+**剩下的**：按钮（39 处调用点）、约 60 条页面级控件外观。
+
+---
+
 ## 2026-10-16 最后一格：世界书编辑器 + 预设编辑器 13 个输入框 ——「页面上的文本输入框」清零
 
 `wb-name`（书名）/ `wb-e-title` / `wb-e-keys` / `wb-e-keys2` / `wb-e-order` / `wb-e-prob`、

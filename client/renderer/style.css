@@ -599,6 +599,18 @@ m-select {
   width: 100%;
 }
 
+/* ⚠️ 多行框的里层必须显式 `display: block`。
+   `<textarea>` 的基线是它自己的**下外边距边**，所以它会坐在行盒基线上，父级行高
+   又把下沿那一截（约 3px）补出来 —— 结果是**宿主比里层高 3px**，每个多行框都把
+   下面的内容往下顶一点。同一个宿主里的 `<input>` / `<select>` 不会：它们的基线是
+   框内文字的基线，差得正好抵掉（实测 m-input 宿主/里层 28/28，m-textarea 267/264）。
+   ⚠️ 这种「多出来 3px」截图基本看不出来，是量出来的（2026-10-16 迁角色编辑页那五个框）。
+   （选择器刻意写成 `宿主 > 类` 而不是光写类名：`.mi-textarea__control` 上面那条
+     已经用过一次，同一个类出现在两条里会被 check-css 记成「重复选择器」。） */
+m-textarea > .mi-textarea__control {
+  display: block;
+}
+
 /* 紧凑档（sm）：密排行里的**主**控件 —— 28px 高、正文级字号，和 .btn-sm 一个量级。
    ⚠️ 这一档原来的定义是 32px + xs 字号，而应用里没人用（只有组件盘）。
    2026-10-16 改成对齐应用里**实际**的口径（.attr-value / .attr-group-name 都是
@@ -1297,8 +1309,10 @@ m-select {
   opacity: 0.85;
 }
 
-/* 就地编辑消息：气泡里换成 textarea + 保存/取消 */
-.msg-edit-box {
+/* 就地编辑消息：气泡里换成多行框 + 保存/取消。
+   ⚙ 2026-10-16 组件化：观感整条落到**里层那颗原生框**上（宿主只占位与铺宽，
+   `m-textarea` 那条自带 width:100%）。留宿主的只有 width —— 它已经由组件给了。 */
+.msg-edit-box > textarea {
   width: 100%;
   min-height: 90px;
   max-height: 50vh;
@@ -1994,8 +2008,16 @@ m-select {
   }
 }
 
+/* 输入框：**宿主管布局**（它是 .composer-box 这个 flex 容器里的一个 flex item），
+   「框自己长什么样」那几条 —— 描边 / 底色 / 内边距 / 高度上下限 —— 全在里层那颗
+   原生框上（⚙ 2026-10-16 组件化，`> textarea`）。写在宿主上等于写在空气上：
+   宿主不画描边、也不滚动。
+   ⚠️ auto-grow 也量里层那颗（views/composer.js 的 autoGrowInput 过 controlOf）。 */
 #input {
   flex: 1 1 auto;
+}
+
+#input > textarea {
   border: none;
   background: transparent;
   color: var(--text);
@@ -2008,9 +2030,8 @@ m-select {
   padding: 10px;
 }
 
-#input::placeholder {
-  color: var(--text-faint);
-}
+/* 占位符颜色走全局那条 `textarea::placeholder`（--text-faint）——
+   这里原来有一份逐字相同的副本，2026-10-16 删掉（重复声明）。 */
 
 /* 发送键：独立一颗胶囊，贴输入框底对齐（输入框长到三四行时不会浮到中间）。
    留着「发送」两个字没换成箭头 —— 中文环境里这两个字比一个图标好认。 */
@@ -2846,9 +2867,10 @@ m-select {
 /* ⚙ 组件化之后的形态：控件是组件里那颗原生控件，多了一层。
    每迁一个控件类型，就在这两条里各加一行 —— 等五类控件都迁完，这一整段会塌成
    一条「组件在这个上下文里的皮肤」规则（那才是"页面不写外观"的终点）。
-   已迁：m-select（下拉）、m-input（文本 / 密码 / 数字）。 */
+   已迁：m-select（下拉）、m-input（文本 / 密码 / 数字）、m-textarea（多行）。 */
 .settings-content > .panel-section .field > m-select > select,
-.settings-content > .panel-section .field > m-input > input {
+.settings-content > .panel-section .field > m-input > input,
+.settings-content > .panel-section .field > m-textarea > textarea {
   border-radius: var(--radius);
   background: var(--bg-side);
   border: 1px solid transparent;
@@ -2857,6 +2879,7 @@ m-select {
 .settings-content > .panel-section .field > m-input > input:focus,
 .settings-content > .panel-section .field > textarea:focus,
 .settings-content > .panel-section .field > select:focus,
+.settings-content > .panel-section .field > m-textarea > textarea:focus,
 .settings-content > .panel-section .field > m-select > select:focus {
   background: var(--bg-card);
   border-color: var(--accent-border);
@@ -3297,11 +3320,14 @@ m-select {
 }
 
 /* ⚠️ 原来这里还有一条 `.char-advanced textarea { min-height: 70px; max-height: none }`，
-   已被 `#view-char-editor .char-advanced > .field > textarea`（84px / none）整条盖住，
-   2026-10-16 清掉。 */
+   已被 `#view-char-editor .char-advanced > .field > m-textarea > textarea`（84px / none）
+   整条盖住，2026-10-16 清掉。 */
 
-/* 长文本框右下角画几道「可拖」斜纹 —— 高度上限交给视图规则，这里只管纹路 */
-.char-form .field-stack > textarea {
+/* 长文本框右下角画几道「可拖」斜纹 —— 高度上限交给视图规则，这里只管纹路。
+   ⚙ 2026-10-16 多行框组件化：原生框成了宿主的直接子级，选择器多一层。
+   凡是「描述一颗输入框长什么样」的规则，现在都要落到 `> m-textarea > textarea`
+   （宿主只管布局与占位，描边/内边距/背景长在里层那颗上）。 */
+.char-form .field-stack > m-textarea > textarea {
   background-image: linear-gradient(
     135deg,
     transparent 0 46%,
@@ -3315,7 +3341,7 @@ m-select {
   background-size: 11px 11px;
 }
 
-.char-form .field-stack > textarea:focus {
+.char-form .field-stack > m-textarea > textarea:focus {
   border-color: var(--accent, var(--border-strong, var(--border)));
 }
 
@@ -3427,7 +3453,7 @@ m-select {
 }
 
 
-.alt-greet-text {
+.alt-greet-text > textarea {
   resize: vertical;
 }
 
@@ -5445,7 +5471,8 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 /* 正文写「回复要遵循什么规则」，通常比说明长，给个能写几行的起始高度；
    ⚠️ 高度由 HTML 的 rows 定（不是这里的 min-height），调小是为了让下面的「启用」
    和「采样参数」也进画面 —— 顶出可视区的话，不滚一下根本不知道还能设采样参数。 */
-#preset-modal #pr-content {
+/* ⚙ 2026-10-16 组件化：`> textarea`（框自己的身量在里层那颗上） */
+#preset-modal #pr-content > textarea {
   resize: vertical;
   min-height: 240px;
 }
@@ -6482,7 +6509,9 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   overflow-y: auto;
 }
 
-.memory-edit-box {
+/* ⚙ 2026-10-16 组件化：多行框的高 / 内边距 / 滚动都长在里层那颗原生框上，
+   所以规则落到 `> textarea`（留在宿主上的只有组件自带的那条 width:100%）。 */
+.memory-edit-box > textarea {
   width: 100%;
   min-height: 170px;
   font-size: var(--fs-sm);
@@ -7554,14 +7583,18 @@ body.pad-dragging {
   display: none;
 }
 
-/* 输入框自己在 .composer-box 里，不要再画一层框 */
+/* 输入框自己在 .composer-box 里，不要再画一层框。
+   同样分两半：布局（flex / order / 宽）归宿主，框自己的观感归里层那颗。 */
 .composer-box #input {
-  background: none;
-  border: none;
-  box-shadow: none;
   flex: 1 0 100%;
   order: 0;
   width: 100%;
+}
+
+.composer-box #input > textarea {
+  background: none;
+  border: none;
+  box-shadow: none;
   padding: 2px 2px 12px;
   min-height: 62px;
 }
@@ -8361,12 +8394,15 @@ body.pad-dragging {
       max(minimum, min(GROW_MAX, maxHeight)) = minimum → 框高恒等于这里的值，
       装不下的内容在**框内**滚。这是有意的：五栏同屏时表单总长得是常数，
       否则多写几行就把下面的字段顶到屏幕外。改高度只改这五行。
-   框的身量（内边距 / 去掉自带描边）见下面「编辑角色 · 写作纸」那一节。 */
-#view-char-editor #c-desc { min-height: 264px; }
-#view-char-editor #c-personality { min-height: 120px; }
-#view-char-editor #c-scenario { min-height: 100px; }
-#view-char-editor #c-first { min-height: 160px; }
-#view-char-editor #c-example { min-height: 140px; }
+   框的身量（内边距 / 去掉自带描边）见下面「编辑角色 · 写作纸」那一节。
+   ⚙ 2026-10-16 多行框组件化之后，这五行落到**里层那颗原生框**上（`> textarea`）：
+     min-height / height 这种「输入框自己多高」的属性写在宿主上只会撑出一个空壳，
+     而且 auto-grow 量的也是里层那颗的 min-height（见 ui/auto-grow.js 的 controlOf）。 */
+#view-char-editor #c-desc > textarea { min-height: 264px; }
+#view-char-editor #c-personality > textarea { min-height: 120px; }
+#view-char-editor #c-scenario > textarea { min-height: 100px; }
+#view-char-editor #c-first > textarea { min-height: 160px; }
+#view-char-editor #c-example > textarea { min-height: 140px; }
 
 #view-char-editor .attr-add-row,
 #view-char-editor .attr-range,
@@ -8698,7 +8734,9 @@ body.pad-dragging {
   font-size: var(--fs-xs);
 }
 
-#view-wb-editor #wb-e-content {
+/* ⚙ 2026-10-16 组件化：`> textarea` —— 高度长在里层那颗原生框上
+   （写在宿主上只会撑出一个空壳，而且宿主不滚动）。 */
+#view-wb-editor #wb-e-content > textarea {
   height: 340px;
   min-height: 260px;
   resize: vertical;
@@ -8765,7 +8803,7 @@ body.pad-dragging {
   min-width: 0;
 }
 
-#view-wb-editor #wb-opening {
+#view-wb-editor #wb-opening > textarea {
   min-height: 240px;
   resize: vertical;
 }
@@ -9112,10 +9150,11 @@ body.pad-dragging {
   justify-content: center;
 }
 
-/* ⚠️ 这条选择器是 (1,2,1)，压得过全局的 `textarea:focus`（(0,1,1)）——
+/* ⚠️ 这条选择器是 (1,1,2)，压得过全局的 `textarea:focus`（(0,1,1)）——
    所以框自己的描边在这里必须归零，**聚焦反馈交给卡片**（见上面的 .char-sheet:focus-within）。
-   反过来，别在这条里写 border-color 指望它做聚焦态：它会被这条自己吃掉。 */
-#view-char-editor .char-sheet > textarea {
+   反过来，别在这条里写 border-color 指望它做聚焦态：它会被这条自己吃掉。
+   ⚙ 2026-10-16 组件化：`>` 后面多一层宿主（描边/内边距/背景长在里层那颗上）。 */
+#view-char-editor .char-sheet > m-textarea > textarea {
   max-height: none;
   padding: 18px 20px;
   border: 0;
@@ -9199,7 +9238,8 @@ body.pad-dragging {
   border-color: var(--accent-border);
 }
 
-#view-char-editor .char-advanced > .field > textarea {
+/* ⚙ 2026-10-16 组件化：中间多一层宿主（`.field` 是 <label>，包着 <m-textarea>） */
+#view-char-editor .char-advanced > .field > m-textarea > textarea {
   min-height: 84px;
   max-height: none;
 }

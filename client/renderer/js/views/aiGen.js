@@ -29,6 +29,8 @@ import { uid } from '../core/util.js';
 import { h, button } from '../ui/build.js';
 // 字段（标签 + 控件 + 说明）的规范件，见 ui/controls.js
 import { field } from '../ui/controls.js';
+// 组件库：生成弹窗里的两个多行框（见 components/index.js）
+import { mTextarea } from '../components/index.js';
 import { showToast } from '../ui/toast.js';
 import { currentEndpoint, isBridgeProvider } from '../data/providers.js';
 import { worldbookCharacters } from '../data/library.js';
@@ -421,7 +423,9 @@ function closeLayer() {
 function buildLayer() {
   layerEl = h('div', { class: 'modal ai-gen-modal' });
 
-  const prompt = h('textarea', {
+  // ⚙ 2026-10-16：两个多行框都换成组件（工厂形态）。观感走 style.css 的
+  //    `.ai-gen-body textarea`（后代选择器，里层那颗照样命中），宿主管布局。
+  const prompt = mTextarea({
     id: 'ai-gen-prompt',
     rows: '5',
     spellcheck: 'false',
@@ -433,7 +437,7 @@ function buildLayer() {
 
   // 「背景 / 基调」：只有角色库那侧才有（世界书那侧已经有条目 + 开场白当大纲了）
   const brief = scope === 'library'
-    ? h('textarea', {
+    ? mTextarea({
         id: 'ai-gen-brief',
         rows: '2',
         spellcheck: 'false',
