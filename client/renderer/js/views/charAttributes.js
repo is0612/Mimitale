@@ -26,6 +26,7 @@ import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear, append } from '../ui/build.js';
 import { MAX_PANEL_FIELDS, panelFieldAllowed } from '../data/panel.js';
+import { setCharSectionCount } from './characterEditorLayout.js';
 
 /** 编辑器里的字段类型选择框（文本 / 数值 / 列表） */
 const ATTR_TYPES = [
@@ -204,6 +205,9 @@ function bucketsOf(list) {
 export function renderCharAttrs(list) {
   if (!el.c.attrList) return;
   const draft = Array.isArray(list) ? list : [];
+
+  // 分区导航「属性」右侧的计数徽章：跟着这份草稿走（加 / 删字段实时变）。0 也照显示
+  setCharSectionCount('state', String(draft.length));
 
   const buckets = bucketsOf(draft);
   // 选中的分组可能已经不存在了（这一组被删空 / 刚换了角色），

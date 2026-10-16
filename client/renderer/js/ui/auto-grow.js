@@ -12,10 +12,17 @@
 //
 //  1) **长高有上限，而且刻意压得很低**。不限的话，一段几千字的描述会把整个
 //     表单顶到屏幕外，反而更难用（想改下面的字段得滚半天）。所以这里的
-//     取舍是：**表单总长是常数** —— 五个框全满也不该超过两屏，塞不下的
-//     内容由浏览器自己的滚动条在**框内**滚。真要舒展开写一大段，用字段行
-//     的「放大编辑」浮层（characterEditor.js），那个才是给长内容的地方。
+//     取舍是：**表单总长是常数**，塞不下的内容由浏览器自己的滚动条在**框内**滚。
 //     160px 约七行字：扫一眼「大概写了多少」够用，往下滚也不至于太碎。
+//
+//     ⚠️ 两件事，动之前先看清楚：
+//     · 2026-10-16 撤掉了「放大编辑」浮层（字段行那颗 ↗ 按钮），少了一个出口。
+//     · **角色编辑页那五个框不受这里管**：V2 重组版（2026-10-16）给它们**按字段分别**
+//       写了 min-height（style.css 里 `#c-desc { min-height: 264px }` 那五行）。
+//       GROW_MAX(160) 比那些 min-height 都小，naturalHeight 会算成
+//       `max(minimum, min(GROW_MAX, maxHeight)) = minimum` —— 也就是「高度恒等于
+//       CSS 里写的那个值，装不下的内容在框内滚」。这是有意的：五栏同屏，表单总长要是常数。
+//       GROW_MAX 现在管的是**别处**调 attachAutoGrow 的框（备选开场白、世界书条目…）。
 //
 //  2) **手动拖过之后就不再自动长高**。用户在 `resize: vertical` 的框上拖过高度，
 //     说明「我就要这么高」，这时候内容再多也不该擅自改回去。否则会出现
@@ -69,8 +76,12 @@ function measureHeight(el) {
 }
 
 /**
- * 按内容调整一个文本框的高度。
- * 已经「锁定」（用户手动拖过）的框直接跳过。
+ * 这个框「按内容应该多高」：先量内容，再夹进 [下限, 上限]。
+ *
+ * 下限取 `max(GROW_MIN, CSS min-height)` —— 所以**角色编辑页那五个框的高度
+ * 其实是 CSS 说了算**（它们的 min-height 都 ≥ GROW_MIN）。
+ * 上限取 `max(下限, min(GROW_MAX, CSS max-height))`：地板高过 GROW_MAX 的框
+ * 上下限重合，就成了刚性框。
  */
 function naturalHeight(el) {
   const style = window.getComputedStyle(el);
@@ -79,7 +90,12 @@ function naturalHeight(el) {
   return Math.min(maximum, Math.max(minimum, measureHeight(el)));
 }
 
-export function autoGrow(el) {
+/**
+ * 按内容调整一个文本框的高度。
+ * 已经「锁定」（用户手动拖过）的框直接跳过。
+ * 内部用，不对外导出 —— 外面要的是 attachAutoGrow。
+ */
+function autoGrow(el) {
   if (!el || el.dataset.growLocked === '1' || !el.getClientRects().length) return;
 
   const next = naturalHeight(el);

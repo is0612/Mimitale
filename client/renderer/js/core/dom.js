@@ -159,6 +159,8 @@ export const el = {
   // 角色编辑器（从弹窗改成了页面，占满主区域的一屏）
   charsTitle: $('chars-title'),
   charsSub: $('chars-sub'),
+  charCrumb: $('char-crumb'),
+  charSaveState: $('char-save-state'),
   // 主区域的七个视图：聊天 / 角色列表页 / 角色编辑页 / 世界书列表页 / 世界书编辑页
   //                / 预设列表页 / 帮助页（设置页在下面单独一段）
   viewChat: $('view-chat'),
@@ -218,6 +220,7 @@ export const el = {
   // 角色编辑器里那行「表情图 · 已设 N 条 · 管理」
   btnManageExpr: $('btn-manage-expr'),
   charExprSummary: $('char-expr-summary'),
+  charExprPreview: $('char-expr-preview'),
   charFootHint: $('char-foot-hint'),
   c: {
     name: $('c-name'),
@@ -370,6 +373,8 @@ export const el = {
     form: $('wb-form'),
     footHint: $('wb-foot-hint'),
     dirtyHint: $('wb-dirty-hint'),
+    crumb: $('wb-crumb'),
+    bookFacts: $('wb-book-facts'),
     btnSave: $('btn-save-wb'),
     e: {
       title: $('wb-e-title'),

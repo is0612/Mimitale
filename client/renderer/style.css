@@ -10,56 +10,17 @@
    ========================================================================== */
 :root {
   color-scheme: light;
-  --bg: #fff5f8;
-  --bg-side: #ffeef4;
-  --bg-elev: #ffffff;
-  --bg-card: #ffffff;
-  --bg-input: #fff7fa;
-  --border: #f8dee8;
-  --border-hover: #f0cbd9;
-  --border-soft: #fbeaf1;
-  --text: #2b1f26;
-  --text-dim: #5f4f58;
-  --text-faint: #7f6f78;
-  --accent: #d92968;
-  --accent-hover: #e8558a;
-  --accent-pressed: #b81f57;
-  --on-accent: #ffffff;
-  --accent-soft: rgba(217, 41, 104, 0.10);
-  --accent-soft-strong: rgba(217, 41, 104, 0.16);
-  --accent-line: rgba(217, 41, 104, 0.35);
-  --accent-wash: rgba(217, 41, 104, 0.06);
-  --accent-border: rgba(217, 41, 104, 0.35);
-  --accent-border-strong: rgba(217, 41, 104, 0.5);
-  --accent-border-soft: rgba(217, 41, 104, 0.28);
-  --accent-border-faint: rgba(217, 41, 104, 0.25);
-  --brand-grad: linear-gradient(135deg, #ff9dc4 0%, #c78cff 100%);
-  --brand-glow: 0 0 12px rgba(255, 157, 196, 0.7), 0 0 6px rgba(199, 140, 255, 0.55);
-  --danger: #d94a52;
-  --danger-bg: #fff1f1;
-  --danger-hover: #b93a42;
-  --danger-text: #a0242c;
-  --danger-border: #f6d3d4;
-  --danger-bg-hover: #ffe7e8;
-  --danger-border-hover: #eeb9bb;
-  --ok-text: #1a7d52;
-  --ok-border: #cbe9d9;
-  --overlay: rgba(43, 31, 38, 0.28);
-  --pre-bg: #fdf0f5;
-  --code-bg: rgba(217, 41, 104, 0.07);
-  --code-text: #6b3a4d;
-  --th-bg: rgba(217, 41, 104, 0.05);
-  --foot-bg: #fff7fa;
-  --toggle-track: #f5d6e1;
-  --scrollbar: #f2d3df;
-  --scrollbar-hover: #e6b6c8;
-  --focus-ring: 0 0 0 3px rgba(217, 41, 104, 0.18);
-  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237f6f78' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  --shadow-sm: 0 1px 2px rgba(23, 18, 24, 0.05);
-  --shadow-lg: 0 14px 36px rgba(23, 18, 24, 0.16);
-  --art-edge: 0 0 1px rgba(0, 0, 0, 0.35);
+
+  /* ⚠️ 这里只放「全主题共用的基础 token」，**颜色一律不在这里**（在两套主题段里）。
+     2026-10-16 清掉了原先那一整套粉色颜色（48 个 token）：`preload.js` 的
+     `applyInitialTheme()` 在页面第一帧之前就设好了 data-theme / data-accent，
+     而 `[data-accent='amber']`（白天）和 `[data-theme='dark']`（夜间）把它们全覆盖 ——
+     等于**一次都不生效**。留着只会误导：改 :root 的颜色没反应，真值在下面的段里。
+     现在两套配色各自完整：白天 = `[data-accent='amber']`，夜间 = `[data-theme='dark']`。 */
   --radius: 4px;
   --radius-sm: 3px;
+
+  /* 字号：--ui-size 由外观设置调；--fs-min 是下限护栏（界面缩放时字号不会退化到读不了） */
   --ui-size: 1;
   --fs-min: 12px;
   --fs-xs: max(var(--fs-min), calc(12px * var(--ui-size)));
@@ -67,6 +28,7 @@
   --fs-md: max(var(--fs-min), calc(16px * var(--ui-size)));
   --fs-lg: max(var(--fs-min), calc(18px * var(--ui-size)));
   --fs-xl: max(var(--fs-min), calc(22px * var(--ui-size)));
+
   --font-ui: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
   --font-story: "Source Han Serif SC", "Noto Serif SC", "SimSun", serif;
 }
@@ -82,28 +44,35 @@
   --bg-input: #f7f8fa;
   --border: #dde1e6;
   --border-hover: #c8ced6;
+  /* 比 --border 深一档（对白底约 2.2:1）：长文本框右下角那个斜纹把手用它才看得见 ——
+     用 --border 的话只有 1.3:1，等于没画。2026-10-16 补上，此前这个 token 从没定义过。 */
+  --border-strong: #a8b0ba;
   --border-soft: #e8eaee;
   --text: #1b1e22;
   --text-dim: #4a5158;
-  --text-faint: #6b7280;
+  --text-faint: #5f6673;
   --accent: #8a6314;
   --accent-hover: #a1751a;
   --accent-pressed: #6e4f10;
   --on-accent: #ffffff;
   --accent-soft: rgba(138, 99, 20, 0.10);
   --accent-soft-strong: rgba(138, 99, 20, 0.16);
-  --accent-line: rgba(138, 99, 20, 0.35);
   --accent-wash: rgba(138, 99, 20, 0.06);
   --accent-border: rgba(138, 99, 20, 0.35);
   --accent-border-strong: rgba(138, 99, 20, 0.5);
   --accent-border-soft: rgba(138, 99, 20, 0.28);
   --accent-border-faint: rgba(138, 99, 20, 0.25);
-  --brand-grad: linear-gradient(135deg, #d9a94b 0%, #8a6314 100%);
-  --brand-glow: 0 0 12px rgba(217, 169, 75, 0.7), 0 0 6px rgba(138, 99, 20, 0.55);
+  /* danger / ok / art-edge 这几组原本写在 :root（2026-10-16 随那一整套粉色一起挪到这儿）。
+     它们**只被夜间段覆盖**，白天本来用的就是这个值 —— 挪过来语义才对得上：
+     白天主题的全部颜色现在都在这一个段里。 */
+  --danger: #d94a52;
   --danger-bg: #fdf1f0;
+  --danger-hover: #b93a42;
+  --danger-text: #a0242c;
   --danger-border: #f2d4d1;
   --danger-bg-hover: #fbe5e3;
-  --danger-border-hover: #e7b9b5;
+  --ok-text: #1a7d52;
+  --ok-border: #cbe9d9;
   --overlay: rgba(27, 30, 34, 0.28);
   --pre-bg: #f2f4f6;
   --code-bg: rgba(138, 99, 20, 0.07);
@@ -117,34 +86,21 @@
   --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --shadow-sm: 0 1px 2px rgba(27, 30, 34, 0.05);
   --shadow-lg: 0 14px 36px rgba(27, 30, 34, 0.16);
-  --radius: 4px;
-  --radius-sm: 3px;
+  --art-edge: 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
-/* 琥珀 × 夜间：底子沿用 [data-theme='dark'] 的中性灰，这里只换主色系。
-   两个值都在深底上调过：主色 on #101113 = 10.2:1，
-   压在黄金底上的深字 on #e8b84b = 10.1:1 —— 小字号也站得住。 */
+/* ⚠️ 这一段现在只剩两个 token：其余 11 个被下面那个
+   `[data-theme='dark'][data-accent='amber']`（属性顺序不同、但**是同一个选择器**，
+   特异性一样、靠后的赢）**完全覆盖**，属死定义，2026-10-16 已删。
+   留下的这两个没被覆盖、确实生效：`--accent-wash` 有 4 处引用、`--focus-ring` 有 10 处。
+   ⚠️ 它们和 main 段的 `--accent` 一样是**金色系**，而夜间主色是苔绿 —— 主题色后面要改，这里先不动。 */
 [data-accent='amber'][data-theme='dark'] {
-  --accent: #e8b84b;
-  --accent-hover: #f2ce74;
-  --accent-pressed: #c99a33;
-  --on-accent: #0e1216;
-  --accent-soft: rgba(232, 184, 75, 0.14);
-  --accent-soft-strong: rgba(232, 184, 75, 0.22);
-  --accent-line: rgba(232, 184, 75, 0.40);
   --accent-wash: rgba(232, 184, 75, 0.07);
-  --accent-border: rgba(232, 184, 75, 0.35);
-  --accent-border-strong: rgba(232, 184, 75, 0.5);
-  --accent-border-soft: rgba(232, 184, 75, 0.28);
-  --accent-border-faint: rgba(232, 184, 75, 0.25);
   --focus-ring: 0 0 0 3px rgba(232, 184, 75, 0.28);
-  --brand-grad: linear-gradient(135deg, #f2ce74 0%, #e8b84b 100%);
-  --brand-glow: 0 0 12px rgba(242, 206, 116, 0.7), 0 0 6px rgba(232, 184, 75, 0.55);
 }
 
 [data-theme='dark'] {
   color-scheme: dark;
-  --bg-band: #191c21;
   --bg-item: #23262b;
   --accent: #fb4d74;
   --accent-hover: #fc7492;
@@ -157,7 +113,6 @@
   --danger-text: #ffb4b0;
   --danger-border: #5a3236;
   --danger-bg-hover: #45282d;
-  --danger-border-hover: #6b3b40;
   --ok-text: #7fd6a8;
   --ok-border: #2f5342;
   --overlay: rgba(0, 0, 0, 0.62);
@@ -182,6 +137,8 @@
   --border: #30362f;
   --border-soft: #2a3029;
   --border-hover: #505c48;
+  /* 同白天那档的语义（对卡片底约 2.2:1），见 [data-accent='amber'] 里的说明 */
+  --border-strong: #525b4c;
   --text: #deded8;
   --text-dim: #abb0a4;
   --text-faint: #919a89;
@@ -266,7 +223,7 @@ body {
 
 .brand {
   display: flex;
-  padding: 0 23px 10px 2px;
+  padding: 0 24px 10px 2px;
   gap: 10px;
   align-items: flex-start;
 }
@@ -281,7 +238,6 @@ body {
   color: var(--text);
   font-family: var(--font-story);
   letter-spacing: .06em;
-  line-height: 1.4;
 }
 
 .sidebar-label {
@@ -298,7 +254,7 @@ body {
   flex-direction: column;
   margin: 0 -4px;
   padding: 0 4px;
-  gap: 7px;
+  gap: 8px;
 }
 
 .convo-item {
@@ -354,7 +310,6 @@ body {
 .char-portrait img,
 .char-expr-thumb img,
 .msg-avatar img,
-.wb-char-chip-avatar img,
 .wb-picker-avatar img,
 .wb-cover-frame img,
 .panel-avatar img,
@@ -444,7 +399,7 @@ body {
   justify-content: flex-start;
   gap: 8px;
   min-height: 35px;
-  padding: 7px 8px;
+  padding: 8px 8px;
   font-size: var(--fs-sm);
 }
 
@@ -1004,7 +959,7 @@ body {
   scroll-behavior: auto;
   padding-top: 26px;
   padding-bottom: 24px;
-  gap: 27px;
+  gap: 28px;
   background: transparent;
   border: 0;
 }
@@ -1013,7 +968,7 @@ body {
 .msg {
   display: flex;
   width: 100%;
-  gap: 15px;
+  gap: 16px;
 }
 
 .msg-avatar {
@@ -1109,7 +1064,6 @@ body {
   user-select: text;
   font-size: var(--chat-font-size, 13px);
   font-family: var(--font-story);
-  line-height: 1.95;
 }
 
 /* 自己的消息头**整体靠右**（「你 22:43」挨在一起），所以不能留那个会把时间
@@ -1542,7 +1496,7 @@ body {
   border-radius: var(--radius-sm);
   cursor: pointer;
   border-color: var(--border-soft);
-  padding: 11px 13px;
+  padding: 12px 14px;
 }
 
 .msg-option-btn:hover {
@@ -1717,7 +1671,6 @@ body {
 
 .empty .hint,
 .foot-hint,
-.char-expand-foot .field-help,
 .crop-hint,
 .crop-zoom-label,
 .crop-foot .field-help,
@@ -3046,7 +2999,7 @@ body {
 }
 
 #char-page-grid .char-card-sub {
-  padding: 5px 10px 0;
+  padding: 6px 10px 0;
   text-align: left;
 }
 
@@ -3277,10 +3230,9 @@ body {
   border-color: var(--accent, var(--border-strong, var(--border)));
 }
 
-/* ------------------------------ 长文本字段：字数角标 + 放大编辑 ------------------------------
+/* ------------------------------ 长文本字段：字数角标 ------------------------------
    五个长文本框的高度上限压低之后（auto-grow 的 GROW_MAX = 160px），
    框矮了，「里面写了多少」得有个信号 —— field-head 右边的角标干这个。
-   ↗ 按钮弹一个近乎全屏的浮层，长内容在那儿写。
 
    field-head 里的 field-label 不再是 .field 的直接子级，
    上面的 `.field.field-stack > .field-label { padding-top: 0 }` 匹配不上它 ——
@@ -3316,12 +3268,6 @@ body {
   font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
-}
-
-.char-expand-btn {
-  margin-left: auto;
-  flex: 0 0 auto;
-  color: var(--text-faint);
 }
 
 /* 备选开场白：条数不定的一列「可增删」文本框（行由 renderAltGreetings 动态铺）。
@@ -3393,91 +3339,6 @@ body {
 .alt-greet-text {
   resize: vertical;
 }
-
-.char-expand-btn:hover {
-  color: var(--text);
-  background: var(--bg-input);
-}
-
-/* 放大编辑浮层：挂在 body 上、盖在角色编辑**页**之上（页面在文档流里、没有 z-index，
-   浮层 65 稳稳压住它；确认框 70 —— 本来就该压着编辑页、又被确认框压着）。 */
-.char-expand {
-  position: fixed;
-  inset: 0;
-  z-index: 65;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(12, 16, 24, 0.45);
-}
-
-.char-expand-card {
-  width: 100%;
-  max-width: 760px;
-  height: min(82vh, 720px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-elev);
-  box-shadow: var(--shadow-lg);
-}
-
-.char-expand-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.char-expand-title {
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  color: var(--text);
-}
-
-.char-expand-meta {
-  flex: 1 1 auto;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 大文本框：高度交给 flex 铺满，不要再抢边框和圆角。
-   选择器给到两个类（(0,2,0)）—— 通用 textarea 规则是 (0,0,1)、
-   `textarea:focus` 是 (0,1,1) 且在文件更后面，只写一个类会被它们盖掉
-   （属性区那条「看着挺具体、实际平局还输」的教训就是这来的）。 */
-.char-expand-card > .char-expand-text {
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
-  border: none;
-  border-radius: 0;
-  resize: none;
-  font-size: var(--fs-sm);
-  box-shadow: none;
-}
-
-.char-expand-card > .char-expand-text:focus {
-  border: none;
-  box-shadow: none;
-}
-
-.char-expand-foot {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border-soft);
-}
-
-/* 脚部那条说明不在 .field 里，通用的 .field > .field-help 管不到它，得自带样式 */
 
 /* --------------------------------- 图片裁剪浮层 --------------------------------
    选好图之后、存下来之前，框一下要哪一块（ui/imageCrop.js）。
@@ -4147,10 +4008,6 @@ body {
 }
 
 .msg-avatar:has(img) {
-  box-shadow: var(--art-edge);
-}
-
-.wb-char-chip-avatar:has(img) {
   box-shadow: var(--art-edge);
 }
 
@@ -4997,90 +4854,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   color: var(--text-faint);
 }
 
-.wb-char-chip {
-  align-items: center;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  display: flex;
-  flex-wrap: wrap;
-  min-width: 0;
-  max-width: none;
-  border-radius: 4px;
-  padding: 12px;
-  gap: 8px;
-}
-
-.wb-char-chip-avatar {
-  flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-soft);
-  font-size: var(--fs-xs);
-  color: var(--text-dim);
-}
-
-
-.wb-char-chip-name {
-  white-space: nowrap;
-  font-size: var(--fs-xs);
-  color: var(--text);
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.wb-char-chip-btn {
-  flex: 0 0 auto;
-  border: 0;
-  background: none;
-  padding: 2px 6px;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-}
-
-.wb-char-chip-btn:hover {
-  color: var(--text);
-  background: var(--border-soft);
-}
-
-/* 副本 chip 上的「显示状态」勾选框：勾了才让这个 NPC 出头像。
-   做成勾选框而不是按钮 —— 它是个持久开关，勾没勾要一眼看得见。 */
-.wb-char-chip-show {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  cursor: pointer;
-  user-select: none;
-  padding: 2px 4px;
-  border-radius: var(--radius-sm);
-  flex-shrink: 0;
-}
-
-.wb-char-chip-show:hover {
-  color: var(--text);
-  background: var(--border-soft);
-}
-
-.wb-char-chip-show input {
-  margin: 0;
-  cursor: pointer;
-}
-
-.wb-char-chip-show:has(input:checked) {
-  color: var(--accent);
-}
-
 /* 从角色库多选加入的弹窗 */
 .wb-picker-card {
   max-width: 520px;
@@ -5361,7 +5134,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   cursor: pointer;
   min-width: 0;
   flex-shrink: 0;
-  padding: 13px 30px 13px 10px;
+  padding: 14px 30px 14px 10px;
   border-radius: 3px;
 }
 
@@ -7168,7 +6941,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   flex: 0 0 auto;
   display: flex;
   gap: 8px;
-  padding: 15px 16px 0;
+  padding: 16px 16px 0;
   padding-top: 14px;
   padding-bottom: 14px;
   align-items: center;
@@ -7225,14 +6998,14 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   width: 34px;
   height: 34px;
   min-width: 34px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-faint);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 7px;
+  padding: 8px;
 }
 
 .cast-divider {
@@ -7262,7 +7035,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   border-bottom: 1px solid var(--border-soft);
   border-radius: 0;
   cursor: pointer;
-  gap: 15px;
+  gap: 16px;
 }
 
 .cast-card-head {
@@ -7309,13 +7082,13 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 .cast-fields {
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: 14px;
 }
 
 .cast-field {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -7355,7 +7128,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 15px 18px 20px;
+  padding: 16px 18px 20px;
   border-top: 1px solid var(--border-soft);
 }
 
@@ -7577,14 +7350,14 @@ body.pad-dragging {
   width: 34px;
   height: 34px;
   min-width: 34px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-faint);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 7px;
+  padding: 8px;
   top: 24px;
   right: 12px;
 }
@@ -7670,7 +7443,6 @@ body.pad-dragging {
   background: none;
   border: none;
   box-shadow: none;
-  line-height: 1.8;
   flex: 1 0 100%;
   order: 0;
   width: 100%;
@@ -7686,8 +7458,8 @@ body.pad-dragging {
   height: 32px;
   width: 34px;
   min-width: 34px;
-  padding: 5px;
-  border-radius: 4px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .suggest-strip {
@@ -7723,7 +7495,6 @@ body.pad-dragging {
   --on-accent: #182015;
   --accent-soft: #292f28;
   --accent-soft-strong: #384239;
-  --accent-line: #52604e;
   --accent-wash: rgba(168,185,151,.045);
   --accent-border: #52604e;
   --accent-border-soft: #454d3c;
@@ -7743,7 +7514,7 @@ body.pad-dragging {
   font-size: var(--fs-xs);
   letter-spacing: .15em;
   color: var(--text-faint);
-  margin-top: 5px;
+  margin-top: 6px;
 }
 
 .btn-new:hover {
@@ -7862,8 +7633,7 @@ body.pad-dragging {
   justify-content: space-between;
   gap: 12px;
   font-size: var(--fs-xs);
-  line-height: 1.7;
-  margin-top: 9px;
+  margin-top: 10px;
 }
 
 .scene-field span {
@@ -7893,7 +7663,7 @@ body.pad-dragging {
   color: var(--text-dim);
   font-size: var(--fs-xs);
   min-height: 43px;
-  gap: 9px;
+  gap: 10px;
   background: transparent;
   border: 0;
 }
@@ -7908,7 +7678,7 @@ body.pad-dragging {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .convo-story-text .convo-title {
@@ -7937,7 +7707,7 @@ body.pad-dragging {
 .sidebar-foot #btn-settings {
   border-top: 1px solid var(--border);
   margin-top: 8px;
-  padding-top: 13px;
+  padding-top: 14px;
   min-height: 44px;
 }
 
@@ -7994,7 +7764,7 @@ body.pad-dragging {
 .scene-worldbook {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin-left: auto;
   color: var(--text-faint);
   max-width: 45%;
@@ -8065,7 +7835,7 @@ body.pad-dragging {
 
 .cast-card.has-portrait .cast-portrait {
   height: 276px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .cast-card.has-portrait .cast-portrait img {
@@ -8076,7 +7846,7 @@ body.pad-dragging {
 .cast-card.has-portrait .cast-card-head {
   margin-top: -78px;
   position: relative;
-  padding: 28px 13px 14px;
+  padding: 28px 14px 14px;
   background: linear-gradient(transparent,rgba(15,19,15,.94));
   color: #e4e7df;
 }
@@ -8119,8 +7889,11 @@ body.pad-dragging {
   background: linear-gradient(color-mix(in srgb, var(--bg) 72%, transparent), color-mix(in srgb, var(--bg) 72%, transparent)), var(--chat-bg-image, none) center / cover no-repeat;
 }
 
+/* 浅色底上图片是「亮 + 带纹理」，而文字又是深色 —— 同样的遮罩强度在浅色下压不住，
+   所以白天这一档刻意比夜间厚一截（夜间 72% 就够：深底已经把图压暗，本来就安静）。
+   2026-10-16：82% → 90%，原来的浅色森林图还明显抢视线。 */
 [data-theme='light'][data-chat-skin='image'] .chat-col::before {
-  background: linear-gradient(color-mix(in srgb, var(--bg) 82%, transparent), color-mix(in srgb, var(--bg) 82%, transparent)), var(--chat-bg-image, none) center / cover no-repeat;
+  background: linear-gradient(color-mix(in srgb, var(--bg) 90%, transparent), color-mix(in srgb, var(--bg) 90%, transparent)), var(--chat-bg-image, none) center / cover no-repeat;
 }
 
 /* 品牌与收放按钮在窄栏中分两行，列表独立滚动，创作入口始终置底。 */
@@ -8176,7 +7949,7 @@ body.pad-dragging {
   min-height: 42px;
   align-self: center;
   justify-content: center;
-  padding: 3px;
+  padding: 4px;
   gap: 0;
 }
 
@@ -8301,26 +8074,66 @@ body.pad-dragging {
   --ce-muted: var(--text-faint);
 }
 
+/* 两栏是默认：属性 / 表情图 / 世界书 / 高级设置的内容本来就是结构化的，不需要目录。
+   「角色设定」才展开第三列 —— 五个字段连成一页长稿，右侧挂一份字段目录。
+   ⚠️ 真实侧栏是 224px（不是设计稿里估的 196），所以三栏的余量要按 1440−224 算。 */
 #view-char-editor #char-form.char-editor-layout {
   display: grid;
-  grid-template-columns: 244px minmax(0, 1fr);
+  grid-template-columns: 220px minmax(0, 1fr);
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
 }
 
+#view-char-editor #char-form.char-editor-layout[data-editor-section='writing'] {
+  grid-template-columns: 220px minmax(0, 1fr) 272px;
+}
+
 #view-char-editor #char-form.hidden,
-#view-char-editor .char-editor-panel[hidden],
-#view-char-editor .char-writing-panel[hidden] {
+#view-char-editor .char-editor-panel[hidden] {
   display: none;
 }
 
 #view-char-editor .char-identity-pane {
   min-width: 0;
-  padding: 26px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px 12px;
   overflow-y: auto;
   border-right: 1px solid var(--ce-line);
   background: var(--ce-sidebar);
+}
+
+/* 左栏里这一摞东西之间的间距由 gap 统一带 —— media 自己那条 20px 底边距
+   在这里是**双份**（原来它在表单里是上下叠的块，现在进了 flex 列）。
+   ⚠️ 这一条不是随手的美化：它直接决定左栏会不会长出栏内滚动条。
+   1440×900 下左栏内容比栏高多 18px，删掉这 20px 才回到「不滚」。 */
+#view-char-editor .char-identity-pane .char-media-top {
+  margin-bottom: 0;
+}
+
+/* 左栏底部：来源提示 + 导出 + 删除角色（V2 从底部通栏搬进来的）。
+   margin-top:auto 把它钉在栏底，那块空白也就有了归属。 */
+#view-char-editor .char-rail-foot {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--ce-line);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+#view-char-editor .char-rail-foot .foot-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  margin-bottom: 2px;
+}
+
+#view-char-editor .char-rail-foot .btn {
+  width: 100%;
+  justify-content: flex-start;
 }
 
 /* 头像 + 形象：一排两个，底边对齐（旧版用 position:absolute + top:150px 的
@@ -8345,18 +8158,12 @@ body.pad-dragging {
   min-width: 0;
 }
 
-#view-char-editor .char-identity-hint {
-  margin: 7px 0 0;
-  color: var(--ce-muted);
-  font-size: var(--fs-xs);
-}
-
 #view-char-editor .char-section-nav {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-top: 17px;
-  margin-top: 24px;
+  padding-top: 8px;
+  margin-top: 8px;
   border-top: 1px solid var(--ce-line);
 }
 
@@ -8367,24 +8174,12 @@ body.pad-dragging {
   font: inherit;
   font-size: var(--fs-sm);
   cursor: pointer;
-  padding: 12px;
+  padding: 8px 12px;
   text-align: left;
   border-radius: var(--radius-sm);
-}
-
-#view-char-editor .char-writing-tab {
-  border: 0;
-  background: transparent;
-  color: var(--text-dim);
-  font: inherit;
-  font-size: var(--fs-sm);
-  cursor: pointer;
-  flex: 1 1 0; /* 五颗等宽铺满一行，不再按文字长短参差 */
-  min-width: 0;
-  padding: 12px 0 15px;
-  text-align: center;
-  white-space: nowrap;
-  border-bottom: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 #view-char-editor .char-section-button:hover {
@@ -8397,8 +8192,7 @@ body.pad-dragging {
   color: var(--text);
 }
 
-#view-char-editor .char-section-button:focus-visible,
-#view-char-editor .char-writing-tab:focus-visible {
+#view-char-editor .char-section-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -8406,14 +8200,12 @@ body.pad-dragging {
 #view-char-editor .char-editor-content {
   min-width: 0;
   overflow-y: auto;
-  padding: 30px 40px 36px;
+  padding: 22px 24px 28px;
   container-type: inline-size;
 }
 
 #view-char-editor .char-editor-panel {
   min-width: 0;
-  max-width: 1120px;
-  margin: 0 auto;
 }
 
 #view-char-editor .char-panel-heading {
@@ -8428,52 +8220,41 @@ body.pad-dragging {
 }
 
 #view-char-editor .char-panel-heading p {
-  margin: 7px 0 0;
+  margin: 8px 0 0;
   color: var(--ce-muted);
   font-size: var(--fs-xs);
 }
 
-#view-char-editor .char-writing-tabs {
+/* 「角色设定」那行标题：说明挪到右边同一行 —— 五栏连成长稿，标题不该占掉一整行高度 */
+#view-char-editor .char-panel-heading.is-work {
   display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  margin-bottom: 28px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--ce-line);
 }
 
-#view-char-editor .char-writing-tab[aria-selected="true"] {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+#view-char-editor .char-panel-heading.is-work p {
+  margin: 0;
+  white-space: nowrap;
 }
 
-#view-char-editor .char-writing-tab:hover {
-  color: var(--accent);
-}
-
-#view-char-editor .char-writing-panel > .field {
-  margin-bottom: 22px;
-}
-
-/* 只调高度和内边距，不碰背景 / 描边 —— 底色和 border-color 在这里写会以
-   (1,2,1) 的优先级压过全局的 `textarea:focus`（(0,1,1)），聚焦描边就没了。 */
-#view-char-editor .char-writing-panel > .field > textarea {
-  min-height: 300px;
-  max-height: none;
-  padding: 20px 22px;
-  line-height: 1.9;
-}
-
-#view-char-editor .char-writing-panel > .field > .field-help {
-  margin-top: 10px;
-  line-height: 1.8;
-}
-
-#view-char-editor .char-writing-panel .field-head {
-  margin-bottom: 8px;
-}
+/* 稿纸高度**按字段分别给定**，不再一律 300px：场景天然一两句、描述天然要写三段，
+   用同一个高度对待五种不同长度的内容，两头都不舒服。
+   ⚠️ 这五行同时是 auto-grow 的实际上限：GROW_MAX(160) 比它们都小，naturalHeight 取
+      max(minimum, min(GROW_MAX, maxHeight)) = minimum → 框高恒等于这里的值，
+      装不下的内容在**框内**滚。这是有意的：五栏同屏时表单总长得是常数，
+      否则多写几行就把下面的字段顶到屏幕外。改高度只改这五行。
+   框的身量（内边距 / 去掉自带描边）见下面「编辑角色 · 写作纸」那一节。 */
+#view-char-editor #c-desc { min-height: 264px; }
+#view-char-editor #c-personality { min-height: 120px; }
+#view-char-editor #c-scenario { min-height: 100px; }
+#view-char-editor #c-first { min-height: 160px; }
+#view-char-editor #c-example { min-height: 140px; }
 
 #view-char-editor .attr-add-row,
-#view-char-editor .attr-row,
 #view-char-editor .attr-range,
 #view-char-editor .attr-group-row,
 #view-char-editor .attr-mode-row,
@@ -8497,8 +8278,137 @@ body.pad-dragging {
   }
 }
 
-#view-char-editor .page-foot {
-  gap: 12px;
+/* ------------------------------ 编辑角色 · 字段目录（V2 新增的第三列） ------------------------------
+   五栏连成一张长稿之后，「现在看的是哪一栏 / 哪一栏还空着」需要有个地方交代 ——
+   这一列的全部职责就是这个。 */
+
+#view-char-editor .char-field-index {
+  display: none;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 14px;
+  border-left: 1px solid var(--ce-line);
+  background: var(--ce-sidebar);
+  overflow-y: auto;
+}
+
+/* 只在「角色设定」露头：其余分区没有"栏"可列，留着只会是一列空的 */
+#view-char-editor #char-form[data-editor-section='writing'] .char-field-index {
+  display: flex;
+}
+
+#view-char-editor .field-index-title {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+  padding: 0 8px 8px;
+}
+
+#view-char-editor .field-index-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+#view-char-editor .field-index-item:hover {
+  background: var(--accent-wash);
+  color: var(--text);
+}
+
+#view-char-editor .field-index-item[aria-current='true'] {
+  background: var(--accent-soft-strong);
+  color: var(--text);
+  font-weight: 600;
+}
+
+#view-char-editor .field-index-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+#view-char-editor .field-index-no {
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+#view-char-editor .field-index-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#view-char-editor .field-index-len {
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 已写 / 未写：一个点说完，不另起一列文字 */
+#view-char-editor .field-index-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-hover);
+}
+
+#view-char-editor .field-index-dot[data-filled='true'] {
+  background: var(--accent);
+}
+
+#view-char-editor .field-index-block {
+  margin-top: 14px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+
+#view-char-editor .field-index-block h3 {
+  margin: 0 0 8px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+#view-char-editor .field-index-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#view-char-editor .field-index-list li {
+  display: flex;
+  gap: 8px;
+  margin: 4px 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+#view-char-editor .field-index-list li::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 4px;
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--border-hover);
 }
 
 /* Worldbook editor: all changes stay inside the existing view. */
@@ -8514,6 +8424,9 @@ body.pad-dragging {
 #view-wb-editor .page-head {
   flex-wrap: wrap;
   gap: 12px;
+  height: auto;
+  min-height: 78px;
+  padding: 14px 24px;
 }
 
 #view-wb-editor .page-actions {
@@ -8526,25 +8439,25 @@ body.pad-dragging {
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 16px 28px 0;
+  gap: 16px;
+  padding: 16px 28px 14px;
   border-bottom: 1px solid var(--border);
 }
 
 #view-wb-editor .wb-summary {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
-  padding-bottom: 16px;
+  padding-bottom: 0;
 }
 
 #view-wb-editor .wb-summary-cover {
   display: grid;
   place-items: center;
-  flex: 0 0 34px;
-  width: 34px;
-  height: 51px;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 69px;
   overflow: hidden;
   border-radius: 3px;
   background: var(--accent-soft);
@@ -8563,11 +8476,11 @@ body.pad-dragging {
 
 #view-wb-editor .wb-summary-text strong {
   display: block;
-  max-width: 320px;
+  max-width: 420px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-lg);
   font-weight: 600;
 }
 
@@ -8580,20 +8493,22 @@ body.pad-dragging {
 
 #view-wb-editor .wb-tabs {
   display: flex;
-  align-self: stretch;
-  gap: 24px;
+  align-self: auto;
+  gap: 26px;
   flex-shrink: 0;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 #view-wb-editor .wb-tab {
-  padding: 0 0 14px;
+  padding: 12px 2px 14px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
   border-radius: 0;
   color: var(--text-dim);
   font: inherit;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   cursor: pointer;
 }
 
@@ -8616,7 +8531,7 @@ body.pad-dragging {
 }
 
 #view-wb-editor .wb-entry-actions .btn {
-  padding: 5px 7px;
+  padding: 6px 8px;
 }
 
 /* 搜索框和状态筛选共用的几何：左右各留 16px 呼吸位（input 全局 width:100%，
@@ -8631,7 +8546,7 @@ body.pad-dragging {
 }
 
 #view-wb-editor .wb-search {
-  padding: 10px 11px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-input);
@@ -8659,8 +8574,9 @@ body.pad-dragging {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   min-height: 25px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 #view-wb-editor .wb-list-back {
@@ -8677,7 +8593,6 @@ body.pad-dragging {
   height: 340px;
   min-height: 260px;
   resize: vertical;
-  line-height: 1.8;
 }
 
 #view-wb-editor .wb-form .field-help {
@@ -8688,13 +8603,16 @@ body.pad-dragging {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 7px;
-  padding: 0;
+  gap: 8px;
+  padding: 6px 12px;
   margin: 0;
-  border: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   background: transparent;
   box-shadow: none;
   min-height: 24px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 
 #view-wb-editor .wb-checks .check input[type='checkbox'] {
@@ -8733,7 +8651,7 @@ body.pad-dragging {
 }
 
 #view-wb-editor .wb-book-name, #view-wb-editor .wb-opening {
-  grid-column: 2;
+  grid-column: 1;
   padding: 0;
   min-width: 0;
 }
@@ -8747,7 +8665,7 @@ body.pad-dragging {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 28px;
+  padding: 20px 28px;
 }
 
 #view-presets .preset-toolbar {
@@ -8761,9 +8679,9 @@ body.pad-dragging {
 #view-presets .preset-search {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   width: min(360px, 100%);
-  padding: 0 11px;
+  padding: 0 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-input);
@@ -8779,7 +8697,7 @@ body.pad-dragging {
   border: 0;
   background: transparent;
   box-shadow: none;
-  padding: 11px 0;
+  padding: 12px 0;
 }
 
 #view-presets .preset-search .field-icon {
@@ -8795,7 +8713,7 @@ body.pad-dragging {
 }
 
 #view-presets .preset-filters button {
-  padding: 9px 0;
+  padding: 10px 0;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
@@ -8842,7 +8760,7 @@ body.pad-dragging {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 9px;
+  gap: 10px;
 }
 
 #view-presets .preset-row-name {
@@ -8855,7 +8773,7 @@ body.pad-dragging {
   font-size: var(--fs-xs);
   color: var(--accent);
   border: 1px solid var(--border);
-  padding: 0 5px;
+  padding: 0 6px;
   border-radius: 2px;
 }
 
@@ -8869,7 +8787,7 @@ body.pad-dragging {
 }
 
 #view-presets .preset-row-tags {
-  margin-top: 7px;
+  margin-top: 8px;
   color: var(--text-faint);
   font-size: var(--fs-xs);
   overflow-wrap: anywhere;
@@ -8878,7 +8796,7 @@ body.pad-dragging {
 #view-presets .preset-row-state {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   font-size: var(--fs-xs);
   color: var(--text-dim);
 }
@@ -8886,7 +8804,7 @@ body.pad-dragging {
 
 #view-presets .preset-row-actions {
   display: flex;
-  gap: 3px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
@@ -8914,3 +8832,651 @@ body.pad-dragging {
   gap: 12px;
 }
 
+
+/* ============================================================================
+   创作空间改版（设计稿 design/editor-redesign/，2026-10-16）
+   编辑角色 / 编辑世界书 两个页面的排版重做。只动结构和样式，令牌一律不动。
+   覆盖层按「#view-* 前缀 + 靠后出现」压过上面的基础规则。
+   ============================================================================ */
+
+/* ------------------------------ 页头：面包屑 + 保存状态 ------------------------------ */
+
+#view-char-editor .page-head {
+  height: auto;
+  min-height: 78px;
+  padding: 14px 24px;
+}
+
+.page-crumb {
+  margin: 0 0 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.page-crumb + .page-title {
+  margin-top: 0;
+}
+
+/* 保存状态小胶囊：绿点 = 已保存，琥珀点 = 有未保存的改动（和 .wb-dirty 一个语义） */
+.save-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.save-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok-text);
+}
+
+.save-pill[data-state='dirty'] {
+  color: var(--accent);
+}
+
+.save-pill[data-state='dirty']::before {
+  background: var(--accent);
+}
+
+/* ------------------------------ 编辑角色 · 左栏 ------------------------------ */
+
+/* 来源胶囊：贴着头像 / 形象下面，一句话交代这张卡是哪来的 */
+.char-source-chip {
+  align-self: flex-start;
+  font-size: var(--fs-xs);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--text-dim);
+  border: 1px solid var(--border-soft);
+}
+
+/* 头像 / 形象：一排两个、顶对齐（形象 2:3 和角色库卡片同比例，不再单独压尺寸） */
+#view-char-editor .char-avatar-col {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+#view-char-editor .char-avatar-col .char-media-item {
+  grid-template-rows: auto auto;
+  row-gap: 8px;
+}
+
+#view-char-editor .char-media-label {
+  display: block;
+}
+
+/* 分区导航：图标 + 名称 + 一句话说明 + 计数徽章。
+   窗口不高（笔记本 820 那档）时收掉第二行说明 —— 宁可少一句，
+   也不让左栏长出栏内滚动条。 */
+#view-char-editor .char-section-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
+#view-char-editor .char-section-icon svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.85;
+}
+
+#view-char-editor .char-section-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+}
+
+#view-char-editor .char-section-count {
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  background: var(--bg-input);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+#view-char-editor .char-section-button[aria-selected='true'] .char-section-count {
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+}
+
+/* ------------------------------ 编辑角色 · 写作纸 ------------------------------ */
+/* 五张稿纸是同一种东西（写作面）：头是「序号 + 字段名 + 字数角标」，中间通体大框，
+   底下一条**可折叠**的写法说明。
+   V2 里五栏同时在场，所以头栏要压扁、说明要收起 —— 五段说明全铺开会把正文淹掉。 */
+
+/* margin-bottom 是字段之间唯一的间距 —— 每张稿纸自带描边，再画分隔线就重了 */
+#view-char-editor .char-sheet {
+  margin-bottom: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+#view-char-editor .char-sheet:focus-within {
+  border-color: var(--accent-border);
+}
+
+/* label 只包住头栏 —— for 的关联还在，点字段名照样聚焦输入框。
+   ⚠️ 别把 details 包进 label：那样点「这一栏怎么写」会连带聚焦输入框。
+   备选开场白那块没有可关联的控件，头栏是 .char-sheet 的直接子级，所以两条都要写。 */
+#view-char-editor .char-sheet > .char-sheet-label {
+  display: block;
+}
+
+#view-char-editor .char-sheet > .char-sheet-label > .field-head,
+#view-char-editor .char-sheet > .field-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-elev);
+}
+
+/* 序号：和右栏字段目录里的序号一一对应 —— 两张表靠它对上号 */
+#view-char-editor .char-sheet .field-no {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ⚠️ 这条选择器是 (1,2,1)，压得过全局的 `textarea:focus`（(0,1,1)）——
+   所以框自己的描边在这里必须归零，**聚焦反馈交给卡片**（见上面的 .char-sheet:focus-within）。
+   反过来，别在这条里写 border-color 指望它做聚焦态：它会被这条自己吃掉。 */
+#view-char-editor .char-sheet > textarea {
+  max-height: none;
+  padding: 18px 20px;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* 写法说明：折叠条。默认收起是刻意的 —— 五栏同屏，说明留给"想查的时候" */
+#view-char-editor .char-fold {
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-input);
+}
+
+#view-char-editor .char-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+#view-char-editor .char-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+#view-char-editor .char-fold > summary::before {
+  content: '▸';
+  color: var(--text-faint);
+  transition: transform 0.12s;
+}
+
+#view-char-editor .char-fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+#view-char-editor .char-fold-body {
+  padding: 0 14px 12px;
+}
+
+/* 模板条（只有开场白那一栏有）：夹在正文和折叠条之间 */
+#view-char-editor .char-sheet > .field-template-bar {
+  margin-top: 0;
+  padding: 8px 14px 10px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-input);
+}
+
+/* 备选开场白的条目列表：现在也长在稿纸卡里，补上左右内边距 */
+#view-char-editor .char-sheet > .alt-greet-list {
+  padding: 12px 14px;
+}
+
+#view-char-editor .char-sheet > .alt-greet-list:empty {
+  padding: 0;
+}
+
+/* ------------------------------ 编辑角色 · 高级设置 ------------------------------ */
+/* 从「details 套分区」改成三张平铺卡：一次点开，不再折两层 */
+
+#view-char-editor .char-advanced {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+#view-char-editor .char-advanced > .field {
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+}
+
+#view-char-editor .char-advanced > .field:focus-within {
+  border-color: var(--accent-border);
+}
+
+#view-char-editor .char-advanced > .field > textarea {
+  min-height: 84px;
+  max-height: none;
+}
+
+#view-char-editor .char-advanced > .field > .field-label {
+  padding-top: 0;
+}
+
+/* ------------------------------ 编辑角色 · 属性 / 开关卡 ------------------------------ */
+
+#view-char-editor .attr-panel {
+  background: var(--bg-card);
+  border-color: var(--border-soft);
+}
+
+/* 字段行：名称定宽，值吃满中间，类型 / 更多 / 删除靠右 */
+#view-char-editor .attr-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+#view-char-editor .attr-item:last-child .attr-row {
+  border-bottom: 0;
+}
+
+#view-char-editor .attr-row .attr-name {
+  flex: 0 0 120px;
+}
+
+#view-char-editor .attr-row .attr-value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 「剧情选项 / 在状态栏显示」两张开关卡 */
+#view-char-editor .char-switch-card {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+}
+
+#view-char-editor .char-switch-card .check-desc,
+#view-char-editor .char-switch-card .field-help {
+  max-width: 760px;
+}
+
+#view-char-editor .c-options-config {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+/* ------------------------------ 编辑角色 · 表情图预览 ------------------------------ */
+
+#view-char-editor .char-expr-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+#view-char-editor .char-expr-preview-cell {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+#view-char-editor .char-expr-preview-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+#view-char-editor .char-expr-preview-cell:hover {
+  border-color: var(--accent-border);
+}
+
+#view-char-editor .char-expr-preview-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  background: transparent;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------ 编辑世界书 · 书籍头 ------------------------------ */
+
+/* 统计行：条设定 / 启用 / 常驻 / 角色 / 字 —— 数字加粗，一眼读完这本书的全貌 */
+#view-wb-editor .wb-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+#view-wb-editor .wb-stats b {
+  color: var(--text-dim);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+#view-wb-editor .wb-bookbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* 分区标签独立成行：下划线式，和左侧导航/分段控件三种形态各司其职 */
+/* ------------------------------ 编辑世界书 · 条目列表 ------------------------------ */
+
+#view-wb-editor .wb-list-tools {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+#view-wb-editor .wb-list-tools .wb-search {
+  flex: 1 1 auto;
+  width: auto;
+  margin: 0;
+}
+
+#view-wb-editor .wb-list-tools .wb-state {
+  flex: 0 0 104px;
+  width: auto;
+  margin: 0;
+}
+
+/* 行尾的「字数 · 顺序」：决定这条生不生效 / 什么时候生效的两样 */
+.wb-entry-meta {
+  margin-top: 6px;
+  display: flex;
+  gap: 12px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------ 编辑世界书 · 条目详情 ------------------------------ */
+
+#view-wb-editor .wb-detail-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* 表单收成一列；检查项用 order 提到最顶，和正文同屏（DOM 不动，脏标记照常冒泡） */
+#view-wb-editor .wb-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+#view-wb-editor .wb-checks {
+  order: -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#view-wb-editor .wb-checks .check:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+#view-wb-editor .wb-checks .check:has(input:checked) {
+  border-color: var(--accent-border);
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+}
+
+/* ------------------------------ 编辑世界书 · 书籍设置 ------------------------------ */
+
+/* 「本书设置」分组标题和分区标签重名，藏掉 */
+#view-wb-editor .wb-book-title {
+  display: none;
+}
+
+/* 两栏：左 = 封面 / 书名 / 开场白，右 = 本书信息，底 = 危险区 */
+#view-wb-editor .wb-book {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+#view-wb-editor .wb-cover {
+  grid-column: 1;
+  grid-row: auto;
+}
+
+#view-wb-editor .wb-cover-row {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+/* 本书信息卡 */
+#view-wb-editor .wb-facts {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: start;
+  margin: 0;
+  padding: 16px 18px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 12px;
+}
+
+#view-wb-editor .wb-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--fs-xs);
+}
+
+#view-wb-editor .wb-fact dt {
+  margin: 0;
+  color: var(--text-faint);
+}
+
+#view-wb-editor .wb-fact dd {
+  margin: 0;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+#view-wb-editor .wb-fact-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+/* 危险区：删除本书 */
+#view-wb-editor .wb-book-foot {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+}
+
+#view-wb-editor .wb-book-foot-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* ------------------------------ 编辑世界书 · 本书角色 ------------------------------ */
+
+#view-wb-editor .wb-char-list {
+  gap: 14px;
+}
+
+/* 副本卡：头像 + 名字 / 设定预览 / 「显示状态 + 编辑 + 移除」 */
+.wb-char-card {
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+}
+
+.wb-char-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.wb-char-card-avatar {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft-strong);
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.wb-char-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.wb-char-card-name {
+  min-width: 0;
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-char-card-desc {
+  margin: 10px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.wb-char-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.wb-char-card-show {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+
+.wb-char-card-show input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.wb-char-card-show:has(input:checked) {
+  color: var(--accent);
+}
+
+.wb-char-card-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.wb-char-card-btn {
+  border: 0;
+  background: none;
+  padding: 4px 8px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.wb-char-card-btn:hover {
+  color: var(--text);
+  background: var(--border-soft);
+}
+
+.wb-char-card-remove:hover {
+  color: var(--danger-text);
+  background: var(--danger-bg);
+}

@@ -66,9 +66,9 @@ import {
   expressionsSummaryText
 } from './charExpressions.js';
 import { openAiGenModal } from './aiGen.js';
-import { attachAutoGrow, syncAutoGrowAll, autoGrow } from '../ui/auto-grow.js';
+import { attachAutoGrow, syncAutoGrowAll } from '../ui/auto-grow.js';
 import { pickAndCrop } from '../ui/imageCrop.js';
-import { initCharacterEditorLayout, showCharacterField } from './characterEditorLayout.js';
+import { initCharacterEditorLayout, showCharacterField, setCharSectionCount, setCharSourceChip, refreshCharSectionCounts } from './characterEditorLayout.js';
 export { showCharacterField } from './characterEditorLayout.js';
 
 // ---------------------------------------------------------------------------
@@ -94,6 +94,13 @@ function longTextAreas() {
   ].filter((pair) => pair[0]);
 }
 
+/** 页头右侧的保存状态小胶囊：输入即「未保存」，保存成功 / 重新填表归「已保存」 */
+function setCharSaveState(state) {
+  if (!el.charSaveState) return;
+  el.charSaveState.dataset.state = state;
+  el.charSaveState.textContent = state === 'dirty' ? '有未保存的改动' : '所有更改已保存';
+}
+
 /** 给五个框接上自动增高。接线只需一次（重复调用会被 ignore） */
 function wireAutoGrow() {
   for (const [node, key] of longTextAreas()) {
@@ -102,15 +109,13 @@ function wireAutoGrow() {
 }
 
 // ---------------------------------------------------------------------------
-//  长文本字段：字数角标 + 「放大编辑」浮层
+//  长文本字段：字数角标
 //
 //  五个框的高度上限压到 160px 之后（auto-grow 的 GROW_MAX），框矮了，
 //  「里面到底写了多少」得有个一眼能看到的信号 —— 角标干这个。
-//  真要写一大段，字段行的 ↗ 按钮弹一个近乎全屏的浮层，舒展开写。
 //
-//  浮层里改动**实时写回**主表单框（input 一来一回），不存在「取消」：
-//  表单本身就是草稿语义，保存角色之前一切都可改。这样做的好处是
-//  任何时刻关掉浮层（Esc / 点空白 / ✕）内容都不会丢。
+//  2026-10-16：原来字段行右边还有一颗「↗ 放大编辑」按钮，弹一层近乎全屏的
+//  浮层写长内容。编辑页改成整屏之后框本身就够大了，那颗按钮已撤掉。
 // ---------------------------------------------------------------------------
 
 /** 一个长文本框的字数角标节点（id 约定：<textarea id>-count） */
@@ -126,130 +131,11 @@ function updateCharCount(textarea) {
   badge.textContent = `${n.toLocaleString()} 字`;
 }
 
-/** 刷新全部五个框的角标（fillCharForm 回填之后用） */
+/** 刷新全部五个框的角标 + 左栏徽章 + 右栏字段目录（fillCharForm 回填之后用） */
 function syncAllCharCounts() {
   for (const [node] of longTextAreas()) updateCharCount(node);
-}
-
-// 放大浮层（挂在 body 上，和世界书选择浮层一个套路：动态建、用完删）
-let expandLayerEl = null;
-// 浮层对应的主表单框：实时同步的落点
-let expandSource = null;
-// Esc 的捕获监听器（关浮层时要摘掉）
-let expandKeyHandler = null;
-
-/**
- * 打开放大编辑浮层。
- * @param {HTMLTextAreaElement} textarea 主表单里的长文本框
- * @param {string} label 字段名（浮层标题）
- */
-function openExpandLayer(textarea, label) {
-  if (!textarea || expandLayerEl) return;
-  closeExpandLayer();
-
-  const overlay = document.createElement('div');
-  overlay.className = 'char-expand';
-
-  const card = document.createElement('div');
-  card.className = 'char-expand-card';
-
-  // --- 头：字段名 + 实时字数 + 关闭 ---
-  const head = document.createElement('div');
-  head.className = 'char-expand-head';
-
-  const title = document.createElement('span');
-  title.className = 'char-expand-title';
-  title.textContent = label || '编辑';
-
-  const meta = document.createElement('span');
-  meta.className = 'char-expand-meta';
-  meta.textContent = `${(textarea.value || '').length.toLocaleString()} 字`;
-
-  const close = document.createElement('button');
-  close.type = 'button';
-  close.className = 'icon-btn';
-  close.title = '收起（Esc）';
-  close.setAttribute('aria-label', '收起放大编辑');
-  close.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>';
-
-  head.append(title, meta, close);
-
-  // --- 正文：一个铺满卡片的大文本框 ---
-  const big = document.createElement('textarea');
-  big.className = 'char-expand-text';
-  big.spellcheck = false;
-  big.value = textarea.value || '';
-  big.setAttribute('aria-label', `放大编辑${label || ''}`);
-
-  // --- 脚：说明 + 完成 ---
-  const foot = document.createElement('div');
-  foot.className = 'char-expand-foot';
-
-  const hint = document.createElement('span');
-  hint.className = 'field-help';
-  hint.textContent = '改动实时写回表单，随时 Esc 收起，不会丢内容。';
-
-  const done = document.createElement('button');
-  done.type = 'button';
-  done.className = 'btn btn-primary btn-sm';
-  done.textContent = '完成';
-
-  foot.append(hint, done);
-  card.append(head, big, foot);
-  overlay.appendChild(card);
-
-  // 实时同步：浮层里每敲一下都写回主框。
-  // 程序改 .value 不触发 input，主框的自动增高不会自己动 —— 手动补一次。
-  big.addEventListener('input', () => {
-    textarea.value = big.value;
-    updateCharCount(textarea);
-    autoGrow(textarea);
-    meta.textContent = `${big.value.length.toLocaleString()} 字`;
-  });
-
-  function shut() {
-    closeExpandLayer();
-    textarea.focus();
-  }
-  close.addEventListener('click', shut);
-  done.addEventListener('click', shut);
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) shut();
-  });
-
-  // Esc 只关浮层，不许把底下的编辑器弹窗一起关掉。
-  // main.js 的全局 Esc 处理是**冒泡阶段**的 document 监听 ——
-  // 这里用**捕获阶段**先拦下：stopPropagation 之后事件到不了那边。
-  expandKeyHandler = (event) => {
-    if (event.key !== 'Escape') return;
-    event.preventDefault();
-    event.stopPropagation();
-    shut();
-  };
-  document.addEventListener('keydown', expandKeyHandler, true);
-
-  document.body.appendChild(overlay);
-  expandLayerEl = overlay;
-  expandSource = textarea;
-
-  // 光标落到末尾：放大进来的人多半是要接着写，不是要从头改
-  big.focus();
-  const end = big.value.length;
-  big.setSelectionRange(end, end);
-}
-
-/** 关掉放大浮层（幂等）。内容早已实时同步，这里只收拾 DOM 和监听 */
-function closeExpandLayer() {
-  if (expandKeyHandler) {
-    document.removeEventListener('keydown', expandKeyHandler, true);
-    expandKeyHandler = null;
-  }
-  if (expandLayerEl) {
-    expandLayerEl.remove();
-    expandLayerEl = null;
-  }
-  expandSource = null;
+  // 徽章与目录上的字数/已写圆点都从 DOM 现算，回填之后必须补一次
+  refreshCharSectionCounts();
 }
 
 // ---------------------------------------------------------------------------
@@ -376,10 +262,19 @@ function updateCharEditorScopeUi() {
         ? `填好内容点「保存角色」才会加进这本书${book ? ` · ${book.name}` : ''}`
         : '填好内容点「保存角色」，保存后才会出现在角色库里';
     } else {
+      // 原来这里是「改完记得点右上角『保存角色』」—— 那句话是在用文案补交互。
+      // 保存状态胶囊（.save-pill）已经会说「有未保存的改动」，这里改成说一件
+      // 用户看不出来的事：这几栏写下去会去哪儿。见 2026-10-16 的 UI/UX 检查报告 P1-5。
       el.charsSub.textContent = inBook
         ? `这本书里的独立副本，改它不影响角色库${book ? ` · ${book.name}` : ''}`
-        : '改完记得点右上角「保存角色」';
+        : '描述与性格每轮都会注入给 AI，改完在右上角保存';
     }
+  }
+  if (el.charCrumb) {
+    // 面包屑：角色库 / 名字（世界书作用域标出来处）。textContent，不吃 HTML。
+    const character = editorCharacterById(editingCharacterId);
+    const name = character ? character.name : el.c.name.value.trim() || '新角色';
+    el.charCrumb.textContent = `${inBook ? '世界书' : '角色库'} / ${name}`;
   }
 }
 
@@ -391,9 +286,7 @@ function updateCharEditorScopeUi() {
  * 改成了 leaveCharacterEditor（跟设置页的 leaveSettings 对齐）。
  */
 export async function leaveCharacterEditor() {
-  // 放大浮层还开着的话先收掉 —— 它挂在 body 上，编辑页走了它就悬空了
-  closeExpandLayer();
-  // 表情弹窗同理：它挂在 body 上、盖着编辑页，编辑页走了不能留着
+  // 表情弹窗挂在 body 上、盖着编辑页，编辑页走了不能留着
   closeCharExpressionsEditor();
 
   // 新建的角色还没保存：离开就等于放弃，先问一句，免得辛苦填的设定白写
@@ -428,6 +321,15 @@ function charFootHintText(character) {
   return '这是你自己写的角色';
 }
 
+/** 左栏来源胶囊的短文案（foot 那条是长文案，管两件事） */
+function charSourceChipText(character) {
+  if (isCharDraft()) return '还没保存的新角色';
+  if (charEditorScope === 'worldbook') return '本书角色副本';
+  if (character.source === 'png') return '酒馆 PNG 卡';
+  if (character.source === 'json') return 'JSON 角色卡';
+  return '手写角色';
+}
+
 /** 有角色时显示右边的编辑表单，没有就显示空状态 */
 function showCharForm(show) {
   el.charForm.classList.toggle('hidden', !show);
@@ -435,6 +337,8 @@ function showCharForm(show) {
   // 新建的新角色还没保存，没有可删的东西
   el.btnDelChar.disabled = !show || isCharDraft();
   el.btnSaveChar.disabled = !show;
+  if (el.charCrumb) el.charCrumb.hidden = !show;
+  if (el.charSaveState) el.charSaveState.hidden = !show;
   if (!show) el.charFootHint.textContent = charFootHintText(null);
 }
 
@@ -558,9 +462,53 @@ function clearPortrait() {
 //  由 stashCharForm 一起写回卡上。弹窗里改了草稿会经 onChange 回调过来。
 // ---------------------------------------------------------------------------
 
-/** 刷新编辑器入口那行「表情图 · 已设 N 条」 */
+const EXPR_PREVIEW_MAX = 8;
+
+/** 刷新编辑器入口那行「表情图 · 已设 N 条」，同步分区计数，并铺前几张预览 */
 function updateExprSummary() {
   if (el.charExprSummary) el.charExprSummary.textContent = expressionsSummaryText(charExpressions);
+  // 0 也照显示 —— 藏起来会让人以为「这角色没有表情图这个功能」
+  setCharSectionCount('expressions', String(charExpressions.length));
+  renderExprPreview();
+}
+
+/**
+ * 前几张表情的预览网格：点任意一张进管理弹窗（增删改 / 设默认脸都在那边）。
+ * 缩略图只读 —— 不想在这里长出第二套编辑交互。
+ */
+function renderExprPreview() {
+  const host = el.charExprPreview;
+  if (!host) return;
+  clear(host);
+  const items = Array.isArray(charExpressions) ? charExpressions : [];
+  host.hidden = items.length === 0;
+  if (!items.length) return;
+  for (const expr of items.slice(0, EXPR_PREVIEW_MAX)) {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'char-expr-preview-cell art-edge';
+    cell.title = `管理表情图（${expr.name || '未命名'}）`;
+    cell.setAttribute('aria-label', `管理表情图（${expr.name || '未命名'}）`);
+    if (expr.image) {
+      const img = document.createElement('img');
+      img.src = expr.image;
+      img.alt = '';
+      cell.appendChild(img);
+    } else {
+      cell.textContent = expr.name || '?';
+    }
+    cell.addEventListener('click', openCharExpressionsEditor);
+    host.appendChild(cell);
+  }
+  if (items.length > EXPR_PREVIEW_MAX) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'char-expr-preview-cell char-expr-preview-more';
+    more.textContent = `+${items.length - EXPR_PREVIEW_MAX}`;
+    more.title = `还有 ${items.length - EXPR_PREVIEW_MAX} 张，打开管理`;
+    more.addEventListener('click', openCharExpressionsEditor);
+    host.appendChild(more);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -642,6 +590,10 @@ function fillCharForm(character) {
 
   el.charFootHint.textContent = charFootHintText(character);
 
+  // 左栏来源胶囊 + 页头保存状态（刚填好的表 = 已保存）
+  setCharSourceChip(charSourceChipText(character));
+  setCharSaveState('saved');
+
   showCharForm(true);
 
   // 长文本框的最后一步：到这儿弹窗才是可见的（上面那些调用方刚摘掉 .hidden），
@@ -684,6 +636,7 @@ function renderCharWorldbookBox(character) {
 
   const ids = character && Array.isArray(character.worldbookIds) ? character.worldbookIds : [];
   const books = ids.map((id) => worldbookById(id)).filter(Boolean);
+  setCharSectionCount('worldbook', String(books.length));
   // 开关的当前值以草稿为准（用户可能刚切过还没保存）
   const enabled = charDraftWbEnabled;
 
@@ -1128,6 +1081,7 @@ async function saveCharacter() {
     // 写盘失败就别报「已创建」—— 提示已经由 persistCharacters 弹过了，
     // 页面也留着，用户能直接再点一次「保存角色」重试。
     if (!(await persistCharacters())) return;
+    setCharSaveState('saved');
     showToast(`角色「${character.name}」已创建`, 'ok');
     // 草稿已经提交（charDraft 清空），这里不会再弹「放弃新建？」那个确认框
     await leaveCharacterEditor();
@@ -1148,7 +1102,10 @@ async function saveCharacter() {
 
   // 失败提示由 persistCharacters 弹（界面上的改动留着，用户能直接再存一次）；
   // 成功了才报「已保存」—— 两条都弹的话后一条会把前一条盖掉。
-  if (await persistCharacters()) showToast(`角色「${character.name}」已保存`, 'ok');
+  if (await persistCharacters()) {
+    setCharSaveState('saved');
+    showToast(`角色「${character.name}」已保存`, 'ok');
+  }
 }
 
 /**
@@ -1529,20 +1486,15 @@ export function initCharacterEditor(injected) {
     el.c.altList.addEventListener('input', onAltListInput);
   }
 
-  // 字数角标：手动输入时刷新（回填路径在 fillCharForm 里统一刷过）
+  // 字数角标 + 保存状态：手动输入时刷新（回填路径在 fillCharForm 里统一刷过）
   el.charForm.addEventListener('input', (event) => {
+    setCharSaveState('dirty');
     if (event.target instanceof HTMLTextAreaElement) updateCharCount(event.target);
+    // 左栏徽章（已写 x/5）与右栏字段目录的字数都跟着输入走，不然它们是开局那一刻的快照
+    refreshCharSectionCounts();
   });
-
-  // 「放大编辑」按钮：五个字段共用一个委托，按钮上带 data-expand 指到对应框
-  el.charForm.addEventListener('click', (event) => {
-    const btn = event.target.closest('.char-expand-btn');
-    if (!btn) return;
-    const textarea = document.getElementById(btn.dataset.expand || '');
-    if (!textarea) return;
-    const label = btn.closest('.field-head')?.querySelector('.field-label')?.textContent || '';
-    openExpandLayer(textarea, label);
-  });
+  // 勾选框 / 下拉不触发 input，单独挂 change（自带世界书开关、剧情选项、显示状态都走这儿）
+  el.charForm.addEventListener('change', () => setCharSaveState('dirty'));
 
   // ⛔ 「点遮罩空白处关闭」那一条 2026-10-13 删了：编辑页没有遮罩这回事
   //    （它现在是主区域里的一屏，不是浮在上面的弹窗）。页头的「返回」和 Esc 管离开。

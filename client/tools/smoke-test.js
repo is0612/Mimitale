@@ -4310,9 +4310,12 @@ app.whenReady().then(async () => {
           if (desc) desc.scrollIntoView({ block: 'start' });
           await nap(300);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
-        // 放大编辑浮层：塞一段够长的描述再点 ↗，看浮层的头/正文/脚排得怎么样。
-        // 描述要足够长 —— 浮层里出现滚动才有「这是个长内容编辑器」的样子。
-        charExpand: `
+        // 长描述塞满文本框：框**不会**跟着长高，多出来的字在框里滚 ——
+        // 这个「矮框 + 框内滚动」的观感只有截图能看出来。
+        // ⚠️ 2026-10-16（V2 重组版）起，角色编辑页五个框的高度是 style.css 里
+        //    `#c-desc{min-height:264px}` 那五行按字段写死的，不再走 GROW_MAX。
+        // 2026-10-16：原来这里点 ↗ 弹放大浮层看浮层的排版，浮层撤了，改成直接看矮框。
+        charDescFull: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
@@ -4333,9 +4336,6 @@ app.whenReady().then(async () => {
             fire(desc, 'input');
           }
           await nap(200);
-          const expandBtn = document.querySelector('.char-expand-btn[data-expand="c-desc"]');
-          if (expandBtn) expandBtn.click();
-          await nap(400);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 同上，但停在**空分组**上 —— 空态文案、计数徽标上的 0、
         // 以及「卡身只剩一行提示」时的留白，只有截图能看出好不好看。
@@ -4688,6 +4688,13 @@ app.whenReady().then(async () => {
             scenario: h('#c-scenario'),
             first: h('#c-first'),
             example: h('#c-example'),
+            // 左栏「有没有长出栏内滚动条」：这是 V2 布局的一条硬要求
+            // （左栏固定、右列独立滚动），光看截图那根细细的滚动条很容易看漏。
+            // scrollHeight > clientHeight 就是长了，给数字比看图可靠。
+            railScroll: (() => {
+              const n = document.querySelector('#view-char-editor .char-identity-pane');
+              return n ? n.scrollHeight + '/' + n.clientHeight : '(无)';
+            })(),
             // 当前那个可见弹窗的卡片实测尺寸 vs 内容区。放大状态应该刚好等于
             // window.innerWidth × innerHeight —— 「差几 px 没铺满」在缩略图上
             // **根本看不出来**，所以这里给数字。
@@ -4710,6 +4717,10 @@ app.whenReady().then(async () => {
         console.log(`  弹窗卡片=${probe.modal}`);
         if (shotArg === 'charTextareas') {
           console.log(`  长文本框实高(px) 描述=${probe.desc} 性格=${probe.personality} 场景=${probe.scenario} 开场白=${probe.first} 示例对话=${probe.example}`);
+        }
+        if (probe.railScroll) {
+          const [sh, ch] = String(probe.railScroll).split('/');
+          console.log(`  左栏 scrollHeight/clientHeight = ${probe.railScroll}${Number(sh) > Number(ch) ? '  ⚠ 左栏长出了栏内滚动条' : '  ✓ 没有栏内滚动'}`);
         }
         const dir = path.join(__dirname, 'shots');
         fs.mkdirSync(dir, { recursive: true });

@@ -16,14 +16,22 @@ export function initWorldbookLayout({ onFilter }) {
     if (text) node.textContent = text;
     return node;
   };
+  const crumb = document.getElementById('wb-crumb');
+
+  // 书籍头：封面 + 书名 + 统计行 + 书级动作（预览命中 / 导出）。
+  // 预览命中、导出是「这本书自己的动作」，贴着书名放 —— 页头只留「返回 / 保存」。
   const bar = make('div', 'wb-bookbar', 'wb-bookbar');
   const summary = make('div', 'wb-summary');
   const cover = make('div', 'wb-summary-cover', 'wb-summary-cover');
   const summaryText = make('div', 'wb-summary-text');
   const name = make('strong', '', 'wb-summary-name');
-  const count = make('small', '', 'wb-summary-count');
-  summaryText.append(name, count);
+  const stats = make('ul', 'wb-stats', 'wb-summary-stats');
+  summaryText.append(name, stats);
   summary.append(cover, summaryText);
+  const actions = make('div', 'wb-bookbar-actions');
+  actions.append(document.getElementById('btn-preview-wb'), document.getElementById('btn-export-wb'));
+  bar.append(summary, actions);
+
   const tabs = make('nav', 'wb-tabs', 'wb-tabs');
   tabs.setAttribute('aria-label', '世界书分区');
   const workspace = make('div', 'wb-workspace', 'wb-panel-entries');
@@ -41,13 +49,10 @@ export function initWorldbookLayout({ onFilter }) {
     buttons[key] = tab;
     tabs.append(tab);
   }
-  bar.append(summary, tabs);
-  wrap.replaceChildren(bar, workspace, book, characterPanel);
-  // Book-level commands stay available independently of the selected tab.
-  const actions = root.querySelector('.page-actions');
-  actions.insertBefore(document.getElementById('btn-preview-wb'), document.getElementById('btn-close-worldbooks'));
-  actions.insertBefore(document.getElementById('btn-export-wb'), document.getElementById('btn-close-worldbooks'));
+  wrap.replaceChildren(bar, tabs, workspace, book, characterPanel);
+  // 原来嵌在「本书设置」里的那个动作条（预览命中）已被搬进书籍头，空壳收掉
   root.querySelector('.wb-book-actions').remove();
+
   const search = make('input', 'wb-search', 'wb-search');
   search.type = 'search';
   search.placeholder = '搜索条目';
@@ -59,30 +64,29 @@ export function initWorldbookLayout({ onFilter }) {
     option.value = value;
     filter.append(option);
   }
-  entries.insertBefore(search, document.getElementById('wb-entry-list'));
-  entries.insertBefore(filter, document.getElementById('wb-entry-list'));
+  // 搜索 + 筛选并排一行；列表头上的「N 条 · N 启用 · N 常驻」小头条由 worldbook.js 铺
+  const listTools = make('div', 'wb-list-tools');
+  listTools.append(search, filter);
+  entries.insertBefore(listTools, document.getElementById('wb-entry-list'));
   search.addEventListener('input', onFilter);
   filter.addEventListener('change', onFilter);
+
   const detailHead = make('div', 'wb-detail-head');
   const back = make('button', 'btn btn-ghost btn-sm wb-list-back', 'wb-list-back', '条目列表');
   back.type = 'button';
   back.addEventListener('click', () => { workspace.dataset.mobile = 'list'; search.focus(); });
+  const headTitle = make('strong', 'wb-detail-title', '', '条目设定');
   const contentCount = make('small', 'wb-content-count', 'wb-content-count');
-  detailHead.append(back, contentCount);
+  detailHead.append(back, headTitle, contentCount);
   main.prepend(detailHead);
-  const form = document.getElementById('wb-form');
-  const content = document.getElementById('wb-e-content').closest('label');
-  const keys = document.getElementById('wb-e-keys').closest('label');
-  const checks = root.querySelector('.wb-checks');
-  content.after(keys);
-  keys.after(checks);
-  checks.querySelectorAll('.check-desc').forEach(desc => {
-    desc.closest('label').title = desc.textContent.replace(/\s+/g, ' ').trim();
-  });
+
+  // 检查项（启用 / 常驻 / 递归）留在表单 DOM 里（change 才能冒泡到表单的脏标记），
+  // 位置交给 CSS order 提到最顶 —— 和正文同屏，写完不用往回滚。
   root.querySelector('.page-sub').hidden = true;
   root.querySelector('#worldbooks-title').textContent = '编辑世界书';
+  const form = document.getElementById('wb-form');
   form.querySelector('.wb-advanced summary').textContent = '高级选项 · 顺序、概率、附加条件';
-  layout = { root, panels, buttons, workspace, name, count, cover, search, filter, contentCount, bookId: null };
+  layout = { root, panels, buttons, workspace, name, stats, cover, search, filter, contentCount, crumb, bookId: null };
   setWorldbookPanel('entries');
 }
 
@@ -123,11 +127,34 @@ export function worldbookEntryVisible(entry) {
     && [entry.title, ...(entry.keys || []), entry.content].join(' ').toLocaleLowerCase().includes(query);
 }
 
+/** 统计行的一项：数字加粗 + 灰色单位 */
+function statItem(num, label) {
+  const li = document.createElement('li');
+  const b = document.createElement('b');
+  b.textContent = num;
+  li.append(b, ' ' + label);
+  return li;
+}
+
 export function syncWorldbookLayout(book, draft, characterCount) {
   if (!layout) return;
-  layout.name.textContent = draft?.name || book?.name || '世界书';
+  const bookName = draft?.name || book?.name || '世界书';
+  layout.name.textContent = bookName;
+  if (layout.crumb) {
+    layout.crumb.textContent = `世界书 / ${bookName}`;
+    layout.crumb.hidden = false;
+  }
   const entries = draft?.entries || [];
-  layout.count.textContent = `${entries.length} 条设定 · ${characterCount} 个角色`;
+  const on = entries.filter((entry) => entry.enabled !== false).length;
+  const constant = entries.filter((entry) => entry.constant).length;
+  const words = entries.reduce((sum, entry) => sum + String(entry.content || '').length, 0);
+  layout.stats.replaceChildren(
+    statItem(String(entries.length), '条设定'),
+    statItem(String(on), '启用'),
+    statItem(String(constant), '常驻'),
+    statItem(String(characterCount), '角色'),
+    statItem(words.toLocaleString(), '字')
+  );
   layout.buttons.entries.textContent = `条目 ${entries.length}`;
   layout.buttons.characters.textContent = `本书角色 ${characterCount}`;
   const cover = draft?.cover || '';

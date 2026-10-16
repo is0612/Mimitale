@@ -90,8 +90,8 @@ function revealEditorControl(node) {
   if (node.closest('#char-form')) {
     const section = node.closest('.char-editor-panel');
     if (section?.hidden) byId(`char-section-tab-${section.dataset.section}`)?.click();
-    const writing = node.closest('.char-writing-panel');
-    if (writing?.hidden) byId(writing.id.replace('char-writing-', 'char-writing-tab-'))?.click();
+    // 2026-10-16 起五个写作字段**同时可见**，没有「切字段」这一步了
+    // （.char-writing-tab / .char-writing-panel 已删，别再找它们）。
     const details = node.closest('details');
     if (details) details.open = true;
   }
@@ -803,18 +803,20 @@ await scenario('角色库：放弃新建', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 5.5：角色编辑器 —— 长文本框自动增高
+//  场景 5.5：角色编辑器 —— 五个写作框的高度
 //
-//  两件事只靠眼睛看是看不出「对没对」的，得量高度：
-//    · 内容少的时候框要矮（不能每个都占五行，一屏放不下几项）
-//    · 内容多的时候框要长高（不然只能看到一小截）
-//    · 手动拖过之后，输入不该把它拽回去
+//  2026-10-16（V2 重组版）之后，这里守的已经不是「自动增高」而是**反过来**的一件事：
+//    · 高度由**字段**决定，不由内容决定 —— 每格在 style.css 里按字段写了 min-height
+//      （`#c-desc { min-height: 264px }` 那五行）。五栏同屏，表单总长必须是常数，
+//      多写几十行不能把下面的字段顶到屏幕外。
+//    · 短内容不许把框压塌（塌成一行就没法写东西了）。
+//    · 装不下的内容走**框内**滚动。
+//    · 手动拖过之后，输入不该把它拽回去。
 //
-//  这里只量「有没有按内容变」，具体多高由 ui/auto-grow.js 决定。
 //  ⚠️ 高度靠 getBoundingClientRect 读 —— 那是布局完成后的实高，
 //     比读 style.height 可信（style 里可能写着值但被别的规则压回去）。
 // ---------------------------------------------------------------------------
-await scenario('角色编辑器：长文本框自动增高', async () => {
+await scenario('角色编辑器：五个写作框的高度', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
@@ -852,38 +854,59 @@ await scenario('角色编辑器：长文本框自动增高', async () => {
   const hShort = hOf(desc);
   desc.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   check('普通点击写作框不会误判为手动拖高', desc.dataset.growLocked !== '1');
-  click('#char-writing-tab-personality');
-  check('写作标签只显示当前字段', !byId('char-writing-personality').hidden && byId('char-writing-desc').hidden);
+
+  // 2026-10-16（V2 重组版）：字段不再靠胶囊切换，五栏同时在场。
+  // 断言方向跟着反过来了 —— 原来测「只显示当前字段」，现在测「全都在」。
+  // ⚠️ 这里不能用 shown()：它只看 .hidden 类，而分区面板用的是 hidden **属性**，
+  //    面板藏起来时它的子元素照样会通过 shown()。用 getClientRects() 才作数。
+  const WRITING_IDS = ['c-desc', 'c-personality', 'c-scenario', 'c-first', 'c-example'];
+  const visible = (id) => (byId(id)?.getClientRects().length || 0) > 0;
+  check('五个写作字段同时可见', WRITING_IDS.every(visible),
+    WRITING_IDS.filter((id) => !visible(id)).join(','));
+  check('写作区不再有字段切换胶囊', !$('#char-writing-tabs') && !$('.char-writing-tab'));
+  check('右栏字段目录列出五栏', $$('#char-field-index .field-index-item').length === 5);
+  check('字段目录高亮当前栏', !!$('#char-field-index .field-index-item[aria-current="true"]'));
+  check('字段目录的已写圆点跟着内容走',
+    $('#char-field-index .field-index-item[data-key="desc"] .field-index-dot')?.dataset.filled === 'true');
+  const writingBadge = byId('char-section-tab-writing')?.querySelector('.char-section-count');
+  check('角色设定徽章是「已写 / 共」，不再是恒定值',
+    /^\d+\/5$/.test(writingBadge?.textContent || ''), writingBadge?.textContent);
+  check('五个写作框高度各不相同（按字段分别给定）',
+    new Set(WRITING_IDS.map((id) => hOf(byId(id)))).size > 1,
+    WRITING_IDS.map((id) => hOf(byId(id))).join('/'));
+
   click('#char-section-tab-state');
   check('属性独立分区不影响写作草稿', shown('#char-section-state') && desc.value === '一行字');
   click('#char-section-tab-writing');
-  click('#char-writing-tab-desc');
-  check('切回描述保留未保存输入', desc.value === '一行字' && shown('#c-desc'));
+  check('切回写作分区保留未保存输入', desc.value === '一行字' && shown('#c-desc'));
 
-  // 内容多：高度应当明显长高
-  setValue(example, Array.from({ length: 14 }, (_, i) => `第 ${i + 1} 行的内容`).join('\n'));
+  // 内容多：把**描述**填满 —— 它那格的地板是 264px，比 GROW_MAX(160) 高，
+  // 所以它是完全刚性的：塞多少行都不动高度，多出来的在框内滚。
+  // （地板低于 160 的格子会在地板和 160 之间随内容浮动，那是有意的宽松度。）
+  const floorOf = (id) => Math.round(parseFloat(getComputedStyle(byId(id)).minHeight) || 0);
+  setValue(desc, Array.from({ length: 24 }, (_, i) => `第 ${i + 1} 行的内容`).join('\n'));
   await sleep(200);
-  const hLong = hOf(example);
+  const hDescLong = hOf(desc);
 
   check(
-    '写作区给短内容保留足够编辑空间',
-    hShort >= 280 && hShort <= 340,
+    '写作框高度由字段决定，等于自己那格的 CSS 地板',
+    Math.abs(hShort - floorOf('c-desc')) <= 2,
+    `desc 实际 ${hShort}px / CSS 地板 ${floorOf('c-desc')}px`
+  );
+  check(
+    '短内容不会把写作框压塌（保留足够编辑空间）',
+    hShort >= 240,
     `实际 ${hShort}px`
   );
   check(
-    '切换写作标签后长内容有可见编辑空间',
-    hLong >= 280,
-    `长内容 ${hLong}px vs 短内容 ${hShort}px`
-  );
-  check(
-    '长高有上限，不会把表单顶爆',
-    hLong <= 500,
-    `实际 ${hLong}px（期望 <=500px）`
+    '填满几十行也不会把框顶高（表单总长恒定，五栏才敢同屏）',
+    Math.abs(hDescLong - hShort) <= 2,
+    `长内容 ${hDescLong}px vs 短内容 ${hShort}px`
   );
   check(
     '超上限的内容走框内滚动（表单总长恒定）',
-    example.scrollHeight > example.clientHeight + 10,
-    `scrollHeight ${example.scrollHeight} vs clientHeight ${example.clientHeight}`
+    desc.scrollHeight > desc.clientHeight + 10,
+    `scrollHeight ${desc.scrollHeight} vs clientHeight ${desc.clientHeight}`
   );
 
   // 手动拖过之后就锁定：再输入内容也不该被自动改回去。
@@ -907,18 +930,16 @@ await scenario('角色编辑器：长文本框自动增高', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 5.6：角色编辑器 —— 字数角标 + 「放大编辑」浮层
+//  场景 5.6：角色编辑器 —— 字数角标
 //
-//  角标：框压矮之后「写了多少」得一眼能看到（输入和回填两条路都要刷）。
-//  浮层：↗ 按钮弹大窗口，改动**实时写回**主框 —— Esc / ✕ / 点空白关掉
-//  都不许丢内容；Esc 还只关浮层，不许把底下的编辑器一起带走。
+//  框高按字段分别给定之后（描述 264、性格 120……），「写了多少」得一眼能看到
+//  （输入和回填两条路都要刷）。
 //
-//  ⚠️ Esc 派发到浮层的 textarea 上让它冒泡（真实按键的 target 就是
-//  聚焦的元素）。直接派发到 document 的话，target 是 document 自己，
-//  捕获/冒泡监听会按注册顺序跑 —— main.js 的全局 Esc 先注册先执行，
-//  就成了「关掉整个编辑器」，测的不是同一条路径。
+//  2026-10-16：字段行右边那颗「↗ 放大编辑」按钮撤掉了（编辑页本来就是整屏，
+//  框够大，不用再弹一层浮层），原来那一串浮层断言随之删掉；这里改成
+//  反向确认「按钮真的不在了」，免得哪天又被加回来。
 // ---------------------------------------------------------------------------
-await scenario('角色编辑器：字数角标与放大编辑', async () => {
+await scenario('角色编辑器：字数角标', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
@@ -933,39 +954,8 @@ await scenario('角色编辑器：字数角标与放大编辑', async () => {
   await sleep(60);
   check('输入后角标跟着变', badge.textContent === '4 字', badge.textContent);
 
-  // --- 打开放大浮层 ---
-  const expandBtn = document.querySelector('.char-expand-btn[data-expand="c-desc"]');
-  check('字段行上有放大按钮', !!expandBtn);
-  click(expandBtn);
-  await waitFor('放大浮层出现', () => !!document.querySelector('.char-expand'));
-
-  const layer = document.querySelector('.char-expand');
-  const big = layer.querySelector('.char-expand-text');
-  check('浮层里带出了主框的内容', big.value === '四两句话', big.value);
-  check('浮层标题是字段名', layer.querySelector('.char-expand-title').textContent === '角色描述');
-
-  // --- 在浮层里输入：实时写回主框 + 角标 ---
-  setValue(big, '放大层里写的长内容');
-  await sleep(60);
-  check('浮层输入实时写回主框', desc.value === '放大层里写的长内容', desc.value);
-  check('主框角标同步更新', badge.textContent === '9 字', badge.textContent);
-
-  // --- Esc 只关浮层，不把编辑器一起关掉 ---
-  big.focus();
-  big.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  await sleep(80);
-  check('Esc 收起了放大浮层', !document.querySelector('.char-expand'));
-  check('Esc 没有连编辑器一起关掉', shown('#view-char-editor'));
-  check('关掉浮层后主框内容还在', desc.value === '放大层里写的长内容', desc.value);
-
-  // --- 再开一次，这次走「完成」按钮 ---
-  click(expandBtn);
-  await waitFor('放大浮层再次出现', () => !!document.querySelector('.char-expand'));
-  const layer2 = document.querySelector('.char-expand');
-  const doneBtn = Array.from(layer2.querySelectorAll('button')).find((b) => b.textContent.trim() === '完成');
-  click(doneBtn);
-  await sleep(80);
-  check('点「完成」收起浮层', !document.querySelector('.char-expand'));
+  check('字段行上已经没有放大按钮', !document.querySelector('.char-expand-btn'));
+  check('放大浮层的样式类也不该再出现', !document.querySelector('.char-expand'));
 
   click('#btn-close-chars');
   await waitFor('弹出放弃确认框', () => shown('#confirm-modal'));
@@ -3762,6 +3752,19 @@ await scenario('编辑弹窗的放大按钮', async () => {
     getComputedStyle(byId('view-char-editor')).position !== 'fixed',
     getComputedStyle(byId('view-char-editor')).position
   );
+
+  // 左栏是「整栏固定、右列独立滚动」的布局 —— 所以它自己**不该**长出栏内滚动条。
+  // 2026-10-16（V2）实测过一次：左栏内容比栏高多 18px，截图上看只是右缘一条细线，
+  // 很容易漏掉；修完之后余量 38px。这条断言就是替眼睛守它。
+  // ⚠️ 别改成量「余量」——栏底那三样是 margin-top:auto 钉住的，装得下时它会把余量
+  //    全吃成外边距；overflow 发生的那一刻 auto 外边距归零，scrollHeight 才会超过
+  //    clientHeight。所以 scrollHeight <= clientHeight 正好就是「装得下」。
+  const rail = $('.char-identity-pane');
+  check(
+    '角色编辑页左栏没有长出栏内滚动条',
+    !!rail && rail.scrollHeight <= rail.clientHeight + 1,
+    rail ? `scrollHeight ${rail.scrollHeight} vs clientHeight ${rail.clientHeight}` : '(没有左栏)'
+  );
   click('#btn-close-chars');
   await waitFor('回到角色库', () => shown('#view-chars'));
 });
@@ -3921,8 +3924,9 @@ await scenario('世界书：新建条目', async () => {
   check('条目列表栏里不再有书级字段',
     !$('.wb-entries').contains(byId('wb-name')) && !$('.wb-entries').contains(byId('wb-opening')),
     '书名 / 开场白还留在 .wb-entries 里');
-  check('导出位于页头，删除本书留在设置中',
-    $('#view-wb-editor .page-actions').contains(byId('btn-export-wb')) &&
+  check('导出 / 预览命中位于书籍头，删除本书留在设置中',
+    $('#wb-bookbar').contains(byId('btn-export-wb')) &&
+    $('#wb-bookbar').contains(byId('btn-preview-wb')) &&
     $('#wb-panel-settings').contains(byId('btn-del-worldbook')));
   check('「＋ 条目」跟着条目列表走', $('.wb-entries').contains(byId('btn-new-entry')));
   const draftText = byId('wb-e-content').value;
@@ -4033,7 +4037,7 @@ await scenario('世界书：本书角色', async () => {
   click('#btn-close-chars');
   await sleep(120);
   check('副本保存后关闭不弹确认框', !shown('#confirm-modal'));
-  check('本书角色复用角色库相同的分区编辑器', !!byId('char-writing-tab-desc') && !!byId('char-section-tab-state'));
+  check('本书角色复用角色库相同的分区编辑器', !!byId('char-field-index') && !!byId('char-section-tab-state'));
   check('共享角色编辑器返回原世界书角色分区', shown('#view-wb-editor') && !byId('wb-panel-characters').hidden);
 
   // 「本书角色」标题整块是折叠开关：副本一多，那一排 chip 会把条目和开场白挤没。

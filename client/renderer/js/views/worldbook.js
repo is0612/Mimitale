@@ -63,6 +63,49 @@ import { initWorldbookLayout, syncWorldbookLayout, resetWorldbookLayout, revealW
 function syncEditorLayout() {
   const book = currentWorldbook();
   syncWorldbookLayout(book, currentDraft(), book ? worldbookCharacters(book).length : 0);
+  renderBookFacts();
+}
+
+/** 「书籍设置」右侧的本书信息卡：条目 / 启用 / 常驻 / 字数 / 角色 / 最后修改 */
+function renderBookFacts() {
+  const host = el.wb.bookFacts;
+  if (!host) return;
+  const book = currentWorldbook();
+  if (!book) { host.replaceChildren(); return; }
+  const draft = currentDraft();
+  const entries = draft?.entries || [];
+  const on = entries.filter((entry) => entry.enabled !== false).length;
+  const constant = entries.filter((entry) => entry.constant).length;
+  const words = entries.reduce((sum, entry) => sum + String(entry.content || '').length, 0);
+  const modified = book.updatedAt
+    ? new Date(book.updatedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: false })
+    : '—';
+  const rows = [
+    ['条目', `${entries.length} 条 · ${on} 启用`],
+    ['常驻条目', `${constant} 条`],
+    ['本书角色', `${worldbookCharacters(book).length} 个`],
+    ['总字数', `${words.toLocaleString()} 字`],
+    ['最后修改', modified]
+  ];
+  const frag = document.createDocumentFragment();
+  const head = document.createElement('div');
+  head.className = 'wb-fact wb-fact-head';
+  const headLabel = document.createElement('span');
+  headLabel.className = 'field-label';
+  headLabel.textContent = '本书信息';
+  head.appendChild(headLabel);
+  frag.appendChild(head);
+  for (const [dt, dd] of rows) {
+    const row = document.createElement('div');
+    row.className = 'wb-fact';
+    const name = document.createElement('dt');
+    name.textContent = dt;
+    const value = document.createElement('dd');
+    value.textContent = dd;
+    row.append(name, value);
+    frag.appendChild(row);
+  }
+  host.replaceChildren(frag);
 }
 
 // --- 入口层注入的跨视图编排动作 ---
@@ -357,12 +400,16 @@ async function saveWorldbook() {
   showToast(`「${name}」已保存${tail}`, 'ok');
 }
 
-/** 世界书的条目数展示 */
+/** 世界书的条目数展示（列表头的小头条） */
 function wbEntryCountText(entries) {
   const list = Array.isArray(entries) ? entries : [];
   const total = list.length;
   const on = list.filter((e) => e.enabled !== false).length;
-  return on === total ? `${total} 条条目` : `${total} 条条目 · ${on} 条启用`;
+  const constant = list.filter((e) => e.constant).length;
+  const parts = [`${total} 条`];
+  parts.push(on === total ? '全部启用' : `${on} 启用`);
+  if (constant) parts.push(`${constant} 常驻`);
+  return parts.join(' · ');
 }
 
 export function currentWorldbook() {
@@ -548,6 +595,13 @@ function renderEntryList() {
           entry.enabled === false && h('span', { class: 'wb-badge', text: '停用' })
         ),
         h('div', { class: 'wb-entry-keys', text: (entry.keys || []).join(' / ') || '（无关键词）' }),
+        // 字数 + 插入顺序：决定这条「生不生效 / 什么时候生效」的两样，得一眼看得到
+        h(
+          'div',
+          { class: 'wb-entry-meta' },
+          h('span', { text: `${String(entry.content || '').length} 字` }),
+          h('span', { text: `顺序 ${entry.order ?? WB_NEW_ENTRY_DEFAULTS.order}` })
+        ),
         // 行上的 ×：一键删（不问确认框 —— 删的只是草稿，整本书点「保存」才落盘，
         // 反悔的办法是不保存）。stopPropagation 是必须的：不然这一下同时把该条选中了。
         button({
@@ -720,41 +774,54 @@ export function renderWorldbookChars() {
   if (box) box.classList.toggle('collapsed', !expanded);
 
   for (const c of copies) {
+    const desc = String(c.description || '').trim();
     host.appendChild(
       h(
-        'div',
-        { class: 'wb-char-chip', title: c.name },
+        'article',
+        { class: 'wb-char-card', title: c.name },
         h(
           'div',
-          { class: 'wb-char-chip-avatar' },
-          c.avatar ? h('img', { src: c.avatar, alt: '' }) : c.name.slice(0, 1)
+          { class: 'wb-char-card-top' },
+          h(
+            'div',
+            { class: 'wb-char-card-avatar' },
+            c.avatar ? h('img', { src: c.avatar, alt: '' }) : c.name.slice(0, 1)
+          ),
+          h('strong', { class: 'wb-char-card-name', text: c.name })
         ),
-        h('span', { class: 'wb-char-chip-name', text: c.name }),
-        // 「显示状态」：勾上之后这个副本的状态会出现在右栏「在场角色」入口条上。
-        // 不做成按钮是因为它是个**每本书各自一份**的持久开关，勾选状态要一眼看见。
+        // 设定只读预览：真正的编辑走「编辑」按钮进角色编辑器（那里才是全集）
+        h('p', { class: 'wb-char-card-desc', text: desc ? desc.slice(0, 90) : '还没有人物设定' }),
         h(
-          'label',
-          { class: 'wb-char-chip-show', title: '把这个副本的状态显示在右栏「在场角色」入口条上' },
-          (() => {
-            const cb = h('input', { type: 'checkbox' });
-            cb.checked = c.showInPanel === true;
-            cb.addEventListener('change', () => toggleWorldbookCharShowInPanel(c.id, cb.checked));
-            return cb;
-          })(),
-          h('span', { text: '显示状态' })
-        ),
-        button({
-          class: 'wb-char-chip-btn',
-          text: '编辑',
-          title: '编辑这个副本的设定',
-          onClick: () => editWorldbookCharacter(c.id)
-        }),
-        button({
-          class: 'wb-char-chip-btn',
-          text: '移除',
-          title: '从本书移除（角色库里的不受影响）',
-          onClick: () => removeWorldbookCharacter(c.id)
-        })
+          'div',
+          { class: 'wb-char-card-foot' },
+          // 「显示状态」：勾上之后这个副本的状态会出现在右栏「在场角色」入口条上。
+          // 不做成按钮是因为它是个**每本书各自一份**的持久开关，勾选状态要一眼看见。
+          h(
+            'label',
+            { class: 'wb-char-card-show', title: '把这个副本的状态显示在右栏「在场角色」入口条上' },
+            (() => {
+              const cb = h('input', { type: 'checkbox' });
+              cb.checked = c.showInPanel === true;
+              cb.addEventListener('change', () => toggleWorldbookCharShowInPanel(c.id, cb.checked));
+              return cb;
+            })(),
+            h('span', { text: '显示状态' })
+          ),
+          h('div', { class: 'wb-char-card-actions' },
+            button({
+              class: 'wb-char-card-btn',
+              text: '编辑',
+              title: '编辑这个副本的设定',
+              onClick: () => editWorldbookCharacter(c.id)
+            }),
+            button({
+              class: 'wb-char-card-btn wb-char-card-remove',
+              text: '移除',
+              title: '从本书移除（角色库里的不受影响）',
+              onClick: () => removeWorldbookCharacter(c.id)
+            })
+          )
+        )
       )
     );
   }
