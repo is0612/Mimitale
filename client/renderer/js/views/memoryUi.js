@@ -498,8 +498,8 @@ function renderCheckpoints(convo) {
           // 档名里已经写了条数，这里就只报时间，不重复
           h('div', { class: 'checkpoint-time', text: when })
         ),
-        button({ class: 'btn btn-primary btn-sm', text: '读档', onClick: () => restoreCheckpoint(point.id) }),
-        button({ class: 'btn btn-ghost btn-sm', text: '删除', onClick: () => deleteCheckpoint(point.id) })
+        button({ variant: 'primary', size: 'sm', text: '读档', onClick: () => restoreCheckpoint(point.id) }),
+        button({ variant: 'ghost', size: 'sm', text: '删除', onClick: () => deleteCheckpoint(point.id) })
       )
     );
   }

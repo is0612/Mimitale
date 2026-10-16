@@ -17,7 +17,8 @@
 // ---------------------------------------------------------------------------
 
 import { el } from '../core/dom.js';
-import { h, clear } from '../ui/build.js';
+import { h } from '../ui/build.js';
+import { fillSelect } from '../ui/controls.js';
 import { showToast } from '../ui/toast.js';
 import { providerById } from '../data/providers.js';
 
@@ -242,33 +243,24 @@ export function fillImageSizeOptions(model, current) {
 
   const sizes = sizesForImageModel(model);
   const wanted = String(current || '').trim();
+  const items = sizes.map((size) => ({ value: size, text: size }));
 
-  clear(select);
-  for (const size of sizes) {
-    select.appendChild(h('option', { value: size, text: size }));
-  }
-
-  // 已保存的尺寸不在这个模型的列表里：要么直接纠正，要么明确标出来
-  if (wanted && !sizes.includes(wanted)) {
-    if (isValidImageSize(model, wanted)) {
-      // 是合法自定义尺寸，保留
-      select.appendChild(h('option', { value: wanted, text: `${wanted}（自定义）` }));
-      select.value = wanted;
-    } else {
-      // 非法（比如 glm-image 配 1024x1024）——直接切到默认值，别让它再撞一次
-      const rule = imageSizeRule(model);
-      const fallback = sizes[0];
-      select.value = fallback;
-      if (rule) {
-        showToast(
-          `${rule.label} 不支持 ${wanted}，已改成 ${fallback}` +
-            (rule.note ? `（${rule.note}）` : ''),
-          'ok'
-        );
-      }
+  // 已保存的尺寸不在这个模型的列表里，分两种：
+  //   · 非法（比如 glm-image 配 1024x1024）——切到默认值，别让它再撞一次
+  //   · 合法自定义尺寸 —— 补一项摆在列表后面，并且**选中它**（不静默改掉用户的选择）
+  if (wanted && !sizes.includes(wanted) && !isValidImageSize(model, wanted)) {
+    const fallback = sizes[0];
+    fillSelect(select, items, { prefer: fallback });
+    const rule = imageSizeRule(model);
+    if (rule) {
+      showToast(
+        `${rule.label} 不支持 ${wanted}，已改成 ${fallback}` + (rule.note ? `（${rule.note}）` : ''),
+        'ok'
+      );
     }
     return;
   }
 
-  select.value = wanted && sizes.includes(wanted) ? wanted : sizes[0];
+  if (wanted && !sizes.includes(wanted)) items.push({ value: wanted, text: `${wanted}（自定义）` });
+  fillSelect(select, items, { prefer: wanted || sizes[0] });
 }

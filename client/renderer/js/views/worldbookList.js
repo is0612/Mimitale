@@ -104,8 +104,8 @@ function worldbookCard(book) {
     h(
       'div',
       { class: 'wb-card-actions' },
-      button({ class: 'btn btn-ghost btn-sm', text: '编辑', onClick: () => openEditor(book.id) }),
-      button({ class: 'btn btn-primary btn-sm', text: '游玩', onClick: () => openPlayerModal(book.id) })
+      button({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => openEditor(book.id) }),
+      button({ variant: 'primary', size: 'sm', text: '游玩', onClick: () => openPlayerModal(book.id) })
     )
   );
 }

@@ -1,0 +1,146 @@
+/* ==========================================================================
+   A 稿「长卷」—— 一张卡就是一份文档
+   编辑面把所有段落一次铺开，导航只剩「大纲」一种。
+   ========================================================================== */
+
+.a-body {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+}
+
+/* ------------------------------ 左栏：身份 + 大纲 ------------------------------ */
+/* 身份栏（.rail / .rail-media / .m-portrait / .m-avatar）是两版共用的家具，定义在 shell.css */
+
+/* 大纲：唯一的导航。
+   ⚠️ 这里**没有完成度/进度** —— 星宝 2026-10-16 明确否决过「写了几个字段 + 进度条」
+   （见 .workbuddy/memory/2026-10-16.md），别再往这儿加。
+   每条后面那个数字是**该段的字数**，和已落地的分区计数徽章同一种东西，不是「写完了没」的判断。 */
+.outline-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.outline-head { display: flex; align-items: baseline; justify-content: space-between; font-size: var(--fs-xs); color: var(--text-faint); }
+
+.outline { display: flex; flex-direction: column; gap: 2px; }
+
+.outline-group { padding: 8px 8px 2px; font-size: var(--fs-xs); color: var(--text-faint); }
+
+.outline-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  text-decoration: none;
+  border-radius: var(--radius);
+}
+
+.outline-item:hover { color: var(--text); background: var(--bg-elev); }
+.outline-item.is-current { color: var(--text); background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+
+.outline-count { font-size: var(--fs-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+.outline-note { margin: 0; padding: 0 8px; font-size: var(--fs-xs); color: var(--text-faint); }
+
+/* ------------------------------ 右列：长卷本身 ------------------------------ */
+
+.doc {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  padding: 18px 28px 40px;
+}
+
+/* 折叠态：写好的段收成一行，长卷才活得下来 */
+.sheet-fold { padding: 2px 8px; font-family: inherit; font-size: var(--fs-xs); color: var(--text-dim); background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.sheet-fold:hover { color: var(--text); border-color: var(--border-hover); }
+
+.sheet-preview { margin: 0; padding: 10px 12px; font-size: var(--fs-sm); color: var(--text-dim); white-space: pre-wrap; }
+.sheet:not(.is-folded) .sheet-preview { display: none; }
+.sheet.is-folded .sheet-input,
+.sheet.is-folded .sheet-help { display: none; }
+.sheet.is-folded .sheet-head { border-bottom: 1px solid var(--border-soft); }
+
+.sheet-skeleton { display: flex; align-items: center; gap: 8px; padding: 0 12px 12px; }
+.sheet-skeleton .btn-icon { font-size: var(--fs-xs); }
+.sheet-skeleton-hint { font-size: var(--fs-xs); color: var(--text-faint); }
+
+/* 长卷里的分节线：说明「下面这些不是正文，是这张卡的其他部分」 */
+.doc-divider { display: flex; align-items: center; gap: 12px; font-size: var(--fs-xs); color: var(--text-faint); }
+.doc-divider::before,
+.doc-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-soft); }
+
+.band { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); scroll-margin-top: 16px; }
+.band-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.band-head h3 { margin: 0; font-size: var(--fs-sm); font-weight: 600; }
+.band-count { margin-left: auto; font-size: var(--fs-xs); color: var(--text-faint); }
+.band-body { padding: 0 12px 12px; }
+
+.attr-tabs { display: flex; gap: 2px; padding: 0 12px 8px; }
+.attr-tabs span { padding: 2px 10px; font-size: var(--fs-xs); color: var(--text-dim); background: var(--bg-input); border: 1px solid var(--border); border-radius: 999px; }
+.attr-tabs b { padding: 2px 10px; font-size: var(--fs-xs); color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: 999px; }
+
+.attr-rows { display: flex; flex-direction: column; gap: 6px; }
+.attr-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: center; gap: 12px; }
+.attr-row span:first-child { font-size: var(--fs-xs); color: var(--text-dim); }
+.attr-row span:last-child { padding: 6px 10px; font-size: var(--fs-sm); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius); }
+
+.expr-grid { display: flex; gap: 8px; padding: 0 12px 12px; overflow-x: auto; }
+.expr-cell { flex: none; width: 72px; text-align: center; }
+.expr-cell i { display: block; width: 72px; height: 72px; overflow: hidden; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius); }
+.expr-cell i img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.expr-cell em { display: block; margin-top: 4px; font-size: var(--fs-xs); font-style: normal; color: var(--text-faint); }
+
+/* ------------------------------ 窄屏 ------------------------------ */
+
+@media (max-width: 1180px) {
+  .a-body { grid-template-columns: 216px minmax(0, 1fr); }
+  .doc { padding: 16px 20px 32px; }
+}
+
+/* 窗口不高的时候：宁可少给一句说明、把立绘收一点，也不让左栏长出栏内滚动条。
+   阈值 920 是照**真窗口 1440×900** 定的（不是稿子的 960）—— 900 高时必须已经收到这一档。 */
+@media (max-height: 920px) {
+  .a-body .rail { gap: 8px; padding: 12px 12px; }
+  .a-body .m-portrait { height: 104px; }
+  .a-body .outline-block { padding-top: 8px; }
+  .a-body .outline-item { padding: 4px 8px; }
+  .a-body .outline-group { padding: 6px 8px 0; }
+  .a-body .outline-note { display: none; }
+}
+
+@media (max-width: 980px) {
+  .a-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .rail-media { flex: none; }
+  .m-portrait { height: 56px; width: 42px; }
+  .m-avatar { width: 40px; height: 40px; }
+  .media-cell figcaption { display: none; }
+  .rail .field { flex: 1; min-width: 140px; }
+  .rail .field .field-label { display: none; }
+  .outline-block { flex: 1 0 100%; min-width: 0; padding-top: 8px; margin-top: 0; }
+  .outline { flex-direction: row; gap: 4px; min-width: 0; padding-bottom: 2px; overflow-x: auto; }
+  .outline-item { flex: none; grid-template-columns: auto auto; padding: 4px 8px; white-space: nowrap; }
+  .outline-item.is-current { box-shadow: inset 0 -2px 0 var(--accent); }
+  .outline-group,
+  .outline-note { display: none; }
+  .doc { padding: 12px 12px 24px; }
+}

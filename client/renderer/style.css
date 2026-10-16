@@ -367,6 +367,7 @@ body {
 
 .convo-del:hover,
 .btn-danger,
+.mi-btn--danger > .mi-btn__control,
 .msg.error .msg-avatar,
 .char-card-del:hover,
 .alt-greet-del:hover,
@@ -425,7 +426,12 @@ body {
 }
 
 /* ------------------------------ 按钮 ------------------------------ */
-.btn {
+/* ⚠️ 这一段里每个选择器都挂着**两个**：`.btn` 一族是还没迁移的老页面，
+   `.mi-btn__*` 是组件（components/button.js）。这是刻意的 —— 按钮的外观
+   **只有这一份定义**，迁移期两套入口共用它；等 `.btn` 退役，把逗号左边那半删掉
+   就完事，不会留下"另一份长得差不多"的规则。 */
+.btn,
+.mi-btn__control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -444,27 +450,32 @@ body {
   position: relative;
 }
 
-.btn-block {
+.btn-block,
+.mi-btn--block > .mi-btn__control {
   width: 100%;
 }
 
-.btn-sm {
+.btn-sm,
+.mi-btn--sm > .mi-btn__control {
   padding: 6px 12px;
   font-size: var(--fs-xs);
 }
 
 /* 主按钮：一层主色底 + 淡阴影，不描边（描边正是「鼓」的来源之一） */
-.btn-primary {
+.btn-primary,
+.mi-btn--primary > .mi-btn__control {
   background: var(--accent);
   color: var(--on-accent);
   box-shadow: var(--shadow-sm);
 }
 
-.btn-primary:hover {
+.btn-primary:hover,
+.mi-btn--primary > .mi-btn__control:hover {
   background: var(--accent-hover);
 }
 
-.btn-primary:active {
+.btn-primary:active,
+.mi-btn--primary > .mi-btn__control:active {
   background: var(--accent-pressed);
 }
 
@@ -484,19 +495,22 @@ body {
 
 /* 次级按钮：白底 + 一层淡阴影，同样不描边（设计稿里的 .ghost-btn）。
    顶栏那几颗是例外，在那里被单独压回透明 —— 它们要轻。 */
-.btn-ghost {
+.btn-ghost,
+.mi-btn--ghost > .mi-btn__control {
   background: var(--bg-card);
   color: var(--text-dim);
   box-shadow: var(--shadow-sm);
 }
 
-.btn-ghost:hover {
+.btn-ghost:hover,
+.mi-btn--ghost > .mi-btn__control:hover {
   color: var(--accent);
   box-shadow: 0 4px 12px rgba(23, 18, 24, 0.10);
 }
 
 
-.btn-danger:hover {
+.btn-danger:hover,
+.mi-btn--danger > .mi-btn__control:hover {
   background: var(--danger-bg-hover);
   color: var(--danger-hover);
 }
@@ -506,6 +520,7 @@ body {
    合并成一条选择器列表；这些选择器各自只此一条 :focus-visible 规则，
    带 .art-edge 的头像另有「描边 + 光环」组合规则且位置更靠后，照旧覆盖。 */
 .btn:focus-visible,
+.mi-btn__control:focus-visible,
 .btn-quick:focus-visible,
 .suggest-btn:focus-visible,
 .icon-btn:focus-visible,
@@ -527,15 +542,66 @@ body {
   box-shadow: var(--focus-ring);
 }
 
-.btn:active:not(:disabled) {
+.btn:active:not(:disabled),
+.mi-btn__control:active:not(:disabled) {
   transform: translateY(1px);
 }
 
-.btn:disabled {
+.btn:disabled,
+.mi-btn__control:disabled {
   opacity: 0.45;
   cursor: not-allowed;
   box-shadow: none;
   filter: grayscale(0.3);
+}
+
+/* ============================================================================
+   组件库的宿主与尺寸（renderer/js/components/）
+
+   上面那半段是**皮肤**（按钮那一族和 .btn 共用）。这里只管宿主怎么摆、
+   尺寸档多大 —— 输入类的皮肤更是完全不用写：里层就是原生 input / textarea /
+   select，style.css 里那条全局控件规则已经在管它们的边框、底色、内边距、
+   聚焦环和下拉箭头了。
+
+   一句总结这套组件的分工：
+     宿主 = 布局盒 + 类名 + 属性转发     里层原生控件 = 外观 + 键盘 + 原生事件
+   ============================================================================ */
+
+/* m-button：宿主 stretch 让里层填满，于是它在原先放 .btn 的位置上行为一致
+   （flex 容器里它就是一个 flex item，`.row .btn` 那类布局规则照旧落在里层上） */
+m-button {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+m-button[block] {
+  display: flex;
+  width: 100%;
+}
+
+/* 输入类：宿主铺满可用宽度，里层 100%。min-width:0 是给 flex / grid 里的
+   「不许被内容顶宽」留的口子（和 `.field > input { min-width: 0 }` 同一条理由） */
+m-input,
+m-textarea,
+m-select {
+  display: block;
+  min-width: 0;
+}
+
+.mi-input__control,
+.mi-textarea__control,
+.mi-select__control {
+  width: 100%;
+}
+
+/* 紧凑档：和 .btn-sm 一个量级，工具条里那种密排控件用 */
+.mi-input--sm > .mi-input__control,
+.mi-textarea--sm > .mi-textarea__control,
+.mi-select--sm > .mi-select__control {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: var(--fs-xs);
+  border-radius: var(--radius-sm);
 }
 
 /* ------------------------------ 主区域 ------------------------------ */
@@ -2903,13 +2969,19 @@ body {
   gap: 16px;
 }
 
+/* 角色卡 / 世界书卡共用同一副骨架：封面从卡片顶边一路铺到左右两边（设计稿就是
+   这个样子），所以卡片自己**不留内边距** —— 缩进 8px 会变成「一张图装在一个框里」。
+   下面几块信息各自带自己的内边距，不靠卡片的 padding 撑。
+   ⚠️ 卡片只由 build.js 的 card() / worldbookCard() 铺出来，两处都是这个形态 ——
+      别再单独写一条 `#char-page-grid .char-card, .wb-card` 覆盖一遍（2026-10-16 合并）。 */
 .char-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 14px 14px;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
   border: 0;
   border-radius: var(--radius);
   background: var(--bg-card);
@@ -2922,19 +2994,27 @@ body {
 }
 
 /* 卡片右上角的删除：跟左侧会话列表的 × 一样，平时透明、鼠标移上来才浮出。
+   封面铺满整卡，× 直接压在图上，所以自己带一层浅底和投影（就是设计稿里那颗
+   白色圆角小浮标）。
    用 :focus-visible 让键盘 Tab 到它时也能看见。 */
 .char-card-del {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
   opacity: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
-  background: transparent;
-  color: var(--text-faint);
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text-dim);
   cursor: pointer;
   font-size: var(--fs-md);
-  padding: 2px 6px;
-  border-radius: var(--radius);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
   transition: opacity 0.12s ease;
 }
 
@@ -2948,17 +3028,20 @@ body {
 
 
 /* ⚠️ 这里**不能**写 background —— 它比 `.g1`~`.g6` 这些单类 (0,1,0) 同优先级
-   但位置更靠后，写了浅底就会把 JS 挂的渐变整个盖掉（表现为"浅色圆 + 主色字"）。 */
+   但位置更靠后，写了浅底就会把 JS 挂的渐变整个盖掉（表现为"浅色圆 + 主色字"）。
+   尺寸是 2:3 竖版封面，铺满卡片宽度。
+   只有角色库（build.js 的 card()）用这类名，所以形态直接写死在这里。 */
 .char-card-avatar {
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 3;
+  flex: 0 0 auto;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--on-accent);
-  font-size: 30px;
+  font-size: 52px;
   font-weight: 600;
   user-select: none;
 }
@@ -2973,26 +3056,7 @@ body {
 }
 
 
-/* 角色卡 / 世界书卡：封面要从卡片顶边一路铺到左右两边（设计稿就是这个样子），
-   卡片自己**不留内边距** —— 缩进 8px 会变成「一张图装在一个框里」。
-   下面那几块信息各自带自己的内边距，所以不靠卡片的 padding 撑。 */
-#char-page-grid .char-card,
-.wb-card {
-  align-items: stretch;
-  gap: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
-#char-page-grid .char-card-avatar {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 2 / 3;
-  flex: 0 0 auto;
-  border-radius: 0;
-  font-size: 52px;
-}
-
+/* 角色卡 / 世界书卡的封面下面那几块信息：左对齐、各自带自己的内边距 */
 #char-page-grid .char-card-name {
   padding: 10px 10px 0;
   text-align: left;
@@ -3008,33 +3072,11 @@ body {
   padding: 8px 10px 10px;
 }
 
-/* 网格卡 / 世界书卡的删除按钮都是「白色圆角小浮标」形态（覆盖基类的文本 × 形态）。
-   世界书多一个 z-index —— 它的封面底部压了渐变层，删除按钮要浮在上面。 */
-#char-page-grid .char-card-del,
-.wb-card .char-card-del {
-  top: 10px;
-  right: 10px;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.86);
-  color: var(--text-dim);
-  font-size: var(--fs-md);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
-}
-
+/* 世界书卡的删除按钮多一个 z-index —— 它的封面底部压了渐变层，要浮在上面。
+   悬停变危险色由文件顶部那条「危险色悬停」组（`.convo-del:hover, …,
+   .char-card-del:hover, …`）统一给，这里不再写一遍。 */
 .wb-card .char-card-del {
   z-index: 2;
-}
-
-#char-page-grid .char-card-del:hover,
-.wb-card .char-card-del:hover {
-  background: var(--danger-bg);
-  color: var(--danger);
 }
 
 .char-card-name {
@@ -3057,13 +3099,14 @@ body {
   color: var(--text-faint);
 }
 
-/* 角色卡 / 世界书卡底部的操作区共用一套骨架 */
+/* 角色卡 / 世界书卡底部的操作区共用一套骨架。
+   贴底（margin-top: auto）分别写在 `#char-page-grid .char-card-actions` 和
+   `.wb-card-actions` 里 —— 两边各自还带自己的内边距，所以这里不重复写。 */
 .char-card-actions,
 .wb-card-actions {
   display: flex;
   gap: 8px;
   width: 100%;
-  margin-top: 2px;
 }
 
 .char-card-actions .btn,
@@ -3206,13 +3249,12 @@ body {
   min-height: 84px;
 }
 
-.char-advanced textarea {
-  min-height: 70px;
-  max-height: none;
-}
+/* ⚠️ 原来这里还有一条 `.char-advanced textarea { min-height: 70px; max-height: none }`，
+   已被 `#view-char-editor .char-advanced > .field > textarea`（84px / none）整条盖住，
+   2026-10-16 清掉。 */
 
+/* 长文本框右下角画几道「可拖」斜纹 —— 高度上限交给视图规则，这里只管纹路 */
 .char-form .field-stack > textarea {
-  max-height: 240px;
   background-image: linear-gradient(
     135deg,
     transparent 0 46%,
@@ -3236,13 +3278,15 @@ body {
 
    field-head 里的 field-label 不再是 .field 的直接子级，
    上面的 `.field.field-stack > .field-label { padding-top: 0 }` 匹配不上它 ——
-   这里补一条同语义的规则，不然标签会被通用规则顶下去一截。 */
+   这里补一条同语义的规则，不然标签会被通用规则顶下去一截。
+
+   ⚠️ 头栏的 flex 布局和内边距统一由 `#view-char-editor .char-sheet > .field-head`
+      （见「编辑角色 · 五张稿纸」那段）给，这里**不要再抄一遍**。
+      这里只剩 min-width 一条：备选开场白那栏没有可关联的控件，头栏是 .char-sheet
+      （grid）的直接子级，grid item 的 min-width 初值是 auto（= min-content），
+      名字长了会把轨道顶宽；label 里那五份是块级子元素，初值本来就是 0。 */
 .char-form .field-stack > .field-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
-  padding-top: 0;
 }
 
 .char-form .field-stack > .field-head .field-label {
@@ -3872,11 +3916,12 @@ body {
 }
 
 /* 图片区：头像 / 形象 + 表情图入口，放在表单最顶上，和下面的文字字段同级。
-   不再是一张折叠卡 —— 要的是「一眼就看到」，不是收起来。 */
+   不再是一张折叠卡 —— 要的是「一眼就看到」，不是收起来。
+   它和下面字段之间的留白由 `#view-char-editor .char-identity-pane` 的 gap 给，
+   这里不再自己写 margin-bottom（写了也会被盖掉，成死声明）。 */
 .char-media-top {
   display: flex;
   flex-direction: column;
-  margin: 0 0 20px;
 }
 
 /* 头像 / 形象下面那行「表情图 · 已设 N 条 · 管理」 */
@@ -3914,34 +3959,34 @@ body {
   min-width: 0;
 }
 
-/* 头像 + 形象一排：底边对齐（两列的最后一行都是「清除」按钮，正好齐平） */
+/* 头像 + 形象一排。
+   对齐方式和列间距由 `#view-char-editor .char-avatar-col` 定（顶部对齐 + 14px），
+   这里只留布局骨架，别重复写一份被盖掉的。 */
 .char-avatar-col {
   position: relative;
   display: flex;
   flex-direction: row;
-  align-items: flex-end;
-  gap: 12px;
   margin: 0;
 }
 
-/* 每列三行：图区（固定高）/ 标签 / 清除。
-   grid 的 align-items 管行内垂直方向（图片在 162px 的图区里居中），
-   justify-items 管水平方向（图、标签、按钮都居中）。 */
+/* 一列两行：图区（定高）/ 「清除」按钮。
+   grid 的 align-items 管行内垂直方向（图片在图区里居中），
+   justify-items 管水平方向（图、按钮都居中）。
+   行距和行数由 `#view-char-editor .char-avatar-col .char-media-item` 给。 */
 .char-media-item {
   display: grid;
   justify-items: center;
   align-items: center;
-  row-gap: 6px;
-  grid-template-rows: auto auto auto;
 }
 
 .char-media-label {
   font-size: var(--fs-xs);
   color: var(--text-faint);
-  display: none;
 }
 
-/* 两个上传框共用的底子：点一下弹文件框，悬停时盖一层「换…」提示 */
+/* 两个上传框共用的底子：点一下弹文件框，悬停时盖一层「换…」提示。
+   尺寸（56px）由 `#view-char-editor .char-avatar` 给、描边光晕由 .art-edge 给 ——
+   index.html 里这两个按钮本来就带 art-edge，这里再写一遍 box-shadow 是死声明。 */
 .char-avatar {
   position: relative;
   padding: 0;
@@ -3950,13 +3995,10 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--bg-input);
-  box-shadow: var(--shadow-sm);
   cursor: pointer;
   font-family: inherit;
   transition: border-color 0.15s;
   border-radius: 50%;
-  width: 42px;
-  height: 42px;
   border: 4px solid var(--ce-sidebar);
 }
 
@@ -3969,7 +4011,6 @@ body {
   justify-content: center;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
   cursor: pointer;
   font-family: inherit;
   transition: border-color 0.15s;
@@ -4237,13 +4278,10 @@ body {
 }
 
 /* 高级选项折叠块 */
-.char-advanced {
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  margin: 0;
-  padding: 20px;
-  background: var(--ce-surface);
-}
+/* ⚠️ `.char-advanced` 已经**没有**自己的基础形态了 —— V2 把「details 套折叠块」
+   换成三张平铺卡之后，描边 / 20px 内边距 / --ce-surface 底全由
+   `#view-char-editor .char-advanced`（见「编辑角色 · 高级设置」那段）接管，
+   这里原来是折叠块时代的写法，整条被盖住，2026-10-16 清掉。 */
 
 .wb-advanced {
   margin-top: 2px;
@@ -4256,39 +4294,32 @@ body {
   padding-top: 14px;
 }
 
-/* 高级选项折叠块的箭头行：角色高级设置和世界书高级设置共用一套手感 */
-.char-advanced > summary,
+/* 高级选项折叠块的箭头行（只剩世界书这边 —— 角色高级设置已改成三张平铺卡，
+   `.char-advanced > summary` 在 DOM 里一个都不存在了）。
+   颜色 / 字号 / 手型由 `#view-wb-editor .wb-advanced summary` 给，这里不重复。 */
 .wb-advanced > summary {
-  cursor: pointer;
-  font-size: var(--fs-sm);
-  color: var(--text-dim);
   list-style: none;
   user-select: none;
 }
 
-.char-advanced > summary::-webkit-details-marker,
 .wb-advanced > summary::-webkit-details-marker {
   display: none;
 }
 
-.char-advanced > summary::before,
 .wb-advanced > summary::before {
   content: "▸ ";
   color: var(--text-faint);
 }
 
-.char-advanced[open] > summary::before,
 .wb-advanced[open] > summary::before {
   content: "▾ ";
 }
 
-.char-advanced[open] > summary,
 .wb-advanced[open] > summary {
   margin-bottom: 14px;
   color: var(--text);
 }
 
-.char-advanced .field:last-child,
 .wb-advanced .field:last-child {
   margin-bottom: 0;
 }
@@ -4432,13 +4463,17 @@ body {
 /* ------------------------------ 控件 ------------------------------ */
 /* 文本框 / 密码框 / 数字框 / 多行框 / 下拉框共用的底子。
    共通部分合并成一条（以前是五段逐字重复，改一处要同步五处），
-   差异部分（最小高度 / 内边距 / 下拉箭头）各自在后面单独补。 */
+   差异部分（内边距 / 下拉箭头）各自在后面单独补。
+   min-height 也放在这条里：单行控件统一 44px 高，多行框的 `textarea` 那条
+   在下面用同样的特异性覆盖成 104px —— 这样五个选择器各只出现一次，
+   不会再被 check-css 报「重复选择器」。 */
 input[type="text"],
 input[type="password"],
 input[type="number"],
 textarea,
 select {
   width: 100%;
+  min-height: 44px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -4448,14 +4483,6 @@ select {
   padding: 12px 14px;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-/* 单行控件统一 44px 高；多行框走自己的最低高度 */
-input[type="text"],
-input[type="password"],
-input[type="number"],
-select {
-  min-height: 44px;
 }
 
 textarea {
@@ -4504,6 +4531,75 @@ select option {
 select optgroup {
   background-color: var(--bg-card);
   color: var(--text);
+}
+
+/* ---------------------------------------------------------------------------
+   自研下拉的弹层（见 renderer/js/ui/select.js）
+
+   原生 <select> 原地不动当地基 —— 上面那些规则管的还是它（宽度、内边距、
+   选中的那行字、禁用态、focus 环），这里只管**弹出来的那份列表**：
+   系统画的那份 CSS 碰不到，所以由我们画。
+
+   挂在 document.body 上、position: fixed 是刻意的：设置页和几个弹窗内部都有
+   overflow 容器，挂在原地会被裁掉一半。宽/左/上由 JS 用 CSSOM 算（placePopover）。
+   外壳沿用 .menu-pop（跟顶栏「⋯」同一套大圆角 + 柔和阴影），只在这里补差异。
+   --------------------------------------------------------------------------- */
+.ctl-select-pop {
+  position: fixed;
+  top: auto;
+  right: auto;
+  left: 0;
+  /* 超过就自己滚，别把弹窗撑破。这个高度也是 JS 算上下位置时量到的高度 */
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* 弹窗是 50、确认框 70；这一层必须压在**弹窗里面**那些下拉之上 */
+  z-index: 80;
+}
+
+/* 一行选项：文字占满左边，右边留给「✓」（.menu-item 已经把排版和悬停做了） */
+.ctl-select-pop .ctl-opt {
+  gap: 12px;
+}
+
+.ctl-select-pop .ctl-opt-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 键盘高亮那一行。和 :hover 同一个观感（--accent-soft），
+   所以鼠标一移上去不会「跳」一下 */
+.ctl-select-pop .ctl-opt.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.ctl-select-pop .ctl-opt.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 当前值后面跟一个对勾：列表一打开就知道自己站在哪一行 */
+.ctl-select-pop .ctl-opt[aria-selected='true']::after {
+  content: '✓';
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: var(--fs-xs);
+}
+
+/* 分组标题（persona-model 那种按服务商分的 optgroup）：只做路标，不能点 */
+.ctl-select-pop .ctl-group {
+  padding: 6px 12px 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* 展开中的触发器：原生 select 的 :focus 描边照旧，这里只是让「开着」更明确 */
+select.ctl-open {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 
 /* 悬停描边淡一点、聚焦换主题色 —— 五种控件一份规则 */
@@ -4843,7 +4939,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   flex-wrap: wrap;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
-  gap: 12px;
   padding-top: 20px;
 }
 
@@ -4956,13 +5051,13 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   overflow: hidden;
 }
 
+/* 书籍设置：两列（封面 | 字段）。列宽和间距由 `#view-wb-editor .wb-book` 给，
+   这里只留骨架 —— 别重复写一份会被盖掉的。 */
 .wb-book {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: 120px minmax(0, 700px);
   align-content: start;
-  gap: 24px;
   padding: 28px;
   border: 0;
   overflow-y: auto;
@@ -4989,8 +5084,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 .wb-cover {
   flex: 0 0 auto;
-  grid-column: 1;
-  grid-row: 2 / 4;
   padding: 0;
 }
 
@@ -5002,9 +5095,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 .wb-cover-row {
   display: flex;
-  gap: 10px;
   margin-top: 6px;
-  flex-direction: column;
 }
 
 /* 说明文字通栏放在下面：挤在封面框右边那一小条里会折成三行 */
@@ -5052,18 +5143,10 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 .wb-book-name {
   flex: 0 0 auto;
-  padding: 10px 12px 0;
 }
 
 .wb-book-foot {
   display: flex;
-  gap: 8px;
-  border-top: 1px solid var(--border-soft);
-  background: var(--bg-elev);
-  grid-column: 1 / -1;
-  justify-content: flex-end;
-  padding: 18px 0 0;
-  margin-top: 8px;
 }
 
 .wb-entries {
@@ -5079,7 +5162,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 .wb-opening {
   flex: 0 0 auto;
-  padding: 10px 12px 0;
 }
 
 .wb-entry-head {
@@ -5128,12 +5210,13 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   max-height: none;
 }
 
+/* 条目不收缩：列表是竖排的，条目按内容定高（`flex: 0 0 auto` 由
+   `#view-wb-editor .wb-entry-list .wb-entry` 统一给，这里不再写一遍） */
 .wb-entry {
   position: relative;
   border: 1px solid transparent;
   cursor: pointer;
   min-width: 0;
-  flex-shrink: 0;
   padding: 14px 30px 14px 10px;
   border-radius: 3px;
 }
@@ -5238,12 +5321,10 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   background: var(--bg-elev);
 }
 
-/* 让条目表单撑满右栏，内容框跟着变高 */
+/* 让条目表单撑满右栏，内容框跟着变高。
+   列方向 / 间距由 `#view-wb-editor .wb-form` 给（14px），这里只留 min-height 兜底。 */
 .wb-form {
-  display: flex;
-  flex-direction: column;
   min-height: 0;
-  gap: 0;
 }
 
 /* 「内容」是这里的主要工作区：占满剩余高度，min-height 兜住矮窗口 */
@@ -5252,10 +5333,9 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   flex: 0 0 auto;
 }
 
-.wb-form textarea {
-  min-height: 240px;
-  height: 100%;
-}
+/* ⚠️ 原来这里有一条 `.wb-form textarea { min-height: 240px; height: 100% }` ——
+   「内容」框的实际尺寸由 `#view-wb-editor #wb-e-content`（260px / 340px）给，
+   整条被盖住，2026-10-16 清掉。 */
 
 .wb-form > .field-stack:has(#wb-e-content) > .field-label {
   flex: 0 0 auto;
@@ -5272,10 +5352,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 .wb-checks {
-  display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
-  gap: 12px 24px;
   margin: 0 0 22px;
 }
 
@@ -6368,7 +6445,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 .memory-edit-box {
   width: 100%;
   min-height: 170px;
-  box-sizing: border-box;
   font-size: var(--fs-sm);
   resize: vertical;
 }
@@ -8534,15 +8610,15 @@ body.pad-dragging {
   padding: 6px 8px;
 }
 
-/* 搜索框和状态筛选共用的几何：左右各留 16px 呼吸位（input 全局 width:100%，
-   直接加 margin 会溢出，所以宽度用 calc 减掉边距） */
+/* 搜索框和状态筛选都是 `.wb-list-tools` 里的 flex item ——
+   flex item 的 min-width 初值是 auto（= min-content），不归零就会被控件自身的
+   默认宽度顶住、收不下来。
+   宽度 / 间距由 `#view-wb-editor .wb-list-tools .wb-search` 和 `... .wb-state`
+   分别给（一个是撑满、一个是固定 104px），这里不再重复写一份被盖掉的。
+   box-sizing 走全局 `*`，也不必再写。 */
 #view-wb-editor .wb-search,
 #view-wb-editor .wb-state {
-  flex: 0 0 auto;
   min-width: 0;
-  width: calc(100% - 32px);
-  margin: 0 16px 10px;
-  box-sizing: border-box;
 }
 
 #view-wb-editor .wb-search {
@@ -8970,7 +9046,9 @@ body.pad-dragging {
 
 /* label 只包住头栏 —— for 的关联还在，点字段名照样聚焦输入框。
    ⚠️ 别把 details 包进 label：那样点「这一栏怎么写」会连带聚焦输入框。
-   备选开场白那块没有可关联的控件，头栏是 .char-sheet 的直接子级，所以两条都要写。 */
+   备选开场白那块没有可关联的控件，头栏是 .char-sheet 的直接子级，所以两条都要写。
+   ⚠️ 这里**只写「长什么样」**：flex 布局已在 `.char-form .field-stack > .field-head`
+      里给过，margin 本来就是 0（span 的 UA 默认值），都别再抄一遍。 */
 #view-char-editor .char-sheet > .char-sheet-label {
   display: block;
 }
@@ -8980,8 +9058,6 @@ body.pad-dragging {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
-  margin: 0;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border-soft);
   background: var(--bg-elev);
@@ -9008,7 +9084,6 @@ body.pad-dragging {
 #view-char-editor .char-sheet > textarea {
   max-height: none;
   padding: 18px 20px;
-  min-height: 0;
   border: 0;
   border-radius: 0;
   background: transparent;

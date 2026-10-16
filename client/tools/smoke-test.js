@@ -3740,6 +3740,17 @@ app.whenReady().then(async () => {
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-rag"]')?.click();
           await new Promise(r => setTimeout(r, 250));`,
+        // 自研下拉（renderer/js/ui/select.js）：**把弹层打开**再出图。
+        // 位置 / 宽度 / 圆角 / 高亮那一行的观感 / 右边那个 ✓ —— 全是 DOM 断言
+        // 看不出来的东西，只有图能核。
+        selectPop: `
+          document.querySelector('#btn-settings')?.click();
+          await new Promise(r => setTimeout(r, 700));
+          document.querySelector('.settings-nav-item[data-target="sec-appearance"]')?.click();
+          await new Promise(r => setTimeout(r, 300));
+          const trigger = document.getElementById('appearance-font');
+          trigger?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+          await new Promise(r => setTimeout(r, 400));`,
         // 桌宠区块（设置页最下面那一段）：预览框、人格、记忆列表 ——
         // 全是排版密集的地方，「挤成一行」「按钮换行」这类问题 DOM 断言看不出来，
         // 只能靠图。顺手点一次「生成一句」，让预览框里真的有内容（空框看不出高矮）。

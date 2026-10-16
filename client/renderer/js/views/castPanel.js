@@ -18,7 +18,7 @@
 
 import { el } from '../core/dom.js';
 import { activeConvo } from '../core/util.js';
-import { h, clear } from '../ui/build.js';
+import { h, clear, button } from '../ui/build.js';
 import { entityTone } from '../ui/avatarTone.js';
 import { stateCardPhoto } from '../data/expressions.js';
 import { currentScene } from '../data/currentScene.js';
@@ -202,14 +202,18 @@ export function renderCastPanel() {
     sceneBlock.appendChild(h('small', { class: 'scene-source', text: '来自本局状态字段 · 随剧情更新' }));
   } else {
     sceneBlock.appendChild(h('small', { class: 'scene-source', text: '尚无场景信息。启用后，模型将尝试随剧情更新地点、时间与天气。' }));
-    const enable = h('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: '启用场景追踪' });
-    enable.addEventListener('click', () => {
-      appendPanelFields(convo, ['地点', '时间', '天气'].map(name => ({
-        name, value: '', owner: 'player', group: '当前场景', type: 'text', mode: 'dynamic',
-        hint: '只记录剧情明确给出的当前场景信息；不确定时保留原值，不编造。'
-      })));
-      persistConversations(0);
-      refreshAll();
+    const enable = button({
+      variant: 'ghost',
+      size: 'sm',
+      text: '启用场景追踪',
+      onClick: () => {
+        appendPanelFields(convo, ['地点', '时间', '天气'].map(name => ({
+          name, value: '', owner: 'player', group: '当前场景', type: 'text', mode: 'dynamic',
+          hint: '只记录剧情明确给出的当前场景信息；不确定时保留原值，不编造。'
+        })));
+        persistConversations(0);
+        refreshAll();
+      }
     });
     const tracking = convoPanelFields(convo).some(key => (convoPanelDef(convo, key) || {}).group === '当前场景');
     if (!tracking) sceneBlock.appendChild(enable);

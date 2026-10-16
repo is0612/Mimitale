@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN" data-accent="amber" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>编辑角色 · 两版设计稿对比</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html { scrollbar-width: thin; }
+  body {
+    margin: 0; padding: 32px 40px 64px; background: var(--bg); color: var(--text);
+    font: var(--fs-sm)/1.6 var(--font-ui); -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: var(--fs-xl); margin: 0 0 6px; }
+  .lede { color: var(--text-faint); font-size: var(--fs-xs); margin-bottom: 28px; }
+  h2 {
+    font-size: var(--fs-lg); margin: 40px 0 6px; padding-top: 22px;
+    border-top: 1px solid var(--border);
+  }
+  h2 small { font-size: var(--fs-xs); font-weight: 400; color: var(--text-faint); margin-left: 10px; }
+  h3 { font-size: var(--fs-sm); margin: 22px 0 10px; color: var(--text-dim); }
+  p { margin: 8px 0; color: var(--text-dim); font-size: var(--fs-sm); }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: var(--fs-xs); }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-elev); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.hi td { background: var(--accent-soft); }
+  figure { margin: 14px 0 26px; }
+  figure img {
+    width: 100%; max-width: 1440px; display: block;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card);
+  }
+  figcaption { font-size: var(--fs-xs); color: var(--text-faint); margin-top: 7px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  .pair figure { margin: 0; }
+  ul { margin: 8px 0; padding-left: 20px; color: var(--text-dim); font-size: var(--fs-sm); }
+  li { margin: 5px 0; }
+  code {
+    font-size: var(--fs-xs); padding: 1px 5px; border-radius: var(--radius-sm);
+    background: var(--code-bg); color: var(--code-text);
+  }
+  .badge {
+    display: inline-block; font-size: var(--fs-xs); padding: 1px 8px; border-radius: 10px;
+    border: 1px solid var(--accent-border); color: var(--accent); background: var(--accent-soft);
+  }
+  .tag { font-size: var(--fs-xs); color: var(--text-faint); }
+</style>
+</head>
+<body>
+
+<h1>编辑角色 · 两版设计稿</h1>
+<p class="lede">Mimitale「编辑角色」页 · 2026-10-16 · 基准窗口 1440×900（取自 <code>main/window.js</code>）· 夜间琥珀 / 白天琥珀 · 20 张图 · 自检 20/20 通过</p>
+
+<h2>一句话区别 <small>同一个页面，两种主张</small></h2>
+<table>
+  <tr><th style="width:120px">　</th><th>V1 · 精修版</th><th>V2 · 重组版</th></tr>
+  <tr>
+    <td><b>主张</b></td>
+    <td>骨架不动，把「写作」这件事本身修好。<b>风险最低，能直接落地。</b></td>
+    <td>把「字段切换」这件事去掉。<b>承认五个字段是互相参照着写的。</b></td>
+  </tr>
+  <tr>
+    <td><b>栏位</b></td>
+    <td>2 栏：左栏 244 + 稿纸 672 + 旁注 224</td>
+    <td>3 栏：左栏 220 + 稿纸 650 + 字段目录 280</td>
+  </tr>
+  <tr class="hi">
+    <td><b>字段可见</b></td>
+    <td>1 个（顶部胶囊切换，与现在一致）</td>
+    <td><b>5 个全在</b>（上下滚着对照）</td>
+  </tr>
+  <tr class="hi">
+    <td><b>正文行宽</b></td>
+    <td class="num">636px ≈ 40 字/行</td>
+    <td class="num">614px ≈ 38 字/行</td>
+  </tr>
+  <tr>
+    <td><b>说明文字</b></td>
+    <td>从框底搬到<b>旁注列</b>，与稿纸并排</td>
+    <td>每栏收进<b>折叠条</b>（默认收起），不占纸面</td>
+  </tr>
+  <tr>
+    <td><b>最大改动</b></td>
+    <td>HTML 只动一处（说明行从稿纸挪到旁注）</td>
+    <td>新增一列 + 约 20 行滚动联动逻辑</td>
+  </tr>
+</table>
+
+<h2>V1 · 精修版 <small>结构不动，先解决「好不好写」</small></h2>
+<figure>
+  <img src="v1-01-writing-desc.png" alt="V1 角色描述">
+  <figcaption>稿纸定型 672px，右侧 224px 旁注列：这一栏写什么 / 模板 / 这一步 / 会进到哪里</figcaption>
+</figure>
+<div class="pair">
+  <figure>
+    <img src="v1-03-writing-scenario.png" alt="V1 场景">
+    <figcaption>短字段（场景）给 180px，不再一律 300px</figcaption>
+  </figure>
+  <figure>
+    <img src="v1-06-attributes.png" alt="V1 属性">
+    <figcaption>属性页：分组计数口径与左栏一致，开关卡补状态胶囊</figcaption>
+  </figure>
+</div>
+
+<h2>V2 · 重组版 <small>五栏连成一页，写性格时看得见描述</small></h2>
+<figure>
+  <img src="v2-01-writing-top.png" alt="V2 顶部">
+  <figcaption>第 1 栏与第 2 栏同屏 —— 这正是这一版存在的理由；右栏是字段目录，滚动时高亮当前栏</figcaption>
+</figure>
+<div class="pair">
+  <figure>
+    <img src="v2-02-writing-mid.png" alt="V2 中段">
+    <figcaption>滚到中段：目录自动高亮到「场景」</figcaption>
+  </figure>
+  <figure>
+    <img src="v2-03-writing-bottom.png" alt="V2 底部">
+    <figcaption>滚到底：写完五栏是一张完整的卡</figcaption>
+  </figure>
+</div>
+<figure>
+  <img src="v2-04-attributes.png" alt="V2 属性">
+  <figcaption>属性页：横向分组 tab 改成三张分组卡，右栏换成「状态栏长这样」的实时预览</figcaption>
+</figure>
+
+<h2>白天主题 <small>两版各一张，确认不是靠夜色撑起来的</small></h2>
+<div class="pair">
+  <figure><img src="v1-10-writing-desc-light.png" alt="V1 白天"><figcaption>V1 · 白天琥珀</figcaption></figure>
+  <figure><img src="v2-08-writing-top-light.png" alt="V2 白天"><figcaption>V2 · 白天琥珀</figcaption></figure>
+</div>
+
+<h2>改版前后实测对照 <small>数字都是量出来的，不是估的</small></h2>
+<table>
+  <tr><th>项</th><th>现状（今天已落地版）</th><th>V1 精修版</th><th>V2 重组版</th></tr>
+  <tr class="hi"><td>正文每行字数</td><td class="num">≈ 67 字 / 1080px</td><td class="num">≈ 40 字 / 636px</td><td class="num">≈ 38 字 / 614px</td></tr>
+  <tr><td>稿纸宽度</td><td class="num">满宽 1116px</td><td class="num">672px</td><td class="num">650px</td></tr>
+  <tr><td>稿纸高度</td><td>恒定 300px（5 栏同高）</td><td>340 / 200 / 180 / 260 / 240</td><td>264 / 120 / 100 / 160 / 140</td></tr>
+  <tr><td>右列</td><td>单栏（稿纸 + 框底说明）</td><td>稿纸 + 旁注 224px</td><td>稿纸 + 字段目录 280px</td></tr>
+  <tr class="hi"><td>分区徽章语义</td><td>5（字段总数，恒定）/ 3、2（已配置数）—— <b>同一列两种含义</b></td><td colspan="2">4/5（已写 / 共）/ 9、3、1、0（已配置条目数）</td></tr>
+  <tr><td>字段名</td><td>tab「基本描述」／框内「角色描述」<b>不一致</b></td><td colspan="2">统一「角色描述」</td></tr>
+  <tr><td>未保存态</td><td>靠页头一句「改完记得点保存」</td><td colspan="2">pill 三态（已保存 / 有未保存的改动 / 保存中）+ 无改动时保存按钮禁用</td></tr>
+  <tr><td>分区说明</td><td>左栏 + 右列标题各一份（900px 高时左栏那份被媒体查询藏掉）</td><td colspan="2">只在右列标题出现一次；写作页移到旁注 / 折叠条</td></tr>
+  <tr><td>左栏底部</td><td>底部通栏：导出 / 删除角色</td><td colspan="2">收进左栏底部（与「保存」拉开距离）</td></tr>
+</table>
+
+<h2>还需要你拍板的四件事</h2>
+<ul>
+  <li><b>选哪一版</b> —— 或者「V1 打底 + 只把 V2 的字段目录搬过来」（三栏，但保留顶部胶囊）。</li>
+  <li><b>保存按钮「无改动即禁用」</b> —— 更明确，但也挡住了「我想手动再存一次」。</li>
+  <li><b>行宽取多少</b> —— 现在给的是 40 字/行；想更沉浸可以收到 34 字/行（约 560px），想更紧凑可以放到 46 字/行（760px）。</li>
+  <li><b>左栏的「导出 / 删除角色」</b>是否收进左栏底部（现在是底部通栏）。</li>
+</ul>
+
+<p class="tag" style="margin-top:34px">
+  图由 <code>node client/node_modules/electron/dist/electron.exe design/char-editor-2versions/capture.cjs</code> 出，尺寸即真实窗口；
+  自检覆盖 token 生效 / 文字对比度 / 元素被裁 / 文本框装不下 / 左栏滚动条。
+  素材为项目自有（头像与品牌标），无外部 IP。
+</p>
+
+</body>
+</html>

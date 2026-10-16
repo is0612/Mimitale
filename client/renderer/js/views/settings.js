@@ -43,6 +43,8 @@ import { state } from '../core/state.js';
 import { activeConvo, asArray } from '../core/util.js';
 import { el } from '../core/dom.js';
 import { h, clear } from '../ui/build.js';
+// 下拉框铺选项的规范件（清空 → 铺 → 定值 → 空了就禁用）。见 ui/controls.js
+import { fillSelect } from '../ui/controls.js';
 // 桌宠区块（它自己不依赖本模块，单向 import，不成环）
 import { openPetSection } from './petSettings.js';
 // 外观那一组（2026-10-12 深夜从顶栏弹窗搬进本页，见 index.html 的 #sec-appearance）。
@@ -270,8 +272,6 @@ function syncSettingsSection() {
  * 只在界面上多给几个选项，不会去改用户的服务商配置。
  */
 function fillModelSelect(select, providerId, current, emptyHint, keepMissing = true, catalogModels = null) {
-  clear(select);
-
   const provider = providerById(providerId);
   const models = provider && Array.isArray(provider.models) ? provider.models.filter(Boolean) : [];
   const extra = (Array.isArray(catalogModels) ? catalogModels : []).filter((m) => m && !models.includes(m));
@@ -279,27 +279,19 @@ function fillModelSelect(select, providerId, current, emptyHint, keepMissing = t
   const value = String(current || '').trim();
 
   if (!all.length) {
-    select.appendChild(h('option', { value: '', text: emptyHint }));
-    select.disabled = true;
+    fillSelect(select, [], { emptyText: emptyHint });
     return;
   }
 
-  select.disabled = false;
+  const items = [];
+  // 存过的值不在列表里（既不在服务商配置、也不在目录）也保留，别让用户的选择凭空消失。
+  // 它要排在分组/列表**最前面**，所以直接摆在 items 头上（不包 group）。
+  if (keepMissing && value && !all.includes(value)) items.push({ value, text: `${value}（不在列表里）` });
+  for (const model of models) items.push({ value: model, text: model });
+  for (const model of extra) items.push({ value: model, text: `${model}（内置）` });
 
-  // 存过的值不在列表里（既不在服务商配置、也不在目录）也保留，别让用户的选择凭空消失
-  if (keepMissing && value && !all.includes(value)) {
-    select.appendChild(h('option', { value, text: `${value}（不在列表里）` }));
-  }
-
-  for (const model of models) {
-    select.appendChild(h('option', { value: model, text: model }));
-  }
-  for (const model of extra) {
-    select.appendChild(h('option', { value: model, text: `${model}（内置）` }));
-  }
-
-  // 有保存过的就用它；没有就挑第一个，别让下拉是空的
-  select.value = value || all[0];
+  // 有保存过的就用它；没有就挑第一个，别让下拉是空的（这条口径在 fillSelect 里）
+  fillSelect(select, items, { prefer: value || all[0] });
 }
 
 // ------------------------------ 默认人设 ------------------------------
@@ -578,16 +570,16 @@ function fillSettingsForm(settings) {
   syncPersonaFields(settings, defaultAssistantModel());
 
   // 生图：下拉里放一个「不启用」+ 所有服务商
-  clear(el.s.imageProvider);
-  el.s.imageProvider.appendChild(h('option', { value: '', text: '（不启用生图）' }));
-  for (const provider of providers()) {
-    // 本机桥接现在有独立的 /draw 接口（走本地 ComfyUI），可以选进生图；
-    // 配图时 renderer 会按「生图服务商是不是桥接」分流到 /draw 或 /images/generations
-    el.s.imageProvider.appendChild(h('option', { value: provider.id, text: provider.name }));
-  }
-  el.s.imageProvider.value = providers().some((p) => p.id === settings.imageProviderId)
-    ? settings.imageProviderId
-    : '';
+  fillSelect(
+    el.s.imageProvider,
+    [
+      { value: '', text: '（不启用生图）' },
+      // 本机桥接现在有独立的 /draw 接口（走本地 ComfyUI），可以选进生图；
+      // 配图时 renderer 会按「生图服务商是不是桥接」分流到 /draw 或 /images/generations
+      ...providers().map((provider) => ({ value: provider.id, text: provider.name }))
+    ],
+    { prefer: providers().some((p) => p.id === settings.imageProviderId) ? settings.imageProviderId : '' }
+  );
   el.s.imageModel.value = settings.imageModel || '';
   // 生图模型下拉要并上内置目录 —— 服务商的模型列表里通常只有文本模型，
   // 不并的话用户根本选不到 glm-image 这种生图模型
@@ -604,16 +596,17 @@ function fillSettingsForm(settings) {
 
   // 语义检索：同样是一个「不启用」+ 全部服务商
   el.s.ragEnabled.checked = settings.ragEnabled === true;
-  clear(el.s.embeddingProvider);
-  el.s.embeddingProvider.appendChild(h('option', { value: '', text: '（不选）' }));
-  for (const provider of providers()) {
-    // 本机桥接没有 /embeddings 接口，不能选进语义检索
-    if (isBridgeProvider(provider)) continue;
-    el.s.embeddingProvider.appendChild(h('option', { value: provider.id, text: provider.name }));
-  }
-  el.s.embeddingProvider.value = providers().some((p) => p.id === settings.embeddingProviderId)
-    ? settings.embeddingProviderId
-    : '';
+  fillSelect(
+    el.s.embeddingProvider,
+    [
+      { value: '', text: '（不选）' },
+      // 本机桥接没有 /embeddings 接口，不能选进语义检索
+      ...providers()
+        .filter((provider) => !isBridgeProvider(provider))
+        .map((provider) => ({ value: provider.id, text: provider.name }))
+    ],
+    { prefer: providers().some((p) => p.id === settings.embeddingProviderId) ? settings.embeddingProviderId : '' }
+  );
   fillModelSelect(el.s.embeddingModel, el.s.embeddingProvider.value, settings.embeddingModel, '（先在上面选一个提供商）');
 
 }

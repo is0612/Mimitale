@@ -72,9 +72,16 @@ function presetRow(preset) {
       h('small', { text: preset.global === true ? '未配置的会话自动带上' : '按会话选用' })
     ),
     h('div', { class: 'preset-row-actions' },
-      button({ class: 'btn btn-ghost btn-sm', text: '编辑', onClick: () => openEditor(preset.id) }),
-      button({ class: 'btn btn-ghost btn-sm', text: '导出', onClick: () => exportOne(preset.id) }),
-      button({ class: 'btn btn-ghost btn-sm preset-row-delete', text: '删除', ariaLabel: `删除预设：${preset.name}`, onClick: () => removePreset(preset.id) })
+      button({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => openEditor(preset.id) }),
+      button({ variant: 'ghost', size: 'sm', text: '导出', onClick: () => exportOne(preset.id) }),
+      button({
+        variant: 'ghost',
+        size: 'sm',
+        class: 'preset-row-delete',
+        text: '删除',
+        ariaLabel: `删除预设：${preset.name}`,
+        onClick: () => removePreset(preset.id)
+      })
     )
   );
 }

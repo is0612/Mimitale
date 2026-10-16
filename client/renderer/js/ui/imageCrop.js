@@ -17,7 +17,7 @@
 //  三个地方都要「弹文件框 → 裁剪 → 拿 dataURL」，走同一份实现。
 // ============================================================================
 
-import { h } from './build.js';
+import { h, button } from './build.js';
 import { api } from '../core/api.js';
 import { showToast } from './toast.js';
 
@@ -314,18 +314,8 @@ export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = '�
         h('span', { class: 'crop-zoom-label', text: '大' })
       );
 
-      const btnCancel = h('button', {
-        id: 'crop-cancel',
-        class: 'btn btn-ghost btn-sm',
-        type: 'button',
-        text: '取消'
-      });
-      const btnOk = h('button', {
-        id: 'crop-ok',
-        class: 'btn btn-primary btn-sm',
-        type: 'button',
-        text: '用这块'
-      });
+      const btnCancel = button({ id: 'crop-cancel', variant: 'ghost', size: 'sm', text: '取消' });
+      const btnOk = button({ id: 'crop-ok', variant: 'primary', size: 'sm', text: '用这块' });
 
       const foot = h(
         'div',

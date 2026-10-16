@@ -77,21 +77,55 @@ export function h(tag, props, ...children) {
 /**
  * 按钮。渲染层里最常见的一段样板：
  * 以前是「createElement + type + className + textContent + addEventListener」五连击。
+ *
+ * 外观可以给**语义参数**，也可以直接给类名：
+ *
+ *   button({ text: '保存', variant: 'primary', size: 'sm' })   → btn btn-primary btn-sm
+ *   button({ text: '×', class: 'char-card-del' })              → char-card-del（原样）
+ *
+ * ⚠️ 只有给了 variant / size / block 才会补上 `.btn` 底座。
+ *    这一条是**故意的**：渲染层里有一大批「长得不像按钮的按钮」
+ *    （char-card-del / convo-del / sc-close / variant-btn …），它们靠自己的类
+ *    定义外形，凭空多一个 `.btn` 会把内边距和圆角全顶掉。
+ *    类名只在下面这张表里拼 —— 调用点别再手写 'btn btn-primary btn-sm' 这种串。
  */
-export function button({ class: className, text, title, ariaLabel, disabled, onClick, ...rest }) {
-  return h(
-    'button',
-    {
-      type: 'button',
-      class: className,
-      text,
-      title,
-      'aria-label': ariaLabel,
-      disabled,
-      onclick: onClick,
-      ...rest
-    }
-  );
+const BUTTON_VARIANTS = { base: '', primary: 'btn-primary', ghost: 'btn-ghost', danger: 'btn-danger' };
+const BUTTON_SIZES = { sm: 'btn-sm' };
+
+export function button({ class: className, text, title, ariaLabel, disabled, onClick, variant, size, block, ...rest }) {
+  const names = [];
+  const push = (name) => {
+    // false / true 是「条件类名」写法留下的假值（`cond && 'active'`），
+    // 不能变成名叫 "false" 的类
+    if (name == null || name === false || name === true) return;
+    const value = String(name).trim();
+    if (value && !names.includes(value)) names.push(value);
+  };
+
+  if (variant || size || block) {
+    // 认不出来的外观**当场报出来**：静默丢掉只会变成「这个按钮怎么没样式」，
+    // 那种问题要翻半天（见 README 里「不会报错，只会静默失效」那一段）
+    if (variant && !(variant in BUTTON_VARIANTS)) console.error(`button()：不认识的外观 variant=${variant}`);
+    if (size && !(size in BUTTON_SIZES)) console.error(`button()：不认识的尺寸 size=${size}`);
+    push('btn');
+    push(BUTTON_VARIANTS[variant]);
+    push(BUTTON_SIZES[size]);
+    if (block) push('btn-block');
+  }
+  for (const name of Array.isArray(className) ? className : String(className == null ? '' : className).split(/\s+/)) {
+    push(name);
+  }
+
+  return h('button', {
+    type: 'button',
+    class: names.join(CLASS_JOIN),
+    text,
+    title,
+    'aria-label': ariaLabel,
+    disabled,
+    onclick: onClick,
+    ...rest
+  });
 }
 
 /**

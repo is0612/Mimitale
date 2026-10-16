@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-accent="amber" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <!-- 这一页也自带 CSP，口径和 index.html 一致（style-src 要 'unsafe-inline'，
+       下面那块 .pv-* 的排版样式是页内的）。 -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;" />
+  <title>组件盘 · Mimitale</title>
+  <link rel="stylesheet" href="../style.css" />
+  <style>
+    /* ------------------------------------------------------------------
+       这一页是**开发用的组件盘**，不属于应用界面。
+
+       所以它自己的排版样式写在这里，不进 style.css —— 那边的类名归
+       tools/audit-css-dead.js 管，界面里不会出现的类名会被当成死规则。
+       规矩：`.pv-*` 只在这个页面里用，应用界面里一个都不能出现。
+       ------------------------------------------------------------------ */
+    .pv-body {
+      margin: 0;
+      padding: 24px 28px 40px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: var(--fs-sm);
+    }
+    .pv-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
+    .pv-title { margin: 0 0 4px; font-size: var(--fs-lg); }
+    .pv-note { margin: 0; color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.7; max-width: 900px; }
+    .pv-note code { padding: 0 4px; border-radius: var(--radius-sm); background: var(--code-bg); font-family: Consolas, monospace; }
+    .pv-theme { margin-left: auto; display: flex; gap: 8px; flex: 0 0 auto; }
+    .pv-root { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+    .pv-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      /* 底色用侧栏那档（--bg-side）而不是卡片白：ghost 按钮的底就是 --bg-card，
+         摆在白卡上等于白底白框，看不见它长什么样。侧栏正是它真正被用的地方。 */
+      background: var(--bg-side);
+      padding: 14px 16px 16px;
+      box-shadow: var(--shadow-sm);
+      min-width: 0;
+    }
+    .pv-card-wide { grid-column: 1 / -1; }
+    .pv-card-title { margin: 0 0 2px; font-size: var(--fs-sm); }
+    .pv-card-desc { margin: 0 0 12px; color: var(--text-faint); font-size: var(--fs-xs); line-height: 1.6; }
+    .pv-line { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: start; margin-bottom: 10px; }
+    .pv-label { padding-top: 9px; color: var(--text-faint); font-size: var(--fs-xs); }
+    .pv-line-body { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+    /* 表单控件在这一页里铺开一点：`.pv-line-body` 是 flex，flex item 默认按内容宽
+       （不铺开的话下拉只有 84px 宽）。这是**这一页的排版**，不是组件的默认行为 ——
+       组件在应用的 .field 网格里由网格给宽度。 */
+    .pv-line-body > m-input,
+    .pv-line-body > m-textarea,
+    .pv-line-body > m-select { flex: 1 1 200px; max-width: 340px; }
+    .pv-log { height: 148px; overflow: auto; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--bg-input); font-family: Consolas, "Courier New", monospace; font-size: var(--fs-xs); line-height: 1.7; color: var(--text-dim); }
+    .pv-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; font-family: Consolas, "Courier New", monospace; font-size: var(--fs-xs); color: var(--text-dim); }
+  </style>
+</head>
+<body class="pv-body">
+  <!-- 页面是空的：内容全由 preview.js 用组件库自己的 API 搭出来 -->
+  <main class="pv-root"></main>
+  <script type="module" src="preview.js"></script>
+</body>
+</html>

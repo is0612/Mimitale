@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="zh-CN" data-accent="amber" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>如我所书 · 编辑角色两版方案（v2）</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="shell.css">
+<link rel="stylesheet" href="variant-a.css">
+<link rel="stylesheet" href="variant-b.css">
+</head>
+<body>
+<div class="shell">
+
+  <aside class="app-nav">
+    <div class="brand">
+      <img src="../editor-redesign/assets/brand-logo.png" alt="">
+      <span class="brand-name">如我所书<small>MIMITALE</small></span>
+    </div>
+    <div class="space-label">创作空间</div>
+    <nav aria-label="主导航">
+      <button type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-1.5a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V20"/><circle cx="9" cy="7" r="3.5"/><path d="M22 20v-1.5a4 4 0 0 0-3-3.87"/><path d="M16 3.6a4 4 0 0 1 0 7.8"/></svg><span>角色库</span></button>
+      <button type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10.5 5 8.5 4.5 4 4.5v13c4.5 0 6.5.5 8 2 1.5-1.5 3.5-2 8-2v-13c-4.5 0-6.5.5-8 2Z"/><path d="M12 6.5v13"/></svg><span>世界书</span></button>
+      <button type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/></svg><span>预设</span></button>
+    </nav>
+    <div class="nav-foot"><span class="dot"></span><span>本地工作空间</span></div>
+  </aside>
+
+  <main class="stage">
+
+    <!-- ==================================================================
+         A 稿「长卷」：一张卡就是一份文档
+         ================================================================== -->
+    <section class="view" id="view-a" aria-label="编辑角色 · A 稿 长卷">
+      <header class="page-head">
+        <div>
+          <p class="crumb">角色库 <span>/</span> 林间的守信人</p>
+          <h1 class="page-title">编辑角色<span class="title-variant">A 稿 · 长卷</span></h1>
+        </div>
+        <div class="head-right">
+          <span class="metric-inline">全文 373 字</span>
+          <span class="save-state" data-state="saved">所有更改已保存</span>
+          <button type="button" class="btn btn-ghost btn-sm">返回</button>
+          <button type="button" class="btn btn-primary btn-sm">保存角色</button>
+        </div>
+      </header>
+
+      <div class="a-body">
+        <aside class="rail" aria-label="角色资料与卡片大纲">
+          <div class="rail-media">
+            <figure class="media-cell media-portrait">
+              <button type="button" class="m-portrait" title="点击上传角色形象（竖版立绘，显示在角色库列表上）"><img src="../editor-redesign/assets/portrait.jpg" alt="角色形象"></button>
+              <figcaption>形象</figcaption>
+            </figure>
+            <figure class="media-cell">
+              <button type="button" class="m-avatar" title="点击上传头像（正方形，用在消息气泡和状态卡上）"><img src="../editor-redesign/assets/portrait.jpg" alt="头像"></button>
+              <figcaption>头像</figcaption>
+            </figure>
+          </div>
+
+          <span class="chip chip-accent">手写角色</span>
+
+          <label class="field">
+            <span class="field-label">角色名</span>
+            <input type="text" value="林间的守信人">
+          </label>
+          <label class="field">
+            <span class="field-label">标签</span>
+            <input type="text" value="原创, 奇幻, 慢叙事">
+          </label>
+
+          <div class="outline-block">
+            <div class="outline-head"><span>卡片大纲</span></div>
+            <nav class="outline" aria-label="卡片大纲">
+              <span class="outline-group">卡片正文</span>
+              <a class="outline-item is-current" href="#a-desc" data-anchor="desc" aria-current="true"><span>基本描述</span><span class="outline-count">174</span></a>
+              <a class="outline-item" href="#a-personality" data-anchor="personality"><span>性格</span><span class="outline-count">62</span></a>
+              <a class="outline-item" href="#a-scenario" data-anchor="scenario"><span>场景</span><span class="outline-count">41</span></a>
+              <a class="outline-item" href="#a-first" data-anchor="first"><span>开场白</span><span class="outline-count">96</span></a>
+              <a class="outline-item" href="#a-example" data-anchor="example"><span>示例对话</span><span class="outline-count">0</span></a>
+              <span class="outline-group">其他部分</span>
+              <a class="outline-item" href="#a-attrs" data-anchor="attrs"><span>属性</span><span class="outline-count">9</span></a>
+              <a class="outline-item" href="#a-expr" data-anchor="expr"><span>表情图</span><span class="outline-count">3</span></a>
+              <a class="outline-item" href="#a-wb" data-anchor="wb"><span>自带世界书</span><span class="outline-count">1</span></a>
+              <a class="outline-item" href="#a-adv" data-anchor="adv"><span>高级设置</span><span class="outline-count">0</span></a>
+            </nav>
+            <p class="outline-note">点一条跳到那一段。写好的段可以在段头折成一行。</p>
+          </div>
+        </aside>
+
+        <main class="doc scroll-v" id="a-doc" aria-label="角色卡正文">
+
+          <!-- 基本描述：领起段，给它最大的纸 -->
+          <section class="sheet sheet-lead" id="a-desc">
+            <div class="sheet-head">
+              <span class="sheet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>
+              <h2 class="sheet-name">基本描述</h2>
+              <span class="sheet-kind">纯文本</span>
+              <span class="sheet-count">174 字</span>
+              <button type="button" class="sheet-fold" aria-expanded="true">收起</button>
+            </div>
+            <textarea class="sheet-input" rows="7" spellcheck="false">{{char}}住在雾林边缘的一间旧木屋里，替往来的人保管那些最终能送出的信。
+
+她有一头浅色长发，习惯把袖口挽起，腰后挂着一串旧铜钥匙。说话时会先看一眼对方的眼睛，再慢慢开口。衣袋里总放着一支铅笔和折好的纸。
+
+很少有人知道她从哪里来。她记得每位寄信人的名字，却从不主动谈论自己的过去。遇到陌生人时，她保持礼貌的距离；一旦答应了什么，就会认真做到。</textarea>
+            <p class="sheet-help">想一句话把角色立住，可以在最前面加一行 <code>((…))</code>，里面按 <b>动机 → 障碍 → 代价 → 奖励</b> 写全。障碍写成「玩家本人」的话，你一出现故事就结束了 —— 让障碍落在角色自己身上。</p>
+          </section>
+
+          <!-- 性格 -->
+          <section class="sheet" id="a-personality">
+            <div class="sheet-head">
+              <span class="sheet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.6h.01M15 9.6h.01" stroke-width="2.4"/></svg></span>
+              <h2 class="sheet-name">性格</h2>
+              <span class="sheet-kind">纯文本</span>
+              <span class="sheet-count">62 字</span>
+              <button type="button" class="sheet-fold" aria-expanded="true">收起</button>
+            </div>
+            <textarea class="sheet-input" rows="4" spellcheck="false">寡言、守信、慢热。认死理，答应过的事一定做完；对陌生人客气但不亲热。讨厌被催促，被催的时候会更慢。</textarea>
+          </section>
+
+          <!-- 场景 -->
+          <section class="sheet" id="a-scenario">
+            <div class="sheet-head">
+              <span class="sheet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+              <h2 class="sheet-name">场景</h2>
+              <span class="sheet-kind">纯文本</span>
+              <span class="sheet-count">41 字</span>
+              <button type="button" class="sheet-fold" aria-expanded="true">收起</button>
+            </div>
+            <textarea class="sheet-input" rows="4" spellcheck="false">雾林边缘的旧木屋，傍晚。{{user}} 敲门进来，手里攥着一封没写地址的信。</textarea>
+          </section>
+
+          <!-- 开场白：已写好，折成一行 —— 演示折叠态 -->
+          <section class="sheet is-folded" id="a-first">
+            <div class="sheet-head">
+              <span class="sheet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M21 12a8 8 0 1 1-3.2-6.4"/><path d="M21 4v5h-5"/></svg></span>
+              <h2 class="sheet-name">开场白</h2>
+              <span class="sheet-kind">纯文本</span>
+              <span class="sheet-count">96 字</span>
+              <button type="button" class="sheet-fold" aria-expanded="false">展开</button>
+            </div>
+            <p class="sheet-preview">门轴响了一声，她没抬头，只把灯往门口推了推。“信放桌上就行。” 等了一会儿，她才抬起眼，看了看你手里的东西。</p>
+          </section>
+
+          <!-- 示例对话：空态 -->
+          <section class="sheet" id="a-example">
+            <div class="sheet-head">
+              <span class="sheet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10h8M8 14h5"/><path d="M21 12a8 8 0 0 1-8 8H7l-4 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z"/></svg></span>
+              <h2 class="sheet-name">示例对话</h2>
+              <span class="sheet-kind">纯文本</span>
+              <span class="sheet-count">0 字</span>
+              <button type="button" class="sheet-fold" aria-expanded="true">收起</button>
+            </div>
+            <div class="sheet-empty">还没写。每行以 {{user}}: 或 {{char}}: 开头，用 &lt;START&gt; 分隔不同组。</div>
+          </section>
+
+          <div class="doc-divider"><span>以上是卡片正文 · 以下是这张卡的其他部分</span></div>
+
+          <!-- 属性 -->
+          <section class="band" id="a-attrs">
+            <div class="band-head">
+              <h3>属性（状态面板）</h3>
+              <span class="band-count">9 个字段</span>
+              <button type="button" class="btn-icon">展开编辑</button>
+            </div>
+            <div class="attr-tabs"><b>状态栏 4</b><span>关系 2</span><span>背包 3</span></div>
+            <div class="band-body attr-rows">
+              <div class="attr-row"><span>体力</span><span>72 / 100</span></div>
+              <div class="attr-row"><span>情绪</span><span>平静</span></div>
+              <div class="attr-row"><span>信任度</span><span>12</span></div>
+              <div class="attr-row"><span>未寄出的信</span><span>3 封</span></div>
+            </div>
+          </section>
+
+          <!-- 表情图 -->
+          <section class="band" id="a-expr">
+            <div class="band-head">
+              <h3>表情图</h3>
+              <span class="band-count">3 张</span>
+              <button type="button" class="btn-icon">管理表情图</button>
+            </div>
+            <div class="expr-grid">
+              <figure class="expr-cell"><i><img src="../editor-redesign/assets/portrait.jpg" alt="平静"></i><em>平静</em></figure>
+              <figure class="expr-cell"><i><img src="../editor-redesign/assets/portrait.jpg" alt="警惕"></i><em>警惕</em></figure>
+              <figure class="expr-cell"><i><img src="../editor-redesign/assets/forest.jpg" alt="浅笑"></i><em>浅笑</em></figure>
+            </div>
+          </section>
+
+          <!-- 自带世界书 -->
+          <section class="band" id="a-wb">
+            <div class="band-head">
+              <h3>自带世界书</h3>
+              <span class="band-count">1 本 · 已启用</span>
+              <button type="button" class="btn-icon">＋ 绑定</button>
+            </div>
+            <div class="band-body attr-rows">
+              <div class="attr-row"><span>雾林信条</span><span>12 条 · 常驻 2 条</span></div>
+            </div>
+          </section>
+
+          <!-- 高级设置 -->
+          <section class="band" id="a-adv">
+            <div class="band-head">
+              <h3>高级设置</h3>
+              <span class="band-count">3 段指令 · 都空着</span>
+              <button type="button" class="btn-icon">展开编辑</button>
+            </div>
+            <div class="band-body">
+              <p class="sheet-help" style="padding:0">角色专属系统提示词 · 对话后指令 · 作者备注。留空就用通用扮演规则。</p>
+            </div>
+          </section>
+
+        </main>
+      </div>
+
+      <footer class="page-foot">
+        <span class="foot-hint">角色卡只保存在你自己电脑上</span>
+        <div class="foot-actions">
+          <button type="button" class="btn btn-ghost btn-sm">导出</button>
+          <button type="button" class="btn btn-danger btn-sm">删除角色</button>
+        </div>
+      </footer>
+    </section>
+
+    <!-- ==================================================================
+         B 稿「工坊」：编辑面右边加一面镜子
+         ================================================================== -->
+    <section class="view" id="view-b" aria-label="编辑角色 · B 稿 工坊">
+      <header class="page-head">
+        <div>
+          <p class="crumb">角色库 <span>/</span> 林间的守信人</p>
+          <h1 class="page-title">编辑角色<span class="title-variant">B 稿 · 工坊</span></h1>
+        </div>
+        <div class="head-right">
+          <span class="save-state" data-state="saved">所有更改已保存</span>
+          <button type="button" class="btn btn-ghost btn-sm">返回</button>
+          <button type="button" class="btn btn-primary btn-sm">保存角色</button>
+        </div>
+      </header>
+
+      <div class="b-body" id="b-body">
+        <aside class="rail" aria-label="角色资料与编辑分区">
+          <div class="rail-media">
+            <figure class="media-cell media-portrait">
+              <button type="button" class="m-portrait" title="点击上传角色形象（竖版立绘，显示在角色库列表上）"><img src="../editor-redesign/assets/portrait.jpg" alt="角色形象"></button>
+              <figcaption>形象</figcaption>
+            </figure>
+            <figure class="media-cell">
+              <button type="button" class="m-avatar" title="点击上传头像（正方形，用在消息气泡和状态卡上）"><img src="../editor-redesign/assets/portrait.jpg" alt="头像"></button>
+              <figcaption>头像</figcaption>
+            </figure>
+          </div>
+
+          <span class="chip chip-accent">手写角色</span>
+
+          <label class="field">
+            <span class="field-label">角色名</span>
+            <input type="text" value="林间的守信人">
+          </label>
+          <label class="field">
+            <span class="field-label">标签</span>
+            <input type="text" value="原创, 奇幻, 慢叙事">
+          </label>
+
+          <nav class="section-nav" id="b-nav" role="tablist" aria-label="角色编辑分区">
+            <button type="button" data-section="writing" aria-controls="b-panel-writing" aria-selected="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+              <span><span class="nav-label">角色设定</span><span class="nav-desc">背景与表达</span></span>
+              <span class="nav-count">5</span>
+            </button>
+            <button type="button" data-section="attributes" aria-controls="b-panel-attributes" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/></svg>
+              <span><span class="nav-label">属性</span><span class="nav-desc">初始状态与选项</span></span>
+              <span class="nav-count">9</span>
+            </button>
+            <button type="button" data-section="expressions" aria-controls="b-panel-expressions" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.6h.01M15 9.6h.01" stroke-width="2.4"/></svg>
+              <span><span class="nav-label">表情图</span><span class="nav-desc">表情与触发词</span></span>
+              <span class="nav-count">3</span>
+            </button>
+            <button type="button" data-section="worldbook" aria-controls="b-panel-worldbook" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10.5 5 8.5 4.5 4 4.5v13c4.5 0 6.5.5 8 2 1.5-1.5 3.5-2 8-2v-13c-4.5 0-6.5.5-8 2Z"/><path d="M12 6.5v13"/></svg>
+              <span><span class="nav-label">世界书</span><span class="nav-desc">自带的世界设定</span></span>
+              <span class="nav-count">1</span>
+            </button>
+            <button type="button" data-section="advanced" aria-controls="b-panel-advanced" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 0-14.14 0M4.93 19.07a10 10 0 0 0 14.14 0M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+              <span><span class="nav-label">高级设置</span><span class="nav-desc">专属指令与备注</span></span>
+              <span class="nav-count"></span>
+            </button>
+          </nav>
+        </aside>
+
+        <main class="work scroll-v">
+          <!-- 一条工具栏：分区名 + 字段分段 + 字数，一次只占一行 -->
+          <div class="work-bar">
+            <h2 class="work-title" id="b-work-title">角色设定</h2>
+            <div class="seg" id="b-seg" role="tablist" aria-label="角色设定字段">
+              <button type="button" data-field="desc" aria-controls="b-field-desc" aria-selected="true">基本描述</button>
+              <button type="button" data-field="personality" aria-controls="b-field-personality" aria-selected="false">性格</button>
+              <button type="button" data-field="scenario" aria-controls="b-field-scenario" aria-selected="false">场景</button>
+              <button type="button" data-field="first" aria-controls="b-field-first" aria-selected="false">开场白</button>
+              <button type="button" data-field="example" aria-controls="b-field-example" aria-selected="false">示例对话</button>
+            </div>
+            <span class="work-count">共 373 字</span>
+          </div>
+
+          <section class="sheet sheet-lead" id="b-panel-writing" role="tabpanel">
+            <div class="sheet-head">
+              <span class="sheet-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>
+              <h3 class="sheet-name" id="b-field-name">基本描述</h3>
+              <span class="sheet-kind">纯文本</span>
+              <span class="sheet-count" id="b-field-count">174 字</span>
+            </div>
+            <textarea class="sheet-input" id="b-field-input" rows="12" spellcheck="false">{{char}}住在雾林边缘的一间旧木屋里，替往来的人保管那些最终能送出的信。
+
+她有一头浅色长发，习惯把袖口挽起，腰后挂着一串旧铜钥匙。说话时会先看一眼对方的眼睛，再慢慢开口。衣袋里总放着一支铅笔和折好的纸。
+
+很少有人知道她从哪里来。她记得每位寄信人的名字，却从不主动谈论自己的过去。遇到陌生人时，她保持礼貌的距离；一旦答应了什么，就会认真做到。</textarea>
+            <p class="sheet-help" id="b-field-help">想一句话把角色立住，可以在最前面加一行 <code>((…))</code>，里面按 <b>动机 → 障碍 → 代价 → 奖励</b> 写全。障碍写成「玩家本人」的话，你一出现故事就结束了 —— 让障碍落在角色自己身上。</p>
+          </section>
+
+          <section class="sheet hidden" id="b-panel-attributes" role="tabpanel" hidden>
+            <div class="sheet-head"><h3 class="sheet-name">属性（状态面板）</h3><span class="sheet-count">9 个字段</span></div>
+            <div class="attr-tabs" style="padding:12px"><b>状态栏 4</b><span>关系 2</span><span>背包 3</span></div>
+            <div style="padding:0 12px 12px" class="attr-rows">
+              <div class="attr-row"><span>体力</span><span>72 / 100</span></div>
+              <div class="attr-row"><span>情绪</span><span>平静</span></div>
+            </div>
+            <p class="sheet-help">这些属性会进游玩时的「状态」面板，每轮由程序注入给 AI，数值不会漂。</p>
+          </section>
+
+          <section class="sheet hidden" id="b-panel-expressions" role="tabpanel" hidden>
+            <div class="sheet-head"><h3 class="sheet-name">表情图</h3><span class="sheet-count">3 张</span></div>
+            <div class="expr-grid" style="padding:12px">
+              <figure class="expr-cell"><i><img src="../editor-redesign/assets/portrait.jpg" alt="平静"></i><em>平静</em></figure>
+              <figure class="expr-cell"><i><img src="../editor-redesign/assets/portrait.jpg" alt="警惕"></i><em>警惕</em></figure>
+              <figure class="expr-cell"><i><img src="../editor-redesign/assets/forest.jpg" alt="浅笑"></i><em>浅笑</em></figure>
+            </div>
+          </section>
+
+          <section class="sheet hidden" id="b-panel-worldbook" role="tabpanel" hidden>
+            <div class="sheet-head"><h3 class="sheet-name">自带世界书</h3><span class="sheet-count">1 本</span></div>
+            <div class="attr-rows" style="padding:12px">
+              <div class="attr-row"><span>雾林信条</span><span>12 条 · 常驻 2 条</span></div>
+            </div>
+            <p class="sheet-help">开关关掉后，这张角色无论单独聊天、还是被绑进某个世界当角色，都不会带入它自己的世界书。</p>
+          </section>
+
+          <section class="sheet hidden" id="b-panel-advanced" role="tabpanel" hidden>
+            <div class="sheet-head"><h3 class="sheet-name">高级设置</h3><span class="sheet-count">3 段指令</span></div>
+            <p class="sheet-help" style="padding-top:12px">角色专属系统提示词 · 对话后指令 · 作者备注。留空就用通用扮演规则。</p>
+          </section>
+
+          <p class="work-note">右栏是这张卡的运行预览：改一个字段，它跟着变。</p>
+        </main>
+
+        <aside class="mirror scroll-v" aria-label="运行预览">
+          <div class="mirror-head">
+            <h2>运行预览</h2>
+            <button type="button" class="btn-icon" id="b-mirror-toggle" aria-label="收起运行预览">收起</button>
+          </div>
+
+          <!-- 镜子一：这段对话每轮会被喂进去多少 -->
+          <section class="mirror-block">
+            <h3>每轮会注入 <b>1 812</b> 字</h3>
+            <div class="budget" id="b-budget"><span style="width:72%"></span></div>
+            <p class="mirror-hint">建议上限 2 500 字。超了，模型容易丢掉最前面的设定。</p>
+            <ul class="asm">
+              <li><span class="asm-name">角色描述</span><span class="asm-bar"><i style="width:62%"></i></span><span class="asm-val">174</span></li>
+              <li><span class="asm-name">开场白</span><span class="asm-bar"><i style="width:34%"></i></span><span class="asm-val">96</span></li>
+              <li><span class="asm-name">性格</span><span class="asm-bar"><i style="width:22%"></i></span><span class="asm-val">62</span></li>
+              <li><span class="asm-name">场景</span><span class="asm-bar"><i style="width:16%"></i></span><span class="asm-val">41</span></li>
+              <li><span class="asm-name">属性 9 项</span><span class="asm-bar"><i style="width:14%"></i></span><span class="asm-val">38</span></li>
+              <li><span class="asm-name">世界书命中 2 条</span><span class="asm-bar"><i style="width:28%"></i></span><span class="asm-val">80</span></li>
+              <li class="asm-fixed"><span class="asm-name">通用扮演规则（固定）</span><span class="asm-bar"><i style="width:100%"></i></span><span class="asm-val">1 321</span></li>
+            </ul>
+          </section>
+
+          <!-- 镜子二：属性会变成什么样的面板 -->
+          <section class="mirror-block">
+            <h3>状态面板</h3>
+            <div class="mini-tabs"><b>状态栏 4</b><span>关系 2</span><span>背包 3</span></div>
+            <dl class="mini-attrs">
+              <div><dt>体力</dt><dd>72 / 100</dd></div>
+              <div><dt>情绪</dt><dd>平静</dd></div>
+              <div><dt>信任度</dt><dd>12</dd></div>
+              <div><dt>未寄出的信</dt><dd>3 封</dd></div>
+            </dl>
+          </section>
+
+          <!-- 镜子三：开场那一刻长什么样 -->
+          <section class="mirror-block">
+            <h3>登场预览</h3>
+            <div class="preview-msg">
+              <span class="pm-avatar"><img src="../editor-redesign/assets/portrait.jpg" alt=""></span>
+              <div class="pm-body">
+                <p class="pm-name">林间的守信人<span class="pm-model">test-model</span><span class="pm-time">14:30</span></p>
+                <p class="pm-text">门轴响了一声，她没抬头，只把灯往门口推了推。“信放桌上就行。”</p>
+              </div>
+            </div>
+          </section>
+
+          <p class="mirror-foot">这是按当前草稿算出来的预估，游玩时以实际注入为准。</p>
+        </aside>
+      </div>
+
+      <footer class="page-foot">
+        <span class="foot-hint">角色卡只保存在你自己电脑上</span>
+        <div class="foot-actions">
+          <button type="button" class="btn btn-ghost btn-sm">导出</button>
+          <button type="button" class="btn btn-danger btn-sm">删除角色</button>
+        </div>
+      </footer>
+    </section>
+
+  </main>
+</div>
+
+<script src="mock.js"></script>
+</body>
+</html>

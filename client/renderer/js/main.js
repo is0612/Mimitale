@@ -23,6 +23,8 @@ import { esc } from './ui/markdown.js';
 import { applyFieldIcons } from './ui/icons.js';
 import { initMoreMenu } from './ui/menu.js';
 import { initModelMenu } from './ui/modelMenu.js';
+import { initSelects } from './ui/select.js';
+import { defineComponents } from './components/index.js';
 
 import { persistCharacters, persistLibrary, markWorldbooksLoaded, markPresetsLoaded } from './data/persist.js';
 import { refreshPetCache, speakNow } from './data/petContext.js';
@@ -544,10 +546,18 @@ async function importWorldbooks() {
 // ---------------------------------------------------------------------------
 
 async function init() {
+  // 自定义元素组件库（components/）：**必须抢在第一次渲染之前**注册。
+  // 组件元素是进文档那一刻由浏览器 upgrade 的，晚注册的话先渲染出来的
+  // <m-button> 会停在"未知元素"状态 —— 看得见、没样式、没行为。
+  defineComponents();
   bindEvents();
   // 静态 HTML 里带 data-icon 的字段标签，启动时一次性挂上图标（见 ui/icons.js）。
   // 动态渲染出来的标签要自己在渲染完成后对那一段再调一次。
   applyFieldIcons();
+  // 静态 HTML 里那 13 个原生 <select>：系统画的下拉列表碰不到 CSS，这里换成
+  // 自己的那份（见 ui/select.js）。原生 <select> 原地留着当值的地基，所以
+  // 各处读 `.value` / 监听 'change' 的接线一行都不用改。
+  initSelects();
   // 必须在第一次 renderAll 之前登记 —— 否则首屏一个视图都不会画。
   // 各功能模块的事件绑定也在这一步完成（它们的 init 里带着自己的登记）。
   registerRefreshListeners();

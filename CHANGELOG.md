@@ -4,6 +4,141 @@
 
 ---
 
+## 2026-10-16 控件层落地：13 个原生下拉换成自研列表，输入框/字段/按钮各归一处
+
+「界面里的按钮、输入框、下拉框能不能做成自己的组件」——**能，而且这个项目坚持
+零构建**，所以做法是「把已有的类名和建 DOM 的样板收成规范件」，不是引一套组件库。
+这一轮先解决最扎眼的那一块：**原生下拉的列表是系统画的**（直角、系统蓝高亮、
+系统字体），CSS 完全碰不到 —— 顶栏「切换模型」当初为这个才手写的 `.menu-pop`，
+现在把它变成能贴在**任意** `<select>` 上的一层皮肤。
+
+**下拉（新增 `renderer/js/ui/select.js`）**
+- 做法是**贴皮肤，不是替换元素**：原生 `<select>` 原地不动、照样可见，宽度/内边距/
+  选中那行字/禁用态/focus 环全交给它现有那套 CSS；只在 `mousedown` 上
+  `preventDefault()` 把系统那份列表按住，再弹自己的 `.menu-pop` 列表。
+  选中那一下 = `select.value = v` + 派发冒泡的 `input`/`change`。
+  ⚠️ 所以**各处现有接线一行都没改**：读 `.value`、`clear()`、`appendChild(h('option'))`、
+  监听 `'change'`（`fillModelSelect` 那一类）照旧。
+- 覆盖 **13 个静态下拉 + 4 个动态建的下拉**（属性类型 / 更新频率 / 分组 / 世界书状态）。
+  接线走**文档级 + 懒标记**：静态那批启动时打标记，动态那批第一次被点到就地接上 ——
+  不用 MutationObserver 盯整棵树（流式渲染每个 chunk 都有 DOM 变更，盯树不值），
+  也不会出现「新加的下拉忘了接线，于是它一个人还是系统样式」这种漏网。
+- 键盘照原生那套补齐：Space / Enter / Alt+上下展开，上下键走（**到头停住**，同
+  `.modelMenu` 的规矩）、Home / End、回车选中、**打字定位**（连按同一个字母在几行之间
+  循环，700ms 后重开一个词）、Esc 收起、Tab 走开。
+- Esc 用**捕获阶段**拦下并 `stopPropagation`：只收弹层，不把底下的设置页 / 编辑器
+  一起关掉（和 `ui/pickList.js` 同一个处理）。
+- 弹层挂在 `document.body` 上、`position: fixed`（设置页和几个弹窗内部都有
+  `overflow` 容器，挂原地会被裁掉一半），位置默认贴触发器下面、下面装不下翻到上面、
+  两边都装不下夹回视口内。`optgroup` 照旧显示分组标题（只有一个分组就不顶标题行）。
+- 纯逻辑（行怎么摊、键怎么走、弹层摆哪、连打的字怎么拼词）全抽成导出函数，
+  `tools/test-ui-controls.js` 用 `node --test` 钉住 —— 这些错了只会表现成
+  「列表位置怪怪的」，肉眼看界面很难复现。
+
+**输入框 / 字段 / 铺选项（新增 `renderer/js/ui/controls.js`）**
+- `input()` / `textarea()`：默认 `type=text`、拼写检查关、值走 property。
+- `field()`：`.field`（标签 + 控件 + 说明）那套两列骨架，`stack` / `hint` / `icon` 按语义给。
+- `fillSelect()`：清空 → 铺（含 `optgroup`）→ 按 `prefer` 定值 → 一项都没有就铺提示条并
+  禁用整个下拉。`views/settings.js` 的 `fillModelSelect`、生图/向量服务商下拉、
+  `views/settingsCatalog.js` 的尺寸下拉都改走它（三处重铺逻辑合成一处）。
+- `ui/build.js` 的 `button()` 加了语义外观参数：`button({ text:'保存', variant:'primary',
+  size:'sm' })` → `btn btn-primary btn-sm`，**类名只在这一处拼**。
+  ⚠️ 只有给了 `variant / size / block` 才补 `.btn` 底座 —— 那批「长得不像按钮的按钮」
+  （`char-card-del` / `convo-del` / `sc-close` / `variant-btn`…）不能被顶掉样式；
+  认不出来的 variant/size 会**当场 console.error**，不静默丢掉。
+
+**测试**
+- 新增 `npm run test:ui`（50 条，纯 node，不需要 Electron）。
+- 冒烟测试新增场景「控件：自研下拉贴在原生 select 上」：点触发器 → 键盘挪 → 选一行 →
+  按 Esc，验 `mousedown` 被 `preventDefault`、弹层挂在 `body` 上且完整落在窗口内、
+  行与 `option` 一一对应、当前值带勾、Esc **只收弹层**（设置页还开着）、
+  选完值写回原生 `<select>` 且 `'change'` 那条链照旧落盘。
+- 出图场景加 `--shot=selectPop`（`electron tools/smoke-test.js --shot-only --shot=selectPop`，
+  可加 `--shot-light` 核浅色）。
+
+---
+
+## 2026-10-16 样式去重第二轮：清掉「永远被盖住」的声明 + 一个死模块
+
+上一轮清的是**从不生效的 token**，这一轮清的是**从不生效的声明**：V2 重组版把编辑器
+重排一遍之后，前半张表里那些「通用段」的写法被后面 `#view-xxx` 的规则**逐条盖住**，
+留在那儿只会误导（改它没反应，真值在另一段里）。
+
+### 怎么判定的（没靠读源码拍板）
+
+CSS 的覆盖算不准：`!important` → 特异性 → 文档顺序，特级靠人脑数容易错。所以改成
+**在真页面里算** —— 用一份真实存档的只读副本拉起客户端，逛遍 7 个视图（含新建 / 编辑
+一份角色、打开一本书、切「书籍设置」/「本书角色」、点出属性行 / 备选开场白行 / 表情
+管理弹窗），再往页面里注入一段脚本：枚举 `document.styleSheets` 的**全部规则**，
+对每个元素用 `el.matches()` 找出所有命中它的规则排一次序，逐条声明记「供过值几次 /
+输过几次」。
+
+两条口径缺一不可，否则全是误报：
+
+- **条件型赢家不算「盖住」** —— `:hover` / `.hidden` / `[aria-*]` / `[data-*]` / `:empty` /
+  `:last-child` 这些是**状态覆盖**，本来就是设计要的（`.wb-form { display: flex }` 被
+  `.hidden` 盖住，切回可见就生效，删了就坏）。
+- **没人跟它抢的声明不能算被盖**（第一版漏了这条，把 `.char-advanced > summary` 里只有
+  它自己声明的 `list-style` / `user-select` 也判成死，于是整条规则被误判成可删）。
+
+### 清掉了什么（都不是删功能）
+
+| 位置 | 清掉 | 为什么它是死的 |
+| --- | --- | --- |
+| `.char-advanced` | 整条（描边 + 20px 内边距 + `--ce-surface` 底） | V2 把「details 套折叠块」换成三张平铺卡后，形态全由 `#view-char-editor .char-advanced` 接管 |
+| `.char-advanced textarea` / `.wb-form textarea` | 各整条 | 实际尺寸由 `#view-char-editor .char-advanced > .field > textarea`（84px / none）和 `#view-wb-editor #wb-e-content`（260px / 340px）给 |
+| `.char-advanced > summary` 系列的**角色那一半** | 4 条选择器里的角色分支 | DOM 里已经没有 `<summary>` 了（折叠块换成了 `.char-fold`），只剩世界书那半 |
+| `.char-card` ← `#char-page-grid .char-card, .wb-card` | 合并成一条 | 两个网格卡本来就是同一形态；顺带 `.char-card-avatar`、`.char-card-del` 各自那条网格覆盖也并回基类 |
+| `.char-card-del:hover` | 整条 | 文件顶部那条全局「危险色悬停」组里已经有了，重复 |
+| `.char-form .field-stack > .field-head` | 5 条声明 → 收缩成 `min-width: 0` | `display` / `align-items` / `gap` 和 `#view-char-editor .char-sheet > .field-head` 逐字相同；`padding-top: 0` 被卡内头栏的 `padding: 10px 14px` 盖住 |
+| `#view-char-editor .char-sheet > .field-head` | `min-width: 0; margin: 0;` | `margin` 无用（`<span>` 的 UA 默认就是 0）；`min-width` 这份多余（见下面「留着没动的」） |
+| 表单控件段 | 6 处重复选择器 | `input[type="text"\|"password"\|"number"] / textarea / select` 原来在「共用底子」和「单行统一 44px」两处各列一遍，把 `min-height` 并进底子即可 |
+| 卡 / 媒体 / 世界书那几段 | 约 90 条被盖声明 | `.char-card-del` 的方位与底色、`.char-media-top` 的 `margin-bottom`、`.char-avatar-col` 的对齐与 `gap`、`.char-avatar` / `.char-portrait` 的 `box-shadow` 与尺寸、`.wb-book` 的列宽、`.wb-cover` 的 grid 定位、`.wb-book-foot` 的 21 条、`.wb-checks` / `.wb-form` / `.wb-entry` 等 |
+| `#view-wb-editor .wb-search, .wb-state` | `flex` / `width: calc(…)` / `margin` / `box-sizing` | 宽度和间距在 `#view-wb-editor .wb-list-tools .wb-search\|.wb-state` 里各给一份；`box-sizing` 走全局 `*` |
+| `.memory-edit-box` | `box-sizing: border-box` | 全局 `*` 已有 |
+| **`renderer/js/data/generation.js`** | **整个文件删掉** | 全仓无人 `import`，文件里唯一的消费者 `globalGeneration()` 也没人调用；采样默认值（0.7 / 0.95 / 8192 / thinking）现在由 `views/settings.js` 就地兜底，是同一组值（逐条对照过） |
+
+### 结果
+
+| 项 | 之前 | 之后 |
+| --- | --- | --- |
+| 「整条规则的每条声明都被无条件盖住」的规则数 | 26 | **0** |
+| `check-css` 重复选择器 | 9 | **4** |
+| `check-dead-code` 的「真死导出」 | 1 | **0** |
+
+剩下那 4 处重复选择器（`.wb-card-actions`、`textarea`、`select`、`#view-wb-editor .wb-search`）
+都是**「一条规则给共用骨架、另一条只补差异」**的写法，消掉只能把差异声明抄回共用规则里 ——
+那是把重复换个地方放，不值当。
+
+### 验证
+
+| 项 | 结果 |
+| --- | --- |
+| 死类名 / 死导出 / 元素引用 / 字号 / 圆角 / 奇数边距 / dom id / 按钮 / import | 全绿 |
+| 冒烟测试 | **1474/1474 通过，控制台报错 0**（连跑 5 次结果一致） |
+| 视觉复核 | 角色库 / 角色编辑页 / 世界书列表 / 世界书「书籍设置」/「本书角色」逐屏截图比对，无变化 |
+
+探针实测（改动后的真实计算值）：`.char-sheet` 卡内头栏内边距 10/14、
+`#c-alt-field > .field-head` 的 `min-width` 仍是 `0px`、`.char-avatar` 56×56 + `art-edge`
+描边、`.char-media-item` `row-gap: 8px`、`#c-desc` `min-height: 264px`、
+白天主题 `body` 底色 `rgb(244, 245, 247)` —— 都与改动前一致。
+
+### ⚠️ 留着没动的（都是**有意**的覆盖，别再当垃圾清）
+
+- `.hidden` 盖 `display`：`.wb-book-wrap` / `.wb-form` / `.wb-entry` / `.char-empty` 的
+  `display` 都被 `.hidden { display: none }` 盖住 —— 切回可见就生效。
+- `:empty` / `[aria-*]` / `[aria-selected]` / `[data-filled]` / `:last-child` / `.active`
+  那一整类状态覆盖。
+- **`.char-form .field-stack > .field-head` 里留了一条 `min-width: 0`**，别顺手删：
+  `.field-head` 有两类宿主 —— 五个在 `<label class="char-sheet-label">` 里（块级子元素，
+  `min-width` 初值就是 0，写不写一样），但**「备选开场白」那个 `#c-alt-field` 是
+  `.char-sheet`（`display: grid`）的直接子级**，grid item 的 `min-width` 初值是 `auto`
+  （= min-content），名字长了会把轨道顶宽。
+- `.wb-advanced[open] > summary` 的 `margin-bottom: 14px`：与
+  `#view-wb-editor .wb-advanced summary` 重复，但那是一条 `[open]` 状态规则，保守留着。
+
+---
+
 ## 2026-10-16 编辑角色页 V2 重组版落地：五栏连成长稿 + 右侧字段目录
 
 上一节刚把编辑角色页整排一遍，出图看下来还剩两处硬伤 —— **都在「写作体验」本身**：

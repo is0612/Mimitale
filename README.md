@@ -211,7 +211,9 @@ client/
 │   └── js/          界面逻辑（ES module，不需要打包器）
 │       ├── main.js      入口层 · 只剩启动流程 + 事件绑定 + 跨视图编排
 │       ├── core/        常量 / 状态 / DOM 引用 / preload 桥 / 工具 / 面板字段桥
-│       ├── ui/          提示条 / 确认框 / 主题 / Markdown / 建 DOM 的小工具
+│       ├── ui/          提示条 / 确认框 / 主题 / Markdown / 建 DOM 的小工具 /
+│       │                **控件规范件**（build.js 按钮 · controls.js 输入框与字段 ·
+│       │                select.js 自研下拉）
 │       ├── data/        纯逻辑地基：模型提供商 / 模型 / 角色库 / 状态面板 / 叙述规则 /
 │       │                记忆摘要 / 持久化 / 导出收尾 / 演出阵容 / 消息 / 语义检索 /
 │       │                剧情选项 / 桌宠上下文 / 会话骨架
@@ -242,10 +244,20 @@ client/
 | `node tools/check-dom-ids.js` | JS 抓的 DOM id 在 HTML 里不存在 |
 | `node tools/check-el-refs.js` | `el.<分组>.<字段>` 在 `core/dom.js` 里不存在 |
 | `node tools/check-api-settings.js` | `api.xxx()` 没被 preload 暴露；设置键不在 `DEFAULT_SETTINGS` 白名单（会被静默丢掉） |
+| `npm run test:ui` | 控件层的纯逻辑（`node --test`）：下拉的行怎么摊 / 键盘怎么走 / 弹层摆哪，以及 `button()` 的类名拼法、`fillSelect()` 的铺选项规则 |
 
 > 为什么值得有这一组：这个仓库的坑集中在「**不会报错，只会静默失效**」这一类 ——
 > 通道名写错、id 拼错、设置键漏进白名单，症状都是「点了没反应」。
 > 靠人肉 review 容易漏，靠这几条正则能稳定挡住。
+
+> **控件的规范件在哪**（2026-10-16 抽的）：`ui/build.js` 管建 DOM 的原语和按钮，
+> `ui/controls.js` 管输入框 / 多行框 / 字段 / 铺下拉选项，`ui/select.js` 管下拉怎么弹。
+> 三条规矩别破坏：**类名只在 `build.js` 的 `button()` 里拼**（调用点给
+> `variant / size`，别再手写 `'btn btn-primary btn-sm'`）；**文本一律 `textContent`**
+> （不给 `innerHTML` 入口）；**值走 property**（`value` / `checked`）。
+> 13 个静态下拉 + 4 个动态建的下拉由 `ui/select.js` 统一换掉系统那份列表 ——
+> 它给原生 `<select>` 贴一层皮肤，**不替换元素**，所以各处读 `.value` /
+> 监听 `'change'` 的接线一行都不用改。
 
 > **主进程为什么拆成 `main/`**：这些模块是纯逻辑，抽出来以后冒烟测试能  
 > `require` **同一份代码**去验，而不是在测试里另写一套 —— 「内嵌世界书被丢掉」  

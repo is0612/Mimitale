@@ -26,7 +26,9 @@
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { uid } from '../core/util.js';
-import { h } from '../ui/build.js';
+import { h, button } from '../ui/build.js';
+// 字段（标签 + 控件 + 说明）的规范件，见 ui/controls.js
+import { field } from '../ui/controls.js';
 import { showToast } from '../ui/toast.js';
 import { currentEndpoint, isBridgeProvider } from '../data/providers.js';
 import { worldbookCharacters } from '../data/library.js';
@@ -441,12 +443,10 @@ function buildLayer() {
 
   const status = h('p', { class: 'ai-gen-status' });
 
-  const stopBtn = h('button', { class: 'btn btn-ghost', text: '中止', type: 'button' });
-  stopBtn.addEventListener('click', stopGen);
+  const stopBtn = button({ variant: 'ghost', text: '中止', onClick: stopGen });
   stopBtn.classList.add('hidden');
 
-  const goBtn = h('button', { class: 'btn btn-primary', text: '开始生成', type: 'button' });
-  goBtn.addEventListener('click', generate);
+  const goBtn = button({ variant: 'primary', text: '开始生成', onClick: generate });
 
   const card = h(
     'div',
@@ -477,20 +477,8 @@ function buildLayer() {
     h(
       'div',
       { class: 'modal-body ai-gen-body' },
-      brief
-        ? h(
-            'label',
-            { class: 'field field-stack' },
-            h('span', { class: 'field-label', text: '背景 / 基调（可选）' }),
-            brief
-          )
-        : null,
-      h(
-        'label',
-        { class: 'field field-stack' },
-        h('span', { class: 'field-label', text: '角色描述' }),
-        prompt
-      ),
+      brief ? field({ label: '背景 / 基调（可选）', control: brief, stack: true }) : null,
+      field({ label: '角色描述', control: prompt, stack: true }),
       status
     ),
     h(

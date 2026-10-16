@@ -79,8 +79,8 @@ function characterCard(c) {
       }
     }),
     actions: [
-      button({ class: 'btn btn-ghost btn-sm', text: '编辑', onClick: () => actions.edit(c.id) }),
-      button({ class: 'btn btn-primary btn-sm', text: '聊天', onClick: () => actions.chat(c.id) })
+      button({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => actions.edit(c.id) }),
+      button({ variant: 'primary', size: 'sm', text: '聊天', onClick: () => actions.chat(c.id) })
     ]
   });
 }

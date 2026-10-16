@@ -198,8 +198,8 @@ export function editMessage(index) {
     renderAll({ forceScroll: false });
   };
 
-  const save = button({ class: 'btn btn-primary btn-sm', text: '保存', onClick: () => finish(true) });
-  const cancel = button({ class: 'btn btn-ghost btn-sm', text: '取消', onClick: () => finish(false) });
+  const save = button({ variant: 'primary', size: 'sm', text: '保存', onClick: () => finish(true) });
+  const cancel = button({ variant: 'ghost', size: 'sm', text: '取消', onClick: () => finish(false) });
 
   textarea.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {

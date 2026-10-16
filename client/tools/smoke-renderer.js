@@ -9595,4 +9595,119 @@ await scenario('开场白：只有一条时不弹选择器', async () => {
   );
 });
 
+// ---------------------------------------------------------------------------
+//  控件：自研下拉（renderer/js/ui/select.js）
+//
+//  13 个原生 <select> 现在是「原生当地基 + 自己画那份列表」。这里走真实用户
+//  路径（点一下触发器 → 键盘挪 → 选一行 → 按 Esc），验四件事：
+//    · 系统那份列表被按住（mousedown 被 preventDefault）
+//    · 弹层挂在 body 上、位置是算出来的、完整落在窗口里、层级在弹窗之上
+//    · 键盘上下 / Home / End 挪高亮，Esc **只收弹层**、不关掉底下那一屏
+//    · 选完真的写回了原生 <select>，而且它那条 'change' 链照旧生效（落盘为证）
+//
+//  用「设置 → 外观」里的字体下拉当样本：选项是 HTML 里写死的 4 条，
+//  改完会落盘到 settings.uiFont，正好拿来当「change 真的发出去了」的证据。
+// ---------------------------------------------------------------------------
+await scenario('控件：自研下拉贴在原生 select 上', async () => {
+  await openAppearanceSection();
+
+  const select = byId('appearance-font');
+  const rows = () => $$('.ctl-select-pop .ctl-opt');
+  const activeRow = () => $('.ctl-select-pop .ctl-opt.is-active');
+  const at = () => rows().indexOf(activeRow());
+  const key = (k) =>
+    document.activeElement.dispatchEvent(
+      new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })
+    );
+
+  check('原生 select 还在原地（值的地基没被换成假控件）', !!select && select.tagName === 'SELECT');
+  check('接上了自研列表', !!select && select.dataset.ctlSelect === 'on');
+  const before = select.value;
+
+  // --- 点一下触发器 ---
+  const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
+  select.dispatchEvent(down);
+  check('mousedown 被 preventDefault（系统那份列表没机会弹出来）', down.defaultPrevented);
+  await waitFor('自研弹层出现', () => shown('.ctl-select-pop'));
+  check('焦点落回触发器上（键盘那套连得上）', document.activeElement === select);
+
+  const options = Array.from(select.options);
+  const popRect = $('.ctl-select-pop').getBoundingClientRect();
+  check('行数 = 原生 option 数', rows().length === options.length, `${rows().length} / ${options.length}`);
+  check(
+    '每行文字和 option 一一对应',
+    rows().map((r) => r.textContent.trim()).join('|') === options.map((o) => o.textContent.trim()).join('|'),
+    rows().map((r) => r.textContent.trim()).join('|')
+  );
+  const ticked = rows().find((r) => r.getAttribute('aria-selected') === 'true');
+  check(
+    '当前值那一行带勾',
+    !!ticked && ticked.textContent.trim() === select.selectedOptions[0].textContent.trim(),
+    ticked && ticked.textContent.trim()
+  );
+  check('弹层挂在 document.body 上（不被设置页的滚动容器裁掉）', $('.ctl-select-pop').parentElement === document.body);
+  check(
+    '弹层的位置和宽度是算出来的',
+    $('.ctl-select-pop').style.left !== '' && $('.ctl-select-pop').style.top !== '' && $('.ctl-select-pop').style.width !== ''
+  );
+  check(
+    '弹层完整落在窗口内（夹回视口那条规则生效了）',
+    popRect.left >= 0 && popRect.top >= 0 && popRect.right <= window.innerWidth + 1 && popRect.bottom <= window.innerHeight + 1,
+    `${Math.round(popRect.left)},${Math.round(popRect.top)} ${Math.round(popRect.width)}x${Math.round(popRect.height)} @ ${window.innerWidth}x${window.innerHeight}`
+  );
+  check('层级给到弹窗之上（50/70 那几层压不住它）', Number(getComputedStyle($('.ctl-select-pop')).zIndex) >= 80);
+
+  // --- 键盘 ---
+  const start = at();
+  check('一打开就高亮当前值那一行', rows()[start] === ticked);
+  key('ArrowDown');
+  check('↓ 往下走一行', at() === Math.min(start + 1, rows().length - 1), String(at()));
+  key('Home');
+  check('Home 回到第一行', at() === 0);
+  key('ArrowUp');
+  check('到头就停住（不绕回最后一行）', at() === 0);
+  key('End');
+  check('End 走到最后一行', at() === rows().length - 1, String(at()));
+
+  // --- Esc：只收弹层 ---
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  await waitFor('Esc 收起弹层', () => !shown('.ctl-select-pop'));
+  check('弹层收起了', !shown('.ctl-select-pop'));
+  check('底下的设置页还开着（没被一起关掉）', shown('#view-settings'));
+  check('Esc 之后值没被改掉', select.value === before);
+
+  // --- 动态建出来的下拉：文档级懒接线（属性类型 / 更新频率 / 分组 / 世界书状态
+  //     这 4 个都是渲染时现建的，启动时那次扫描扫不到它们）---
+  const fresh = document.createElement('select');
+  fresh.setAttribute('aria-label', '临时下拉（这条只验接线）');
+  for (const value of ['甲', '乙']) fresh.appendChild(new Option(value, value));
+  document.body.appendChild(fresh);
+  check('刚建出来的下拉还没打过标记', !fresh.dataset.ctlSelect);
+  fresh.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+  await waitFor('动态下拉也弹出自己的列表', () => shown('.ctl-select-pop'));
+  check('动态下拉被就地接上（懒接线生效）', fresh.dataset.ctlSelect === 'on');
+  check('动态下拉的列表里就是它那两项', rows().length === 2, String(rows().length));
+  fresh.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+  check('再点一下触发器就收起（不留下一个悬空的列表）', !shown('.ctl-select-pop'));
+  fresh.remove();
+
+  // --- 选一行 ---
+  const target = options.find((o) => o.value !== select.value) || options[0];
+  select.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+  await waitFor('弹层又开了', () => shown('.ctl-select-pop'));
+  click(rows()[options.indexOf(target)]);
+  check('值写回了原生 <select>', select.value === target.value, `${before} → ${select.value}`);
+  check('弹层自己收起（不用再点一下）', !shown('.ctl-select-pop'));
+  check('焦点回到触发器上', document.activeElement === select);
+
+  await sleep(250);
+  const saved = (await window.mimitale.getSettings()).settings;
+  check('change 照旧触发（外观字体已落盘）', saved.uiFont === target.value, `落盘的是 ${saved.uiFont}`);
+
+  // 复原：别把「外观字体」留在改过的那一档，也别把设置页停在外观那一组
+  setValue('#appearance-font', before);
+  await sleep(150);
+  await leaveAppearanceSection();
+});
+
 return { results, notes, hoverProbe };

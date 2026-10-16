@@ -1,0 +1,173 @@
+/* ==========================================================================
+   B 稿「工坊」—— 编辑面右边加一面镜子
+   中间仍是「一格一改」（保证写作行宽），但右边实时显示这张卡运行起来的样子。
+   ========================================================================== */
+
+.b-body {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr) 300px;
+  min-height: 0;
+  flex: 1;
+}
+
+/* ------------------------------ 左栏：分区导航 ------------------------------ */
+
+.section-nav { display: flex; flex-direction: column; gap: 2px; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--border-soft); }
+
+.section-nav button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.section-nav button:hover { color: var(--text); background: var(--bg-elev); }
+.section-nav button[aria-selected='true'] { color: var(--text); background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.section-nav button svg { width: 18px; height: 18px; flex: none; color: var(--text-faint); }
+.section-nav button[aria-selected='true'] svg { color: var(--accent); }
+
+.nav-label { display: block; font-size: var(--fs-xs); font-weight: 600; }
+.nav-desc { display: block; font-size: var(--fs-xs); color: var(--text-faint); }
+.nav-count { font-size: var(--fs-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* ------------------------------ 中栏：一条工具栏 + 一格编辑面 ------------------------------ */
+
+.work { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 14px 24px 32px; }
+
+.work-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.work-title { margin: 0; font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
+
+.seg { display: flex; gap: 2px; padding: 2px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius); }
+.seg button { padding: 4px 10px; font-family: inherit; font-size: var(--fs-xs); color: var(--text-dim); background: none; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
+.seg button:hover { color: var(--text); }
+.seg button[aria-selected='true'] { color: var(--accent); background: var(--bg-elev); font-weight: 600; box-shadow: var(--shadow-sm); }
+
+.work-count { margin-left: auto; font-size: var(--fs-xs); color: var(--text-faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.work-note { margin: 0; font-size: var(--fs-xs); color: var(--text-faint); }
+
+.work .sheet-lead .sheet-input { min-height: 300px; }
+
+/* ------------------------------ 右栏：镜子 ------------------------------ */
+
+.mirror {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 14px 12px 24px;
+  background: var(--bg-side);
+  border-left: 1px solid var(--border);
+}
+
+.mirror-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding-bottom: 8px; background: var(--bg-side); }
+.mirror-head h2 { margin: 0; font-size: var(--fs-sm); font-weight: 600; }
+.mirror-head .btn-icon { margin-left: auto; }
+
+.mirror-block { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); }
+.mirror-block h3 { margin: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
+.mirror-block h3 b { font-size: var(--fs-sm); color: var(--text); font-variant-numeric: tabular-nums; }
+.mirror-hint { margin: 0; font-size: var(--fs-xs); color: var(--text-faint); }
+
+.budget { height: 6px; overflow: hidden; background: var(--toggle-track); border-radius: 999px; }
+.budget span { display: block; height: 100%; background: var(--accent); }
+
+/* 装配清单：每块占多少字，一眼看出谁在吃预算 */
+.asm { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.asm li { display: grid; grid-template-columns: minmax(0, 1fr) 56px 40px; align-items: center; gap: 8px; font-size: var(--fs-xs); }
+.asm-name { overflow: hidden; color: var(--text-dim); text-overflow: ellipsis; white-space: nowrap; }
+.asm-bar { height: 4px; overflow: hidden; background: var(--toggle-track); border-radius: 999px; }
+.asm-bar i { display: block; height: 100%; background: var(--accent-border); }
+.asm-val { color: var(--text-faint); text-align: right; font-variant-numeric: tabular-nums; }
+.asm-fixed .asm-name,
+.asm-fixed .asm-val { color: var(--text-faint); }
+.asm-fixed .asm-bar i { background: var(--border-strong); }
+
+/* 状态面板预览 */
+.mini-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.mini-tabs span,
+.mini-tabs b { padding: 2px 8px; font-size: var(--fs-xs); font-weight: 400; color: var(--text-faint); background: var(--bg-input); border: 1px solid var(--border); border-radius: 999px; }
+.mini-tabs b { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border); font-weight: 600; }
+
+.mini-attrs { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.mini-attrs > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--fs-xs); }
+.mini-attrs dt { overflow: hidden; color: var(--text-dim); text-overflow: ellipsis; white-space: nowrap; }
+.mini-attrs dd { margin: 0; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* 登场预览：按「去气泡」之后的消息体渲染
+   —— 头像 36px 方形圆角 + 消息头（角色名 / 模型牌 / 时间）+ 正文，没有气泡底 */
+.preview-msg { display: flex; gap: 8px; }
+.pm-avatar { flex: 0 0 36px; width: 36px; height: 44px; overflow: hidden; border-radius: var(--radius-sm); }
+.pm-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pm-body { flex: 1; min-width: 0; }
+.pm-name { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-xs); color: var(--text-dim); }
+.pm-model { padding: 0 4px; font-family: ui-monospace, Consolas, monospace; color: var(--text-faint); border: 1px solid var(--border); border-radius: 2px; }
+.pm-time { margin-left: auto; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.pm-text { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--text); white-space: pre-wrap; }
+
+.mirror-foot { margin: 0; font-size: var(--fs-xs); color: var(--text-faint); }
+
+/* 镜子收起时：中栏把宽度全吃掉 */
+.b-body.is-mirror-hidden { grid-template-columns: 244px minmax(0, 1fr) 0; }
+.b-body.is-mirror-hidden .mirror { display: none; }
+
+/* ------------------------------ 窄屏 ------------------------------ */
+
+@media (max-width: 1280px) {
+  .b-body { grid-template-columns: 216px minmax(0, 1fr) 264px; }
+  .work { padding: 12px 16px 24px; }
+}
+
+@media (max-width: 1080px) {
+  /* 宁可把镜子收掉，也不让写作行宽被挤到不适读 */
+  .b-body { grid-template-columns: 216px minmax(0, 1fr); }
+  .mirror { display: none; }
+}
+
+@media (max-width: 980px) {
+  .b-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .rail-media { flex: none; }
+  .m-portrait { height: 56px; width: 42px; }
+  .m-avatar { width: 40px; height: 40px; }
+  .media-cell figcaption { display: none; }
+  .rail .field { flex: 1; min-width: 140px; }
+  .rail .field .field-label { display: none; }
+  .section-nav { flex: 1 0 100%; min-width: 0; flex-direction: row; padding-top: 8px; margin-top: 0; overflow-x: auto; }
+  .section-nav button { flex: none; grid-template-columns: 18px auto auto; white-space: nowrap; }
+  .section-nav button[aria-selected='true'] { box-shadow: inset 0 -2px 0 var(--accent); }
+  .nav-desc { display: none; }
+  .work { padding: 12px 12px 24px; }
+  .work-bar { flex-wrap: wrap; }
+  .seg { overflow-x: auto; }
+  .seg button { white-space: nowrap; }
+}

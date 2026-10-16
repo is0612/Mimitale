@@ -25,6 +25,8 @@ import { el } from '../core/dom.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear, append } from '../ui/build.js';
+// 输入框的规范件：默认 type=text、拼写检查关、值走 property。见 ui/controls.js
+import { input } from '../ui/controls.js';
 import { MAX_PANEL_FIELDS, panelFieldAllowed } from '../data/panel.js';
 import { setCharSectionCount } from './characterEditorLayout.js';
 
@@ -380,10 +382,8 @@ function renderAttrTabs(list, buckets, active) {
   // 「＋ 新建分组」：长得像一个标签，但它是个输入框，回车确认。
   // 不做成「点按钮弹输入框」，是因为那要多点一次，而组名本来就是随手打的。
   el.c.attrTabs.appendChild(
-    h('input', {
-      type: 'text',
+    input({
       class: 'attr-tab-new',
-      spellcheck: 'false',
       placeholder: '＋ 新建分组',
       'aria-label': '新建分组，回车确认',
       onkeydown: (event) => {
@@ -432,11 +432,9 @@ function renderAttrGroupEdit(list, bucket) {
   el.c.attrGroupEdit.classList.toggle('hidden', !open);
   if (!open) return;
 
-  const nameInput = h('input', {
-    type: 'text',
+  const nameInput = input({
     class: 'attr-group-name',
     value: bucket.id,
-    spellcheck: 'false',
     maxlength: '24',
     placeholder: '分组名',
     'aria-label': '分组名',
@@ -469,7 +467,8 @@ function renderAttrGroupEdit(list, bucket) {
     h('span', { class: 'attr-group-edit-label', text: '分组名' }),
     nameInput,
     button({
-      class: 'btn btn-danger btn-sm',
+      variant: 'danger',
+      size: 'sm',
       text: '解散这一组',
       title: bucket.fields.length
         ? `把这 ${bucket.fields.length} 个属性退回「未分组」`
@@ -503,11 +502,9 @@ function renderAttrRows(list, bucket) {
   }
 
   for (const attr of bucket.fields) {
-    const valueInput = h('input', {
-      type: 'text',
+    const valueInput = input({
       class: 'attr-value',
       value: attr.value,
-      spellcheck: 'false',
       placeholder: '初始值（可以留空）',
       'aria-label': `${attr.name} 的初始值`,
       oninput: () => {
@@ -588,12 +585,11 @@ function buildMoreBox(list, attr) {
   // 填了就有用（实际 clampFieldValue 只对 meter 动作）
   if ((attr.type || 'text') === 'meter') {
     const numInput = (key, placeholder, label) =>
-      h('input', {
+      input({
         type: 'number',
         class: 'attr-num',
         value: typeof attr[key] === 'number' ? String(attr[key]) : '',
         placeholder,
-        spellcheck: 'false',
         'aria-label': `${attr.name} 的${label}`,
         oninput: (event) => {
           const raw = String(event.target.value || '').trim();
@@ -614,11 +610,9 @@ function buildMoreBox(list, attr) {
     );
   }
 
-  const hintInput = h('input', {
-    type: 'text',
+  const hintInput = input({
     class: 'attr-hint',
     value: attr.hint || '',
-    spellcheck: 'false',
     placeholder: '变化规则（给模型看，比如「示好时每轮最多加 10」）',
     'aria-label': `${attr.name} 的变化规则`,
     oninput: () => {
@@ -676,10 +670,8 @@ function buildGroupRow(list, attr) {
 
   // 「＋ 新建分组…」的输入框模式。等这一行铺完再聚焦 —— 节点这会儿还没进文档。
   if (list._movingName === attr.name) {
-    const nameInput = h('input', {
-      type: 'text',
+    const nameInput = input({
       class: 'attr-group-new',
-      spellcheck: 'false',
       maxlength: '24',
       placeholder: '新分组名，回车确认',
       'aria-label': '新建分组，并把这个属性搬过去',
