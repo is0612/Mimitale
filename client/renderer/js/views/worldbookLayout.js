@@ -53,11 +53,20 @@ export function initWorldbookLayout({ onFilter }) {
   // 原来嵌在「本书设置」里的那个动作条（预览命中）已被搬进书籍头，空壳收掉
   root.querySelector('.wb-book-actions').remove();
 
-  const search = make('input', 'wb-search', 'wb-search');
+  // ⚙ 组件化（2026-10-16）：它被同一行 stretch 成 44px（= 组件的默认档），
+  // 字号从 xs 变成正文级（和旁边那个筛选下拉一致）。
+  // 下面 search.type / search.placeholder 是**直接设 property** 的写法，
+  // 靠组件的 reflectProperties 桥到里层原生 input（base.js 有注释）。
+  const search = make('m-input', 'wb-search', 'wb-search');
   search.type = 'search';
   search.placeholder = '搜索条目';
   search.setAttribute('aria-label', '搜索条目');
-  const filter = make('select', 'wb-state', 'wb-state');
+  // ⚙ 组件化（2026-10-16）：状态筛选从原生 <select> 换成 <m-select>。
+  // 按标签名建就行 —— 组件在启动时注册过，createElement('m-select') 拿到的已经是
+  // 升级好的自定义元素；里面的 <option> 由组件搬进里层那颗原生 select。
+  // 类名 `.wb-state` 留在宿主上，所以 style.css 里那两条（min-width / flex 宽度）
+  // 一个字都不用改。
+  const filter = make('m-select', 'wb-state', 'wb-state');
   filter.setAttribute('aria-label', '条目状态筛选');
   for (const [value, label] of [['all', '全部条目'], ['enabled', '已启用'], ['disabled', '已停用'], ['constant', '常驻条目']]) {
     const option = make('option', '', '', label);

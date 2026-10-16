@@ -249,11 +249,14 @@
               <div class="char-head-fields">
                 <label class="field">
                   <span class="field-label">角色名</span>
-                  <input id="c-name" type="text" spellcheck="false" placeholder="例如 小满" aria-label="角色名" />
+                  <!-- ⚙ 组件化（2026-10-16）：默认档（44px / 正文级字号），type=text
+                       与 spellcheck=false 都是组件默认值，所以这里不用写。
+                       id 留在宿主上，dom.js / el.c.name / .value 都不用改。 -->
+                  <m-input id="c-name" placeholder="例如 小满" aria-label="角色名"></m-input>
                 </label>
                 <label class="field">
                   <span class="field-label">标签</span>
-                  <input id="c-tags" type="text" spellcheck="false" placeholder="分类用，例如：原神, 治愈" aria-label="标签" />
+                  <m-input id="c-tags" placeholder="分类用，例如：原神, 治愈" aria-label="标签"></m-input>
                 </label>
               </div>
 
@@ -437,9 +440,10 @@
                   <div id="c-attr-list" class="attr-list" role="tabpanel" aria-label="当前分组的属性"></div>
 
                   <!-- 加字段：加进**当前选中的那一组**，所以不用再手动填分组。
-                       占位文案由渲染层按当前分组改写，这里只留个默认值。 -->
+                       占位文案由渲染层按当前分组改写 —— 它设的是 `.placeholder` property，
+                       组件那边用 reflectProperties 把那一段桥到里层原生 input（见 components/base.js）。 -->
                   <div class="attr-add-row">
-                    <input id="c-attr-new" type="text" spellcheck="false" placeholder="属性名，比如 金币" aria-label="新属性名" />
+                    <m-input id="c-attr-new" class="attr-new" size="sm" placeholder="属性名，比如 金币" aria-label="新属性名"></m-input>
                     <button id="btn-add-attr" class="btn btn-ghost btn-sm" type="button">添加</button>
                     <button id="btn-attr-paste" class="btn btn-ghost btn-sm" type="button" title="把一段文本一次解析成多条属性">粘贴文本</button>
                   </div>
@@ -474,12 +478,13 @@
                 <div id="c-options-config" class="c-options-config hidden">
                   <label class="field">
                     <span class="field-label">每轮给几个</span>
-                    <input id="c-options-count" type="number" min="1" max="6" step="1" value="4" />
+                    <!-- value 属性就是初始值（和原生 <input> 同义，见 components/base.js） -->
+                    <m-input id="c-options-count" type="number" min="1" max="6" step="1" value="4"></m-input>
                   </label>
                   <label class="field field-stack">
                     <span class="field-label">额外要求（可选）</span>
-                    <input id="c-options-hint" type="text" spellcheck="false"
-                           placeholder="比如：语气轻松些、总有一条冒险的选择" />
+                    <m-input id="c-options-hint"
+                             placeholder="比如：语气轻松些、总有一条冒险的选择"></m-input>
                   </label>
                 </div>
               </div>
@@ -620,7 +625,7 @@
 
           <label class="field field-stack wb-book-name">
             <span class="field-label">书名</span>
-            <input id="wb-name" type="text" spellcheck="false" placeholder="世界书名称" aria-label="世界书名称" />
+            <m-input size="sm" id="wb-name" placeholder="世界书名称" aria-label="世界书名称"></m-input>
           </label>
 
           <!-- 开场白：进这个世界时自动作为第一条消息 -->
@@ -703,12 +708,12 @@
           <div id="wb-form" class="wb-form hidden">
             <label class="field field-stack">
               <span class="field-label">条目名称</span>
-              <input id="wb-e-title" type="text" spellcheck="false" placeholder="例如：小镇广场" />
+              <m-input id="wb-e-title" placeholder="例如：小镇广场"></m-input>
             </label>
 
             <label class="field field-stack">
               <span class="field-label">关键词</span>
-              <input id="wb-e-keys" type="text" spellcheck="false" placeholder="逗号分隔，例如：广场, 喷泉, 告示牌" />
+              <m-input id="wb-e-keys" placeholder="逗号分隔，例如：广场, 喷泉, 告示牌"></m-input>
               <span class="field-help">
                 对话里出现任意一个就注入。中文按子串匹配，英文按单词匹配。<br />
                 写成 <code>/正则/</code> 也可以。勾选「常驻」则不需要关键词。
@@ -727,29 +732,29 @@
               <div class="field-grid">
                 <label class="field field-stack">
                   <span class="field-label">插入顺序</span>
-                  <input id="wb-e-order" type="number" min="0" max="9999" step="1" value="100" />
+                  <m-input id="wb-e-order" type="number" min="0" max="9999" step="1" value="100"></m-input>
                   <span class="field-help">数字大的更靠后，影响更大。</span>
                 </label>
                 <label class="field field-stack">
                   <span class="field-label">触发概率 %</span>
-                  <input id="wb-e-prob" type="number" min="0" max="100" step="1" value="100" />
+                  <m-input id="wb-e-prob" type="number" min="0" max="100" step="1" value="100"></m-input>
                   <span class="field-help">100 = 必中。调低可做随机事件。</span>
                 </label>
               </div>
 
               <label class="field field-stack">
                 <span class="field-label">附加关键词（可选）</span>
-                <input id="wb-e-keys2" type="text" spellcheck="false" placeholder="留空则忽略" />
+                <m-input id="wb-e-keys2" placeholder="留空则忽略"></m-input>
               </label>
 
               <label class="field">
                 <span class="field-label">附加条件</span>
-                <select id="wb-e-logic">
+                <m-select id="wb-e-logic">
                   <option value="AND_ANY">同时命中任意一个</option>
                   <option value="AND_ALL">同时命中全部</option>
                   <option value="NOT_ANY">这些词都不出现</option>
                   <option value="NOT_ALL">这些词不同时出现</option>
-                </select>
+                </m-select>
               </label>
             </details>
 
@@ -812,7 +817,7 @@
 
         <div class="page-body">
           <div class="preset-toolbar">
-            <label class="preset-search"><span data-icon="search" aria-hidden="true"></span><input id="preset-search" type="search" placeholder="搜索名称、说明或标签" aria-label="搜索预设" /></label>
+            <label class="preset-search"><span data-icon="search" aria-hidden="true"></span><m-input id="preset-search" type="search" placeholder="搜索名称、说明或标签" aria-label="搜索预设"></m-input></label>
             <div class="preset-filters" role="tablist" aria-label="预设状态">
               <button type="button" class="active" role="tab" aria-selected="true" data-preset-filter="all">全部</button>
               <button type="button" role="tab" aria-selected="false" data-preset-filter="enabled">已启用</button>
@@ -982,18 +987,18 @@
 
           <label class="field">
             <span class="field-label">名称</span>
-            <input id="p-name" type="text" spellcheck="false" placeholder="例如 DeepSeek" aria-label="模型提供商名称" />
+            <m-input id="p-name" placeholder="例如 DeepSeek" aria-label="模型提供商名称"></m-input>
           </label>
 
           <label class="field">
             <span class="field-label">接口地址</span>
-            <input id="p-baseurl" type="text" spellcheck="false" placeholder="https://api.deepseek.com" aria-label="接口地址" />
+            <m-input id="p-baseurl" placeholder="https://api.deepseek.com" aria-label="接口地址"></m-input>
             <span class="field-help">如 DeepSeek 填 https://api.deepseek.com —— 从上面的「第三方模型提供商」里选一个会自动填好。</span>
           </label>
 
           <label class="field">
             <span class="field-label">API Key</span>
-            <input id="p-apikey" type="password" spellcheck="false" placeholder="sk-..." aria-label="API Key" />
+            <m-input id="p-apikey" type="password" placeholder="sk-..." aria-label="API Key"></m-input>
             <span class="field-help">只保存在你自己电脑上，保存时会加密。</span>
           </label>
 
@@ -1038,18 +1043,18 @@
           <div class="field-grid">
             <label class="field">
               <span class="field-label">温度</span>
-              <input id="s-temp" type="number" min="0" max="2" step="0.01" />
+              <m-input id="s-temp" type="number" min="0" max="2" step="0.01"></m-input>
               <span class="field-help">越大越有创意，越小越稳定。0.7 通用。</span>
             </label>
             <label class="field">
               <span class="field-label">核采样</span>
-              <input id="s-topp" type="number" min="0" max="1" step="0.01" />
+              <m-input id="s-topp" type="number" min="0" max="1" step="0.01"></m-input>
               <span class="field-help">控制候选词范围，默认 0.95。部分模型会忽略此参数。</span>
             </label>
             <label class="check"><input id="s-thinking" type="checkbox" /><span class="check-text"><b>深度思考</b><small>默认开启，适用于支持该参数的模型。</small></span></label>
             <label class="field">
               <span class="field-label">回复上限</span>
-              <input id="s-maxtokens" type="number" min="64" max="32000" step="64" />
+              <m-input id="s-maxtokens" type="number" min="64" max="32000" step="64"></m-input>
 
               <span class="field-help">越大回复越长，也越费钱。推理模型的「思考」也算在这份额度里；若调大后仍反复被截断，多半是模型提供商按模型自己的上限截断，换个模型比继续调大更管用。</span>
             </label>
@@ -1108,7 +1113,7 @@
 
           <label class="field">
             <span class="field-label">世界书递归深度</span>
-            <input id="s-wb-depth" type="number" min="0" max="5" step="1" aria-label="世界书递归深度" />
+            <m-input id="s-wb-depth" type="number" min="0" max="5" step="1" aria-label="世界书递归深度"></m-input>
             <span class="field-help">
               「可递归」的世界书条目（编辑器里勾了「递归」的，或从酒馆导入时没勾
               Prevent further recursion 的），命中后还能再带出别的条目，最多连锁几层。<br />
@@ -1120,7 +1125,7 @@
 
           <label class="field">
             <span class="field-label">对话轮数</span>
-            <input id="s-max-turns" type="number" min="1" max="200" step="1" aria-label="带进请求的对话轮数" />
+            <m-input id="s-max-turns" type="number" min="1" max="200" step="1" aria-label="带进请求的对话轮数"></m-input>
             <span class="field-help">
               每次请求最多带上多少轮旧对话（1 轮 = 一问一答）。更早的内容由<b>记忆摘要</b>接管，不会全丢。<br />
               调大 = 记得更牢，但<b>每一轮都要把这几十条重发一遍，token 花得更多</b>。
@@ -1147,12 +1152,12 @@
 
           <label class="field">
             <span class="field-label">生图模型提供商</span>
-            <select id="s-image-provider" aria-label="生图模型提供商"></select>
+            <m-select id="s-image-provider" aria-label="生图模型提供商"></m-select>
           </label>
 
           <label class="field">
             <span class="field-label">生图模型</span>
-            <select id="s-image-model" aria-label="生图模型"></select>
+            <m-select id="s-image-model" aria-label="生图模型"></m-select>
             <span class="field-help">
               列表跟着上面选的<b>生图模型提供商</b>走，用的是那个模型提供商的「可用模型」。<br />
               里面没有你要的画图模型，就去上面「模型提供商」那一节把它加进模型列表（或点「拉取可用模型」）。
@@ -1161,7 +1166,7 @@
 
           <label class="field">
             <span class="field-label">图片尺寸</span>
-            <select id="s-image-size" aria-label="图片尺寸"></select>
+            <m-select id="s-image-size" aria-label="图片尺寸"></m-select>
             <span class="field-help">
               可选项跟着上面选的<b>生图模型</b>走 —— 不同模型支持的尺寸不一样，
               填错会被接口拒掉（智谱的 glm-image 只认固定的几个尺寸）。
@@ -1207,12 +1212,12 @@
 
           <label class="field">
             <span class="field-label">向量模型提供商</span>
-            <select id="s-embedding-provider" aria-label="向量模型提供商"></select>
+            <m-select id="s-embedding-provider" aria-label="向量模型提供商"></m-select>
           </label>
 
           <label class="field">
             <span class="field-label">向量模型</span>
-            <select id="s-embedding-model" aria-label="向量模型"></select>
+            <m-select id="s-embedding-model" aria-label="向量模型"></m-select>
             <span class="field-help">
               同样是跟着上面选的向量模型提供商走。常见的有 <code>text-embedding-3-small</code>、
               <code>BAAI/bge-m3</code> 这类。
@@ -1284,12 +1289,19 @@
 
           <label class="field">
             <span class="field-label">字体</span>
-            <select id="appearance-font" aria-label="界面字体">
+            <!-- ⚙ 组件库迁移样板（2026-10-16）：这一格从原生 <select> 换成了 <m-select>。
+                 id 留在**宿主**上（core/dom.js 的 el.appearanceFont 照旧），
+                 `.value` 由组件代理、'change' 从里层原生 select 冒泡上来，
+                 外观仍是 style.css 里那一份（组件的里层就是原生 select）。
+                 里面的 <option> 会被组件搬进里层那颗原生 select。
+                 ⚠️ 跟着要改的是 CSS 的**子选择器**：`.field > select` 现在多了一层
+                 （`.field > m-select > select`），见 style.css 的「设置页控件」那段。 -->
+            <m-select id="appearance-font" aria-label="界面字体">
               <option value="default">系统默认（微软雅黑）</option>
               <option value="noto">思源黑体 / Noto Sans SC</option>
               <option value="simhei">黑体 SimHei</option>
               <option value="serif">宋体系（阅读向）</option>
-            </select>
+            </m-select>
             <span class="field-help">
               整个界面的字体。这几套都是<b>本机确认装了的</b> —— 没装的会自动回退到微软雅黑，不会变成方框。
             </span>
@@ -1308,8 +1320,8 @@
             <span class="field-label">加粗字的颜色</span>
             <div class="appearance-row">
               <input id="appearance-boldcolor" type="color" value="#409eff" aria-label="选择加粗字颜色" />
-              <input id="appearance-boldcolor-text" type="text" spellcheck="false"
-                     placeholder="留空 = 跟随主题配色。" aria-label="加粗字颜色（十六进制）" />
+              <m-input id="appearance-boldcolor-text"
+                     placeholder="留空 = 跟随主题配色。" aria-label="加粗字颜色（十六进制）"></m-input>
               <button id="btn-boldcolor-reset" class="btn btn-ghost btn-sm" type="button">默认</button>
             </div>
             <span class="field-help">
@@ -1377,7 +1389,7 @@
 
           <label class="field" id="s-pet-skin-field">
             <span class="field-label">形象</span>
-            <select id="s-pet-skin" aria-label="桌宠形象"></select>
+            <m-select id="s-pet-skin" aria-label="桌宠形象"></m-select>
             <span class="field-help" id="s-pet-skin-hint">切换后桌宠窗口会立刻换成这个形象。image 目录在 assets/pet/&lt;名字&gt;/，放好自己的角色后在这里选它即可</span>
           </label>
 
@@ -1413,12 +1425,12 @@
           <div class="field-grid">
             <label class="field">
               <span class="field-label">每隔几轮说一次</span>
-              <input id="s-pet-every" type="number" min="1" max="50" step="1" />
+              <m-input id="s-pet-every" type="number" min="1" max="50" step="1"></m-input>
               <span class="field-help">按「角色回复了几次」算。调小 = 存在感强，调大 = 安静</span>
             </label>
             <label class="field">
               <span class="field-label">每次说几句</span>
-              <input id="s-pet-lines" type="number" min="1" max="5" step="1" />
+              <m-input id="s-pet-lines" type="number" min="1" max="5" step="1"></m-input>
               <span class="field-help">气泡里一句一行地冒出来，1~5 句</span>
             </label>
           </div>
@@ -1445,7 +1457,7 @@
 
           <label class="field" id="s-pet-model-field">
             <span class="field-label">桌宠用的模型</span>
-            <select id="s-pet-model" aria-label="桌宠使用的模型"></select>
+            <m-select id="s-pet-model" aria-label="桌宠使用的模型"></m-select>
             <span class="field-help">
               宠物说的话很短，这里指一个<b>便宜</b>的模型最划算（也可以是本机那个酒馆桥接）。
               万一它不可用，会自动回退到主模型，宠物不会因此变哑巴。
@@ -1455,7 +1467,7 @@
           <div class="field-grid">
             <label class="field">
               <span class="field-label">桌宠温度</span>
-              <input id="s-pet-temp" type="number" min="0" max="2" step="0.1" placeholder="跟随全局" />
+              <m-input id="s-pet-temp" type="number" min="0" max="2" step="0.1" placeholder="跟随全局"></m-input>
               <span class="field-help">
                 取值范围 <b>0 ~ 2</b>：越小越稳、越大越跳。留空 = 跟随上面的全局温度；
                 全局也没设时按 0.85。宠物要的是有个性，可以给高一点
@@ -1463,7 +1475,7 @@
             </label>
             <label class="field">
               <span class="field-label">长期记忆保留条数</span>
-              <input id="s-pet-memory-max" type="number" min="0" max="200" step="1" />
+              <m-input id="s-pet-memory-max" type="number" min="0" max="200" step="1"></m-input>
               <span class="field-help">
                 超出上限时，最早的那些会被折进摘要（本地拼接，不再调模型）。0 = 不留长期记忆
               </span>
@@ -1472,7 +1484,7 @@
 
           <label class="field">
             <span class="field-label">说话风格补充</span>
-            <input id="s-pet-style" type="text" spellcheck="false" placeholder="例如：多说点风凉话，别老夸我" aria-label="桌宠说话风格补充" />
+            <m-input id="s-pet-style" placeholder="例如：多说点风凉话，别老夸我" aria-label="桌宠说话风格补充"></m-input>
             <span class="field-help">会拼在人格后面一起发给它，用来临时调调语气，不用改人格正文</span>
           </label>
 
@@ -1600,17 +1612,17 @@
         <div class="field-grid">
           <label class="field">
             <span class="field-label">名称</span>
-            <input id="pr-name" type="text" spellcheck="false" placeholder="例如：沉稳叙事" aria-label="预设名称" />
+            <m-input id="pr-name" placeholder="例如：沉稳叙事" aria-label="预设名称"></m-input>
           </label>
           <label class="field">
             <span class="field-label">标签</span>
-            <input id="pr-tags" type="text" spellcheck="false" placeholder="逗号分隔，可留空" aria-label="预设标签" />
+            <m-input id="pr-tags" placeholder="逗号分隔，可留空" aria-label="预设标签"></m-input>
           </label>
         </div>
 
         <label class="field field-stack">
           <span class="field-label">说明</span>
-          <input id="pr-note" type="text" spellcheck="false" placeholder="一句话说明这个预设是干什么的" aria-label="预设说明" />
+          <m-input id="pr-note" placeholder="一句话说明这个预设是干什么的" aria-label="预设说明"></m-input>
           <span class="field-help">只显示在列表上，不会发给模型</span>
         </label>
 
@@ -1652,16 +1664,16 @@
           <div class="field-grid">
             <label class="field">
               <span class="field-label">温度</span>
-              <input id="pr-temperature" type="number" min="0" max="2" step="0.1" placeholder="全局" aria-label="预设温度" />
+              <m-input id="pr-temperature" type="number" min="0" max="2" step="0.1" placeholder="全局" aria-label="预设温度"></m-input>
             </label>
             <label class="field">
               <span class="field-label">回复上限</span>
-              <input id="pr-maxtokens" type="number" min="64" max="32000" step="64" placeholder="全局" aria-label="预设回复上限" />
+              <m-input id="pr-maxtokens" type="number" min="64" max="32000" step="64" placeholder="全局" aria-label="预设回复上限"></m-input>
             </label>
           </div>
           <label class="field">
             <span class="field-label">top_p</span>
-            <input id="pr-topp" type="number" min="0" max="1" step="0.05" placeholder="全局" aria-label="预设 top_p" />
+            <m-input id="pr-topp" type="number" min="0" max="1" step="0.05" placeholder="全局" aria-label="预设 top_p"></m-input>
           </label>
         </details>
       </div>
@@ -1732,11 +1744,11 @@
       <div class="modal-body">
         <label class="field field-stack">
           <span class="field-label">叙述模式</span>
-          <select id="p-narration" aria-label="叙述模式">
+          <m-select id="p-narration" aria-label="叙述模式">
             <option value="standard">标准 —— 对话、动作、环境融成叙述</option>
             <option value="inner">内心描写 —— 每轮附上角色的真实心理</option>
             <option value="god">上帝视角 —— 正文 + 心理 + 旁白</option>
-          </select>
+          </m-select>
           <span class="field-help">
             选好后会自动把格式要求加进提示词。「【心理】」「【旁白】」会被渲染成独立样式块，
             和正文区分开。
@@ -1745,10 +1757,10 @@
 
         <label class="field field-stack">
           <span class="field-label">推进节奏</span>
-          <select id="p-pace" aria-label="推进节奏">
+          <m-select id="p-pace" aria-label="推进节奏">
             <option value="step">一步一步 —— 走到需要你做决定的地方就停下</option>
             <option value="brisk">快节奏 —— 允许一轮里多推进一些</option>
-          </select>
+          </m-select>
           <span class="field-help">
             「一步一步」会明确要求 AI <b>不替你决定、不替你说、不把一整段过程演完</b>。<br />
             世界模型建议保持这个模式 —— 否则你说一句「去酒馆玩游戏」，
@@ -1882,7 +1894,7 @@
              角色库为空时整块隐藏（renderPlayerCharOptions 里控制）。 -->
         <label class="field field-stack" id="player-char-field">
           <span class="field-label">用角色库里的人物当自己（可选）</span>
-          <select id="player-char" aria-label="选择角色卡"></select>
+          <m-select id="player-char" aria-label="选择角色卡"></m-select>
           <span id="player-char-preview" class="player-char-preview hidden"></span>
           <span class="field-help">
             选一张角色卡，名字和设定会自动填到下面（<b>还能改</b>）；<br />
@@ -1892,7 +1904,7 @@
 
         <label class="field field-stack">
           <span class="field-label">你的名字</span>
-          <input id="player-name" type="text" spellcheck="false" placeholder="留空就是「你」" />
+          <m-input id="player-name" placeholder="留空就是「你」"></m-input>
           <span class="field-help">TA 会这么称呼你，也会替换掉 <code>{{user}}</code>。</span>
         </label>
 
@@ -1963,7 +1975,7 @@
 
         <label class="field">
           <span class="field-label">给哪个模型</span>
-          <select id="persona-model" aria-label="选择要给哪个模型配默认人设"></select>
+          <m-select id="persona-model" aria-label="选择要给哪个模型配默认人设"></m-select>
           <span class="field-help">
             <b>这里选谁，存下来的就是谁那一份</b>。没绑角色卡的对话，按它在顶栏当前用的模型取这套设定。<br />
             两边都清空 = 那个模型回到通用助手（不扮演任何角色）。
@@ -1972,7 +1984,7 @@
 
         <label class="field">
           <span class="field-label">名字</span>
-          <input id="persona-name" type="text" spellcheck="false" placeholder="可以不填" aria-label="默认人设的名字" />
+          <m-input id="persona-name" placeholder="可以不填" aria-label="默认人设的名字"></m-input>
           <span class="field-help">AI 那一侧显示的名字，也会用来在提示词里自称。<b>留空就不提名字</b> —— 气泡和导出的对话里显示成「AI」，空状态标题也不带名字。</span>
         </label>
 

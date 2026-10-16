@@ -46,6 +46,8 @@ import { panelEntities } from '../data/cast.js';
 import { stateCardPhoto } from '../data/expressions.js';
 import { persistConversations } from '../data/persist.js';
 import { onRefresh, refreshAll } from './refresh.js';
+// 组件库：编辑行里的输入框（见 components/index.js）
+import { mInput } from '../components/index.js';
 
 // 卡片尺寸常量。**定位和「并排铺开」都按这几个数算**，改宽度要一起改。
 // 320 而不是更窄：卡上要铺一张角色图，太窄的话图和右侧的字段列都挤。
@@ -240,11 +242,11 @@ function viewRow(convo, key) {
 /** 编辑行：值变成输入框，右边一个删除。改完走 setPanelField（和面板同一条路）。 */
 function editRow(convo, key) {
   const name = panelFieldName(key);
-  const input = h('input', {
-    type: 'text',
+  // ⚙ 组件化（2026-10-16）：28px + 正文级字号正好是组件的 size="sm" 档
+  const input = mInput({
     class: 'sc-input',
+    size: 'sm',
     value: String(convoPanel(convo)[key] == null ? '' : convoPanel(convo)[key]),
-    spellcheck: 'false',
     'aria-label': name
   });
   input.addEventListener('input', () => {
@@ -272,11 +274,10 @@ function editRow(convo, key) {
 
 /** 编辑态底部：加一个新字段 */
 function addRow(convo, owner) {
-  const input = h('input', {
-    type: 'text',
-    class: 'sc-input sc-new',
+  const input = mInput({
+    class: ['sc-input', 'sc-new'],
+    size: 'sm',
     placeholder: '新字段名',
-    spellcheck: 'false',
     'aria-label': '新字段名'
   });
 

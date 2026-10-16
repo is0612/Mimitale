@@ -9,10 +9,11 @@
 //  rows 默认 3 —— 和 ui/controls.js 的 textarea() 同一个口径，别在组件里再定一个。
 // ============================================================================
 
-import { MiValueControl, applyOptions } from './base.js';
+import { MiValueControl, applyOptions, reflectProperties } from './base.js';
 
 const CLASS_TABLE = {
-  sm: 'mi-textarea--sm'
+  sm: 'mi-textarea--sm',
+  xs: 'mi-textarea--xs'
 };
 
 /** rows 的默认值（两处口径必须一致：这里和 ui/controls.js 的 textarea()） */
@@ -53,3 +54,6 @@ export class MiTextarea extends MiValueControl {
 export function mTextarea(opts = {}) {
   return applyOptions(document.createElement('m-textarea'), opts);
 }
+
+// 原生 textarea 的专有属性（property 写法也要能生效，见 base.js 的 reflectProperties）
+reflectProperties(MiTextarea, ['placeholder', 'name', 'rows', 'wrap', 'maxlength', 'maxLength', 'readonly', 'readOnly']);

@@ -208,9 +208,14 @@ client/
 ├── renderer/        前端（Chromium 页面）
 │   ├── index.html
 │   ├── style.css
+│   ├── preview/     **组件盘**（开发用页面，不属于应用界面）
+│   │                components.html + preview.js —— 每个组件的每种状态摆一遍
+│   │                出图：npm run shot:components
 │   └── js/          界面逻辑（ES module，不需要打包器）
 │       ├── main.js      入口层 · 只剩启动流程 + 事件绑定 + 跨视图编排
 │       ├── core/        常量 / 状态 / DOM 引用 / preload 桥 / 工具 / 面板字段桥
+│       ├── components/  **组件库**（自定义元素，见下面「组件库」一节）：
+│       │                base.js 极小运行时 · button / input / textarea / select
 │       ├── ui/          提示条 / 确认框 / 主题 / Markdown / 建 DOM 的小工具 /
 │       │                **控件规范件**（build.js 按钮 · controls.js 输入框与字段 ·
 │       │                select.js 自研下拉）
@@ -230,6 +235,50 @@ client/
                     + 一组不需要启动程序就能跑的静态检查（见下面「自检工具」）
 ```
 
+### 组件库
+
+界面里反复要用的东西（按钮 / 输入框 / 多行框 / 下拉框）都有现成的组件，
+**一次定义 = 结构 + 行为 + 样式**，页面只写「用哪个组件 + `variant` / `size`」，
+不写外观样式。两套入口共用一份实现：
+
+```html
+<!-- 标签形态（index.html 里、或 innerHTML 里都行） -->
+<m-button variant="primary" size="sm">保存</m-button>
+<m-input placeholder="角色名" aria-label="角色名"></m-input>
+<m-select aria-label="界面字体">
+  <option value="default">系统默认</option>
+  <option value="noto">思源黑体</option>
+</m-select>
+```
+
+```js
+// 工厂形态（渲染层 95% 是 JS 建 DOM，用的是这一套）
+import { mButton, mInput, mSelect } from './components/index.js';
+mButton({ variant: 'primary', text: '保存', onClick: save });   // → <m-button>
+mInput({ placeholder: '角色名', value: '小满', onInput: fn });    // → <m-input>
+mSelect({ 'aria-label': '界面字体', items: [...] });             // → <m-select>
+```
+
+每个组件都是「**宿主 + 里层一个原生控件**」（m-button→`<button>`、
+m-input→`<input>`、m-textarea→`<textarea>`、m-select→`<select>`）：
+键盘、禁用态、原生事件、表单语义全由里层那个原生控件提供；宿主负责外观类名、
+属性转发、`.value` 代理、`focus()` / `click()` 转发。三条约定别破坏：
+
+- **皮肤只有一份**：组件的外观住在 `style.css` 的组件段，而按钮那几条是
+  `.btn, .mi-btn__control { … }` 这样**一条规则挂两个选择器** —— 老 `.btn` 退役时
+  把逗号左边删掉即可，不会留下两份长得差不多的外观。
+- **light DOM，不是 Shadow DOM**：整套配色/字号/圆角是 style.css 里那 125 个
+  CSS 变量 + 两套主题（`data-theme` / `data-accent`）。Shadow 会把全局 CSS 挡在外面，
+  样式得复制进每个影子根 —— 那等于每个组件自己养一套主题。代价是没有样式隔离，
+  所以**组件类名一律 `mi-` 前缀**。
+- **类名写成字面量**：`{ primary: 'mi-btn--primary' }` 这样写，别用
+  `mi-btn--${variant}` 拼 —— 拼出来的字符串 grep 不到，`tools/audit-css-dead.js`
+  会把 CSS 里那些类当成死规则。
+
+想一眼看全所有状态：`renderer/preview/components.html`（`npm run shot:components`
+出明暗两张图）。新增组件就写一个 `createControl()`，往 `components/index.js` 的
+`COMPONENTS` 表里添一行。
+
 ### 自检工具
 
 以下命令都在 `client/` 目录下执行（先 `cd client`）。它们都是**纯静态检查**，
@@ -244,7 +293,9 @@ client/
 | `node tools/check-dom-ids.js` | JS 抓的 DOM id 在 HTML 里不存在 |
 | `node tools/check-el-refs.js` | `el.<分组>.<字段>` 在 `core/dom.js` 里不存在 |
 | `node tools/check-api-settings.js` | `api.xxx()` 没被 preload 暴露；设置键不在 `DEFAULT_SETTINGS` 白名单（会被静默丢掉） |
-| `npm run test:ui` | 控件层的纯逻辑（`node --test`）：下拉的行怎么摊 / 键盘怎么走 / 弹层摆哪，以及 `button()` 的类名拼法、`fillSelect()` 的铺选项规则 |
+| `npm run test:ui` | 控件层的纯逻辑（`node --test`）：下拉的行怎么摊 / 键盘怎么走 / 弹层摆哪，`button()` 的类名拼法、`fillSelect()` 的铺选项规则，以及组件库的类名表 / 属性口径 / 注册表幂等 |
+| `npm run shot:components` | 给组件盘出图（明 + 暗两张，写到 `tools/shots/`）。顺带打出「组件皮肤 vs 老 `.btn` 皮肤」的计算样式对照 —— 两者必须一模一样 |
+| `npm run diag` | 页面到底起没起来（模块图链接失败时它 3 秒就能把控制台那行报错打出来） |
 
 > 为什么值得有这一组：这个仓库的坑集中在「**不会报错，只会静默失效**」这一类 ——
 > 通道名写错、id 拼错、设置键漏进白名单，症状都是「点了没反应」。

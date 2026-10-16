@@ -579,12 +579,17 @@ m-button[block] {
   width: 100%;
 }
 
-/* 输入类：宿主铺满可用宽度，里层 100%。min-width:0 是给 flex / grid 里的
-   「不许被内容顶宽」留的口子（和 `.field > input { min-width: 0 }` 同一条理由） */
+/* 输入类：宿主铺满可用宽度，里层 100%。
+   ⚠️ 宿主这里的 `width: 100%` **不是可选的**：全局控件基线给
+   `input / textarea / select` 定了 `width: 100%`，而很多父容器是
+   `align-items: start`（比如 .field 那条基础规则）—— 靠 flex/grid 的 stretch
+   根本拉不满。宿主不接这一条，控件就会缩成内容宽（设置页那个字体下拉从
+   930px 变成 218px，2026-10-16 迁移第一处时就是这么撞出来的）。 */
 m-input,
 m-textarea,
 m-select {
   display: block;
+  width: 100%;
   min-width: 0;
 }
 
@@ -594,12 +599,49 @@ m-select {
   width: 100%;
 }
 
-/* 紧凑档：和 .btn-sm 一个量级，工具条里那种密排控件用 */
-.mi-input--sm > .mi-input__control,
-.mi-textarea--sm > .mi-textarea__control,
+/* 紧凑档（sm）：密排行里的**主**控件 —— 28px 高、正文级字号，和 .btn-sm 一个量级。
+   ⚠️ 这一档原来的定义是 32px + xs 字号，而应用里没人用（只有组件盘）。
+   2026-10-16 改成对齐应用里**实际**的口径（.attr-value / .attr-group-name 都是
+   28px + --fs-sm）—— 让组件去迎合页面，而不是反过来让页面迁就组件。 */
+.mi-input--sm > .mi-input__control {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: var(--fs-sm);
+  border-radius: var(--radius-sm);
+}
+
 .mi-select--sm > .mi-select__control {
-  min-height: 32px;
+  min-height: 28px;
+  padding: 4px 30px 4px 10px; /* 右边留给下拉箭头 */
+  font-size: var(--fs-sm);
+  border-radius: var(--radius-sm);
+}
+
+/* 多行框不跟着压高度：它有自己的 min-height（全局 textarea 那条），这里只收紧内边距与字号 */
+.mi-textarea--sm > .mi-textarea__control {
   padding: 6px 10px;
+  font-size: var(--fs-sm);
+  border-radius: var(--radius-sm);
+}
+
+/* 最紧凑档（xs）：属性行里那种**次要**控件（26px 高、xs 字号）。
+   下拉单独一条是为了给箭头留右内边距（全局 select 那条的 40px 被这里的 padding 覆盖了）。 */
+.mi-input--xs > .mi-input__control {
+  min-height: 26px;
+  padding: 4px 8px;
+  font-size: var(--fs-xs);
+  border-radius: var(--radius-sm);
+}
+
+.mi-select--xs > .mi-select__control {
+  min-height: 26px;
+  padding: 4px 30px 4px 8px; /* 右边留给下拉箭头 */
+  font-size: var(--fs-xs);
+  border-radius: var(--radius-sm);
+}
+
+.mi-textarea--xs > .mi-textarea__control {
+  padding: 4px 8px;
   font-size: var(--fs-xs);
   border-radius: var(--radius-sm);
 }
@@ -2800,17 +2842,22 @@ m-select {
 .settings-content > .panel-section .field > input[type="password"],
 .settings-content > .panel-section .field > input[type="number"],
 .settings-content > .panel-section .field > textarea,
-.settings-content > .panel-section .field > select {
+.settings-content > .panel-section .field > select,
+/* ⚙ 组件化之后的形态：控件是组件里那颗原生控件，多了一层。
+   每迁一个控件类型，就在这两条里各加一行 —— 等五类控件都迁完，这一整段会塌成
+   一条「组件在这个上下文里的皮肤」规则（那才是"页面不写外观"的终点）。
+   已迁：m-select（下拉）、m-input（文本 / 密码 / 数字）。 */
+.settings-content > .panel-section .field > m-select > select,
+.settings-content > .panel-section .field > m-input > input {
   border-radius: var(--radius);
   background: var(--bg-side);
   border: 1px solid transparent;
 }
 
-.settings-content > .panel-section .field > input[type="text"]:focus,
-.settings-content > .panel-section .field > input[type="password"]:focus,
-.settings-content > .panel-section .field > input[type="number"]:focus,
+.settings-content > .panel-section .field > m-input > input:focus,
 .settings-content > .panel-section .field > textarea:focus,
-.settings-content > .panel-section .field > select:focus {
+.settings-content > .panel-section .field > select:focus,
+.settings-content > .panel-section .field > m-select > select:focus {
   background: var(--bg-card);
   border-color: var(--accent-border);
 }
@@ -3645,13 +3692,10 @@ m-select {
 
 /* ⚠️ 带 [type="text"]（= (0,2,1)）：通用那条 `input[type="text"]` 是 (0,1,1)
    且写在文件更后面，光写 `.attr-group-edit input` 会输给它，输入框会被顶成 40px 高。 */
-.attr-group-edit input[type="text"] {
+/* ⚙ 已组件化：外观归 size="sm" */
+.attr-group-edit .attr-group-name {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 28px;
-  padding: 4px 10px;
-  font-size: var(--fs-sm);
-  border-radius: var(--radius-sm);
 }
 
 .attr-group-edit .btn {
@@ -3715,23 +3759,23 @@ m-select {
   text-align: right;
 }
 
-.attr-row input.attr-value {
+/* ⚙ 已组件化（2026-10-16）：28px / --fs-sm 那套外观归组件的 size="sm" */
+.attr-row .attr-value {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 28px;
-  padding: 4px 10px;
-  font-size: var(--fs-sm);
-  border-radius: var(--radius-sm);
 }
 
-/* 类型选择框：文本 / 数值 / 列表 */
-.attr-row select.attr-type {
+/* 类型选择框：文本 / 数值 / 列表
+   ⚙ 已组件化（2026-10-16）：尺寸（26px 高 / xs 字号 / 小圆角）归组件的 `size="xs"`，
+   这里只剩**布局**（它在行里占多宽）和这个上下文特有的**文字颜色**。
+   颜色必须点名里层那颗原生 select —— 全局 `select` 规则显式设了 color，
+   靠宿主继承传不进去（这是"上下文覆盖"的固定写法：`.宿主类 > .mi-xxx__control`）。 */
+.attr-row .attr-type {
   flex: 0 0 auto;
   width: 64px;
-  min-height: 28px;
-  padding: 2px 6px;
-  font-size: var(--fs-xs);
-  border-radius: var(--radius-sm);
+}
+
+.attr-row .attr-type > .mi-select__control {
   color: var(--text-dim);
 }
 
@@ -3799,60 +3843,45 @@ m-select {
   color: var(--text-faint);
 }
 
-.attr-more input.attr-num {
+/* ⚙ 已组件化：26px / --fs-xs 那套归组件的 size="xs"，这里只剩宽度 */
+.attr-more .attr-num {
   flex: 0 0 auto;
   width: 64px;
-  min-height: 26px;
-  padding: 4px 8px;
-  font-size: var(--fs-xs);
-  border-radius: var(--radius-sm);
 }
 
 /* 变化规则：整行铺满 */
-.attr-more input.attr-hint {
+/* ⚙ 已组件化：外观归 size="xs" */
+.attr-more .attr-hint {
   width: 100%;
   min-width: 0;
-  min-height: 26px;
-  padding: 4px 8px;
-  font-size: var(--fs-xs);
-  border-radius: var(--radius-sm);
 }
 
 /* 分组下拉 / 「＋ 新建分组…」临时输入框。
-   写足到 (0,2,1) 是为了和属性区其它 `.attr-more ...` 规则保持一致的权重口径。
-   （注意别把这条读成「通用规则写在后面所以能盖住」：通用那条是
-   `input[type="text"], select`，权重 (0,1,1)，本来就不如任意两段类选择器；
-   层叠里特异性优先于书写顺序。） */
-.attr-more select.attr-group {
+   ⚙ 已组件化（2026-10-16）：下拉的尺寸（26px / xs 字号 / 小圆角 / 给箭头留的右内边距）
+   全归组件的 `size="xs"`，这里只剩布局与上下文颜色。旁边那个临时输入框还是原生 input，
+   照旧写全（它的组件化在输入类那一批里）。 */
+.attr-more .attr-group {
   flex: 1 1 auto;
   min-width: 0;
   width: auto;
-  min-height: 26px;
-  padding: 4px 8px;
-  font-size: var(--fs-xs);
-  border-radius: var(--radius-sm);
-  padding-right: 30px;
+}
+
+.attr-more .attr-group > .mi-select__control {
   color: var(--text-dim);
 }
 
-.attr-more select.attr-mode {
+/* 更新频率下拉：尺寸同样归 `size="xs"`，这里只剩布局（它不需要换文字颜色） */
+.attr-more .attr-mode {
   flex: 1 1 auto;
   min-width: 0;
   width: auto;
-  min-height: 26px;
-  padding: 4px 8px;
-  font-size: var(--fs-xs);
-  border-radius: var(--radius-sm);
 }
 
-.attr-more input.attr-group-new {
+/* ⚙ 已组件化：外观归 size="xs" */
+.attr-more .attr-group-new {
   flex: 1 1 auto;
   min-width: 0;
   width: auto;
-  min-height: 26px;
-  padding: 4px 8px;
-  font-size: var(--fs-xs);
-  border-radius: var(--radius-sm);
 }
 
 /* 下拉右边要给 CSS 画的小箭头留位置，否则长组名会顶到箭头底下 */
@@ -3873,13 +3902,10 @@ m-select {
   border-top: 1px dashed var(--border);
 }
 
-.attr-add-row input[type="text"] {
+/* ⚙ 已组件化：外观归 size="sm"（原来手写 30px，收进组件那档 28px） */
+.attr-add-row .attr-new {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 30px;
-  padding: 6px 10px;
-  font-size: var(--fs-sm);
-  border-radius: var(--radius-sm);
 }
 
 /* 批量粘贴区：平时收着，点「粘贴文本」才展开 */
@@ -4219,12 +4245,9 @@ m-select {
 
 /* ⚠️ 带 [type="text"]（= (0,2,1)）：通用那条 input[type="text"] 是 (0,1,1)
    且写在文件更后面，只写类名的话宽高会被它盖掉。 */
-.char-expr-row input[type="text"] {
-  width: 100%;
-  min-height: 26px;
-  padding: 4px 8px;
-  font-size: var(--fs-xs);
-}
+/* ⚙ 已组件化（2026-10-16）：那两个输入框是 <m-input size="xs">，
+   26px / xs 字号 / 4px 8px 内边距全归组件；宽度由 .char-expr-fields 的
+   纵向 flex（默认 stretch）和组件外层的 width: 100% 负责，这里不用再写。 */
 
 .char-expr-del {
   flex: 0 0 auto;
@@ -4470,6 +4493,13 @@ m-select {
 input[type="text"],
 input[type="password"],
 input[type="number"],
+/* ⚙ 文本类输入都算控件：组件的 INPUT_TYPES 支持 search / email / url / tel，
+   皮肤基线也得盖住它们 —— 否则 type="search" 的输入框会掉回 UA 默认样式
+   （灰边框、21px 高）。2026-10-16 迁世界书搜索框时踩到。 */
+input[type="search"],
+input[type="email"],
+input[type="url"],
+input[type="tel"],
 textarea,
 select {
   width: 100%;
@@ -4606,6 +4636,10 @@ select.ctl-open {
 input[type="text"]:hover,
 input[type="password"]:hover,
 input[type="number"]:hover,
+input[type="search"]:hover,
+input[type="email"]:hover,
+input[type="url"]:hover,
+input[type="tel"]:hover,
 textarea:hover,
 select:hover {
   border-color: var(--border-hover);
@@ -4614,6 +4648,10 @@ select:hover {
 input[type="text"]:focus,
 input[type="password"]:focus,
 input[type="number"]:focus,
+input[type="search"]:focus,
+input[type="email"]:focus,
+input[type="url"]:focus,
+input[type="tel"]:focus,
 textarea:focus,
 select:focus {
   border-color: var(--accent);
@@ -5191,11 +5229,10 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 }
 
 /* 书名输入比别的字段高一点（它是这一栏里最常用的一颗输入框） */
-.wb-book-name input {
-  min-height: 34px;
-  font-size: var(--fs-sm);
-  padding: 8px 12px;
-}
+/* ⚙ 已组件化（2026-10-16）：书名那格是 <m-input size="sm">。
+   这条原来给的是 **34px**（页面自己写的一个没有档位对应的高度）——
+   靠到组件的 sm 档：字号本来就是正文级（不变），高度 34 → 28。
+   宿主自带 width: 100%，.wb-book-name 只负责 flex: 0 0 auto（那条留着）。 */
 
 
 .wb-entry-list {
@@ -5869,20 +5906,23 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 
 /* ⚠️ 选择器必须给到两个类 (0,2,0)：通用 input[type="text"] 是 (0,1,1)
    且写在文件更后面，只写 .sc-input 会被它盖掉（width/min-height/padding）。 */
+/* ⚙ 已组件化（2026-10-16）：尺寸（实测 28px + 正文级字号）正好是组件的 size="sm"，
+   边框/圆角/文字色和全局控件基线本来就一样，这里只剩**布局**和这个上下文特有的
+   底色 + 聚焦环（状态卡浮在对话上，底色要用 --bg-input 才压得住）。
+   ⚠️ 上下文覆盖必须点名里层那颗原生 input：全局 input 规则显式设了底色和文字色，
+   靠宿主继承传不进去。 */
 .state-card .sc-input {
   flex: 1 1 auto;
   min-width: 0;
   width: auto;
-  min-height: 26px;
-  padding: 4px 8px;
-  font-size: var(--fs-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+}
+
+.state-card .sc-input > .mi-input__control {
   background: var(--bg-input);
   color: var(--text);
 }
 
-.state-card .sc-input:focus {
+.state-card .sc-input > .mi-input__control:focus {
   outline: none;
   border-color: var(--accent-border);
   box-shadow: var(--focus-ring);
@@ -8229,10 +8269,8 @@ body.pad-dragging {
   font-size: var(--fs-xs);
 }
 
-#view-char-editor .char-head-fields input {
-  width: 100%;
-  min-width: 0;
-}
+/* ⚙ 已组件化（2026-10-16）：角色名/标签已经是 <m-input>，宿主自带
+   width: 100% + min-width: 0（见 style.css 的组件段），这条不用再写。 */
 
 #view-char-editor .char-section-nav {
   display: flex;
@@ -8345,7 +8383,8 @@ body.pad-dragging {
     margin-left: 0;
   }
 
-  #view-char-editor .attr-row input.attr-value {
+  /* ⚙ 组件化之后这个类在**宿主**上，选择器不能再带 input 标签 */
+  #view-char-editor .attr-row .attr-value {
     flex-basis: 120px;
   }
 
@@ -8621,20 +8660,14 @@ body.pad-dragging {
   min-width: 0;
 }
 
-#view-wb-editor .wb-search {
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+/* ⚙ 已组件化（2026-10-16）：它被同一行 stretch 成 44px（= 默认档），
+   内边距/圆角/字号全归组件的默认皮肤（字号从 xs 变成正文级，和旁边那个筛选下拉一致）。
+   这里只留**上下文特有**的底色：工具条上是内凹的输入区，用 --bg-input。 */
+#view-wb-editor .wb-search > .mi-input__control {
   background: var(--bg-input);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--fs-xs);
 }
 
-#view-wb-editor .wb-search:focus {
-  outline: 2px solid var(--accent-border);
-  outline-offset: -1px;
-}
+/* 聚焦观感统一走全局控件规则（border-color: --accent），不再单独写一套 outline */
 
 #view-wb-editor .wb-entry-list .wb-entry {
   flex: 0 0 auto;
@@ -8767,9 +8800,10 @@ body.pad-dragging {
   border-color: var(--accent);
 }
 
-#view-presets .preset-search input {
-  min-width: 0;
-  width: 100%;
+/* ⚙ 已组件化（2026-10-16）：搜索框是 <m-input>，这层"无边框 + 透明底"的观感
+   要落到**里层那颗原生控件**上（外层的方框由 .preset-search 自己画：边框、圆角、底、
+   :focus-within 亮边框都在上面那条规则里）。 */
+#view-presets .preset-search m-input > .mi-input__control {
   border: 0;
   background: transparent;
   box-shadow: none;

@@ -554,3 +554,45 @@ test('fillSelect：disabled 的那一项带着 disabled 属性铺出来', () => 
 test('fillSelect：select 传 null 不抛错（拿不到节点时静默无害）', () => {
   assert.equal(controls.fillSelect(null, [{ value: 'a' }]), '');
 });
+
+// ---------------------------------------------------------------------------
+//  resolveSelect：铺选项要认得「原生 select」和「组件 m-select」两种
+// ---------------------------------------------------------------------------
+
+test('resolveSelect：原生 <select> 原样返回', () => {
+  const native = { tagName: 'SELECT' };
+  assert.equal(controls.resolveSelect(native), native);
+});
+
+test('resolveSelect：进过文档的 <m-select> 认它里面那颗原生 select', () => {
+  const inner = { tagName: 'SELECT' };
+  const component = { tagName: 'M-SELECT', control: inner };
+  assert.equal(controls.resolveSelect(component), inner);
+});
+
+test('resolveSelect：还没进文档的 <m-select> 先 ensureRendered() 再认（视图常先搭游离的树）', () => {
+  const inner = { tagName: 'SELECT' };
+  let rendered = 0;
+  const component = {
+    tagName: 'M-SELECT',
+    control: null,
+    ensureRendered() {
+      rendered += 1;
+      this.control = inner;
+    }
+  };
+  assert.equal(controls.resolveSelect(component), inner);
+  assert.equal(rendered, 1);
+});
+
+test('resolveSelect：别的元素 / 空值一律 null（fillSelect 会报错而不是乱铺）', () => {
+  assert.equal(controls.resolveSelect(null), null);
+  assert.equal(controls.resolveSelect(undefined), null);
+  assert.equal(controls.resolveSelect({ tagName: 'DIV' }), null);
+  // m-select 里那颗还没建出来、又没有 ensureRendered 可用 → 也给 null
+  assert.equal(controls.resolveSelect({ tagName: 'M-SELECT', control: null }), null);
+});
+
+test('resolveSelect：m-select 里装着的不是 select 时不认（结构被人改坏了）', () => {
+  assert.equal(controls.resolveSelect({ tagName: 'M-SELECT', control: { tagName: 'DIV' } }), null);
+});

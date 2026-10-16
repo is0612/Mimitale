@@ -4,6 +4,441 @@
 
 ---
 
+## 2026-10-16 最后一格：世界书编辑器 + 预设编辑器 13 个输入框 ——「页面上的文本输入框」清零
+
+`wb-name`（书名）/ `wb-e-title` / `wb-e-keys` / `wb-e-keys2` / `wb-e-order` / `wb-e-prob`、
+`pr-name` / `pr-tags` / `pr-note` / `pr-temperature` / `pr-maxtokens` / `pr-topp`、
+`preset-search`（预设搜索）全部换成 `<m-input>`。**index.html 里再也没有原生文本输入框了**
+（剩下的 24 个 `<input>` 是勾选框 / 单选 / 滑块 / 颜色 / 文件 —— 明确不迁）。
+
+- 书名那格原来被页面规则写成 **34px**（一个没有档位对应的高度），字号本来就是正文级，
+  所以靠到 `size="sm"`（28px）：**字号不变，只矮了 8px** —— 出图确认差异就是"这一格变矮、
+  下面的开场白跟着上移 8px"，没有别的影响。
+- 预设搜索框是「外层方框自己画、里面那格无边框透明」的写法：外层规则（边框/圆角/底/
+  `:focus-within`）留着，里面那层的观感落到里层原生控件上。
+
+**⚠️ 缺口 4：选中区间的**属性**也要代理（`selectionStart` / `selectionEnd` / `selectionDirection`）**
+`select()` / `setSelectionRange()` 是方法（上一轮补的），但页面还会**读**这些属性：
+`quickPhrases.js` 按光标位置决定短语插在哪 —— 读不到就退化成「永远插在末尾」
+（不报错，行为悄悄变差）；测试也读它验「焦点落在标题末尾还是整段选中」。
+底座补了 `mirrorSelectionProperties`（口径照原生：文本类返数字，其它类型返 null）。
+
+**验证**
+- 出图 + 逐像素：`presets` **逐像素完全相同**；`wbEditorPage` / `worldbookEditor` /
+  `presetEditor` 各差 0.12–0.14%（最大通道差 2–19，都是包了一层之后的亚像素取整）；
+  `wbBookSettings` 差 3.1% —— 逐带扫描确认是**书名那格矮 8px、下方内容整体上移 8px**，
+  页头/标签栏 0 差异。
+- 冒烟 **1519/1519 通过，控制台 0 报错**；`npm run test:ui` **79/79**；静态自检全绿。
+- 顺手修了两处**量错对象**的断言（组件化之后 `activeElement`、`selectionStart`
+  都在里层控件上）：`asControl(title)` 那一条。
+
+**剩下的**：多行框（index.html 17 个 + JS 6 处）、按钮（39 处调用点）、约 60 条页面级控件外观。
+
+---
+
+## 2026-10-16 设置页 16 个输入框一次迁完（今天收尾）+ 组件库现状交接
+
+这轮把设置页那一片的文本类输入框全部换成组件：`s-temp`/`s-topp`/`s-maxtokens`/
+`s-wb-depth`/`s-max-turns`（生成参数与上下文）、`s-pet-*` 五个（桌宠）、
+`p-name`/`p-baseurl`/`p-apikey`（服务商与 API Key）、`player-name`/`persona-name`（人设）、
+`appearance-boldcolor-text`（外观里的十六进制色值）。**16 个一次迁完，脚本变换 + 逐项核对**。
+
+**设置页那条"上下文皮肤"按原计划加了一层**
+设置页的控件不是全局皮肤，而是一条上下文皮肤（透明边框 + `bg-side` 底，聚焦时变 `bg-card`）。
+那段注释本来就写着「每迁一个控件类型，就在这两条里各加一行 —— 等五类控件都迁完，
+这一整段会塌成一条『组件在这个上下文里的皮肤』规则」。这轮照做了：两条规则里各加
+`.field > m-input > input`（`:focus` 同理），并顺手把三处"该落在宿主上还是里层"的规则分开：
+数字框的 `max-width` 归宿主、等宽数字 `tabular-nums` 归里层控件、外观行的 `flex` 归宿主。
+
+**验证**
+- 出图 + 逐像素：`settings` / `appearance` / `settingsImage` **逐像素完全相同**；
+  `settingsBehavior` 差 15 像素（最大通道差 1，肉眼不可见）；
+  `petSettings` 差 270 像素（最大通道差 34）—— 裁图确认**只差数字框右侧那个上下箭头**
+  （spinner 的渲染/悬停），没有任何位移。
+- 冒烟 **1519/1519 通过，控制台 0 报错**；`npm run test:ui` **79/79**；静态自检全绿
+  （`check-css` 仍是那 3 处继承来的重复，本轮引入 0 处）。
+
+---
+
+## 组件库现状（2026-10-16 收尾时的交接单）
+
+**四个基础件都已经落好了**（`renderer/js/components/`，两种入口共用一份实现）：
+`MiButton` / `MiInput` / `MiTextarea` / `MiSelect` —— 自定义元素 + 工厂（`mButton` / `mInput` …），
+light DOM 吃现有 CSS 令牌，词表是 variant `base/primary/ghost/danger` × size `md/sm/xs`。
+配套：`preview/components.html` 组件盘、`npm run test:ui`（79 条）、`npm run shot:components`
+（出图对照老 `.btn` 的计算样式）、`docs` 见 README 的组件库一节。
+
+**还没迁的页面部分**（组件本身都在，只差把调用点换过来）：
+| 类别 | 现状 | 剩多少 |
+| --- | --- | --- |
+| `<select>` | ✅ **全部迁完** | index.html 里已无原生 select（只剩注释） |
+| 文本输入（`<m-input>`） | 已迁：属性行 6 个、状态卡 2 个、世界书搜索、表情 2 个、角色编辑器 4 个、设置页 16 个 | index.html 还剩 **14 个**（世界书编辑器 `wb-*` 6 个、预设编辑器 `pr-*` 6 个、`preset-search` 等）+ JS 里 5 处（多为勾选框/滑块/文件，**不迁**） |
+| 多行框（`<m-textarea>`） | ❌ 一个都没迁 | index.html **17 个** + JS 6 处（聊天输入、人设模板、世界书内容…） |
+| 按钮（`<m-button>`） | ❌ 一个都没迁（`.btn` 与 `.mi-btn__*` 已经共用同一份声明，所以迁的时候是**删左半边**） | 39 处 `button({…})` 调用点 |
+| 页面级控件外观 | 已收掉：属性行、状态卡、世界书搜索、设置页皮肤 | 约 **60 条**待收（每迁一类就塌一段） |
+
+**迁移一个控件的三件事**（三件都在 `components/base.js` 顶部有注释，是踩出来的）：
+① 页面有没有**直接设 property**（`placeholder`/`type`）→ `reflectProperties`；
+② 有没有监听**不冒泡的事件**（`focus`/`blur`）→ `_wireFocusBridge`；
+③ 有没有调用**原生控件的方法**（`select`/`setSelectionRange`）→ `_callControlMethod`。
+迁文本域时第③类还会再撞上（`composer.js`、`settings.js` 各一处 `setSelectionRange`）。
+
+**明确不迁**（写进这里免得反复纠结）：`type=range`、勾选框、单选、颜色、文件选择框 ——
+它们不是"文本输入"，硬套只会把组件词表撑大。
+
+---
+
+## 2026-10-16 角色编辑器 4 个静态框 + 表情 2 个；第三个「组件不像原生控件」的缺口：方法没转发
+
+这轮把 `index.html` 里角色编辑器那 4 个静态文本/数字框（角色名 `#c-name`、标签 `#c-tags`、
+每轮给几个 `#c-options-count`、额外要求 `#c-options-hint`）和表情行的名称/触发词换成组件。
+`id` 全部留在宿主上，所以 `dom.js`、`el.c.name.value`、`setValue('#c-name', …)` 一行都不用改。
+
+**尺寸：两个档位都是"正好对上"**
+- 表情那两个：页面规则 `.char-expr-row input[type="text"]` 写的是 **26px + xs 字号** = `size="xs"` ✓
+  —— 那条规则整个删掉，外观全归组件。
+- 编辑器那 4 个：全局基线就是 **44px + 正文级字号** = 默认档 ✓ —— 两条只管布局的页面规则
+  （`.char-head-fields input` 的 width/min-width）也一并删掉：宿主自带 `width: 100%` + `min-width: 0`。
+
+**⚠️ 缺口 3：原生控件的「方法」没有转发 → `el.c.name.select is not a function`**
+页面里真的在用这些方法：`el.c.name.select()`（打开编辑器后选中名字，一打字就整段替换，
+角色编辑器和世界书编辑器各一处）、`setSelectionRange()`（把光标放到末尾 / 选中模板第一行，
+4 处）。组件化之后宿主上**没有**这些方法 —— 不是静默失效，是**直接 TypeError**：
+这轮冒烟一次炸出 **23 条控制台报错**、6 条断言失败（角色编辑器打不开）。
+底座补了 `select()` / `setSelectionRange()` 转发（照 `focus`/`blur`/`click` 那套写法），
+里层控件没有这个方法时**当场报错**，不做静默空转。
+
+**这一轮记住的教训**：组件化一个控件，要同时问三件事 ——
+① 页面有没有**直接设 property**（`placeholder` / `type`，上轮补的 `reflectProperties`）；
+② 页面有没有监听**不冒泡的事件**（`focus` / `blur`，上轮补的桥）；
+③ 页面有没有调用**原生控件的方法**（`select` / `setSelectionRange`，这轮补的）。
+三件事都在 `components/base.js` 顶部有注释，后面迁文本域时第③类还会再撞上
+（`composer.js` 的 `textarea.setSelectionRange`、`settings.js` 的 `el.persona.text…`）。
+
+**验证**
+- 出图 + 逐像素：`charExpr` 场景（正好显示角色名/标签）**逐像素完全相同**；
+  `charAttrsState` 只差**鼠标悬停态**（`.attr-item:hover` 的 `--bg-input` 背景，
+  最大通道差 8，行结构与文字一致）—— 同代码连拍两次是 0 差异，说明这不是噪声，
+  而是驱动脚本最后那次点击把光标停在了不同行上。
+- 冒烟 **1519/1519 通过，控制台 0 报错**（新增 2 条：`select()` / `setSelectionRange()` 转发）；
+  `npm run test:ui` **79/79**；静态自检全绿（`check-css` 仍是那 3 处继承来的重复）。
+- 测试侧顺手修了一处**假红**：`radiusOf('#c-name')` 在量宿主（组件化之后圆角在里层），
+  已改成过一道 `asControl()` —— 这条断言当时红的是测试自己。
+
+**剩下的输入框**：`index.html` 里还有 33 个文本类静态框（15 number / 16 text / 1 password /
+1 search，主要在设置页、世界书编辑器），加上按钮那一批和 69 条页面级控件外观。
+`type=range` / 勾选框 / 文件选择框**不迁**（它们不是文本输入）。
+
+---
+
+## 2026-10-16 状态卡编辑框 + 世界书搜索框；顺手补了两个「组件不像原生控件」的缺口
+
+状态卡编辑态的输入框（`.sc-input`，6 个字段 + 新增字段那个）和世界书条目搜索框
+（`.wb-search`）换成 `<m-input>`。
+
+**先量再改：两个都是"正好对上"的档位**
+出图探针先量了迁移前的实测值，省掉了瞎猜：
+- `.sc-input`：实测 **28px + 正文级字号**（CSS 里写的是 `min-height: 26px`，但它在
+  状态卡那一行里被 stretch 成 28）—— 正好是组件的 `size="sm"`；只剩底色
+  （`--bg-input`）和聚焦环是这个上下文特有的，用两条点名里层控件的覆盖规则留住。
+- `.wb-search`：实测 **44px**（CSS 里没写高度，是被同一行的筛选下拉 stretch 上去的）——
+  正好是默认档；字号从 12px 变成正文级，和旁边那个 `m-select` 一致了。
+
+**⚠️ 缺口 1：`type="search"` 不在控件皮肤基线里**
+页面那几条 `.wb-search` 规则一删，搜索框立刻掉回 **UA 默认样式**（灰边框、21px 高、
+13.3px 字号）—— 因为全局那条控件基线只覆盖 `text / password / number`。
+修法是把组件 `INPUT_TYPES` 支持的**文本类输入全补进基线**
+（`search` / `email` / `url` / `tel` 各进宽高/悬停/聚焦三条规则），
+而不是给搜索框单独写一套皮肤。补完实测：44px / 14px / `--border` ✓。
+
+**⚠️ 缺口 2：`focus` / `blur` **不冒泡**，组件化之后宿主收不到**
+状态卡的编辑行靠 `input.addEventListener('blur', …)` 把值落盘（防抖那条只是兜底）。
+监听对象从原生控件变成宿主之后，里层那个 blur 永远冒不上来 —— **静默失效**
+（界面看着还正常，只是最后一次编辑可能漏提交）。底座新增 `_wireFocusBridge()`：
+里层控件上的 `focus` / `blur` 转发一份到宿主（照原生口径：不带 bubbles）。
+
+**测试侧的两个坑（都写进注释了）**
+- 冒烟窗口是**隐藏**的，这种窗口里 Chromium 不发 `focus` / `blur` **事件**
+  （`.focus()` 仍会改 `activeElement`）—— 所以桥那一层用**合成事件**验，
+  走的是同一个监听器；真实那一层只验 `activeElement`。
+- 状态卡那个出图场景**不能用 `--shot-only`**：它依赖冒烟跑出来的会话与面板状态。
+  这轮第一次用 `--shot=stateCardEdit`（不加 `--shot-only`）才拍到真正的编辑态卡片。
+
+**验证**
+- 出图 + 逐像素对比（迁移前后各拍一次，两次都跑完整套以保证状态一致）：
+  - 状态卡：差 0.57% —— 差异掩码显示红点**全部落在每个字段的文字上**（内边距 8→10px，
+    文字右移 2px），加上一处**运行间瞬态**（某条消息的操作条「复制/编辑/重新生成」）。
+    卡片几何实测与迁移前**逐项相同**（28px / 14px / `rgb(247,248,250)`）。
+  - 世界书：差 0.19% —— 搜索框字号 12→14px（有意）、圆角 4→3px（并进 `--radius-sm`），
+    外加 3 条 1px 边框线差 2 个色阶（亚像素取整）；沿列扫描确认**没有任何位移**（Δtop 全 0）。
+- 冒烟 **1517/1517 通过，控制台 0 报错**（新增 2 条：`.placeholder` property 桥、
+  里层 focus/blur 桥到宿主）；`npm run test:ui` **79/79**；13 个静态自检全绿 ——
+  `check-css` 的重复选择器还从 4 处**降到 3 处**（删掉世界书那两条自带重复的规则）。
+
+**还剩什么**：别的页面那些输入框与多行框（`.crop-zoom` / `.memory-edit-box` /
+设置页那一串）、按钮、以及那 69 条页面级控件外观。
+
+---
+
+## 2026-10-16 属性行的输入框也组件化了：又挖出一个「property 写法不生效」的通用坑
+
+属性编辑器那 6 个输入框（值 / 范围上下限 / 变化规则 / 新建分组名 / 分组改名 / 新增属性）
+换成 `<m-input>`。到这儿，**属性行这一块控件已经全是组件**了。
+
+**尺寸口径的收敛（这轮的实质收益）**
+应用里这三个输入框原来是三套各自写死的小尺寸：26px + xs 字号、28px + 正文级字号、
+30px + 正文级字号。组件那边原来只有 `sm`（32px + xs 字号，而且**应用里没人用**）。
+处理办法是**让组件去迎合页面**，而不是反过来：
+- `sm` 重定义为 **28px + 正文级字号**（对齐 `.attr-value` / `.attr-group-name`，也正是
+  `.btn-sm` 那个量级）；
+- `xs` 保持 **26px + xs 字号**（对齐 `.attr-num` / `.attr-hint` / `.attr-group-new`）；
+- 三条尺寸规则按控件类型拆开写（多行框不跟着压高度 —— 它有自己的 `min-height`）；
+- 页面 CSS 里那 7 条规则的外观部分（min-height / padding / font-size / border-radius）
+  全部删掉，只剩「占多宽 / 怎么排」和上下文颜色。
+
+结果：5 个控件与迁移前**逐像素同尺寸**，只有「新增属性」那个从 30px 收到 28px（2px），
+这是**有意的收敛**（三套变两档）。
+
+**⚠️ 又挖出一个通用坑：`host.placeholder = 'x'` 这种 property 写法不生效**
+`<m-input>` **不是** `HTMLInputElement`，没有 `placeholder` / `maxLength` / `min` 这些
+property。而视图里到处是直接设 property 的写法：
+`el.c.attrNew.placeholder = bucket.id ? '往「…」里加一个属性' : '属性名，比如 金币'`
+—— 不接管的话这一行只会往宿主对象上挂一个普通属性，里层那颗原生 input 永远收不到
+（不报错、也不生效）。修法是底座新增 `reflectProperties(ctor, names)`：把 property
+桥成 attribute，再由 `syncForward` 落到里层控件（`m-input` / `m-textarea` 各自登记了
+自己那批属性名）。单元测试 + 冒烟各钉了一条。
+
+**测试那边跟着改的**
+- `asSelect()` 泛化成 **`asControl()`**：组件（`m-select`/`m-input`/`m-textarea`）都返回
+  里层那颗原生控件。**外观长在里层**，所以「圆角是多少 / 高度是多少」这类断言必须过一道 ——
+  这轮就有一条旧断言在量宿主、拿到 0px 而假红。
+- 9 处按标签写死的选择器（`input.attr-num` / `input.attr-group-new` / `input.attr-group-name`）
+  去掉标签名。
+
+**验证**
+- 4 个场景出图 + 逐像素对比：`charAttrs` / `charAttrsMore` / `charGroupEdit`
+  **逐像素完全相同**；`charAttrsState`（唯一能看见这些控件的场景）差 4.46% ——
+  逐项量过：类型下拉 26、值输入框 28、规则输入框 26、新增属性框 28（旧的 30），
+  差异掩码显示变化集中在**下拉箭头 / 行分隔线级别的 1px 位移**和那个 2px 收敛上，
+  整块属性区由 163px 收到 159px。这是这一系列迁移里**第一处有意的视觉收敛**，
+  不是为了零差异而回退（回退等于把页面外观规则留着）。
+- 冒烟 **1514/1514 通过，控制台 0 报错**；`npm run test:ui` **79/79**；静态自检全绿；
+  `check-css` 仍是继承来的 4 处重复（我引入 0 处）。
+- 出图工具的属性区探针现在把这 6 个控件的宿主/里层/宽度逐项打出来，后面几批迁移直接对照。
+
+**还剩什么**：别的页面那些输入框与多行框（`.sc-input` / `.wb-search` / `.crop-zoom` /
+`.memory-edit-box` / 设置页那一串）、按钮、以及那 69 条页面级控件外观。
+另外「＋ 新建分组」那颗**药丸形**输入框（`.attr-tab-new`）暂不迁：它是一次性定制件
+（虚线边框 + 全圆角 + 聚焦拉宽），归通用组件管只会把组件词表撑大。
+
+---
+
+## 2026-10-16 动态下拉也迁完了 + 一个会「静默丢事件」的坑（差点埋进组件层）
+
+剩下那 4 个**渲染时现建**的下拉（属性类型 / 更新频率 / 分组 / 世界书状态筛选）也换成了
+`<m-select>`。到这儿，**应用里已经没有一处现建的原生 `<select>`** —— 全仓只剩组件内部
+自己 createElement 的那一颗。
+
+**新增一档尺寸 `size="xs"`**
+属性行那三个控件原来是三套各自写死的小尺寸（`.attr-type` 28px / padding 2px 6px，
+`.attr-group`、`.attr-mode` 26px / padding 4px 8px）。这类「最紧凑档」正是组件库该收的：
+新增 `xs`（26px 高、xs 字号、小圆角），三条页面规则里的**外观部分全部删掉**，只留
+「它在行里占多宽」和这个上下文特有的文字颜色（颜色得点名里层控件
+`.attr-type > .mi-select__control` —— 全局 `select` 规则显式设了 color，靠宿主继承传不进去）。
+下拉的 `xs` 档单独留了 `padding-right: 30px` 给箭头（老代码里就是这么补的），
+`worldbookLayout.js` 那个状态筛选**一行 CSS 都没改**（类名留在宿主上，那两条规则照旧命中）。
+
+**⚠️ 差点埋进去的坑：`applyOptions` 只认 `onChange`，不认 `onchange`**
+视图里这两种写法**各占一半**（各 61 处），而 `h()` 的口径是宽松的「on 开头 + 值是函数」。
+组件的 `applyOptions` 原来写的是 `/^on[A-Z]/` —— 于是 `mSelect({ onchange })` 会把监听
+**静默丢掉**（不报错、点了没反应）。冒烟测试当场炸出 34 条连锁失败（属性编辑器那条
+场景超时 → 后面所有"面板注入给模型"的断言全红），根因就是这个。
+修法：`on*` 一律小写后 `addEventListener`（和 `h()` 对齐），值不是函数时**当场报错**
+而不是默默写成一个 `onchange="…"` 垃圾属性。加了单元测试钉住两种写法都收。
+
+**MiSelect 又补了一层：`append()` 绕过 `appendChild`**
+`ParentNode.append()` 走的是内部 pre-insert，**不经过** `appendChild` —— 而
+`worldbookLayout.js` 铺状态筛选项用的正是 `filter.append(option)`（它现在只是"碰巧"
+因为发生在进文档之前才没事）。补了 `append` / `prepend` 的同步转发，另加一个
+MutationObserver 兜底任何别的路径。同步那一半必须留：调用点紧接着就会设 `.value` /
+读 `.options`（`player.js` 就是「清空 → 逐条 append → `value = ''`」）。
+
+**验证**
+- 出图 + 逐像素对比：`charAttrs` / `charAttrsMore` / `wbEditorPage` **逐像素完全相同**；
+  `charGroupEdit` 差 484 像素 —— 定位到行 371-414、列 240-426（就是那个聚焦输入框的
+  **光标闪烁**），并且用「同一份代码连拍两次」做了噪声基线：**两次的差异区间与像素数
+  一模一样**（484 / 同样区间）。所以四个场景实质零差异。
+- 新增出图场景 `--shot=charAttrsState`：属性行那三个下拉住在编辑器的「属性」分区里，
+  而那个分区默认不展开 —— 不切过去，出图里根本看不到它们（第一次量出来高度是 0 才发现）。
+  它顺带把几何打出来：**类型 26px / 里层 26px / 字号 12px**，说明 `xs` 真生效了。
+- 冒烟 **1513/1513 通过，控制台 0 报错**（新增一条断言：属性行的类型下拉是组件、
+  走 `size="xs"`、实测 26px）；`npm run test:ui` **77/77**；9 个静态自检全绿
+  （`check-css` 仍是继承来的 4 处重复 —— 我自己写重了一条 `.mi-select--xs` 规则，
+  被它抓出来当场拆开了）。
+- 组件盘加了 `size=xs` 两行（输入框 / 下拉），词表在预览页上看得见。
+
+**还剩什么**：属性行里那几个**输入框**（`.attr-value` / `.attr-num` / `.attr-hint` /
+`.attr-group-new` / `.attr-group-name`）、其它页面的输入框与多行框、按钮，
+以及那 69 条页面级控件外观。
+
+---
+
+## 2026-10-16 剩下 12 个静态下拉一次迁完：index.html 里已经没有一个原生 `<select>` 了
+
+顺着上一处的样子批量推：设置（生图 3 个 / 语义检索 2 个 / 桌宠 2 个）、视角弹窗 2 个、
+玩家弹窗 1 个、默认人设弹窗 1 个（带 `optgroup` 分组）、世界书条目表单 1 个
+（「附加条件」）。**13 个静态下拉全部是 `<m-select>`**，`index.html` 里一个原生
+`<select>` 开标签都不剩（只有两处注释里提到它）。
+
+**应用代码几乎没动**：`dom.js` 的 `el.*` 别名一个没改，视图那边只用到
+`.value` / `.options` / `.innerHTML = ''` / `appendChild(option)` / `clear()` / `'change'`
+—— 全部由组件代理或转发（`MiSelect` 的 `innerHTML` / `appendChild` / `insertBefore`
+都转发给里层那颗原生 select，`options` / `selectedOptions` / `selectedIndex` 是代理）。
+
+**测试那边要跟着改的只有一类：断言「它是个下拉」的写法**
+- 新增两个帮手：`asSelect(node)`（原生 select 或组件都给到里层那颗原生控件）、
+  `isDropdown(node)`（派发 change 时判"是不是下拉"）。
+- `setValue()` 原来写的是 `if (node.tagName === 'SELECT') 派发 change` —— 组件是
+  `M-SELECT`，不改的话「换服务商 → 模型下拉跟着重填」这类只监听 `change` 的行为
+  会**静默地测不到**（假绿）。这条正是迁移里最容易漏的坑：红的是断言，坏的却是测试自己。
+- 顺手把动态建的那个 `.attr-group` 断言也换成了 `asSelect()`，等它迁移时不会再假红。
+
+**新增一条按 DOM 推导的批量断言（不写死 id 清单）**
+「文档里每个原生 select 用的时候都接得上自研列表 / 每个 m-select 宿主都建出了里层
+控件 / 宿主 `.value` 与 `.disabled` 和里层一致」。第一版把口径写成"启动后全都带标记"，
+**当场红了** —— 动态建出来的 `wb-state`（世界书状态筛选）此刻还没被点过，而它的接线是
+**懒接线**（第一次被点才接）。红得有道理：断言该写真实保证，不该写愿望。改完之后它
+一次覆盖全部下拉，谁漏接线、谁代理走偏都会红。
+
+**验证**
+- 6 个场景出图 + 逐像素对比（设置·语义检索 / 设置·生图 / 设置·桌宠 / 视角弹窗 /
+  世界书条目表单 / 默认人设弹窗）：**全部「逐像素完全相同」**。
+  为覆盖这些下拉新加了三个出图场景：`--shot=settingsImage`、`--shot=perspective`、
+  `--shot=wbEntryForm`（后者会先点开一条世界书条目，否则条目表单不出来）。
+- 冒烟 **1512/1512 通过，控制台 0 报错**；`npm run test:ui` 75/75；9 个静态自检全绿。
+
+**还剩什么**：4 个**动态**下拉（属性类型 / 更新频率 / 分组 / 世界书状态 —— 都是渲染时
+现建的 `h('select', …)`，迁移要连带改 `.attr-row select.attr-type` 这类按类名写的宽度
+规则）、输入框与多行框那一类，以及那 69 条页面级控件外观。
+
+---
+
+## 2026-10-16 组件库第一次真实迁移：设置页那个字体下拉换成 `<m-select>`
+
+组件库落地之后的第一处页面迁移，选它是因为**代价最小、验证最硬**：它已经有现成的
+出图场景（`--shot=selectPop`）和冒烟断言，迁移前后能直接做**逐像素对比**。
+
+**改了什么**
+- `index.html`：`<select id="appearance-font">` → `<m-select id="appearance-font">`
+  （id 留在宿主上，`core/dom.js` 的 `el.appearanceFont` 一行没动）。里面的
+  `<option>` 由组件搬进里层那颗原生 `<select>`。
+- `appearance.js` **一个字没改**：它只用 `.value` 和 `'change'` —— `.value` 现在是
+  代理，`'change'` 从里层原生 select 冒泡上来。
+- `style.css`：设置页那两条控件规则各加一行 `.field > m-select > select` —— 子选择器
+  多了一层，这是**每处迁移都要跟着做的一件事**（五类控件都迁完之后，那一段会塌成
+  一条「组件在这个上下文里的皮肤」）。
+- `components/select.js`：宿主把**落在自己身上的合成** `mousedown` / `keydown` 转发给
+  里层原生 select。因为自研列表是「按事件目标找 select」，而工具和测试普遍写
+  `getElementById('xxx').dispatchEvent(...)` —— 按 id 拿到的是宿主，不转发就是
+  「点了个寂寞且不报错」。真人点击时目标本来就是里层那颗（它 width:100% 铺满宿主）。
+
+**迁移时踩到并修掉的坑：宿主会缩成内容宽（930px → 218px）**
+
+第一遍出图后做像素对比：**8.13% 的像素变了**，差异区正是那个下拉。量出来是这样 ——
+`.field` 的对齐是 `align-items: start`（继承自 `.field` 那条基础 grid 规则），所以
+flex 的 stretch 根本拉不满宿主；而老的原生 `<select>` 之所以铺满，靠的是全局控件
+基线里那条 `select { width: 100% }`。**宿主不接这一条，控件就只占内容宽。**
+
+修法：给 `m-input / m-textarea / m-select` 的宿主补上 `width: 100%`（和全局基线同一条
+口径）。修完宿主 = 896px = field 的内容区宽度，正是迁移前原生 select 的宽度。
+
+这条不是个例：**「宿主必须占住原控件占的那个盒子」是所有 wrap 型组件迁移的通则**，
+所以写在 style.css 组件段里当硬约束（带数字注释），后面 12 个下拉、以及输入类迁移
+都会撞到同一个形状。
+
+**验证**
+- 迁移前后各出一张图（`--shot=selectPop`，明 + 暗），用 Pillow 逐像素对比：
+  **两套主题都是「逐像素完全相同」** —— 这是"重构不改外观"能拿到的最硬证据。
+- 冒烟场景改名为「自研下拉（原生 select 与组件 m-select 两条路）」，把两层的组合钉住：
+  宿主 `.value` 是代理、里层 `change` 冒泡到宿主（页面按宿主监听照旧收得到）、
+  在**宿主**上派发 mousedown 也能打开列表、里层仍是原生 select 且皮肤/列表照旧。
+  整套 **1508/1508 通过，控制台 0 报错**。
+- 出图工具的 `--shot=selectPop` 顺带把这一格的几何量出来打印（宿主盒 / 里层盒 / 父容器
+  对齐 / display / flex 参数）—— 后面每迁一处都先看这几项，避免再靠肉眼看"窄了没有"。
+- `npm run test:ui` 75/75；9 个静态自检全绿（`check-css` 仍是继承来的 4 处重复）。
+
+**还剩什么**：另外 12 个静态下拉 + 4 个动态下拉，以及那 69 条页面级控件外观。
+一页一页来，每页出图 + 像素对比 + 跑冒烟。
+
+---
+
+## 2026-10-16 组件库第一步：自定义元素落地（m-button / m-input / m-textarea / m-select）
+
+上一轮把「类名和建 DOM 的样板」收成了规范件，但页面级控件样式还是有 69 条各写一遍
+（`style.css` 里自带 `1px solid` 边框的规则 82 条，其中 69 条连背景 + 内边距一起重写）。
+这一轮补上**真正的那层**：像 Element Plus 那样「一次定义 = 结构 + 行为 + 样式」，
+页面只挑 `variant` / `size`，不写外观。
+
+**为什么不是 Element Plus 本身**：它要 Vue + 构建步骤，而这个项目 README 写着的卖点
+就是**零构建**（`renderer/` 由 Chromium 直接读，没有 webpack/vite/babel）。所以用
+**自定义元素 + light DOM** 在零构建下拿到同一件事；代价与边界都记在
+`components/base.js` 的文件头里。
+
+**结构（`renderer/js/components/`）**
+- `base.js` —— 极小运行时：`componentClass()` 拼类名（认不出来的 variant/size
+  **当场报错**，不静默丢）、`applyOptions()` 工厂共用入口、`MiControl`（外观 / 禁用 /
+  属性转发 / 焦点与点击转发）、`MiValueControl`（`.value` 代理 + 初始值口径 + dirty 标记）。
+- `button.js` / `input.js` / `textarea.js` / `select.js` —— 每个组件都是
+  「**宿主 + 里层一个原生控件**」：键盘、禁用态、原生事件、表单语义全由里层提供。
+  `m-select` 里的原生 `<select>` 因此**自动吃上**上一轮那层自研下拉列表，组件里没有
+  第二份弹层实现。
+- `index.js` —— 注册表 + 两套入口（`<m-button>` 标签 ／ `mButton({…})` 工厂，**同一份实现**）。
+  `defineComponents()` 在 `main.js` 的 `init()` 最前面调用 —— 组件是进文档那一刻由浏览器
+  upgrade 的，晚注册会停在「未知元素」状态（看得见、没样式、没行为）。
+- 类名一律 `mi-` 前缀（light DOM 没有样式隔离）；类名表**必须写字面量**
+  （`{ primary: 'mi-btn--primary' }`），拼字符串会让 `tools/audit-css-dead.js` 认不出活类名。
+
+**样式：皮肤只有一份**
+- 按钮那几条改成 `.btn, .mi-btn__control { … }` —— 一条规则挂两个选择器，老 `.btn` 与
+  组件**共用同一份声明**；`.btn` 退役时删掉逗号左边那半即可，不会留下两份外观。
+- 输入类的皮肤**一行都不用写**：里层就是原生 `input` / `textarea` / `select`，
+  命中的是 style.css 里那条全局控件规则（`input[type="text"], … , select`）。
+  组件只补宿主布局和尺寸档（`.mi-input--sm` 等）。
+- ⚠️ 这也是一条硬约束：**里层 input 必须带 `type` 属性** —— 属性选择器
+  `input[type="text"]` 不匹配「没有 type 的 input」，漏了就是整个控件没皮肤（不报错）。
+
+**顺手修掉的两个老坑**
+- `h('input', { ariaLabel: … })` 会落到**无效属性 `arialabel`**（Electron 实测确认），
+  a11y 树看不见；12 处 `ariaLabel` 里 4 处在 `h()` 里是坏的。组件入口统一收
+  `ariaLabel` 并写成 `aria-label`。
+- `textContent` 被组件接管：渲染层里到处是「按钮建好之后改字」
+  （`btn.textContent = '换一批中…'`），原生 setter 会**删掉所有子节点**，等于把组件里
+  那颗原生按钮一起删了、而且不报错。`m-button` 的 `textContent` / `innerHTML` 都改写成改 label。
+
+**测试与出图**
+- `npm run test:ui` 扩到 **69 条**（新增 `tools/test-ui-components.js`：类名拼法、
+  `ariaLabel` → `aria-label`、value 走 property、注册表幂等、每个组件的元信息自洽）。
+- 冒烟新增场景「组件库：自定义元素」共 31 条断言，其中一条是**组件皮肤与老 `.btn`
+  计算样式逐项相等**（明暗都验）；整套 **1505/1505 通过，控制台 0 报错**。
+- 新增**组件盘** `renderer/preview/components.html`（开发用页面，不属于应用界面）
+  与 `npm run shot:components`（明 / 暗各一张，写到 `tools/shots/`）。出图工具会
+  **核对有没有拍漏**：窗口内容区被屏幕锁死（1544x975），页面更高时自动算一档 zoom
+  缩进可见区，缩到下限仍装不下就当场告警（这次就踩了：底下「事件与值」整格没拍到）。
+
+**样式工具链的结论（Sass）：不引。** Sass 的四件好处在这里各有替代 —— 变量用
+CSS 自定义属性（125 个 + 两套主题，而且**能运行时切主题**，Sass 变量做不到）、
+嵌套用原生 CSS 嵌套（这个 Electron 是 Chromium 152，实测 `CSS.supports('selector(&)')`
+为真）、`@mixin` / `@extend` 用组件层、颜色函数用 `color-mix()`（已在用）。
+真要引，代价是：dev 循环变两个进程、`style.css` 变生成物（改了源忘编译 = 经典静默失效）、
+6 个 CSS linter 全部要改成读源文件。
+**同理，`style.css` 继续写平铺而不写嵌套** —— 那些 linter 是按平铺规则写的，
+嵌套会让内层规则漏检（宁可少一层便利，不要体检结果失真）。
+
+> ⚠️ 迁移是增量的：**应用自己的页面还没换成组件**（那一轮在第 2、3 步 —— 先把页面级
+> 控件样式收进组件层，再逐页替换）。现在两边并存，外观由同一份声明保证一致。
+
+---
+
 ## 2026-10-16 控件层落地：13 个原生下拉换成自研列表，输入框/字段/按钮各归一处
 
 「界面里的按钮、输入框、下拉框能不能做成自己的组件」——**能，而且这个项目坚持

@@ -28,7 +28,8 @@ defineComponents();
 initSelects(); // 让组件里的原生 <select> 也吃上自研列表（见文件头）
 
 const root = document.querySelector('.pv-root');
-if (!root) throw new Error('组件盘缺少 .pv-root 容器（components.html 结构变了？）');
+const headHost = document.querySelector('.pv-head');
+if (!root || !headHost) throw new Error('组件盘缺少 .pv-root / .pv-head 容器（components.html 结构变了？）');
 
 // ---------------------------------------------------------------------------
 //  页面脚手架（.pv-* 只属于这一页）
@@ -159,6 +160,7 @@ const inputs = card(
   line('password', wire('m-input[password]', mInput({ type: 'password', value: 'hunter2' }))),
   line('number', wire('m-input[number]', mInput({ type: 'number', min: 1, max: 6, value: 4 }))),
   line('size=sm', wire('m-input[sm]', mInput({ size: 'sm', placeholder: '紧凑档' }))),
+  line('size=xs', wire('m-input[xs]', mInput({ size: 'xs', placeholder: '属性行那种最紧凑档' }))),
   line('禁用 / 只读', mInput({ value: '禁用', disabled: true }), mInput({ value: '只读', readonly: true })),
   line('无障碍', ariaSample, ariaReadout)
 );
@@ -171,10 +173,10 @@ const textareas = card(
   '多行框 m-textarea',
   'rows 默认 3（和 ui/controls.js 的 textarea() 同一个口径）；能不能拖拽改变大小由全局 textarea 规则提供。',
   false,
-  line('rows=3', wire('m-textarea[3]', mTextarea({ placeholder: '写点什么……' }))),
-  line('rows=6', wire('m-textarea[6]', mTextarea({ rows: 6, value: '多行\n文本' }))),
+  line('rows=2', wire('m-textarea[2]', mTextarea({ rows: 2, placeholder: '写点什么……' }))),
+  line('rows=5', wire('m-textarea[5]', mTextarea({ rows: 5, value: '多行\n文本' }))),
   line('size=sm', wire('m-textarea[sm]', mTextarea({ size: 'sm', rows: 2, placeholder: '紧凑档' }))),
-  line('禁用', mTextarea({ value: '禁用', disabled: true }))
+  line('禁用', mTextarea({ rows: 2, value: '禁用', disabled: true }))
 );
 
 // ---------------------------------------------------------------------------
@@ -225,6 +227,10 @@ const selects = card(
     { value: '1', text: '一' },
     { value: '2', text: '二' }
   ]), ['change'])),
+  line('size=xs', wire('m-select[xs]', selectWithOptions({ size: 'xs', 'aria-label': '属性行最紧凑档' }, [
+    { value: 'text', text: '文本' },
+    { value: 'meter', text: '数值' }
+  ]), ['change'])),
   line('禁用', selectWithOptions({ disabled: true, 'aria-label': '禁用' }, [{ value: '1', text: '禁用' }]))
 );
 
@@ -246,9 +252,8 @@ const inspect = card(
 
 const theme = (mode) => document.documentElement.setAttribute('data-theme', mode);
 
-const head = h(
-  'header',
-  { class: 'pv-head' },
+// 页头进 .pv-head（**不能**进 .pv-root：那是四栏 grid，页头会占掉第一格）
+headHost.append(
   h(
     'div',
     {},
@@ -256,8 +261,8 @@ const head = h(
     h('p', {
       class: 'pv-note',
       text:
-        '开发用页面（不属于应用界面）。每一格都是 components/ 里那个组件的真实实例 —— '
-        + '页面这边一个外观样式都没写，只有 variant / size 和属性。'
+        '开发用页面，不属于应用界面。每一格都是组件的真实实例，页面这边一个外观样式都没写 —— '
+        + '只有 variant / size 和属性。'
     })
   ),
   h(
@@ -268,7 +273,6 @@ const head = h(
   )
 );
 
-root.appendChild(head);
 root.appendChild(buttons);
 root.appendChild(inputs);
 root.appendChild(textareas);

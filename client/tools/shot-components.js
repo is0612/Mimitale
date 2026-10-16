@@ -36,42 +36,63 @@ const SHOW = process.argv.includes('--show');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * 整页截图（不只是可见视口）。
+ * 拍一张，并**核对有没有拍漏**。
  *
- * ⚠️ 别用 `win.webContents.capturePage()`：它只拍**可见视口**，而窗口高度受屏幕
- * 物理高度限制 —— 组件盘 1749px 高，窗口要到 1860px 才装得下，在这台机器上会被
- * 系统压到 ~975px，于是底下「下拉框 / 事件与值」两格**整块拍不到**，而且看图时
- * 很容易以为"组件就这么多"。
- * 走 CDP 的 `Page.captureScreenshot` + `captureBeyondViewport` 才拿得到整页。
+ * `capturePage()` 只拍**可见视口**，而窗口内容区的高度被屏幕物理高度锁死
+ * （这台机器上不管申请多高都是 1544x975）。组件盘比它高就会整块漏拍底下几格，
+ * 而"漏拍"在看图上极难发现 —— 这次就踩了：页面 1214px，底下「事件与值」整格没了。
+ *
+ * 所以两条一起用：
+ *   · 先按页面高度**算一档 zoom** 把整页缩进可见区（0.6 是下限，再小就没法看了）
+ *   · 缩完还装不下就**当场警告**，别让图默默缺一块
+ * （试过 CDP 的 Page.captureScreenshot + captureBeyondViewport 拍整页，在这个
+ *   隐藏窗口上会直接挂住，不划算。）
  */
-async function wholePagePng(win) {
-  const metrics = await win.webContents.executeJavaScript(`(() => {
+const MIN_ZOOM = 0.6;
+
+async function pageMetrics(win) {
+  return win.webContents.executeJavaScript(`(() => {
     const doc = document.documentElement;
     return {
-      width: Math.ceil(Math.max(doc.scrollWidth, document.body.scrollWidth)),
-      height: Math.ceil(Math.max(doc.scrollHeight, document.body.scrollHeight))
+      pageHeight: Math.ceil(Math.max(doc.scrollHeight, document.body.scrollHeight)),
+      pageWidth: Math.ceil(Math.max(doc.scrollWidth, document.body.scrollWidth)),
+      viewHeight: window.innerHeight,
+      viewWidth: window.innerWidth
     };
   })()`);
+}
 
-  try {
-    if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3');
-    const shot = await win.webContents.debugger.sendCommand('Page.captureScreenshot', {
-      format: 'png',
-      captureBeyondViewport: true,
-      clip: { x: 0, y: 0, width: metrics.width, height: metrics.height, scale: 1 }
-    });
-    return { buffer: Buffer.from(shot.data, 'base64'), size: metrics, via: 'cdp' };
-  } catch (err) {
-    console.warn('  CDP 整页截图失败，退回只拍可见视口：', err.message);
-    return { buffer: (await win.webContents.capturePage()).toPNG(), size: metrics, via: 'viewport' };
+async function fitToView(win) {
+  win.webContents.setZoomFactor(1);
+  const before = await pageMetrics(win);
+  if (before.pageHeight <= before.viewHeight) return before;
+
+  const zoom = Math.max(MIN_ZOOM, Math.floor((before.viewHeight / before.pageHeight) * 100) / 100);
+  win.webContents.setZoomFactor(zoom);
+  console.log(`  页面 ${before.pageHeight}px 高于可见区 ${before.viewHeight}px，缩到 zoom=${zoom} 出图`);
+  await sleep(250);
+  return pageMetrics(win);
+}
+
+async function captureChecked(win) {
+  const metrics = await pageMetrics(win);
+  const image = await win.webContents.capturePage();
+  const size = image.getSize();
+  if (metrics.pageHeight > metrics.viewHeight + 2) {
+    console.warn(
+      `  ⚠ 缩到下限还有 ${metrics.pageHeight - metrics.viewHeight}px 没进图（页面 ${metrics.pageHeight}px / ` +
+        `可见 ${metrics.viewHeight}px，CSS px 口径）—— 把组件盘压短一点，或者把窗口调宽让卡片更矮。`
+    );
   }
+  return { image, metrics, size };
 }
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
-    width: 1280,
-    // 高度按屏幕能给多少算（见下面 wholePagePng 的注释：整页靠 CDP 拍，不靠窗口高）
-    height: 1000,
+    // 宽一点、高一点：组件盘是四栏布局。窗口高度受屏幕限制时下面的 captureChecked
+    // 会当场警告「底下多少 px 没进图」，别让图默默缺一块。
+    width: 1560,
+    height: 1320,
     show: SHOW,
     webPreferences: {
       contextIsolation: true,
@@ -90,6 +111,14 @@ app.whenReady().then(async () => {
   await win.loadFile(PAGE);
   await sleep(400); // 等组件升级 + 首帧排版稳定
 
+  // 窗口到底给了多大内容区：屏幕会限制窗口高度，而 capturePage 只拍可见视口 ——
+  // 先把它打出来，出图不对劲时一眼能看出是"窗口没给够"还是"页面太高"。
+  const [cw, ch] = win.getContentSize();
+  console.log(`  窗口内容区: ${cw}x${ch}`);
+
+  // 屏幕会把窗口内容区压到一屏高，而组件盘比一屏高 —— 先算一档 zoom 把整页装进去
+  await fitToView(win);
+
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   for (const mode of MODES) {
@@ -104,24 +133,45 @@ app.whenReady().then(async () => {
         const ctor = customElements.get(tag);
         return ctor ? ctor.name : '(没注册)';
       };
-      const btn = document.querySelector('m-button .mi-btn__control');
+      const primary = document.querySelector('m-button[variant="primary"] .mi-btn__control');
       const input = document.querySelector('m-input .mi-input__control');
       const select = document.querySelector('m-select .mi-select__control');
+      // 拿一颗老式 .btn-primary 当对照：组件和它必须**长得一模一样**
+      //（皮肤是共用的一份声明；不一样就说明我的选择器接错了，而不是"主题有问题"）
+      const legacy = document.createElement('button');
+      legacy.className = 'btn btn-primary';
+      document.body.appendChild(legacy);
+      const cs = (node) => {
+        if (!node) return '(没有)';
+        const s = getComputedStyle(node);
+        return s.color + ' / ' + s.backgroundColor;
+      };
+      const pairs = {
+        '组件 primary（字/底）': cs(primary),
+        '老 .btn-primary（字/底）': cs(legacy)
+      };
+      legacy.remove();
       return {
         主题: document.documentElement.getAttribute('data-theme'),
         注册: [up('m-button'), up('m-input'), up('m-textarea'), up('m-select')].join(' / '),
-        按钮底色: btn ? getComputedStyle(btn).backgroundColor : '(没有里层按钮)',
+        对照: pairs,
         输入框边框: input ? getComputedStyle(input).borderTopWidth + ' ' + getComputedStyle(input).borderTopColor : '(没有里层 input)',
         下拉宽度: select ? Math.round(select.getBoundingClientRect().width) + 'px' : '(没有里层 select)',
-        页面高: document.body.scrollHeight + 'px'
+        页面高: document.body.scrollHeight + 'px',
+        各卡片高: [...document.querySelectorAll('.pv-card')]
+          .map((c) => {
+            const t = c.querySelector('.pv-card-title');
+            return (t ? t.textContent.split(' ')[0] : '?') + '=' + Math.round(c.getBoundingClientRect().height);
+          })
+          .join(' ')
       };
     })()`);
     console.log(`  ${mode}: ${JSON.stringify(probe, null, 0)}`);
 
     const file = path.join(OUT_DIR, `components-${mode}.png`);
-    const shot = await wholePagePng(win);
-    fs.writeFileSync(file, shot.buffer);
-    console.log(`  截图: tools/shots/components-${mode}.png（${shot.size.width}x${shot.size.height}，${shot.via}）`);
+    const shot = await captureChecked(win);
+    fs.writeFileSync(file, shot.image.toPNG());
+    console.log(`  截图: tools/shots/components-${mode}.png（${shot.size.width}x${shot.size.height}）`);
   }
 
   app.quit();

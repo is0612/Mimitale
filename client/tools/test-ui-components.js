@@ -163,6 +163,31 @@ test('componentClass：四个词表的取值都以自己的 baseClass 打头（C
   }
 });
 
+test('每个组件的类名表：键必须落在统一词表里（variant / size / block，别自创名字）', () => {
+  const allowed = new Set([...M.VARIANTS, ...M.SIZES, 'block']);
+  for (const [tag, ctor] of M.COMPONENTS) {
+    for (const key of Object.keys(ctor.classTable)) {
+      assert.ok(allowed.has(key), `${tag} 的 classTable 里有词表外的键：${key}（可用：${[...allowed].join(' / ')}）`);
+    }
+  }
+  // 词表本身也要能被外面看见（docs / 新组件照着写）
+  assert.deepEqual(M.VARIANTS, ['base', 'primary', 'ghost', 'danger']);
+  assert.deepEqual(M.SIZES, ['md', 'sm', 'xs']);
+});
+
+test('size=xs：属性行那种最紧凑档（select / input / textarea 都得有）', () => {
+  for (const [tag, ctor] of [
+    ['m-select', M.MiSelect],
+    ['m-input', M.MiInput],
+    ['m-textarea', M.MiTextarea]
+  ]) {
+    assert.ok(ctor.classTable.xs, `${tag} 没有 xs 档的类名（属性行要用）`);
+    assert.equal(M.componentClass(ctor.baseClass, ctor.classTable, { size: 'xs' }), `${ctor.baseClass} ${ctor.classTable.xs}`);
+  }
+  // 按钮**没有** xs：词表里有不等于每个组件都实现了 —— 要的时候会当场报错，不是静默
+  assert.equal(M.MiButton.classTable.xs, undefined);
+});
+
 // ---------------------------------------------------------------------------
 //  applyOptions 的口径
 // ---------------------------------------------------------------------------
@@ -192,6 +217,29 @@ test('applyOptions：value / checked 走 property，剩下的走 attribute', () 
 test('applyOptions：onXxx 变成事件，别的 on 开头的字符串不当事件', () => {
   const node = M.applyOptions(fakeNode('m-button'), { onInput: () => {}, onclick: 'ignored', onClick: () => {} });
   assert.deepEqual(node.listeners.map((l) => l.type).sort(), ['click', 'input']);
+});
+
+test('applyOptions：小写与大写的事件键**都收**（视图里各占一半，丢一半就是静默失效）', () => {
+  const node = M.applyOptions(fakeNode('m-select'), {
+    onchange: () => {},
+    oninput: () => {},
+    onclick: () => {},
+    onkeydown: () => {}
+  });
+  assert.deepEqual(node.listeners.map((l) => l.type).sort(), ['change', 'click', 'input', 'keydown']);
+  // 值不是函数的 on* 键**不能**默默变成一个 onxxx 垃圾属性，要当场报错
+  const original = console.error;
+  const seen = [];
+  console.error = (msg) => seen.push(String(msg));
+  try {
+    const bad = M.applyOptions(fakeNode('m-button'), { onchange: 'not a function' });
+    assert.equal(bad.getAttribute('onchange'), null, 'onchange 不该被写成属性');
+    assert.equal(bad.listeners.length, 0);
+  } finally {
+    console.error = original;
+  }
+  assert.equal(seen.length, 1);
+  assert.ok(seen[0].includes('onchange'));
 });
 
 test('applyOptions：class 支持数组和空格串，假值不会变成名叫 "false" 的类', () => {
@@ -230,6 +278,57 @@ test('setAttr / toggleAttr：null、false 删掉，true 是空属性', () => {
   assert.equal(node.hasAttribute('a'), false);
   M.toggleAttr(node, 'a', true);
   assert.equal(node.hasAttribute('a'), true);
+});
+
+test('reflectProperties：直接设 property 也落到 attribute 上（视图里到处这么写）', () => {
+  // 用一个最小的假基类：只实现 setAttribute / getAttribute / removeAttribute
+  class Base {
+    constructor() {
+      this.attrs = {};
+    }
+    getAttribute(name) {
+      return Object.prototype.hasOwnProperty.call(this.attrs, name) ? this.attrs[name] : null;
+    }
+    setAttribute(name, value) {
+      this.attrs[name] = String(value);
+    }
+    removeAttribute(name) {
+      delete this.attrs[name];
+    }
+  }
+  class Fake extends Base {}
+  M.reflectProperties(Fake, ['placeholder', 'maxLength']);
+  const node = new Fake();
+
+  node.placeholder = '属性名，比如 金币';
+  assert.equal(node.attrs.placeholder, '属性名，比如 金币');
+  assert.equal(node.placeholder, '属性名，比如 金币', '读回来还是同一个值');
+
+  node.placeholder = null; // null → 删掉属性（和 setAttr 一个口径）
+  assert.equal('placeholder' in node.attrs, false);
+
+  node.maxLength = 24; // 驼峰写法：DOM 会把 attribute 名转小写，所以和 maxlength 是同一个
+  assert.equal(node.attrs.maxLength, '24');
+});
+
+test('reflectProperties：已有的访问器（value / disabled）绝不能被覆盖', () => {
+  class Base {
+    getAttribute() {
+      return null;
+    }
+    setAttribute() {}
+    removeAttribute() {}
+  }
+  class WithValue extends Base {}
+  Object.defineProperty(WithValue.prototype, 'value', {
+    configurable: true,
+    get() {
+      return '自己的';
+    },
+    set() {}
+  });
+  M.reflectProperties(WithValue, ['value', 'disabled']);
+  assert.equal(new WithValue().value, '自己的');
 });
 
 // ---------------------------------------------------------------------------

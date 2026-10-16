@@ -25,9 +25,12 @@ import { el } from '../core/dom.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear, append } from '../ui/build.js';
-// 输入框的规范件：默认 type=text、拼写检查关、值走 property。见 ui/controls.js
+// 轻量输入框工厂：还剩「＋ 新建分组」那颗**药丸形**的临时输入框用它
+//（它是个一次性的定制件，不归通用组件管）。见 ui/controls.js
 import { input } from '../ui/controls.js';
 import { MAX_PANEL_FIELDS, panelFieldAllowed } from '../data/panel.js';
+// 组件库：属性行里的控件（三个下拉 + 五个输入框）。见 components/index.js
+import { mInput, mSelect } from '../components/index.js';
 import { setCharSectionCount } from './characterEditorLayout.js';
 
 /** 编辑器里的字段类型选择框（文本 / 数值 / 列表） */
@@ -432,8 +435,9 @@ function renderAttrGroupEdit(list, bucket) {
   el.c.attrGroupEdit.classList.toggle('hidden', !open);
   if (!open) return;
 
-  const nameInput = input({
+  const nameInput = mInput({
     class: 'attr-group-name',
+    size: 'sm',
     value: bucket.id,
     maxlength: '24',
     placeholder: '分组名',
@@ -502,8 +506,9 @@ function renderAttrRows(list, bucket) {
   }
 
   for (const attr of bucket.fields) {
-    const valueInput = input({
+    const valueInput = mInput({
       class: 'attr-value',
+      size: 'sm',
       value: attr.value,
       placeholder: '初始值（可以留空）',
       'aria-label': `${attr.name} 的初始值`,
@@ -512,10 +517,12 @@ function renderAttrRows(list, bucket) {
       }
     });
 
-    const typeSelect = h(
-      'select',
+    // ⚙ 组件化（2026-10-16）：尺寸（26px / xs 字号 / 小圆角）归组件的 size="xs"，
+    // 页面 CSS 只剩「它在行里占多宽」和这个上下文的文字颜色。
+    const typeSelect = mSelect(
       {
         class: 'attr-type',
+        size: 'xs',
         'aria-label': `${attr.name} 的类型`,
         title: '字段类型：数值可以设范围，超出范围时程序会拉回来',
         onchange: () => {
@@ -527,8 +534,10 @@ function renderAttrRows(list, bucket) {
           renderCharAttrs(list);
         }
       },
-      ATTR_TYPES.map((t) => h('option', { value: t.value, text: t.label, selected: (attr.type || 'text') === t.value }))
     );
+    // 选项挂在宿主上，组件会搬进里层那颗原生 select（声明式写法）
+    for (const t of ATTR_TYPES) typeSelect.appendChild(h('option', { value: t.value, text: t.label }));
+    typeSelect.value = attr.type || 'text';
 
     // 「更多」：默认展开条件是「已经有范围或变化规则」，但用户手动收起/展开过
     // 就以手动状态为准（_moreOpen 是 true/false/undefined 三态）——
@@ -585,9 +594,10 @@ function buildMoreBox(list, attr) {
   // 填了就有用（实际 clampFieldValue 只对 meter 动作）
   if ((attr.type || 'text') === 'meter') {
     const numInput = (key, placeholder, label) =>
-      input({
+      mInput({
         type: 'number',
         class: 'attr-num',
+        size: 'xs',
         value: typeof attr[key] === 'number' ? String(attr[key]) : '',
         placeholder,
         'aria-label': `${attr.name} 的${label}`,
@@ -610,8 +620,9 @@ function buildMoreBox(list, attr) {
     );
   }
 
-  const hintInput = input({
+  const hintInput = mInput({
     class: 'attr-hint',
+    size: 'xs',
     value: attr.hint || '',
     placeholder: '变化规则（给模型看，比如「示好时每轮最多加 10」）',
     'aria-label': `${attr.name} 的变化规则`,
@@ -636,10 +647,10 @@ function buildMoreBox(list, attr) {
 function buildModeRow(attr) {
   const row = h('div', { class: 'attr-mode-row' }, h('span', { class: 'attr-range-label', text: '更新频率' }));
 
-  const modeSelect = h(
-    'select',
+  const modeSelect = mSelect(
     {
       class: 'attr-mode',
+      size: 'xs',
       'aria-label': `${attr.name} 的更新频率`,
       title:
         '每轮维护：AI 每轮都会照抄一遍，值一定是最新的。\n' +
@@ -649,11 +660,9 @@ function buildModeRow(attr) {
         if (modeSelect.value === 'static') attr.mode = 'static';
         else delete attr.mode; // dynamic 是默认，不写进盘，保持数据干净
       }
-    },
-    ATTR_MODES.map((m) =>
-      h('option', { value: m.value, text: m.label, selected: (attr.mode || 'dynamic') === m.value })
-    )
+    }
   );
+  for (const m of ATTR_MODES) modeSelect.appendChild(h('option', { value: m.value, text: m.label }));
   modeSelect.value = attr.mode || 'dynamic';
 
   row.appendChild(modeSelect);
@@ -670,8 +679,9 @@ function buildGroupRow(list, attr) {
 
   // 「＋ 新建分组…」的输入框模式。等这一行铺完再聚焦 —— 节点这会儿还没进文档。
   if (list._movingName === attr.name) {
-    const nameInput = input({
+    const nameInput = mInput({
       class: 'attr-group-new',
+      size: 'xs',
       maxlength: '24',
       placeholder: '新分组名，回车确认',
       'aria-label': '新建分组，并把这个属性搬过去',
@@ -701,10 +711,10 @@ function buildGroupRow(list, attr) {
     .filter((bucket) => bucket.id && bucket.id !== NEW_GROUP_VALUE)
     .map((bucket) => bucket.id);
 
-  const groupSelect = h(
-    'select',
+  const groupSelect = mSelect(
     {
       class: 'attr-group',
+      size: 'xs',
       'aria-label': `${attr.name} 的分组`,
       title: `${attr.name} 现在在「${current || UNGROUPED_TITLE}」，在这里把它搬到别的组`,
       onchange: () => {
@@ -718,13 +728,11 @@ function buildGroupRow(list, attr) {
         list._movingName = '';
         renderCharAttrs(list);
       }
-    },
-    [
-      ...named.map((id) => h('option', { value: id, text: id })),
-      h('option', { value: '', text: UNGROUPED_TITLE }),
-      h('option', { value: NEW_GROUP_VALUE, text: '＋ 新建分组…' })
-    ]
+    }
   );
+  for (const id of named) groupSelect.appendChild(h('option', { value: id, text: id }));
+  groupSelect.appendChild(h('option', { value: '', text: UNGROUPED_TITLE }));
+  groupSelect.appendChild(h('option', { value: NEW_GROUP_VALUE, text: '＋ 新建分组…' }));
   groupSelect.value = current;
 
   row.appendChild(groupSelect);

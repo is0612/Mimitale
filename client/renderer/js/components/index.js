@@ -18,7 +18,7 @@
 //    接上，不是代码依赖。）
 // ============================================================================
 
-import { MiControl, MiValueControl, applyOptions, componentClass, setAttr, toggleAttr } from './base.js';
+import { MiControl, MiValueControl, applyOptions, componentClass, setAttr, toggleAttr, reflectProperties, VARIANTS, SIZES } from './base.js';
 import { MiButton, mButton } from './button.js';
 import { MiInput, mInput, INPUT_TYPES } from './input.js';
 import { MiTextarea, mTextarea } from './textarea.js';
@@ -61,9 +61,13 @@ export {
   mSelect,
   // m-input 支持哪些 type（调用方要自己校验时也用它，别各写一份白名单）
   INPUT_TYPES,
+  // 外观词表：写新组件时对照它，别自己发明一套 variant 名字
+  VARIANTS,
+  SIZES,
   // 底座工具（工厂自己要用的那几个，测试也直接用）
   applyOptions,
   componentClass,
+  reflectProperties,
   setAttr,
   toggleAttr
 };

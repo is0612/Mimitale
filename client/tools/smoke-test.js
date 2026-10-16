@@ -3743,14 +3743,104 @@ app.whenReady().then(async () => {
         // 自研下拉（renderer/js/ui/select.js）：**把弹层打开**再出图。
         // 位置 / 宽度 / 圆角 / 高亮那一行的观感 / 右边那个 ✓ —— 全是 DOM 断言
         // 看不出来的东西，只有图能核。
+        // 顺带把这一格的几何量出来塞进 window.__selProbe：控件从原生 select 换成
+        // 组件之后，最容易悄悄变的就是**宽度**（外层多了一个宿主盒），而"窄了一截"
+        // 在看图上不一定第一眼认出来，有数字就一眼可见。
         selectPop: `
           document.querySelector('#btn-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-appearance"]')?.click();
           await new Promise(r => setTimeout(r, 300));
           const trigger = document.getElementById('appearance-font');
+          const inner = trigger && trigger.tagName === 'SELECT' ? trigger : trigger && trigger.querySelector('select');
+          const field = trigger && trigger.closest('.field');
+          const rect = (n) => {
+            if (!n) return '(无)';
+            const r = n.getBoundingClientRect();
+            return Math.round(r.width) + 'x' + Math.round(r.height) + '@' + Math.round(r.left) + ',' + Math.round(r.top);
+          };
+          const cs = (n, p) => (n ? getComputedStyle(n)[p] : '(无)');
+          window.__selProbe = {
+            触发器标签: trigger ? trigger.tagName : '(没找到)',
+            触发器盒: rect(trigger),
+            里层select盒: rect(inner),
+            field盒: rect(field),
+            field显示: cs(field, 'display') + ' / ' + cs(field, 'flexDirection'),
+            触发器宽度: cs(trigger, 'width') + ' min=' + cs(trigger, 'minWidth'),
+            里层宽度: cs(inner, 'width'),
+            label盒: rect(field && field.querySelector('.field-label')),
+            // 「宿主有没有铺满」这件事出问题时要靠这几项定位：父容器是不是 .field、
+            // 它的对齐方式、宿主的 display / align-self / flex 参数
+            宿主父节点: trigger && trigger.parentElement
+              ? trigger.parentElement.tagName + '.' + (trigger.parentElement.className || '(无类)')
+              : '(无)',
+            宿主display: cs(trigger, 'display'),
+            field对齐: cs(field, 'alignItems') + ' / ' + cs(field, 'justifyContent'),
+            宿主alignSelf: cs(trigger, 'alignSelf'),
+            宿主flex: cs(trigger, 'flexGrow') + '/' + cs(trigger, 'flexShrink') + '/' + cs(trigger, 'flexBasis')
+          };
           trigger?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
           await new Promise(r => setTimeout(r, 400));`,
+        // 属性行那三个下拉（类型 / 更新频率 / 分组）住在编辑器的**「属性」分区**里，
+          // 而那个分区默认不是打开的那个 —— 不切过去，出图里根本看不到它们
+          //（2026-10-16 踩过：控件量出来高度 0，说明它压根没显示）。
+          charAttrsState: `
+            const $$ = (s) => Array.from(document.querySelectorAll(s));
+            const $ = (s) => document.querySelector(s);
+            const nap = (ms) => new Promise(r => setTimeout(r, ms));
+            const fire = (node, type) => node.dispatchEvent(new Event(type, { bubbles: true }));
+
+            document.querySelector('#btn-chars')?.click();
+            await nap(400);
+            document.querySelector('#btn-new-char')?.click();
+            await nap(500);
+            const nameBox = $('#c-name');
+            if (nameBox) { nameBox.value = '属性行示例'; fire(nameBox, 'input'); }
+
+            // 加两条属性：一条留在未分组（看类型下拉），一条展开「更多」（看更新频率 / 分组）
+            for (const [name, value] of [['好感度', '20'], ['金币', '9900']]) {
+              const box = $('#c-attr-new');
+              box.value = name;
+              $('#btn-add-attr').click();
+              await nap(140);
+              const rows = $$('#c-attr-list .attr-row');
+              const last = rows[rows.length - 1];
+              const val = last && last.querySelector('.attr-value');
+              if (val) { val.value = value; fire(val, 'input'); }
+            }
+            $('#char-section-tab-state')?.click();
+            await nap(350);
+            const more = $$('#c-attr-list .attr-more-btn')[0];
+            if (more) more.click();
+            await nap(300);
+            const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 生图分组：三个下拉（服务商 / 模型 / 尺寸）。迁移成组件之后「宽度」最容易变，
+        // 出图 + 像素对比是唯一靠谱的核法。
+        settingsImage: `
+          document.querySelector('#btn-settings')?.click();
+          await new Promise(r => setTimeout(r, 700));
+          document.querySelector('.settings-nav-item[data-target="sec-image"]')?.click();
+          await new Promise(r => setTimeout(r, 300));`,
+        // 视角弹窗：叙述模式 / 推进节奏两个下拉（都在弹窗里，顺便验「组件里的下拉
+        // 在弹窗里也吃得上自研列表」）。
+        perspective: `
+          document.querySelector('#btn-perspective')?.click();
+          await new Promise(r => setTimeout(r, 450));`,
+        // 世界书条目的「附加条件」下拉住在**条目表单**里 —— 得先选一条条目表单才出来
+        wbEntryForm: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-worldbooks')?.click();
+          await nap(450);
+          const card = $$('#wb-page-grid .char-card')[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await nap(650);
+          const entry = $('#wb-entry-list .wb-entry');
+          if (entry) entry.click();
+          await nap(450);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 桌宠区块（设置页最下面那一段）：预览框、人格、记忆列表 ——
         // 全是排版密集的地方，「挤成一行」「按钮换行」这类问题 DOM 断言看不出来，
         // 只能靠图。顺手点一次「生成一句」，让预览框里真的有内容（空框看不出高矮）。
@@ -3801,6 +3891,22 @@ app.whenReady().then(async () => {
           const btn = withCover && Array.from(withCover.querySelectorAll('.btn')).find(b => b.textContent === '编辑');
           if (btn) btn.click();
           await new Promise(r => setTimeout(r, 600));`,
+        // 世界书编辑器的「书籍设置」分区：书名那格在这儿（`wb-name`，页面规则原来给的是
+        // 34px 这个**没有档位对应**的高度，迁组件时要决定靠向哪一档）。没有这个场景的话
+        // 改完看不见 —— 2026-10-16 加。
+        wbBookSettings: `
+          const t = document.querySelector('#toast');
+          if (t) { t.classList.add('hidden'); t.textContent = ''; }
+          document.querySelector('#btn-worldbooks')?.click();
+          await new Promise(r => setTimeout(r, 400));
+          const cards = Array.from(document.querySelectorAll('#wb-page-grid .char-card'));
+          const withCover = cards.find(c => c.querySelector('.wb-card-cover img'));
+          const btn = withCover && Array.from(withCover.querySelectorAll('.btn')).find(b => b.textContent === '编辑');
+          if (btn) btn.click();
+          await new Promise(r => setTimeout(r, 600));
+          document.querySelector('#wb-tab-settings')?.click();
+          await new Promise(r => setTimeout(r, 350));
+          if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         panel: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
@@ -4688,6 +4794,83 @@ app.whenReady().then(async () => {
           return {
             theme: document.documentElement.getAttribute('data-theme') || 'light',
             accent: document.documentElement.getAttribute('data-accent') || '(没设)',
+            // 出图场景自己量的东西（目前是 selectPop 的下拉几何）
+            selProbe: window.__selProbe || null,
+            // 状态卡 / 世界书工具条那几个控件的实测尺寸（迁移前后对照用）
+            cardProbe: (() => {
+              const innerOf = (n) =>
+                n && typeof n.tagName === 'string' && n.tagName.startsWith('M-') && n.control ? n.control : n;
+              const h = (n) => (n ? Math.round(n.getBoundingClientRect().height) : null);
+              const w = (n) => (n ? Math.round(n.getBoundingClientRect().width) : null);
+              const cs = (n, p) => (n ? getComputedStyle(n)[p] : null);
+              const sc = document.querySelector('.state-card .sc-input');
+              const search = document.querySelector('#wb-search');
+              const state = document.querySelector('.wb-state');
+              if (!sc && !search) return null;
+              return {
+                状态卡输入框: sc
+                  ? {
+                      宿主: h(sc),
+                      里层: h(innerOf(sc)),
+                      宽: w(sc),
+                      字号: cs(innerOf(sc), 'fontSize'),
+                      底色: cs(innerOf(sc), 'backgroundColor')
+                    }
+                  : null,
+                世界书搜索: search
+                  ? {
+                      宿主: h(search),
+                      里层: h(innerOf(search)),
+                      宽: w(search),
+                      字号: cs(innerOf(search), 'fontSize'),
+                      底色: cs(innerOf(search), 'backgroundColor'),
+                      边框色: cs(innerOf(search), 'borderTopColor')
+                    }
+                  : null,
+                条目筛选下拉: h(state)
+              };
+            })(),
+            // 属性行那几个下拉/输入框的实测几何（迁移成 xs / sm 之后应该能对上预期值）。
+            // "出图零差异"这件事**不能**用来证明"改动生效了"—— 反过来也一样：
+            // 得直接量，否则可能整批样式压根没应用，而图看着一模一样。
+            attrProbe: (() => {
+              const type = document.querySelector('#c-attr-list .attr-type');
+              const inner = type && type.querySelector('select');
+              const h = (n) => (n ? Math.round(n.getBoundingClientRect().height) : null);
+              const w = (n) => (n ? Math.round(n.getBoundingClientRect().width) : null);
+              const group = document.querySelector('#c-attr-list .attr-more .attr-group');
+              const mode = document.querySelector('#c-attr-list .attr-more .attr-mode');
+              const value = document.querySelector('#c-attr-list .attr-value');
+              const num = document.querySelector('#c-attr-list .attr-more .attr-num');
+              const hint = document.querySelector('#c-attr-list .attr-more .attr-hint');
+              const addNew = document.querySelector('#c-attr-new');
+              if (!type && !group && !mode && !value) return null;
+              // ⚠️ 探针跑在**页面**上下文里，冒烟脚本（另一个注入上下文）里的 asControl 用不了，
+              //    这里内联一份同样口径的：组件 → 里层那颗原生控件
+              const innerOf = (n) =>
+                n && typeof n.tagName === 'string' && n.tagName.startsWith('M-') && n.control ? n.control : n;
+              const row = (n) => (n ? { 宿主: h(n), 里层: h(innerOf(n)), 宽: w(n) } : null);
+              return {
+                类型下拉: h(type),
+                类型里层: h(inner),
+                类型字号: inner ? getComputedStyle(inner).fontSize : null,
+                分组下拉: h(group),
+                频率下拉: h(mode),
+                值输入框: row(value),
+                范围输入框: row(num),
+                规则输入框: row(hint),
+                新增属性框: row(addNew),
+                状态筛选: h(document.querySelector('.wb-state')),
+                状态里层: h(document.querySelector('.wb-state select')),
+                属性行高: Array.from(document.querySelectorAll('#c-attr-list .attr-row')).map((n) => Math.round(n.getBoundingClientRect().height)).join('/'),
+                更多框高: h(document.querySelector('#c-attr-list .attr-more')),
+                新增行高: h(document.querySelector('.attr-add-row')),
+                属性区滚动高: (() => {
+                  const panel = document.querySelector('#char-section-state');
+                  return panel ? panel.scrollHeight : null;
+                })()
+              };
+            })(),
             card: bg('.modal-card'),
             panel: bg('.attr-panel'),
             tabs: bg('.attr-tabs'),
@@ -4726,6 +4909,9 @@ app.whenReady().then(async () => {
         })()`);
         console.log(`  主题=${probe.theme} 配色=${probe.accent} 弹窗底=${probe.card} 属性卡=${probe.panel} 标签栏=${probe.tabs} 值框=${probe.value}`);
         console.log(`  弹窗卡片=${probe.modal}`);
+        if (probe.selProbe) console.log(`  下拉几何=${JSON.stringify(probe.selProbe)}`);
+        if (probe.attrProbe) console.log(`  属性行控件=${JSON.stringify(probe.attrProbe)}`);
+        if (probe.cardProbe) console.log(`  卡片/工具条控件=${JSON.stringify(probe.cardProbe)}`);
         if (shotArg === 'charTextareas') {
           console.log(`  长文本框实高(px) 描述=${probe.desc} 性格=${probe.personality} 场景=${probe.scenario} 开场白=${probe.first} 示例对话=${probe.example}`);
         }

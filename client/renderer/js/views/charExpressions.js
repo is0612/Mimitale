@@ -19,6 +19,8 @@ import { showToast } from '../ui/toast.js';
 import { h, button, clear } from '../ui/build.js';
 import { pickAndCrop, cropTopToDataUrl } from '../ui/imageCrop.js';
 import { MAX_EXPRESSIONS } from '../data/expressions.js';
+// 组件库：表情行里的名称 / 触发词输入框（见 components/index.js）
+import { mInput } from '../components/index.js';
 
 // 表情图输出 640×640（1:1）。状态卡上那张图铺满是 320px 宽，2 倍屏正好 640 ——
 // 再大就只是把同一份信息摊得更糊、文件更大（一套差分二十几张，体积是实打实的成本：
@@ -324,11 +326,12 @@ function buildExpressionRow(expr, index) {
   else thumb.appendChild(h('span', { class: 'char-avatar-empty', text: '点击上传' }));
 
   // 打字时**不重绘**（重绘会重建输入框、光标就跑了），直接写进草稿那一项。
-  const nameInput = h('input', {
-    type: 'text',
+  // ⚙ 组件化（2026-10-16）：26px + xs 字号 = 组件的 size="xs"
+  // （页面那条 .char-expr-row input[type="text"] 已经删掉）
+  const nameInput = mInput({
     class: 'char-expr-name',
+    size: 'xs',
     value: expr.name,
-    spellcheck: 'false',
     placeholder: '名称（如 害羞）',
     ariaLabel: '表情名'
   });
@@ -337,11 +340,10 @@ function buildExpressionRow(expr, index) {
     if (item) item.name = nameInput.value;
   });
 
-  const keysInput = h('input', {
-    type: 'text',
+  const keysInput = mInput({
     class: 'char-expr-keys',
+    size: 'xs',
     value: expr.keywords.join(', '),
-    spellcheck: 'false',
     placeholder: '触发词，逗号分隔（可不填）',
     ariaLabel: '触发词'
   });

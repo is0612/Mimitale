@@ -174,6 +174,24 @@ const activeConvo = async () => {
   return (cs.conversations || []).find((c) => c.id === cs.activeId);
 };
 
+/**
+ * 拿到「里层那颗原生控件」：组件（`<m-select>` / `<m-input>` / `<m-textarea>`）
+ * 返回 `node.control`，别的元素原样返回。
+ *
+ * 为什么需要它：组件把原生控件包了一层，**外观长在里层那颗上**（宿主管布局）。
+ * 断言「它是下拉 / 圆角是多少 / 字号多少」时若直接量宿主，迁移之后会**假红**
+ * （红的是断言，坏的却是测试自己）。`.value` / `.options` / `.disabled` 由组件代理，
+ * 不用包；只有"看标签 / 量外观"的断言需要过一道。
+ */
+function asControl(node) {
+  return node && typeof node.tagName === 'string' && node.tagName.startsWith('M-') && node.control ? node.control : node;
+}
+
+/** 事件目标是"下拉"（原生或组件）—— 派发 change 时用 */
+function isDropdown(node) {
+  return !!node && (node.tagName === 'SELECT' || node.tagName === 'M-SELECT');
+}
+
 function setValue(target, value) {
   const node = typeof target === 'string' ? $(target) : target;
   if (!node) throw new Error(`找不到输入框：${target}`);
@@ -182,7 +200,8 @@ function setValue(target, value) {
   node.dispatchEvent(new Event('input', { bubbles: true }));
   // 下拉框在真实浏览器里会同时触发 input 和 change，这里补齐 ——
   // 否则「换服务商 → 模型下拉跟着重填」这类只监听 change 的行为就测不到
-  if (node.tagName === 'SELECT') node.dispatchEvent(new Event('change', { bubbles: true }));
+  // （组件 m-select 也要算进来：它内部的宿主 .value 是代理，change 得自己派）
+  if (isDropdown(node)) node.dispatchEvent(new Event('change', { bubbles: true }));
   return node;
 }
 
@@ -839,7 +858,9 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
     const R = root.getPropertyValue('--radius').trim();
     const RSM = root.getPropertyValue('--radius-sm').trim();
     const radiusOf = (sel) => {
-      const node = $(sel);
+      // ⚙ 组件化之后圆角长在**里层那颗原生控件**上（宿主只是布局盒），
+      // 所以要过一道 asControl() —— 直接量宿主只会得到 0px（假红）
+      const node = asControl($(sel));
       return node ? getComputedStyle(node).borderTopLeftRadius : '(没有)';
     };
     check('编辑器里的卡片圆角 = --radius（不是写死的 16）', radiusOf('.char-form .attr-panel') === R, `${radiusOf('.char-form .attr-panel')} vs ${R}`);
@@ -1152,13 +1173,16 @@ await scenario('属性：从角色卡种到状态面板', async () => {
     check('属性行圆角 = --radius-sm（不是写死的 7）', radiusOf($('#c-attr-list .attr-item')) === RSM, `${radiusOf($('#c-attr-list .attr-item'))} vs ${RSM}`);
     check(
       '属性里的值输入框圆角 = --radius-sm（不是写死的 7）',
-      radiusOf(rows[0].querySelector('.attr-value')) === RSM,
-      `${radiusOf(rows[0].querySelector('.attr-value'))} vs ${RSM}`
+      // ⚙ 组件化之后圆角长在**里层那颗原生 input** 上（宿主只是个布局盒）——
+      // 量宿主只会得到 0px，那红的是断言、坏的却是测试自己
+      radiusOf(asControl(rows[0].querySelector('.attr-value'))) === RSM,
+      `${radiusOf(asControl(rows[0].querySelector('.attr-value')))} vs ${RSM}`
     );
     check(
       '属性类型下拉圆角 = --radius-sm（不是写死的 7）',
-      radiusOf(rows[0].querySelector('.attr-type')) === RSM,
-      `${radiusOf(rows[0].querySelector('.attr-type'))} vs ${RSM}`
+      // 同上：下拉的圆角也在里层那颗原生 select 上
+      radiusOf(asControl(rows[0].querySelector('.attr-type'))) === RSM,
+      `${radiusOf(asControl(rows[0].querySelector('.attr-type')))} vs ${RSM}`
     );
   }
 
@@ -1166,6 +1190,19 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   const attrRows = $$('#c-attr-list .attr-row');
   setValue(attrRows[0].querySelector('.attr-value'), '100');
   setValue(attrRows[1].querySelector('.attr-value'), '布衣');
+
+  // ⚙ 属性行那三个下拉已迁成组件（<m-select size="xs">）。这里量**实测高度**：
+  // 出图零差异**不能**反推"改动生效了"—— 得直接量（26px = xs 档，28px 就是没生效）。
+  // 属性分区此时一定是展开的（上面几个 setValue/click 都会先 revealEditorControl）。
+  {
+    const typeInner = asControl(attrRows[0].querySelector('.attr-type'));
+    const height = typeInner ? Math.round(typeInner.getBoundingClientRect().height) : 0;
+    check(
+      '属性行的类型下拉是组件、走 size="xs"（26px 高 / xs 字号）',
+      !!typeInner && !!typeInner.closest('m-select') && height === 26,
+      `${typeInner ? (typeInner.closest('m-select') ? 'm-select' : '原生 select') : '没找到'} / 高 ${height}px`
+    );
+  }
 
   // --- 加一个「带范围的数值」属性（吸收互动模板那套：类型 + 范围 + 变化规则）---
   setValue('#c-attr-new', '好感度');
@@ -1180,7 +1217,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   setValue(meterRow.querySelector('.attr-value'), '20');
   // 选「数值」→ 重画一次，并且自动展开「更多」，范围输入框这时候才出现
   setValue(meterRow.querySelector('.attr-type'), 'meter');
-  await waitFor('范围输入框出现', () => !!$('#c-attr-list .attr-more input.attr-num'));
+  await waitFor('范围输入框出现', () => !!$('#c-attr-list .attr-more .attr-num'));
 
   meterRow = $$('#c-attr-list .attr-row')[2];
   const numInputs = meterRow.parentElement.querySelectorAll('.attr-more .attr-num');
@@ -1188,7 +1225,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   setValue(numInputs[0], '0');
   setValue(numInputs[1], '100');
   setValue(meterRow.parentElement.querySelector('.attr-more .attr-hint'), '按剧情合理增减，单轮不超过 10');
-  check('配置区里有分组下拉', !!meterRow.parentElement.querySelector('.attr-more select.attr-group'));
+  check('配置区里有分组下拉', !!meterRow.parentElement.querySelector('.attr-more .attr-group'));
 
   // 「更多」能收起，收起来之后配置不丢（草稿还在）。
   // 这一段必须跑在**填分组之前** —— 填完分组这个字段就归到「关系」组、
@@ -1199,7 +1236,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   await waitFor('收起后配置区没了', () => !$('#c-attr-list .attr-more'));
   meterRow = $$('#c-attr-list .attr-row')[2];
   click(meterRow.querySelector('.attr-more-btn'));
-  await waitFor('再展开还在', () => !!$('#c-attr-list .attr-more input.attr-num'));
+  await waitFor('再展开还在', () => !!$('#c-attr-list .attr-more .attr-num'));
   check(
     '收起再展开，范围没丢',
     $$('#c-attr-list .attr-more .attr-num')[0].value === '0' && $$('#c-attr-list .attr-more .attr-num')[1].value === '100',
@@ -1217,9 +1254,9 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   // 「未分组」必须在选项里 —— 否则一旦所有属性都归了组，就再也拿不出来了
   check(
     '分组是下拉，且永远带一个「未分组」出口',
-    groupSelect.tagName === 'SELECT' &&
+    asControl(groupSelect).tagName === 'SELECT' &&
       Array.from(groupSelect.options).some((o) => o.value === '' && o.textContent === '未分组'),
-    groupSelect.tagName
+    asControl(groupSelect).tagName
   );
   // 卡里一个命名分组都没有时，下拉里唯一的选择就是「＋ 新建分组…」——
   // 走它 → 这一行临时变输入框 → 打完回车，建组 + 搬过去一步完成。
@@ -1227,8 +1264,8 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   check('下拉末尾有「＋ 新建分组…」', !!newOpt, Array.from(groupSelect.options).map((o) => o.textContent).join('/'));
   setValue(groupSelect, newOpt.value);
 
-  await waitFor('这一行变成新建分组输入框', () => !!$('#c-attr-list .attr-more input.attr-group-new'));
-  const newGroupInput = $('#c-attr-list .attr-more input.attr-group-new');
+  await waitFor('这一行变成新建分组输入框', () => !!$('#c-attr-list .attr-more .attr-group-new'));
+  const newGroupInput = $('#c-attr-list .attr-more .attr-group-new');
   setValue(newGroupInput, '关系');
   newGroupInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 
@@ -1252,7 +1289,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
     listedNames().join(',') === '好感度',
     JSON.stringify(listedNames())
   );
-  check('切组之后那一行的「更多」还是展开的（草稿里的展开状态没丢）', !!$('#c-attr-list .attr-more input.attr-num'));
+  check('切组之后那一行的「更多」还是展开的（草稿里的展开状态没丢）', !!$('#c-attr-list .attr-more .attr-num'));
 
   // --- 搬到**已经存在**的分组：在下拉里直接选，不用再走「＋ 新建分组…」---
   click($$('#c-attr-tabs .attr-tab').find((b) => b.textContent.startsWith('未分组')));
@@ -1260,8 +1297,8 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   // 取行的函数要每次现查：「更多」一点开列表就整块重建，手里的节点会作废
   const shirtRow = () => $$('#c-attr-list .attr-row').find((r) => r.querySelector('.attr-name').textContent === '上衣');
   click(shirtRow().querySelector('.attr-more-btn'));
-  await waitFor('上衣的「更多」展开', () => !!shirtRow().parentElement.querySelector('.attr-more select.attr-group'));
-  const moveSelect = shirtRow().parentElement.querySelector('.attr-more select.attr-group');
+  await waitFor('上衣的「更多」展开', () => !!shirtRow().parentElement.querySelector('.attr-more .attr-group'));
+  const moveSelect = shirtRow().parentElement.querySelector('.attr-more .attr-group');
   check(
     '下拉里列出了这张卡已有的分组',
     Array.from(moveSelect.options).some((o) => o.value === '关系'),
@@ -1278,11 +1315,11 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   await waitFor('切到关系组', () => $$('#c-attr-list .attr-row').length === 2);
   const backRow = () => $$('#c-attr-list .attr-row').find((r) => r.querySelector('.attr-name').textContent === '上衣');
   // 「更多」的展开状态记在草稿上（_moreOpen），上面点开过一次，这里通常是开着的
-  if (!backRow().parentElement.querySelector('.attr-more select.attr-group')) {
+  if (!backRow().parentElement.querySelector('.attr-more .attr-group')) {
     click(backRow().querySelector('.attr-more-btn'));
-    await waitFor('上衣的「更多」展开', () => !!backRow().parentElement.querySelector('.attr-more select.attr-group'));
+    await waitFor('上衣的「更多」展开', () => !!backRow().parentElement.querySelector('.attr-more .attr-group'));
   }
-  setValue(backRow().parentElement.querySelector('.attr-more select.attr-group'), '');
+  setValue(backRow().parentElement.querySelector('.attr-more .attr-group'), '');
   await waitFor('上衣退回未分组', () => tabLabels().join() === '关系 1,未分组 2');
   check('下拉里选「未分组」就把它拿出来了', listedNames().join(',') === '好感度', JSON.stringify(listedNames()));
 
@@ -1552,7 +1589,9 @@ await scenario('属性：从角色卡种到状态面板', async () => {
       const R = root.getPropertyValue('--radius').trim();
       const RSM = root.getPropertyValue('--radius-sm').trim();
       const radiusOf = (sel) => {
-        const node = $(sel);
+        // ⚙ 组件化之后圆角长在**里层那颗原生控件**上（宿主只是布局盒），
+        // 所以要过一道 asControl() —— 直接量宿主只会得到 0px（假红）
+        const node = asControl($(sel));
         return node ? getComputedStyle(node).borderTopLeftRadius : '(没有)';
       };
       check('浮动状态卡圆角 = --radius（稿子 2:476 r=4，不是写死的 14）', radiusOf('#state-cards .state-card') === R, `${radiusOf('#state-cards .state-card')} vs ${R}`);
@@ -1674,9 +1713,9 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   // --- 5) 超范围的数值要被夹回来 ---
   // 在卡片的编辑态里手填一个越界值（模拟模型写了 150/100），失焦即落盘。
   click(charCard().querySelector('.sc-edit'));
-  await waitFor('卡切到编辑态', () => !!charCard().querySelector('input.sc-input'));
+  await waitFor('卡切到编辑态', () => !!charCard().querySelector('.sc-input'));
 
-  const favorInput = cardRowOf('好感度').querySelector('input.sc-input');
+  const favorInput = cardRowOf('好感度').querySelector('.sc-input');
   check('卡里能改「好感度」', !!favorInput);
 
   if (favorInput) {
@@ -3035,8 +3074,8 @@ await scenario('给剧情配图（生图）', async () => {
   const imgModelOptions = Array.from(byId('s-image-model').options).map((o) => o.value);
   check(
     '生图模型是下拉，而且跟着服务商填好',
-    byId('s-image-model').tagName === 'SELECT' && imgModelOptions.length === 1 && imgModelOptions[0] === 'img-model-x',
-    `${byId('s-image-model').tagName} ${JSON.stringify(imgModelOptions)}`
+    asControl(byId('s-image-model')).tagName === 'SELECT' && imgModelOptions.length === 1 && imgModelOptions[0] === 'img-model-x',
+    `${asControl(byId('s-image-model')).tagName} ${JSON.stringify(imgModelOptions)}`
   );
 
   // 注意：「生图模型下拉并入内置目录」这条不在这里测。
@@ -3052,8 +3091,8 @@ await scenario('给剧情配图（生图）', async () => {
   const genericSizes = Array.from(byId('s-image-size').options).map((o) => o.value);
   check(
     '尺寸是下拉，未知模型给通用尺寸',
-    byId('s-image-size').tagName === 'SELECT' && genericSizes.includes('1024x1024'),
-    `${byId('s-image-size').tagName} ${JSON.stringify(genericSizes)}`
+    asControl(byId('s-image-size')).tagName === 'SELECT' && genericSizes.includes('1024x1024'),
+    `${asControl(byId('s-image-size')).tagName} ${JSON.stringify(genericSizes)}`
   );
 
   // 已知模型要给出它专属的尺寸（智谱 glm-image 就那 7 个固定值）
@@ -4846,7 +4885,7 @@ await scenario('角色属性：分组改名与解散', async () => {
   };
   // 改名走 change（回车 / 失焦），而 setValue 只补一个 input —— 手动补齐
   const renameTo = (name) => {
-    const box = $('#c-attr-group-edit input.attr-group-name');
+    const box = $('#c-attr-group-edit .attr-group-name');
     setValue(box, name);
     box.dispatchEvent(new Event('change', { bubbles: true }));
   };
@@ -4874,8 +4913,8 @@ await scenario('角色属性：分组改名与解散', async () => {
   await openGroupEdit();
   check(
     '操作条里带出了当前分组名',
-    $('#c-attr-group-edit input.attr-group-name').value === '状态',
-    $('#c-attr-group-edit input.attr-group-name').value
+    $('#c-attr-group-edit .attr-group-name').value === '状态',
+    $('#c-attr-group-edit .attr-group-name').value
   );
   renameTo('心情');
   await waitFor('改名生效', () => tabLabels().some((t) => t.startsWith('心情')));
@@ -4891,7 +4930,7 @@ await scenario('角色属性：分组改名与解散', async () => {
   // 事件冒泡到入口层的全局 Esc 链（document 上）就把 charsModal 关了。
   await openGroupEdit();
   {
-    const escBox = $('#c-attr-group-edit input.attr-group-name');
+    const escBox = $('#c-attr-group-edit .attr-group-name');
     escBox.value = '不该生效的名字';
     escBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await sleep(120);
@@ -5074,8 +5113,8 @@ await scenario('语义检索', async () => {
   const embModelOptions = Array.from(byId('s-embedding-model').options).map((o) => o.value);
   check(
     '向量模型也是下拉，跟着服务商走',
-    byId('s-embedding-model').tagName === 'SELECT' && embModelOptions.length === 1 && embModelOptions[0] === 'emb-model-x',
-    `${byId('s-embedding-model').tagName} ${JSON.stringify(embModelOptions)}`
+    asControl(byId('s-embedding-model')).tagName === 'SELECT' && embModelOptions.length === 1 && embModelOptions[0] === 'emb-model-x',
+    `${asControl(byId('s-embedding-model')).tagName} ${JSON.stringify(embModelOptions)}`
   );
   setValue('#s-embedding-model', 'emb-model-x');
   click('#s-rag-enabled');
@@ -5635,10 +5674,10 @@ await scenario('剧情选项', async () => {
 
       // 推断出来的范围也要真的生效：在卡里手填越界值会被夹回来
       click(charCard().querySelector('.sc-edit'));
-      await waitFor('卡切到编辑态', () => !!charCard().querySelector('input.sc-input'));
+      await waitFor('卡切到编辑态', () => !!charCard().querySelector('.sc-input'));
       const input = Array.from(charCard().querySelectorAll('.sc-row')).find(
         (r) => (r.querySelector('.sc-name') || {}).textContent === '好感度'
-      ).querySelector('input.sc-input');
+      ).querySelector('.sc-input');
       if (input) {
         setValue(input, '150');
         input.dispatchEvent(new Event('blur', { bubbles: true }));
@@ -6297,8 +6336,8 @@ await scenario('状态卡：点头像查看与编辑', async () => {
   check(
     '卡片默认是只读的（值是文本，没有输入框）',
     $$('#state-cards .state-card[data-owner="player"] .sc-value').length > 0 &&
-      $$('#state-cards .state-card[data-owner="player"] input.sc-input').length === 0,
-    JSON.stringify({ 值: $$('#state-cards .state-card[data-owner="player"] .sc-value').length, 输入框: $$('#state-cards .state-card[data-owner="player"] input.sc-input').length })
+      $$('#state-cards .state-card[data-owner="player"] .sc-input').length === 0,
+    JSON.stringify({ 值: $$('#state-cards .state-card[data-owner="player"] .sc-value').length, 输入框: $$('#state-cards .state-card[data-owner="player"] .sc-input').length })
   );
   check(
     '卡里有玩家角色卡种下的属性',
@@ -6308,14 +6347,14 @@ await scenario('状态卡：点头像查看与编辑', async () => {
 
   // --- 点「编辑」→ 值变成输入框 ---
   click(myCard().querySelector('.sc-edit'));
-  await waitFor('编辑态出现输入框', () => $$('#state-cards .state-card[data-owner="player"] input.sc-input').length > 0);
+  await waitFor('编辑态出现输入框', () => $$('#state-cards .state-card[data-owner="player"] .sc-input').length > 0);
   check('编辑态下按钮变成「完成」', myCard().querySelector('.sc-edit').textContent.trim() === '完成', myCard().querySelector('.sc-edit').textContent);
 
   // --- 改一个值 → 落到会话面板上 ---
   const ageRow = $$('#state-cards .state-card[data-owner="player"] .sc-row').find(
     (r) => r.querySelector('.sc-name').textContent === '年龄'
   );
-  const ageInput = ageRow.querySelector('input.sc-input');
+  const ageInput = ageRow.querySelector('.sc-input');
   setValue(ageInput, '19');
   ageInput.dispatchEvent(new Event('blur', { bubbles: true }));
   await sleep(300);
@@ -9463,7 +9502,9 @@ await scenario('世界书：＋ 事件', async () => {
   // 焦点落在标题末尾（接着打名字），不是整段选中
   check(
     '光标落在标题末尾，不是整段选中',
-    document.activeElement === title && title.selectionStart === title.value.length,
+    // ⚙ 组件化之后 activeElement 与 selectionStart 都在**里层那颗原生控件**上
+    // （宿主用 mirrorSelectionProperties 代理了 selectionStart，所以后面那半仍然成立）
+    document.activeElement === asControl(title) && title.selectionStart === title.value.length,
     `${document.activeElement && document.activeElement.id} @${title.selectionStart}`
   );
   check(
@@ -9607,11 +9648,18 @@ await scenario('开场白：只有一条时不弹选择器', async () => {
 //
 //  用「设置 → 外观」里的字体下拉当样本：选项是 HTML 里写死的 4 条，
 //  改完会落盘到 settings.uiFont，正好拿来当「change 真的发出去了」的证据。
+//
+//  ⚙ 2026-10-16 起这一格是**组件化迁移的第一个样本**：`<m-select id="appearance-font">`。
+//  所以这个场景顺带把「两层怎么组合」钉住：
+//    · 里层仍是原生 <select>（皮肤、自研列表、change 链都还是它）
+//    · 宿主按 id 拿到的那个元素，`.value` 是代理、'change' 从里层冒泡上来
+//    · 按 id 在**宿主**上派发 mousedown（工具和测试都这么干）也能打开列表
 // ---------------------------------------------------------------------------
-await scenario('控件：自研下拉贴在原生 select 上', async () => {
+await scenario('控件：自研下拉（原生 select 与组件 m-select 两条路）', async () => {
   await openAppearanceSection();
 
-  const select = byId('appearance-font');
+  const host = byId('appearance-font');
+  const select = host && host.control; // 里层那颗原生 select
   const rows = () => $$('.ctl-select-pop .ctl-opt');
   const activeRow = () => $('.ctl-select-pop .ctl-opt.is-active');
   const at = () => rows().indexOf(activeRow());
@@ -9620,16 +9668,61 @@ await scenario('控件：自研下拉贴在原生 select 上', async () => {
       new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })
     );
 
-  check('原生 select 还在原地（值的地基没被换成假控件）', !!select && select.tagName === 'SELECT');
-  check('接上了自研列表', !!select && select.dataset.ctlSelect === 'on');
-  const before = select.value;
+  check(
+    '这一格已经是组件，里层仍是原生 <select>（值的地基没被换成假控件）',
+    !!host && host.tagName === 'M-SELECT' && !!select && select.tagName === 'SELECT',
+    host ? host.tagName + ' / ' + (select ? select.tagName : '(没有里层)') : '(找不到 #appearance-font)'
+  );
+  check('接上了自研列表（标记打里层那颗 select 上）', !!select && select.dataset.ctlSelect === 'on');
+  check('宿主的 .value 代理到里层', host.value === select.value, `${host.value} / ${select.value}`);
+  const before = host.value;
 
-  // --- 点一下触发器 ---
+  // --- 批量：文档里**每一个**下拉都要能接上自研列表（不写死 id 清单，按 DOM 推）---
+  //  2026-10-16 那批 12 个静态下拉一次迁完，靠的就是这条。
+  //  ⚠️ 口径是「**用的时候**接得上」而不是「启动时全都打好标记」：静态那 13 个由
+  //  initSelects() 在启动时打标记，动态建出来的那几个（世界书状态筛选等）是
+  //  **懒接线** —— 第一次被点到才接。第一版断言写成"启动后全都带标记"，当场红了
+  //  （wb-state 还没被点过），红得有道理：断言该写真实保证，不该写愿望。
+  {
+    const natives = $$('select');
+    const unmarked = natives.filter((s) => s.dataset.ctlSelect !== 'on');
+    for (const node of unmarked) {
+      node.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+    }
+    if (shown('.ctl-select-pop')) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await sleep(60);
+    }
+    check(
+      '文档里每个原生 select 用的时候都接得上自研列表（静态的启动就打标记，动态的懒接线）',
+      natives.length > 0 && natives.every((s) => s.dataset.ctlSelect === 'on'),
+      `共 ${natives.length} 个，没接上的：${natives.filter((s) => s.dataset.ctlSelect !== 'on').map((s) => s.id || s.className).join(' / ') || '(无)'}`
+    );
+
+    const hosts = $$('m-select');
+    check(
+      '每个 m-select 宿主都建出了里层原生控件',
+      hosts.every((h) => !!h.control && h.control.tagName === 'SELECT'),
+      `共 ${hosts.length} 个宿主，没建出来的：${hosts.filter((h) => !h.control).map((h) => h.id || '(无 id)').join(' / ') || '(无)'}`
+    );
+    check(
+      '宿主的 .value 和里层那颗一致（代理没走偏）',
+      hosts.every((h) => h.value === h.control.value),
+      hosts.filter((h) => h.control && h.value !== h.control.value).map((h) => `${h.id}:${h.value}≠${h.control.value}`).join(' / ') || '(无)'
+    );
+    check(
+      '宿主的 .disabled 和里层那颗一致',
+      hosts.every((h) => h.disabled === h.control.disabled),
+      hosts.filter((h) => h.control && h.disabled !== h.control.disabled).map((h) => h.id).join(' / ') || '(无)'
+    );
+  }
+
+  // --- 点一下触发器：按 id 在**宿主**上派发（工具/测试的常规姿势）---
   const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
-  select.dispatchEvent(down);
-  check('mousedown 被 preventDefault（系统那份列表没机会弹出来）', down.defaultPrevented);
+  host.dispatchEvent(down);
   await waitFor('自研弹层出现', () => shown('.ctl-select-pop'));
-  check('焦点落回触发器上（键盘那套连得上）', document.activeElement === select);
+  check('宿主上的合成 mousedown 也能打开列表（组件把它转发给了里层）', shown('.ctl-select-pop'));
+  check('焦点落在里层那颗原生控件上（键盘那套连得上）', document.activeElement === select);
 
   const options = Array.from(select.options);
   const popRect = $('.ctl-select-pop').getBoundingClientRect();
@@ -9692,11 +9785,20 @@ await scenario('控件：自研下拉贴在原生 select 上', async () => {
   fresh.remove();
 
   // --- 选一行 ---
+  //  页面自己的接线是「监听宿主」（appearance.js 就是 `el.appearanceFont.addEventListener('change')`），
+  //  所以这里挂一个宿主上的监听，验里层那条 change 真的冒泡上来了
+  let hostChanges = 0;
+  host.addEventListener('change', () => {
+    hostChanges += 1;
+  });
+
   const target = options.find((o) => o.value !== select.value) || options[0];
   select.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
   await waitFor('弹层又开了', () => shown('.ctl-select-pop'));
   click(rows()[options.indexOf(target)]);
   check('值写回了原生 <select>', select.value === target.value, `${before} → ${select.value}`);
+  check('宿主的 .value 跟着新值（代理）', host.value === target.value, host.value);
+  check('里层的 change 冒泡到了宿主（页面按宿主监听照旧收得到）', hostChanges === 1, String(hostChanges));
   check('弹层自己收起（不用再点一下）', !shown('.ctl-select-pop'));
   check('焦点回到触发器上', document.activeElement === select);
 
@@ -9708,6 +9810,211 @@ await scenario('控件：自研下拉贴在原生 select 上', async () => {
   setValue('#appearance-font', before);
   await sleep(150);
   await leaveAppearanceSection();
+});
+
+// ---------------------------------------------------------------------------
+//  组件库：自定义元素（renderer/js/components/）
+//
+//  上面那个场景验的是「原生 <select> 换成自研列表」，这个场景验的是**组件层**：
+//  每个组件都是「宿主 + 里层一个原生控件」，页面只挑 variant/size 和属性。
+//  这里在真页面里临时搭一棵树（不碰应用自己的 DOM），跑完删掉。
+//
+//  三件最要紧的事：
+//    · 组件皮肤必须和老 `.btn` **一模一样**（共用一份声明，不是抄了一份）
+//    · 里层原生控件的属性转发 / 事件冒泡 / .value 代理都要通
+//    · m-select 里的原生 <select> 也要被自研列表接上（两层自动组合）
+// ---------------------------------------------------------------------------
+await scenario('组件库：自定义元素（m-button / m-input / m-textarea / m-select）', async () => {
+  const tags = ['m-button', 'm-input', 'm-textarea', 'm-select'];
+  check(
+    '四个组件都在启动时注册了（必须在第一次渲染之前）',
+    tags.every((tag) => !!customElements.get(tag)),
+    tags.map((tag) => `${tag}:${customElements.get(tag) ? '✓' : '✗'}`).join(' ')
+  );
+
+  const host = document.createElement('div');
+  host.className = 'smoke-component-host';
+  document.body.appendChild(host);
+
+  const csOf = (node) => {
+    const s = getComputedStyle(node);
+    return [s.color, s.backgroundColor, s.borderRadius, s.paddingTop, s.paddingLeft, s.fontSize, s.boxShadow].join(' | ');
+  };
+
+  // ---- m-button ----
+  const btn = document.createElement('m-button');
+  btn.setAttribute('variant', 'primary');
+  btn.textContent = '保存';
+  host.appendChild(btn);
+  await waitFor('m-button 升级出里层按钮', () => !!btn.querySelector('.mi-btn__control'));
+
+  const innerBtn = btn.querySelector('.mi-btn__control');
+  check('里层是原生 <button>', innerBtn.tagName === 'BUTTON');
+  check('外观类名拼对了', btn.classList.contains('mi-btn') && btn.classList.contains('mi-btn--primary'), btn.className);
+  check('标签形态的文字收进了 label', btn.querySelector('.mi-btn__label').textContent === '保存');
+  check('宿主里只剩那颗按钮（没留下游离文本节点）', btn.childNodes.length === 1, String(btn.childNodes.length));
+
+  const legacyBtn = document.createElement('button');
+  legacyBtn.className = 'btn btn-primary';
+  host.appendChild(legacyBtn);
+  check(
+    '组件皮肤和老 .btn 完全一致（一条规则两个选择器，不是抄了一份）',
+    csOf(innerBtn) === csOf(legacyBtn),
+    `组件 ${csOf(innerBtn)} ／ 老 ${csOf(legacyBtn)}`
+  );
+  legacyBtn.remove();
+
+  let clicked = 0;
+  btn.addEventListener('click', () => {
+    clicked += 1;
+  });
+  btn.click();
+  check('程序化 click() 转发到了里层原生按钮', clicked === 1, String(clicked));
+
+  btn.textContent = '保存中…';
+  check(
+    'textContent 改文字之后组件没散架（原生 setter 会把里层按钮删掉）',
+    !!btn.querySelector('.mi-btn__control') && btn.querySelector('.mi-btn__label').textContent === '保存中…'
+  );
+
+  btn.disabled = true;
+  check('disabled 转发到里层原生按钮', innerBtn.hasAttribute('disabled'));
+  btn.disabled = false;
+  check('取消 disabled 也转发', !innerBtn.hasAttribute('disabled'));
+
+  btn.classList.add('preset-row-delete');
+  btn.setAttribute('variant', 'ghost');
+  check(
+    '切 variant 只换组件自己的类，页面自己加的类留着',
+    btn.classList.contains('mi-btn--ghost') && !btn.classList.contains('mi-btn--primary') && btn.classList.contains('preset-row-delete'),
+    btn.className
+  );
+
+  // ---- m-input ----
+  const field = document.createElement('m-input');
+  field.setAttribute('placeholder', '角色名');
+  field.setAttribute('aria-label', '角色名');
+  field.value = '小满'; // 还没进文档 → 走"待应用的值"
+  host.appendChild(field);
+  await waitFor('m-input 升级出里层输入框', () => !!field.querySelector('input'));
+
+  const innerInput = field.querySelector('input');
+  check('里层是原生 <input>，而且带 type=text（全局皮肤靠这个属性选择器命中）', innerInput.tagName === 'INPUT' && innerInput.getAttribute('type') === 'text');
+  check('进文档前设的 .value 也被应用了', innerInput.value === '小满', innerInput.value);
+  check('aria-label 转发到里层（h() 里写 ariaLabel 会落到无效的 arialabel，组件入口修掉了）', innerInput.getAttribute('aria-label') === '角色名');
+  check('placeholder 转发', innerInput.getAttribute('placeholder') === '角色名');
+  check('拼写检查默认关（这个项目的口径）', innerInput.getAttribute('spellcheck') === 'false');
+
+  let bubbled = 0;
+  field.addEventListener('input', () => {
+    bubbled += 1;
+  });
+  innerInput.value = '改了';
+  innerInput.dispatchEvent(new Event('input', { bubbles: true }));
+  check('里层原生事件冒泡到宿主（不用重新派发）', bubbled === 1, String(bubbled));
+  check('.value 代理到里层', field.value === '改了', field.value);
+
+  field.disabled = true;
+  check('m-input 的 disabled 也转发', innerInput.hasAttribute('disabled'));
+  field.disabled = false;
+
+  // 直接设 property（视图里到处这么写：`el.c.attrNew.placeholder = …`）。
+  // `<m-input>` 不是 HTMLInputElement —— 没有 reflectProperties 的话这一行只会挂到
+  // 宿主对象上，里层那颗原生 input 永远收不到（不报错、也不生效）。
+  field.placeholder = '往「关系」里加一个属性';
+  check(
+    '`.placeholder` 这种 property 写法也桥到了里层',
+    innerInput.getAttribute('placeholder') === '往「关系」里加一个属性',
+    innerInput.getAttribute('placeholder')
+  );
+
+  // focus / blur **不冒泡**：页面代码在控件上监听它们（stateCard 的编辑行就靠 blur
+  // 把值落盘），组件化之后监听对象变成了宿主 —— 不做桥接，这条链路会静默失效。
+  {
+    let focuses = 0;
+    let blurs = 0;
+    field.addEventListener('focus', () => {
+      focuses += 1;
+    });
+    field.addEventListener('blur', () => {
+      blurs += 1;
+    });
+    innerInput.focus();
+    await sleep(30);
+    check('focus() 转发到里层那颗原生 input 上', document.activeElement === innerInput);
+    // ⚠️ 冒烟窗口是**隐藏**的，这种窗口里 Chromium 不发 focus / blur **事件**
+    // （`.focus()` 仍会改 activeElement，上面那条就是这么过的）。所以桥这一层
+    // 用合成事件验 —— 走的是**同一个**监听器（组件挂在里层控件上的那个），
+    // 验的是"里层有 focus / blur 时宿主收得到"。
+    innerInput.dispatchEvent(new FocusEvent('focus'));
+    innerInput.dispatchEvent(new FocusEvent('blur'));
+    check('里层的 focus 桥到了宿主', focuses === 1, String(focuses));
+    check('里层的 blur 桥到了宿主（「失焦才提交」那条链路靠它）', blurs === 1, String(blurs));
+  }
+
+  // 原生控件的**方法**也要转发：页面里有 `el.c.name.select()`（打开编辑器后选中名字，
+  // 一打字就整段替换）和 `setSelectionRange()`（把光标放到末尾）。
+  // 不转发就是一个 TypeError —— 这轮就是这么炸出 23 条控制台报错的。
+  {
+    field.value = '小满';
+    field.select();
+    check('select() 转发到里层（选中整段）', innerInput.selectionStart === 0 && innerInput.selectionEnd === 2, `${innerInput.selectionStart}~${innerInput.selectionEnd}`);
+    field.setSelectionRange(1, 1);
+    check('setSelectionRange() 转发到里层（光标位置）', innerInput.selectionStart === 1 && innerInput.selectionEnd === 1, `${innerInput.selectionStart}~${innerInput.selectionEnd}`);
+  }
+
+  // ---- m-textarea ----
+  const area = document.createElement('m-textarea');
+  area.setAttribute('rows', '5');
+  area.value = '多行\n文本';
+  host.appendChild(area);
+  await waitFor('m-textarea 升级出里层多行框', () => !!area.querySelector('textarea'));
+
+  const innerArea = area.querySelector('textarea');
+  check('里层是原生 <textarea>', innerArea.tagName === 'TEXTAREA');
+  check('rows 转发', innerArea.getAttribute('rows') === '5', innerArea.getAttribute('rows'));
+  check('值转发（含换行）', innerArea.value === '多行\n文本', JSON.stringify(innerArea.value));
+
+  const defaultArea = document.createElement('m-textarea');
+  host.appendChild(defaultArea);
+  await waitFor('缺省 rows 的多行框升级', () => !!defaultArea.querySelector('textarea'));
+  check('rows 缺省是 3（和 ui/controls.js 的 textarea() 同一个口径）', defaultArea.querySelector('textarea').getAttribute('rows') === '3');
+
+  // ---- m-select（和自研下拉列表自动组合）----
+  const picker = document.createElement('m-select');
+  picker.setAttribute('aria-label', '界面字体');
+  picker.appendChild(new Option('系统默认', 'default'));
+  picker.appendChild(new Option('思源黑体', 'noto'));
+  host.appendChild(picker);
+  await waitFor('m-select 升级出里层下拉', () => !!picker.querySelector('select'));
+
+  const innerSelect = picker.querySelector('select');
+  check('里层是原生 <select>', innerSelect.tagName === 'SELECT');
+  check('声明式选项被搬进了里层（宿主里只剩那颗 select）', innerSelect.options.length === 2 && picker.children.length === 1, `${innerSelect.options.length} / ${picker.children.length}`);
+  check('.options 代理', picker.options.length === 2);
+  picker.value = 'noto';
+  check('.value 代理到里层', innerSelect.value === 'noto', innerSelect.value);
+
+  const controlsMod = await import(new URL('js/ui/controls.js', document.baseURI).href);
+  controlsMod.fillSelect(picker, [
+    { value: 'a', text: '甲（动态铺的）' },
+    { value: 'b', text: '乙（动态铺的）' }
+  ]);
+  check(
+    'fillSelect 认 <m-select>：选项真的进了里层 select',
+    innerSelect.options.length === 2 && innerSelect.options[0].textContent === '甲（动态铺的）',
+    `${innerSelect.options.length} 项，第一项 ${innerSelect.options[0] && innerSelect.options[0].textContent}`
+  );
+
+  innerSelect.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+  await waitFor('组件里的下拉也弹出自研列表', () => shown('.ctl-select-pop'));
+  check('m-select 里的原生 select 被自研列表接上了（两层自动组合）', innerSelect.dataset.ctlSelect === 'on');
+  check('列表里就是它那两项', $$('.ctl-select-pop .ctl-opt').length === 2, String($$('.ctl-select-pop .ctl-opt').length));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  await waitFor('Esc 收起组件里的下拉列表', () => !shown('.ctl-select-pop'));
+  check('Esc 之后值没被改掉', picker.value === 'a', picker.value);
+
+  host.remove();
 });
 
 return { results, notes, hoverProbe };

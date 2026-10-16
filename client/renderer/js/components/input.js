@@ -12,14 +12,14 @@
 //     不匹配"没有 type 属性的 input"，漏了它整个控件就没有皮肤（不报错的那种坏）。
 // ============================================================================
 
-import { MiValueControl, applyOptions } from './base.js';
+import { MiValueControl, applyOptions, reflectProperties } from './base.js';
 
 /** 支持哪些 type。滑块 / 勾选框不是"输入框"，请直接用原生 <input> */
 export const INPUT_TYPES = ['text', 'password', 'number', 'search', 'email', 'url', 'tel'];
 
-/** 尺寸档：sm = 紧凑（和 .btn-sm 一个量级） */
 const CLASS_TABLE = {
-  sm: 'mi-input--sm'
+  sm: 'mi-input--sm',
+  xs: 'mi-input--xs'
 };
 
 export class MiInput extends MiValueControl {
@@ -74,3 +74,21 @@ export class MiInput extends MiValueControl {
 export function mInput(opts = {}) {
   return applyOptions(document.createElement('m-input'), opts);
 }
+
+// 原生 input 的专有属性：视图会**直接设 property**（`el.c.attrNew.placeholder = …`、
+// `search.type = 'search'`），而 `<m-input>` 不是 HTMLInputElement ——
+// 见 base.js 里 reflectProperties 的注释
+reflectProperties(MiInput, [
+  'type',
+  'placeholder',
+  'name',
+  'maxlength',
+  'maxLength',
+  'min',
+  'max',
+  'step',
+  'readonly',
+  'readOnly',
+  'autocomplete',
+  'inputmode'
+]);

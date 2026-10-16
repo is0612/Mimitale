@@ -18,46 +18,52 @@
        ------------------------------------------------------------------ */
     .pv-body {
       margin: 0;
-      padding: 24px 28px 40px;
+      padding: 18px 22px 28px;
       background: var(--bg);
       color: var(--text);
       font-family: var(--font-ui);
       font-size: var(--fs-sm);
     }
-    .pv-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px; }
+    .pv-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
     .pv-title { margin: 0 0 4px; font-size: var(--fs-lg); }
     .pv-note { margin: 0; color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.7; max-width: 900px; }
     .pv-note code { padding: 0 4px; border-radius: var(--radius-sm); background: var(--code-bg); font-family: Consolas, monospace; }
     .pv-theme { margin-left: auto; display: flex; gap: 8px; flex: 0 0 auto; }
-    .pv-root { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+    /* 铺成四栏 + 底部一条通栏。为什么要压进一屏：出图工具只拍**可见视口**
+       （tools/shot-components.js 的 captureChecked 那条注释讲了原因），
+       页面比一屏高就会悄悄漏拍底下几格。 */
+    .pv-root { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: start; }
     .pv-card {
       border: 1px solid var(--border);
       border-radius: var(--radius);
       /* 底色用侧栏那档（--bg-side）而不是卡片白：ghost 按钮的底就是 --bg-card，
-         摆在白卡上等于白底白框，看不见它长什么样。侧栏正是它真正被用的地方。 */
+         摆在白卡上等于白底白框，看不出它长什么样。侧栏正是它真正被用的地方。 */
       background: var(--bg-side);
-      padding: 14px 16px 16px;
+      padding: 12px 14px 14px;
       box-shadow: var(--shadow-sm);
       min-width: 0;
     }
     .pv-card-wide { grid-column: 1 / -1; }
     .pv-card-title { margin: 0 0 2px; font-size: var(--fs-sm); }
     .pv-card-desc { margin: 0 0 12px; color: var(--text-faint); font-size: var(--fs-xs); line-height: 1.6; }
-    .pv-line { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: start; margin-bottom: 10px; }
+    .pv-line { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; align-items: start; margin-bottom: 9px; }
     .pv-label { padding-top: 9px; color: var(--text-faint); font-size: var(--fs-xs); }
-    .pv-line-body { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+    .pv-line-body { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
     /* 表单控件在这一页里铺开一点：`.pv-line-body` 是 flex，flex item 默认按内容宽
        （不铺开的话下拉只有 84px 宽）。这是**这一页的排版**，不是组件的默认行为 ——
        组件在应用的 .field 网格里由网格给宽度。 */
     .pv-line-body > m-input,
     .pv-line-body > m-textarea,
-    .pv-line-body > m-select { flex: 1 1 200px; max-width: 340px; }
-    .pv-log { height: 148px; overflow: auto; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--bg-input); font-family: Consolas, "Courier New", monospace; font-size: var(--fs-xs); line-height: 1.7; color: var(--text-dim); }
-    .pv-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; font-family: Consolas, "Courier New", monospace; font-size: var(--fs-xs); color: var(--text-dim); }
+    .pv-line-body > m-select { flex: 1 1 140px; max-width: 320px; }
+    .pv-log { height: 108px; overflow: auto; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--bg-input); font-family: Consolas, "Courier New", monospace; font-size: var(--fs-xs); line-height: 1.6; color: var(--text-dim); }
+    .pv-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 14px; font-family: Consolas, "Courier New", monospace; font-size: var(--fs-xs); line-height: 1.5; color: var(--text-dim); }
   </style>
 </head>
 <body class="pv-body">
-  <!-- 页面是空的：内容全由 preview.js 用组件库自己的 API 搭出来 -->
+  <!-- 页头**不在** .pv-root 里：.pv-root 是四栏 grid，页头混进去会占掉第一格，
+       四张组件卡就被挤到第二行去（2026-10-16 出图时踩到的）。 -->
+  <header class="pv-head"></header>
+  <!-- 卡片全由 preview.js 用组件库自己的 API 搭出来 -->
   <main class="pv-root"></main>
   <script type="module" src="preview.js"></script>
 </body>

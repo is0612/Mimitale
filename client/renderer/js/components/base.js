@@ -33,8 +33,15 @@
 
 /** 外观变体词表 —— 和 ui/build.js 的 button() 是**同一套名字**，别再造第二套 */
 export const VARIANTS = ['base', 'primary', 'ghost', 'danger'];
-/** 尺寸词表：md = 不写（默认那档），sm = 紧凑档 */
-export const SIZES = ['md', 'sm'];
+/**
+ * 尺寸词表：
+ *   md = 不写（默认那档，和全局控件基线一致）
+ *   sm = 紧凑档（工具条、设置页里密排的控件）
+ *   xs = 最紧凑档（属性行那种"一行一个字段"的地方，26px 高、xs 字号）
+ * ⚠️ 加了词表**不等于**每个组件都有这一档：组件没实现时 componentClass 会当场报错
+ *（这是故意的 —— 静默丢一个 size 的后果是"这个控件怎么尺寸没变"，很难查）。
+ */
+export const SIZES = ['md', 'sm', 'xs'];
 
 /**
  * 拼组件类名：`mi-btn mi-btn--primary mi-btn--sm`。
@@ -76,6 +83,33 @@ export function setAttr(node, name, value) {
   else node.setAttribute(name, String(value));
 }
 
+/**
+ * 给组件补上「原生控件专有属性」的访问器：`host.placeholder = 'x'` → attribute → 里层控件。
+ *
+ * 为什么需要：`<m-input>` **不是** `HTMLInputElement`，没有 `placeholder` / `maxLength`
+ * 这些 property。而视图里到处是**直接设 property** 的写法：
+ *   `el.c.attrNew.placeholder = bucket.id ? '往「…」里加一个属性' : '属性名，比如 金币'`
+ * 不接管的话这一行只会往宿主对象上挂一个普通属性，里层那颗原生 input 永远收不到 ——
+ * 不报错、也不生效（2026-10-16 迁属性行输入框时发现的）。
+ *
+ * 口径：property ↔ attribute ↔ 里层控件（`syncForward` 负责最后一段）。
+ * 注意 attribute 名一律小写，所以 `maxLength` 和 `maxlength` 落到同一个属性上。
+ */
+export function reflectProperties(ctor, names) {
+  for (const name of names) {
+    if (Object.getOwnPropertyDescriptor(ctor.prototype, name)) continue; // 已经有的（value / disabled…）不动
+    Object.defineProperty(ctor.prototype, name, {
+      configurable: true,
+      get() {
+        return this.getAttribute(name);
+      },
+      set(value) {
+        setAttr(this, name, value);
+      }
+    });
+  }
+}
+
 export function toggleAttr(node, name, on) {
   if (on) node.setAttribute(name, '');
   else node.removeAttribute(name);
@@ -112,8 +146,18 @@ export function applyOptions(el, opts = {}) {
   for (const key of Object.keys(rest)) {
     const value = rest[key];
     if (value == null || value === false) continue;
-    if (/^on[A-Z]/.test(key) && typeof value === 'function') el.addEventListener(key.slice(2).toLowerCase(), value);
-    else if (key === 'value') el.value = value;
+
+    // 事件：**两种写法都收** —— `onchange` 和 `onChange`。
+    // 视图里这两种各占一半（各 61 处），而 `h()` 的口径是「on 开头 + 值是函数」
+    // （一律 lowercase 后 addEventListener）。这里要是只认大写那种，
+    // 迁一个 `onchange:` 过来的控件就会**静默丢掉事件**（不报错、点了没反应）——
+    // 2026-10-16 迁属性行那三个下拉时就是这么炸出来的。
+    if (/^on[a-z]/i.test(key)) {
+      if (typeof value === 'function') el.addEventListener(key.slice(2).toLowerCase(), value);
+      else console.error(`applyOptions：${key} 只接受函数，收到的是 ${typeof value}`);
+      continue;
+    }
+    if (key === 'value') el.value = value;
     else if (key === 'checked') el.checked = value;
     else setAttr(el, key, value);
   }
@@ -173,7 +217,31 @@ export class MiControl extends HTMLElement {
 
   connectedCallback() {
     this.ensureRendered();
+    this._wireFocusBridge();
     this.sync();
+  }
+
+  /**
+   * 把里层原生控件的 `focus` / `blur` 转发一份到宿主上。
+   *
+   * 为什么需要：这两个事件**不冒泡**。页面代码写 `node.addEventListener('blur', …)`
+   * （stateCard.js 的编辑行就靠它把值落盘）时，监听的是那颗控件本身；组件化之后
+   * 监听对象变成了宿主，而里层的 blur 永远冒不上来 —— 于是「失焦才提交」这条链路
+   * **静默失效**（防抖那条路还在，所以界面看着还正常，只是慢半拍或漏最后一次）。
+   *
+   * 口径照原生：转发出去的事件不带 bubbles（focus / blur 本来就不冒泡），
+   * 直接派发在宿主上，所以宿主上的监听者能收到、且不会顺着祖先链传下去。
+   */
+  _wireFocusBridge() {
+    if (this._focusWired) return;
+    const control = this.control;
+    if (!control || control === this) return;
+    this._focusWired = true;
+    for (const type of ['focus', 'blur']) {
+      control.addEventListener(type, () => {
+        this.dispatchEvent(new FocusEvent(type, { bubbles: false }));
+      });
+    }
   }
 
   /**
@@ -265,7 +333,62 @@ export class MiControl extends HTMLElement {
     if (control && control !== this && typeof control.click === 'function') control.click();
     else super.click();
   }
+
+  /**
+   * 选中文本 / 设光标位置（input、textarea 上的原生方法）。
+   *
+   * 页面里真的在用：`el.c.name.select()`（角色编辑器、世界书编辑器打开后选中名字，
+   * 一打字就整段替换）、`setSelectionRange()`（把光标放到末尾、或选中模板第一行）。
+   * 组件化之后这些方法在宿主上**不存在** —— 不转发就是一个 TypeError
+   * （2026-10-16 迁角色名时炸出 23 条控制台报错，就是这个）。
+   */
+  select() {
+    return this._callControlMethod('select');
+  }
+
+  setSelectionRange(start, end, direction) {
+    return this._callControlMethod('setSelectionRange', start, end, direction);
+  }
+
+  /** 转发到里层原生控件；没有这个方法就**当场报错**，不做静默空转 */
+  _callControlMethod(name, ...args) {
+    const control = this.control;
+    if (control && control !== this && typeof control[name] === 'function') return control[name](...args);
+    console.error(`<${this.tagName.toLowerCase()}> 里层控件没有 ${name}()（它不是文本输入类控件？）`);
+    return undefined;
+  }
 }
+
+/**
+ * 选中区间也代理到里层：`selectionStart` / `selectionEnd` / `selectionDirection`。
+ *
+ * 为什么需要（和 select() 是同一类，但这次是**属性**）：
+ * - 页面在**读**：`quickPhrases.js` 按光标位置决定短语插在哪 —— 读不到就退化成
+ *   「永远插在末尾」（不报错，行为悄悄变差）；
+ * - 页面在**写**：把光标挪到末尾、选中模板第一行；
+ * - 测试也在读它验「焦点落在标题末尾，不是整段选中」。
+ *
+ * 口径照原生：文本类控件返数字，其它类型原生返 null / undefined，这里原样透传，
+ * 不做包装（`control` 还没建出来时返 null）。
+ */
+function mirrorSelectionProperties(ctor) {
+  for (const name of ['selectionStart', 'selectionEnd', 'selectionDirection']) {
+    if (Object.getOwnPropertyDescriptor(ctor.prototype, name)) continue;
+    Object.defineProperty(ctor.prototype, name, {
+      configurable: true,
+      get() {
+        const control = this.control;
+        return control && control !== this ? control[name] : null;
+      },
+      set(value) {
+        const control = this.control;
+        if (control && control !== this) control[name] = value;
+      }
+    });
+  }
+}
+
+mirrorSelectionProperties(MiControl);
 
 /**
  * 带「值」的控件（m-input / m-textarea / m-select）：`.value` 代理 + 初始值口径 + dirty 标记。
