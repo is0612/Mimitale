@@ -180,13 +180,10 @@ export function characterContextForConvo(convo) {
   if (!character) return '';
 
   const me = convoUserName(convo);
-  const identity = [character.age ? `年龄 ${character.age}` : '', character.gender, character.race]
-    .filter(Boolean)
-    .join('，');
   const description = String(character.description || '').trim();
 
   const parts = [];
-  parts.push(identity ? `${character.name}：${identity}` : character.name);
+  parts.push(character.name);
   if (description) parts.push(applyMacros(description, character, me));
   return parts.join('\n');
 }
@@ -337,21 +334,13 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   if (String(base).trim()) parts.push(applyMacros(base, character, me, charName).trim());
 
   if (character) {
-    // 身份：年龄/性别/种族是「这个人是谁」的一部分，一开始就说清楚
-    // （状态面板可能被重置、老会话没有这些字段，不能只靠面板）。
-    const identity = [];
-    if (character.age) identity.push(`年龄 ${character.age}`);
-    if (character.gender) identity.push(`性别 ${character.gender}`);
-    if (character.race) identity.push(`种族 ${character.race}`);
-    if (identity.length) parts.push(`【${charName}的基本信息】\n${identity.join('，')}`);
-
     if (character.description) parts.push(`【${charName}的设定】\n${applyMacros(character.description, character, me)}`);
     if (character.personality) parts.push(`【${charName}的性格】\n${applyMacros(character.personality, character, me)}`);
     if (character.scenario) parts.push(`【当前场景】\n${applyMacros(character.scenario, character, me)}`);
   }
 
   // GM 模式换掉那段「不要跳出角色」：世界模型必须能写第三人称、切多个 NPC 视角，
-  // 被「始终以第一人称」捆着会一轮缩回单角色腔调。
+  // 被单角色那套叙述口径捆着会一轮缩回单角色腔调。
   // 两种规则里都带上了「推进节奏」—— 否则模型会一口气把整场戏演完，玩家只剩看的份。
   // 默认对话（plainChat）不要这一段：那段规则是给「扮演某个角色」用的，
   // 而这里要的是普通聊天，规则交给用户写的人设自己交代。

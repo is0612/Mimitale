@@ -94,7 +94,7 @@ export function startWorldPlay(book) {
   // 同名以先出现的为准，所以自己卡上的「金币」不会被书里的盖掉。
   // 归属（owner）：你自己的身份和卡标成 'player'（在「我的状态」卡里看，
   // 不挤在「当前状态」面板里）；书里角色的各归各的 id。
-  seedIdentity(convo, draft.name, pickedCard, 'player');
+  seedIdentity(convo, draft.name, 'player');
   if (pickedCard) seedPanelFromCharacters(convo, [pickedCard], 'player');
   seedPanelFromCharacters(convo, worldbookCharacters(book));
 
@@ -144,7 +144,7 @@ async function startCharacterChat(character) {
   applyPlayerIdentity(convo, draft);
 
   if (draft.card) {
-    seedIdentity(convo, draft.name, draft.card, 'player');
+    seedIdentity(convo, draft.name, 'player');
     seedPanelFromCharacters(convo, [draft.card], 'player');
   }
 

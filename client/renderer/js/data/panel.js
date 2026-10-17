@@ -263,24 +263,12 @@ export function ownerIdByLabel(convo, label) {
   return '';
 }
 
-// 身份四项（姓名/年龄/性别/种族）在状态面板里的分组名。它们和「时间/地点/
-// 好感度」这类随剧情变化的动态状态不是一回事，单独成块，跟状态栏/关系/背包并列。
-export const IDENTITY_GROUP = '身份';
-
-// 身份四项的字段名。老会话种身份时还没有「身份」分组，panelDefs 里没记 group；
-// 按字段名兜底归组（见 panelFieldGroup），新旧会话的展示和注入就一致了。
-const IDENTITY_FIELD_NAMES = new Set(['姓名', '年龄', '性别', '种族']);
-
 /**
- * 会话面板字段属于哪个分组：优先用 defs 里记的；没记 group 且是身份四项的，
- * 兜底归进「身份」。分组只是视图键，面板上的分组编辑不存在（组的归属在
- * 种进去那一刻就定了），所以这个兜底不会跟任何手工操作打架。
+ * 会话面板字段属于哪个分组：只认 panelDefs 里记的 group。
+ * 分组只是视图键，面板上的分组编辑不存在（组的归属在种进去那一刻就定了）。
  */
 export function panelFieldGroup(convo, key) {
-  const name = panelFieldName(key);
-  const group = (convoPanelDef(convo, key) || {}).group || '';
-  if (group) return group;
-  return IDENTITY_FIELD_NAMES.has(name) ? IDENTITY_GROUP : '';
+  return (convoPanelDef(convo, key) || {}).group || '';
 }
 
 export const OPTIONS_LABEL = '剧情选项';
@@ -370,8 +358,8 @@ export function stripPanelLines(text, knownFields) {
 }
 
 /**
- * 会话里有哪些「分组名」—— 从 panelDefs 各字段的 group 收集，再加上身份四项
- * 兜底的「身份」。这些组名就是注入时 `—— 组名 ——` 小标题的来源，
+ * 会话里有哪些「分组名」—— 从 panelDefs 各字段的 group 收集。
+ * 这些组名就是注入时 `—— 组名 ——` 小标题的来源，
  * 剥正文时拿它来认分组标题（只剥已知组名，避免误删正文里「—— 破折号 ——」引语）。
  */
 export function panelGroupNames(convo) {
@@ -380,14 +368,6 @@ export function panelGroupNames(convo) {
   for (const key of Object.keys(defs)) {
     const g = (defs[key] || {}).group;
     if (g) names.add(g);
-  }
-  // 身份四项可能没记 group（老会话），但 panelFieldGroup 会兜底成「身份」，
-  // 所以只要面板里有身份字段，就把「身份」也算作已知分组。
-  for (const key of convoPanelFields(convo)) {
-    if (IDENTITY_FIELD_NAMES.has(panelFieldName(key))) {
-      names.add(IDENTITY_GROUP);
-      break;
-    }
   }
   return names;
 }
@@ -1544,25 +1524,15 @@ export function mergePlayerOwnedFields(convo) {
 }
 
 /**
- * 把「身份四项」（姓名/年龄/性别/种族）种进状态面板，归到「身份」分组。
- * 单角色对话种的是绑卡身份，玩世界书种的是玩家自己（姓名来自弹窗填写）。
- * 四项标 static（偶尔才变）。
+ * 把「姓名」种进状态面板。
+ * 单角色对话种的是绑卡身份的名字，玩世界书种的是玩家自己（姓名来自弹窗填写）。
+ * 标 static（偶尔才变）。
  */
-export function seedIdentity(convo, name, character, owner) {
+export function seedIdentity(convo, name, owner) {
   const pairs = [];
   const trimmed = String(name || '').trim();
-  // 身份四项是「偶尔变」的设定（年龄一年才涨一岁、改名也少见），标 static ——
-  // 模型只在变化时输出，不用每轮都照抄一遍姓名/年龄/性别/种族。
-  if (trimmed) pairs.push({ name: '姓名', value: trimmed, group: IDENTITY_GROUP, owner, mode: 'static' });
-
-  if (character) {
-    const age = String(character.age || '').trim();
-    const gender = String(character.gender || '').trim();
-    const race = String(character.race || '').trim();
-    if (age) pairs.push({ name: '年龄', value: age, group: IDENTITY_GROUP, owner, mode: 'static' });
-    if (gender) pairs.push({ name: '性别', value: gender, group: IDENTITY_GROUP, owner, mode: 'static' });
-    if (race) pairs.push({ name: '种族', value: race, group: IDENTITY_GROUP, owner, mode: 'static' });
-  }
+  // 姓名是「偶尔变」的设定，标 static —— 模型只在变化时输出，不用每轮都照抄。
+  if (trimmed) pairs.push({ name: '姓名', value: trimmed, owner, mode: 'static' });
 
   return appendPanelFields(convo, pairs);
 }

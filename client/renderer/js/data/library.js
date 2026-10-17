@@ -199,9 +199,6 @@ function worldbookCharacterPayload(character) {
     systemPrompt: c.systemPrompt || '',
     postHistoryInstructions: c.postHistoryInstructions || '',
     creatorNotes: c.creatorNotes || '',
-    age: c.age || '',
-    gender: c.gender || '',
-    race: c.race || '',
     tags: asArray(c.tags)
   };
   if (Array.isArray(c.attributes) && c.attributes.length) out.attributes = c.attributes;

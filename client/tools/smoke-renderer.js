@@ -1403,20 +1403,6 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(150);
 
-  // 年龄/性别/种族已从编辑器移除（归入描述文字），但「身份四项流转」这条链路
-  // （种进状态卡、注入模型）仍保留，依赖角色卡上的 age/gender/race 数据字段。
-  // 这些字段现在只能来自「导入的外部卡」——测试里直接改渲染层 state 里这张卡，
-  // 等价于导入了一张自带身份信息的卡，验证后续流转不受手填入口移除的影响。
-  {
-    const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
-    const target = stateMod.state.characters.find((c) => c.name === '属性测试角色');
-    if (target) {
-      target.age = '18';
-      target.gender = '女';
-      target.race = '精灵';
-    }
-  }
-
   const saved = await savedCharacters();
   const mine = saved.find((c) => c.name === '属性测试角色');
   check('属性已落盘到角色卡', !!mine && Array.isArray(mine.attributes) && mine.attributes.length === 3, JSON.stringify(mine && mine.attributes));
@@ -1442,9 +1428,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
     !!mine && !('_moreOpen' in mine.attributes[2]),
     JSON.stringify(mine && Object.keys(mine.attributes[2] || {}))
   );
-  // 年龄/性别/种族不再是编辑器可填字段（归入描述），「落盘」语义由
-  // 「字段往返不丢」场景里的 saveCharacters 白名单测试覆盖。这里不再断言
-  // 编辑器填的身份三项落盘 —— 身份三项的流转（种进状态卡）在下方验证。
+  // 年龄/性别/种族已整体移除（身份写进角色描述即可），身份组只剩「姓名」。
 
   // --- 3) 点「聊天」绑定角色 → 属性应该种进状态面板 ---
   click('#btn-close-chars');
@@ -1705,9 +1689,11 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   const cardSeq = Array.from(charCard().querySelectorAll('.sc-body > *')).map((n) =>
     n.classList.contains('sc-group-title') ? `#${n.textContent}` : n.querySelector('.sc-name').textContent
   );
+  // 「身份」分组已随 IDENTITY_GROUP 一起删掉：姓名不再归组，和金币/上衣一起
+  // 排在已分组字段（关系）之后 —— 组内的先出，没组的跟在后头。
   check(
     '分组小标题和字段按组排好',
-    cardSeq.join(',') === '#身份,姓名,年龄,性别,种族,#关系,好感度,金币,上衣',
+    cardSeq.join(',') === '#关系,好感度,姓名,金币,上衣',
     JSON.stringify(cardSeq)
   );
   // 数值行：值显示成「20/100」，带进度条
@@ -1727,13 +1713,8 @@ await scenario('属性：从角色卡种到状态面板', async () => {
 
   check('卡里的值是角色卡上的初始值', cardValue('金币') === '100', String(cardValue('金币')));
 
-  // 单角色对话（角色库点「聊天」）也得把身份四项带上。
-  check('身份四项也在这张卡里', ['姓名', '年龄', '性别', '种族'].every((n) => cardNames().includes(n)), JSON.stringify(cardNames()));
-  check(
-    '身份取的是角色卡上的值',
-    cardValue('年龄') === '18' && cardValue('性别') === '女' && cardValue('种族') === '精灵',
-    JSON.stringify({ 年龄: cardValue('年龄'), 性别: cardValue('性别'), 种族: cardValue('种族') })
-  );
+  // 单角色对话（角色库点「聊天」）也得把姓名带上。
+  check('姓名在这张卡里', cardNames().includes('姓名'), JSON.stringify(cardNames()));
   check('姓名取的是角色名', cardValue('姓名') === '属性测试角色', String(cardValue('姓名')));
 
   // --- 4) 发一条：注入给模型的消息里必须真的带上面板 ---
@@ -4486,13 +4467,7 @@ await scenario('进入世界：用角色卡当自己', async () => {
   };
 
   check('「我的状态」卡里有用角色卡种下的属性', cardNames.includes('金币') && cardNames.includes('上衣'), JSON.stringify(cardNames));
-  check('身份四件套也在这张卡里', ['姓名', '年龄', '性别', '种族'].every((n) => cardNames.includes(n)), JSON.stringify(cardNames));
   check('姓名用的是你改过的名字', cardValue('姓名') === '改过的名字', String(cardValue('姓名')));
-  check(
-    '年龄/性别/种族来自角色卡',
-    cardValue('年龄') === '18' && cardValue('性别') === '女' && cardValue('种族') === '精灵',
-    JSON.stringify({ 年龄: cardValue('年龄'), 性别: cardValue('性别'), 种族: cardValue('种族') })
-  );
   check('值来自角色卡的初始值', cardValue('金币') === '100', String(cardValue('金币')));
 
   // 收掉这张卡，别影响后面的场景
@@ -4541,8 +4516,7 @@ await scenario('角色卡：字段往返不丢', async () => {
   const NAME = '字段往返测试';
   setValue('#c-name', NAME);
   setValue('#c-tags', '甲, 乙');
-  // 年龄/性别/种族已从编辑器移除，不再通过 UI 填；它们的白名单保留行为
-  // 由下方 saveCharacters 补数据后单独验证。
+  // 年龄/性别/种族已整体移除（写进描述即可），编辑器里没有对应输入框。
   setValue('#c-desc', 'D-描述');
   setValue('#c-personality', 'P-性格');
   setValue('#c-scenario', 'S-场景');
@@ -4561,23 +4535,11 @@ await scenario('角色卡：字段往返不丢', async () => {
   await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(150);
 
-  // 身份三项走导入/数据层通道进来：验证 normalizeCharacter 白名单仍保留它们
-  // （导入的外部卡会带这些字段，不能丢）。
-  await window.mimitale.saveCharacters({
-    characters: (await savedCharacters()).map((c) =>
-      c.name === NAME ? { ...c, age: '23', gender: '男', race: '龙' } : c
-    )
-  });
-  await sleep(100);
-
   const saved = (await savedCharacters()).find((c) => c.name === NAME);
   check('角色存下来了', !!saved);
 
   const expect = {
     tags: ['甲', '乙'],
-    age: '23',
-    gender: '男',
-    race: '龙',
     description: 'D-描述',
     personality: 'P-性格',
     scenario: 'S-场景',
@@ -5963,7 +5925,7 @@ await scenario('剧情选项：默认开、关掉要写 false', async () => {
 //  字段名兜底，让新旧会话的分组展示和提示词注入一致。
 //  纯函数，动态 import 真代码来测（同场景 20 的路数）。
 // ---------------------------------------------------------------------------
-await scenario('面板：身份分组的兜底', async () => {
+await scenario('面板：分组只认 defs', async () => {
   let mod = null;
   try {
     const url = new URL('js/data/panel.js', document.baseURI).href;
@@ -5975,31 +5937,36 @@ await scenario('面板：身份分组的兜底', async () => {
   if (mod && typeof mod.panelFieldGroup === 'function') {
     check('panelFieldGroup 能从真模块里拿到', true);
 
-    // 老会话形状：defs 里只有数值字段的定义，身份四项什么都没记
-    const legacyConvo = {
-      panelFields: ['姓名', '年龄', '金币'],
-      panel: { 姓名: '阿莉', 年龄: '18', 金币: '100' },
+    // 身份分组兜底已经删掉：没记 group 的字段就是没分组
+    const plainConvo = {
+      panelFields: ['姓名', '金币'],
+      panel: { 姓名: '阿莉', 金币: '100' },
       panelDefs: { 金币: { type: 'meter', min: 0, max: 100 } }
     };
-
     check(
-      '老会话的身份字段兜底归进「身份」组',
-      mod.panelFieldGroup(legacyConvo, '姓名') === mod.IDENTITY_GROUP && mod.panelFieldGroup(legacyConvo, '年龄') === mod.IDENTITY_GROUP,
-      JSON.stringify([mod.panelFieldGroup(legacyConvo, '姓名'), mod.panelFieldGroup(legacyConvo, '年龄')])
+      '没记 group 的字段不兜底（返回空串）',
+      mod.panelFieldGroup(plainConvo, '姓名') === '' && mod.panelFieldGroup(plainConvo, '金币') === '',
+      JSON.stringify([mod.panelFieldGroup(plainConvo, '姓名'), mod.panelFieldGroup(plainConvo, '金币')])
     );
-    check('不是身份四项的字段不兜底（保持没分组）', mod.panelFieldGroup(legacyConvo, '金币') === '', mod.panelFieldGroup(legacyConvo, '金币'));
     check(
-      'defs 里记过 group 的以 defs 为准（不被兜底覆盖）',
+      'defs 里记过 group 的以 defs 为准',
       mod.panelFieldGroup({ panelFields: ['好感度'], panel: {}, panelDefs: { 好感度: { type: 'meter', group: '关系' } } }, '好感度') === '关系'
     );
 
-    // 新会话形状：种的时候 group 已经记进 defs —— 兜底不该多事
-    const newConvo = {
-      panelFields: ['姓名'],
-      panel: { 姓名: '阿莉' },
-      panelDefs: { 姓名: { type: 'text', group: mod.IDENTITY_GROUP } }
-    };
-    check('新会话的身份字段直接读 defs（结果一致）', mod.panelFieldGroup(newConvo, '姓名') === mod.IDENTITY_GROUP);
+    // panelGroupNames 也只从 defs 收集，不再凭空补「身份」
+    check(
+      'panelGroupNames 只收集 defs 里的组名',
+      mod.panelGroupNames({
+        panelFields: ['姓名', '好感度'],
+        panel: { 姓名: '阿莉' },
+        panelDefs: { 好感度: { type: 'meter', group: '关系' } }
+      }).size === 1,
+      JSON.stringify([...mod.panelGroupNames({
+        panelFields: ['姓名', '好感度'],
+        panel: { 姓名: '阿莉' },
+        panelDefs: { 好感度: { type: 'meter', group: '关系' } }
+      })])
+    );
   }
 });
 
@@ -6506,16 +6473,16 @@ await scenario('状态卡：点头像查看与编辑', async () => {
   check('编辑态下按钮变成「完成」', myCard().querySelector('.sc-edit').textContent.trim() === '完成', myCard().querySelector('.sc-edit').textContent);
 
   // --- 改一个值 → 落到会话面板上 ---
-  const ageRow = $$('#state-cards .state-card[data-owner="player"] .sc-row').find(
-    (r) => r.querySelector('.sc-name').textContent === '年龄'
+  const coinRow = $$('#state-cards .state-card[data-owner="player"] .sc-row').find(
+    (r) => r.querySelector('.sc-name').textContent === '金币'
   );
-  const ageInput = ageRow.querySelector('.sc-input');
-  setValue(ageInput, '19');
-  ageInput.dispatchEvent(new Event('blur', { bubbles: true }));
+  const coinInput = coinRow.querySelector('.sc-input');
+  setValue(coinInput, '19');
+  coinInput.dispatchEvent(new Event('blur', { bubbles: true }));
   await sleep(300);
   let cv = await window.mimitale.getConversations();
   let wc = cv.conversations.find((c) => c.title === '冒烟测试世界');
-  check('卡片里改的值落到了会话面板上', !!wc && wc.panel && panelValByName(wc.panel, '年龄') === '19', wc ? String(panelValByName(wc.panel, '年龄')) : 'null');
+  check('卡片里改的值落到了会话面板上', !!wc && wc.panel && panelValByName(wc.panel, '金币') === '19', wc ? String(panelValByName(wc.panel, '金币')) : 'null');
 
   // --- 加一个字段 ---
   setValue($('#state-cards .state-card[data-owner="player"] .sc-new'), '心情');
@@ -8297,6 +8264,30 @@ await scenario('规则段：段落之间不粘连', async () => {
     '【标重点】带 ✔/✗ 正反例（光说「要加粗」模型不照做）',
     soloRule.includes('✔') && soloRule.includes('✗'),
     JSON.stringify(soloRule.slice(soloRule.indexOf('【标重点】'), soloRule.indexOf('【标重点】') + 260))
+  );
+
+  // 人称兜底（2026-10-18 从「第一人称 + 括号」改成「第三人称连贯叙述」）：
+  // 老兜底是 2026-09 之前的残留，和同一份提示词里的【叙述要求】直接对撞
+  // （叙述模式那边明写「不要把整段动作括在括号里」，人称这头却让人括在括号里）。
+  // 这里钉住新口径，顺便钉住正反例和「台词照常用我」那半句 —— 只写「第三人称」时
+  // 模型很容易把台词也改成第三人称，那两句必须分开讲。
+  const personStart = soloRule.indexOf('人称和描写格式');
+  const personCut = soloRule.indexOf('【推进节奏】');
+  const personRule = personStart < 0 ? '' : soloRule.slice(personStart, personCut > personStart ? personCut : personStart + 400);
+  check(
+    '单角色默认人称是第三人称（不是第一人称 + 括号）',
+    personRule.includes('第三人称') && !personRule.includes('把动作和神态描写放在括号里'),
+    JSON.stringify(personRule.slice(0, 120))
+  );
+  check(
+    '人称规则带 ✔/✗ 正反例（和老规矩一致：光说要求模型不照做）',
+    personRule.includes('✔') && personRule.includes('✗'),
+    JSON.stringify(personRule)
+  );
+  check(
+    '人称规则点明「台词里照常用我」（不然模型会把台词也改成第三人称）',
+    personRule.includes('台词里照常用「我」'),
+    JSON.stringify(personRule.slice(-90))
   );
 
   // 推进节奏现在的**唯一落点**是角色卡规则内部（roleplayRuleText / gmRuleText）。

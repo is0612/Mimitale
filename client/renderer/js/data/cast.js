@@ -426,14 +426,11 @@ export function worldbookCast(convo) {
     if (isPlayerCharacterCopy(convo, c)) continue;
     npcCount += 1;
 
-    // 身份用括号缀在名字后面：GM 不知道 NPC 几岁、什么族，照样会瞎编
-    const who = [c.age && `${c.age}岁`, c.gender, c.race].filter(Boolean).join('·');
     const bits = [c.description, c.personality]
       .map((s) => String(s || '').trim().replace(/\s+/g, ' '))
       .filter(Boolean)
       .join(' ');
-    const head = who ? `${c.name}（${who}）` : c.name;
-    const line = `- ${head}：${bits.slice(0, MAX_CAST_PER_NPC) || '（没写设定）'}`;
+    const line = `- ${c.name}：${bits.slice(0, MAX_CAST_PER_NPC) || '（没写设定）'}`;
 
     if (total + line.length > MAX_CAST_CHARS) {
       lines.push(`- （还有 ${cast.length - npcCount + 1} 人没列出）`);

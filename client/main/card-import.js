@@ -229,11 +229,6 @@ function characterFromCard(card, avatar, source, fallbackName, makeWorldbookId, 
       creator: d.creator,
       characterVersion: d.character_version,
       tags: d.tags,
-      // 自己导出去的卡会把年龄/性别/种族放在 extensions.mimitale，
-      // 这里读回来，导出再导入才是一个闭环（别的软件按规范会原样忽略这段）
-      age: ext.age,
-      gender: ext.gender,
-      race: ext.race,
       attributes,
       // 自带世界书的开关也跟着一起回来。缺省 true，所以没这个字段的卡不受影响。
       worldbookEnabled: typeof ext.worldbookEnabled === 'boolean' ? ext.worldbookEnabled : true

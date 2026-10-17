@@ -78,9 +78,6 @@ export function characterCardPayload(character) {
       character_version: character.characterVersion || '',
       extensions: {
         mimitale: {
-          age: character.age || '',
-          gender: character.gender || '',
-          race: character.race || '',
           attributes: characterAttrs(character),
           // 开关也带上：别人导入后拿到的状态跟你这边一致
           worldbookEnabled: character.worldbookEnabled !== false

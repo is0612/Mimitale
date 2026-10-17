@@ -97,20 +97,6 @@ function newCharacterId() {
 }
 
 /**
- * 性别归一化。
- * 酒馆卡里常写成 male / female，统一成选择框认的那几个值；
- * 认不出来的一律留空（宁可不填，也不要塞个编辑器里选不中的值进去 —— 那样一保存就丢了）。
- */
-function normalizeGender(value) {
-  const text = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  if (!text) return '';
-  if (['男', 'male', 'm', 'man', '男性'].includes(text)) return '男';
-  if (['女', 'female', 'f', 'woman', '女性'].includes(text)) return '女';
-  if (['其他', 'other', 'nonbinary', 'non-binary', '未知'].includes(text)) return '其他';
-  return '';
-}
-
-/**
  * 剧情选项的配置归一化。
  *
  * 三种情况分得清清楚楚：
@@ -240,11 +226,6 @@ function normalizeCharacter(raw, source) {
     // 用来分辨「同一个角色的不同作者 / 不同版本」；没有就是空串。
     creator: str(r.creator, MAX_META_CHARS).trim(),
     characterVersion: str(r.characterVersion, MAX_META_CHARS).trim(),
-    // 身份三项。酒馆卡规范里没有它们，有些卡会写在 extensions 里，
-    // 所以这里有就收、没有就是空（种族不硬塞「人类」，免得给精灵安个人类）。
-    age: str(r.age, 40).trim(),
-    gender: normalizeGender(r.gender),
-    race: str(r.race, 40).trim(),
     tags: Array.isArray(r.tags)
       ? r.tags.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim().slice(0, 40)).slice(0, 20)
       : [],
@@ -274,7 +255,6 @@ module.exports = {
   normalizeExpressions,
   normalizeAlternateGreetings,
   normalizeOptionsSpec,
-  normalizeGender,
   normalizeWorldbookIds,
   newCharacterId,
   MAX_AVATAR_CHARS,

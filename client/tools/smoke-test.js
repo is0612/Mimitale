@@ -1698,22 +1698,12 @@ function probeInjection(result) {
     detail: playerOk ? '' : `翻了 ${blobs.length} 次请求都没找到「【玩家角色：改过的名字】」`
   });
 
-  // 单角色对话：角色卡上的年龄必须真的进提示词（曾经漏了，AI 就把 16 岁写成 21 岁）
-  const ageOk = blobs.some((b) => b.includes('【属性测试角色的基本信息】') && b.includes('年龄 18'));
+  // 身份三件套（年龄/性别/种族）已整体移除，注入链路上只剩姓名
+  const identityOk = blobs.some((b) => b.includes('【姓名】：改过的名字'));
   result.results.push({
-    name: '单角色对话：角色的年龄/性别/种族被注入给模型',
-    pass: ageOk,
-    detail: ageOk ? '' : `翻了 ${blobs.length} 次请求都没找到「【属性测试角色的基本信息】…年龄 18」`
-  });
-
-  // 身份四件套也要跟着面板一起注入 —— 世界里这些是会变的
-  const identityOk = blobs.some(
-    (b) => b.includes('【姓名】：改过的名字') && b.includes('【年龄】：18') && b.includes('【种族】：精灵')
-  );
-  result.results.push({
-    name: '进入世界：身份四件套被注入给模型',
+    name: '进入世界：面板里的姓名被注入给模型',
     pass: identityOk,
-    detail: identityOk ? '' : `翻了 ${blobs.length} 次请求都没找齐姓名/年龄/种族`
+    detail: identityOk ? '' : `翻了 ${blobs.length} 次请求都没找到「【姓名】：改过的名字」`
   });
 }
 
@@ -1865,8 +1855,6 @@ function probeExports(result) {
         !!card &&
         card.spec === 'chara_card_v2' &&
         card.data.name === '属性测试角色' &&
-        ext.age === '18' &&
-        ext.gender === '女' &&
         attrs.length === 3 &&
         // 范围/规则也要能过一遍 PNG 往返（写进 extensions.mimitale 再读回来）
         !!meter &&
@@ -2184,7 +2172,7 @@ function probeImport(result) {
       post_history_instructions: '',
       tags: [],
       character_book: { name: '卡里自带的世界书', entries },
-      extensions: { mimitale: { age: '18', gender: '女', race: '精灵', attributes: [] } }
+      extensions: { mimitale: { attributes: [] } }
     }
   });
 
@@ -2243,9 +2231,6 @@ function probeImport(result) {
 
     push('导入：PNG 卡读出来了', (out.characters || []).length === 1 && !!char && char.name === '导入测试角色',
       char ? `roles=${out.characters.length} name=${char.name}` : JSON.stringify(out.errors));
-    push('导入：v2 的 extensions.mimitale 也读回来了',
-      !!char && char.age === '18' && char.gender === '女' && char.race === '精灵',
-      char ? `age=${char.age} gender=${char.gender} race=${char.race}` : '没有角色');
     push('导入：卡里内嵌的世界书被存下来了（以前整本丢掉）', !!book,
       book ? `「${book.name}」${(book.entries || []).length} 条` : JSON.stringify((out.worldbooks || []).map((b) => b.name)));
     push('导入：内嵌世界书的条目内容对得上',
@@ -2287,7 +2272,7 @@ function probeImport(result) {
       0: { uid: 0, comment: '规则', key: [], content: '玩家不是世界中心。', constant: true, order: 5 }
     },
     characters: [
-      { id: 'npc-1', name: '顾言', description: '大三，学生会成员', personality: '温和可靠', age: '20', gender: '男' },
+      { id: 'npc-1', name: '顾言', description: '大三，学生会成员', personality: '温和可靠' },
       { id: 'npc-2', name: '林夏', description: '新闻学院', personality: '外向活泼', age: '20', gender: '女' }
     ]
   };
@@ -2301,11 +2286,10 @@ function probeImport(result) {
   push('导入：世界书里自带的 NPC 收进来了（以前整份 characters 静默丢掉）',
     !!castImported && (castImported.characters || []).length === 2,
     castImported ? `characters=${(castImported.characters || []).length}` : JSON.stringify(castOut.errors));
-  push('导入：书里 NPC 的设定做了归一化（名字 / 性格 / 年龄都在）',
+  push('导入：书里 NPC 的设定做了归一化（名字 / 性格都在）',
     !!castImported && castImported.characters[0] &&
       castImported.characters[0].name === '顾言' &&
       castImported.characters[0].personality === '温和可靠' &&
-      castImported.characters[0].age === '20' &&
       typeof castImported.characters[0].id === 'string' && !!castImported.characters[0].id,
     castImported && castImported.characters[0] ? JSON.stringify(castImported.characters[0]) : '没有书');
   push('导入：书里的开场白也留下了', !!castImported && castImported.opening === castBook.opening,
@@ -3301,7 +3285,7 @@ async function probeWorldbookExportRoundTrip(win, result) {
       }
     ],
     characters: [
-      { name: '顾言', description: '大三，学生会成员', personality: '温和可靠', age: '20', gender: '男' },
+      { name: '顾言', description: '大三，学生会成员', personality: '温和可靠' },
       { name: '林夏', description: '新闻学院', personality: '外向活泼', age: '20', gender: '女' }
     ]
   };
@@ -3361,7 +3345,6 @@ async function probeWorldbookExportRoundTrip(win, result) {
         cast.length === 2 &&
         cast[0].name === '顾言' &&
         cast[0].personality === '温和可靠' &&
-        cast[0].age === '20' &&
         (back.characters || []).length === 0;
       backDetail = `书=${b && b.name} 条目=${b ? (b.entries || []).length : 0} opening=${
         b ? JSON.stringify(b.opening) : 'null'
