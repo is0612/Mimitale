@@ -590,14 +590,19 @@
         </div>
       </section>
 
+      <!-- 视图八：编辑世界书（A 稿「条目工作台」）
+           一天里九成时间在写条目，所以这一屏是一台三栏工具：左列表 / 中正文 / 右本条属性。
+           书本身很少改，于是它退成一条 64px 的信息条；书籍设置 / 本书角色 是两个二级屏。
+           垂直预算（1440×900）：页头 56 + 书籍条 64 + 分区标签 44 = 164
+           （原来是 78 + 100 + 47 = 225 —— 900 的窗口里四分之一还没看到一个字段）。 -->
       <section id="view-wb-editor" class="view hidden" aria-label="编辑世界书">
-        <header class="page-head">
-          <div class="page-heading">
+        <header class="page-head wb-head">
+          <div class="wb-head-left">
             <p class="page-crumb" id="wb-crumb" hidden></p>
-            <h1 id="worldbooks-title" class="page-title">世界书</h1>
-            <p class="page-sub">一条条目 = 一组关键词 + 一段设定；关键词命中才会注入提示词</p>
+            <h1 id="worldbooks-title" class="page-title">编辑世界书</h1>
           </div>
           <div class="page-actions">
+            <span id="wb-total-words" class="wb-total"></span>
             <span id="wb-dirty-hint" class="wb-dirty hidden"></span>
             <m-button id="btn-close-worldbooks" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
             <m-button id="btn-save-wb" variant="primary" size="sm" title="把这本书的书名 / 开场白 / 条目写进磁盘">保存</m-button>
@@ -609,197 +614,254 @@
 
         <div id="wb-book-wrap" class="wb-book-wrap hidden">
 
-        <section class="wb-book">
-          <div class="wb-book-title">本书设置</div>
-
-          <!-- 封面：铺在世界书列表卡片上的那张 2:3 竖版图（和角色形象同一个比例，
-               走同一个裁剪组件）。点击上传 → 结果先落**草稿**，点页头「保存」才写盘 ——
-               和书名 / 开场白同一条规矩，不保存关掉就还原。 -->
-          <div class="wb-cover">
-            <span class="field-label">封面</span>
-            <div class="wb-cover-row">
-              <button id="wb-cover" class="wb-cover-frame" type="button"
-                      title="点击上传封面（2:3 竖版，铺在世界书列表的卡片上）" aria-label="上传世界书封面">
-                <span class="wb-cover-empty">点击上传</span>
-              </button>
-              <div class="wb-cover-side">
-                <m-button id="btn-clear-wb-cover" variant="ghost" size="sm" class="hidden">清除</m-button>
-              </div>
+          <!-- 书籍条 64px：封面缩略 + 书名 + 一行统计 + 两个书级动作。
+               统计只在这里出现一次 —— 原来页头 / 书籍头 / 书籍设置右栏三份重复，
+               同一组数字读三遍就没人在读它了。 -->
+          <div class="wb-bookbar" id="wb-bookbar">
+            <button id="wb-bookbar-cover" class="wb-bookbar-cover" type="button"
+                    title="换封面（在「书籍设置」里）" aria-label="去书籍设置换封面"></button>
+            <h2 id="wb-bookbar-name" class="wb-bookbar-name">世界书</h2>
+            <span id="wb-bookbar-sub" class="wb-bookbar-sub"></span>
+            <div class="wb-bookbar-actions">
+              <m-button id="btn-preview-wb" variant="ghost" size="sm">预览命中</m-button>
+              <m-button id="btn-export-wb" variant="ghost" size="sm" title="导出成酒馆能直接导入的 JSON">导出</m-button>
             </div>
-            <span class="field-help wb-cover-help">点图片上传或更换；没封面时卡片上是「世」字块。</span>
           </div>
 
-          <label class="field field-stack wb-book-name">
-            <span class="field-label">书名</span>
-            <m-input size="sm" id="wb-name" placeholder="世界书名称" aria-label="世界书名称"></m-input>
-          </label>
+          <nav class="wb-tabs" id="wb-tabs" aria-label="世界书分区">
+            <button type="button" class="wb-tab" id="wb-tab-entries" aria-controls="wb-panel-entries">条目 <span class="wb-tab-n" id="wb-tab-entries-n"></span></button>
+            <button type="button" class="wb-tab" id="wb-tab-settings" aria-controls="wb-panel-settings">书籍设置</button>
+            <button type="button" class="wb-tab" id="wb-tab-characters" aria-controls="wb-panel-characters">本书角色 <span class="wb-tab-n" id="wb-tab-characters-n"></span></button>
+          </nav>
 
-          <!-- 开场白：进这个世界时自动作为第一条消息 -->
-          <label class="field field-stack wb-opening">
-            <span class="field-label">开场白</span>
-            <m-textarea id="wb-opening" rows="3" spellcheck="false" placeholder="进这个世界时自动作为第一条消息。留空则让 AI 按设定现生成一段开局。"></m-textarea>
-          </label>
+          <!-- 屏 1 · 条目：列表 336 | 正文 640（居中，两侧留白） | 本条属性 248 -->
+          <div class="wb-work" id="wb-panel-entries">
+            <aside class="wb-list">
+              <div class="wb-list-tools">
+                <m-input class="wb-search" id="wb-search" type="search" placeholder="搜索条目" aria-label="搜索条目"></m-input>
+                <m-select class="wb-state" id="wb-state" aria-label="条目状态筛选">
+                  <option value="all">全部条目</option>
+                  <option value="enabled">已启用</option>
+                  <option value="disabled">已停用</option>
+                  <option value="constant">常驻条目</option>
+                </m-select>
+              </div>
+              <p class="wb-side-title">条目 <span id="wb-entry-count" class="wb-count"></span></p>
+              <div id="wb-entry-list" class="wb-entry-list"></div>
+              <!-- 三颗都跟「条目」走 —— 它们动的是列表，不是书 -->
+              <div class="wb-entry-actions">
+                <m-button id="btn-new-entry" variant="ghost" size="sm">＋ 条目</m-button>
+                <m-button id="btn-wb-entry-template" variant="ghost" size="sm"
+                          title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</m-button>
+                <m-button id="btn-wb-add-event" variant="ghost" size="sm"
+                          title="新建一条「事件」条目：填上关键词，聊到就把这段演出来">＋ 事件</m-button>
+              </div>
+            </aside>
 
-          <!-- 本书信息：条数 / 启用 / 常驻 / 字数 / 来源 —— 由 worldbook.js 按草稿实时铺 -->
-          <dl id="wb-book-facts" class="wb-facts"></dl>
+            <!-- ⚠️ #wb-form 是 display: contents：它自己不画盒子，两个子级
+                 （正文列 / 属性栏）直接落进 .wb-work 的三列网格。
+                 这样「表单里任何一下改动都算这本书有未保存的改动」那两条监听
+                 （input / change 冒泡）不用拆成三处。 -->
+            <div id="wb-form" class="wb-form hidden">
+              <main class="wb-doc">
+                <div id="wb-form-empty" class="wb-empty">选中一条条目后在这里编辑</div>
 
-          <!-- 本书角色：从角色库复制进来的独立副本。
-               和角色库里的那个角色互相独立，改哪边都不影响另一边。
-               它就是「这本书的 NPC 名单」—— 进世界时 GM 照着他们演，
-               勾了「显示状态」的还会出现在右栏头像条上。 -->
-          <div class="wb-chars">
-            <div class="wb-chars-head">
-              <!-- 标题整块就是折叠开关：一本酒馆书十来号 NPC，一排 chip 能把
-                   下面的东西挤没。收起只是 CSS 藏起来（DOM 还在），
-                   所以「＋ 新建」之后照样找得到 chip。 -->
-              <button id="btn-toggle-wb-chars" class="wb-chars-toggle" type="button" aria-expanded="true"
-                      title="本书角色 = 这本书的 NPC 名单：进世界时 GM 会照着他们演，勾了「显示状态」的会出现在右栏头像条上">
-                <span class="wb-caret" aria-hidden="true"></span>
-                <span class="field-label">本书角色</span>
-                <span id="wb-char-count" class="wb-count"></span>
-              </button>
-              <div class="wb-chars-actions">
+                <div class="wb-measure">
+                  <section class="wb-sheet">
+                    <div class="wb-sheet-head">
+                      <span class="wb-sheet-no">1</span>
+                      <h2 class="wb-sheet-name">这条怎么被认出来</h2>
+                      <span id="wb-keys-count" class="wb-sheet-count"></span>
+                    </div>
+                    <div class="wb-sheet-body wb-ident">
+                      <label class="field field-stack">
+                        <span class="field-label">条目名称</span>
+                        <m-input id="wb-e-title" placeholder="例如：小镇广场"></m-input>
+                      </label>
+                      <label class="field field-stack">
+                        <span class="field-label">关键词（任一命中就注入，用逗号分隔）</span>
+                        <m-input id="wb-e-keys" placeholder="例如：广场, 喷泉, 告示牌"></m-input>
+                      </label>
+                      <span class="field-help wb-ident-help">
+                        中文按子串匹配，英文按单词匹配；写成 <code>/正则/</code> 也可以。勾了「常驻」就不需要关键词。
+                      </span>
+                    </div>
+                  </section>
+
+                  <section class="wb-sheet wb-sheet-lead">
+                    <div class="wb-sheet-head">
+                      <span class="wb-sheet-no">2</span>
+                      <h2 class="wb-sheet-name">内容</h2>
+                      <span class="wb-sheet-kind">纯文本</span>
+                      <span id="wb-content-count" class="wb-sheet-count"></span>
+                    </div>
+                    <m-textarea id="wb-e-content" rows="12" spellcheck="false" placeholder="关键词命中时要塞给模型的设定。写成一个能独立看懂的段落。"></m-textarea>
+                    <details class="wb-fold">
+                      <summary>这一栏怎么写</summary>
+                      <div class="wb-fold-body">
+                        <p>一段话把这个世界「是什么」立住：地理尺度 → 有谁 → 技术/魔法的边界在哪。写具体的名词（<code>小镇广场</code>、<code>圣盾城</code>），模型才接得住。</p>
+                        <p>别在这里写剧情 —— 剧情属于条目之间的组合，交给顺序和「附加条件」。</p>
+                      </div>
+                    </details>
+                  </section>
+                </div>
+              </main>
+
+              <!-- 本条属性：三个开关 + 两个数字属于「这一条」，放进正文里会把正文打散。
+                   挪到右栏之后改完立刻看见，不用在长表单里上下找。 -->
+              <aside class="wb-aside">
+                <div class="wb-aside-card">
+                  <h3>这条什么时候生效</h3>
+                  <div class="wb-checks">
+                    <label class="check">
+                      <input id="wb-e-enabled" type="checkbox" checked />
+                      <span class="check-text">
+                        <span class="check-title">启用</span>
+                        <span class="check-desc">关掉后这条不参与匹配</span>
+                      </span>
+                    </label>
+                    <label class="check">
+                      <input id="wb-e-constant" type="checkbox" />
+                      <span class="check-text">
+                        <span class="check-title">常驻</span>
+                        <span class="check-desc">每轮都注入，不等关键词</span>
+                      </span>
+                    </label>
+                    <label class="check">
+                      <input id="wb-e-recursive" type="checkbox" />
+                      <span class="check-text">
+                        <span class="check-title">递归</span>
+                        <span class="check-desc">命中后再扫一遍别的条目</span>
+                      </span>
+                    </label>
+                  </div>
+                  <!-- 递归那段的完整说明（原来贴在勾选框下面，四行字会把右栏撑爆）：
+                       做成卡片底部一条折叠，想查的时候再展开。 -->
+                  <details class="wb-fold wb-fold-flat">
+                    <summary>递归怎么算</summary>
+                    <div class="wb-fold-body">
+                      <p>这条命中后，把它的正文也拿去做下一轮匹配 —— 正文里提到的词能再带出别的条目，一路连锁。</p>
+                      <p>最多几层在「设置 → 行为」里调，默认 1 层；<b>那里填 0 时勾了这个也不生效</b>。</p>
+                      <p>对应酒馆的「Prevent further recursion」：那边是勾上才禁止，这里是勾上才允许。<b>会明显增加 token</b>，只给「总览 / 索引」这类条目开。</p>
+                    </div>
+                  </details>
+                </div>
+
+                <div class="wb-aside-card">
+                  <h3>插在哪 · 多大概率</h3>
+                  <label class="wb-num-row">
+                    <m-input id="wb-e-order" type="number" min="0" max="9999" step="1" value="100" aria-label="插入顺序"></m-input>
+                    <span class="wb-num-unit">顺序，小的先插</span>
+                  </label>
+                  <label class="wb-num-row">
+                    <m-input id="wb-e-prob" type="number" min="0" max="100" step="1" value="100" aria-label="触发概率"></m-input>
+                    <span class="wb-num-unit">% 命中概率</span>
+                  </label>
+                  <label class="field field-stack">
+                    <span class="field-label">附加关键词（可选）</span>
+                    <m-input id="wb-e-keys2" placeholder="留空则忽略"></m-input>
+                  </label>
+                  <label class="field field-stack">
+                    <span class="field-label">附加关键词怎么算</span>
+                    <m-select id="wb-e-logic">
+                      <option value="AND_ANY">同时命中任意一个</option>
+                      <option value="AND_ALL">同时命中全部</option>
+                      <option value="NOT_ANY">这些词都不出现</option>
+                      <option value="NOT_ALL">这些词不同时出现</option>
+                    </m-select>
+                  </label>
+                </div>
+
+                <div class="wb-aside-card">
+                  <h3>本条目</h3>
+                  <dl class="wb-facts">
+                    <div><dt>字数</dt><dd id="wb-e-words">—</dd></div>
+                    <div><dt>关键词</dt><dd id="wb-e-keycount">—</dd></div>
+                  </dl>
+                  <p class="wb-predict">话里出现上面任一关键词时，这段才进提示词。</p>
+                  <div class="wb-form-foot">
+                    <m-button id="btn-del-entry" variant="danger" size="sm">删除条目</m-button>
+                    <span class="wb-form-foot-hint">改完点保存才生效</span>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <!-- 屏 2 · 书籍设置：左两张稿纸（封面与书名 / 开场白）| 右本书信息 + 删除 -->
+          <div class="wb-set" id="wb-panel-settings" hidden>
+            <main class="wb-set-main">
+              <div class="wb-measure">
+                <section class="wb-sheet">
+                  <div class="wb-sheet-head">
+                    <span class="wb-sheet-no">1</span>
+                    <h2 class="wb-sheet-name">封面与书名</h2>
+                  </div>
+                  <div class="wb-sheet-body wb-cover-cell">
+                    <!-- 封面：铺在世界书列表卡片上的那张 2:3 竖版图（和角色形象同一个比例，
+                         走同一个裁剪组件）。点击上传 → 结果先落**草稿**，点页头「保存」才写盘。 -->
+                    <button id="wb-cover" class="wb-cover-frame" type="button"
+                            title="点击上传封面（2:3 竖版，铺在世界书列表的卡片上）" aria-label="上传世界书封面">
+                      <span class="wb-cover-empty">点击上传</span>
+                    </button>
+                    <div class="wb-cover-side">
+                      <label class="field field-stack wb-book-name">
+                        <span class="field-label">书名</span>
+                        <m-input id="wb-name" placeholder="世界书名称" aria-label="世界书名称"></m-input>
+                      </label>
+                      <span class="field-help">封面显示在世界书列表的卡片上；2:3 竖版最合适，点左边的图换一张。</span>
+                      <m-button id="btn-clear-wb-cover" variant="ghost" size="sm" class="hidden">清除封面</m-button>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="wb-sheet wb-sheet-lead">
+                  <div class="wb-sheet-head">
+                    <span class="wb-sheet-no">2</span>
+                    <h2 class="wb-sheet-name">开场白</h2>
+                    <span id="wb-opening-count" class="wb-sheet-count"></span>
+                  </div>
+                  <m-textarea id="wb-opening" rows="9" spellcheck="false" placeholder="进这个世界时自动作为第一条消息。留空则让 AI 按设定现生成一段开局。"></m-textarea>
+                  <details class="wb-fold">
+                    <summary>这一栏怎么写</summary>
+                    <div class="wb-fold-body">
+                      <p>进这个世界的第一条消息。写清三件事：<b>你在哪</b>、<b>你手上有什么</b>、<b>周围人怎么看你</b> —— 这三样齐了，第一轮不用模型替你补设定。</p>
+                      <p>留一句没说完的话，比把剧情写满更容易接上。</p>
+                    </div>
+                  </details>
+                </section>
+              </div>
+            </main>
+
+            <aside class="wb-set-aside">
+              <div class="wb-aside-card">
+                <h3>本书信息</h3>
+                <dl id="wb-book-facts" class="wb-facts"></dl>
+              </div>
+              <div class="wb-danger">
+                <h3>删除这本书</h3>
+                <p id="wb-danger-hint">删除会连同这本书的条目和角色副本一起删掉，不可恢复。想留底先用书籍条的「导出」。</p>
+                <m-button id="btn-del-worldbook" variant="danger" size="sm">删除本书</m-button>
+              </div>
+            </aside>
+          </div>
+
+          <!-- 屏 3 · 本书角色：从角色库复制进来的独立副本（书里没有角色时给一张引导卡） -->
+          <div class="wb-chars-panel" id="wb-panel-characters" hidden>
+            <div class="wb-chars-inner">
+              <div class="wb-chars-bar">
                 <m-button id="btn-add-wb-chars" variant="ghost" size="sm">＋ 从角色库加入</m-button>
                 <m-button id="btn-ai-wb-char" variant="ghost" size="sm"
-                        title="按这本书的设定生成一个 NPC（酒馆的小二、咖啡店的老板娘这类），生成完可以自己改">AI 生成</m-button>
+                          title="按这本书的设定生成一个 NPC（酒馆的小二、咖啡店的老板娘这类），生成完可以自己改">AI 生成</m-button>
                 <m-button id="btn-new-wb-char" variant="ghost" size="sm">＋ 新建</m-button>
                 <m-button id="btn-sync-wb-attrs" variant="ghost" size="sm"
-                        title="按名字找角色库里同名的卡，把它的属性补进这里的副本（副本是快照，加进来之后角色库又补了属性的话，副本不会自己跟着变）">↻ 同步属性</m-button>
+                          title="按名字找角色库里同名的卡，把它的属性补进这里的副本（副本是快照，加进来之后角色库又补了属性的话，副本不会自己跟着变）">↻ 同步属性</m-button>
+                <span id="wb-chars-hint" class="wb-chars-hint"></span>
               </div>
-            </div>
-            <div id="wb-char-list" class="wb-char-list"></div>
-          </div>
-
-          <div class="wb-book-actions">
-            <m-button id="btn-preview-wb" variant="ghost" size="sm">预览命中</m-button>
-          </div>
-
-          <!-- 书级那两颗「进 / 出」：导出会在布局初始化时挪进书籍头（它是「这本书自己的动作」），
-               这一栏只剩「删除本书」—— 做成危险区，删之前先看见后果。 -->
-          <div class="wb-book-foot">
-            <span class="wb-book-foot-hint">删除会连同这本书的条目和角色副本一起删掉，不可恢复。想留底先用书籍头的「导出」。</span>
-            <m-button id="btn-export-wb" variant="ghost" size="sm" title="导出成酒馆能直接导入的 JSON">导出</m-button>
-            <m-button id="btn-del-worldbook" variant="danger" size="sm">删除本书</m-button>
-          </div>
-        </section>
-
-        <!-- 左二栏：条目列表。高频 —— 每次进来都在点它，所以紧挨着编辑区。 -->
-        <section class="wb-entries">
-
-          <div class="wb-entry-head">
-            <span class="field-label">条目</span>
-            <span id="wb-entry-count" class="wb-count"></span>
-            <!-- 这一栏 268px：三颗按钮正好一行放得下，放不下就靠 flex-wrap 折行，
-                 别被 overflow:hidden 切掉（这条从单栏时代就成立，别把列宽压到 268 以下）。 -->
-            <div class="wb-entry-actions">
-              <m-button id="btn-new-entry" variant="ghost" size="sm">＋ 条目</m-button>
-              <!-- 世界书条目模板：一键种入世界模拟类卡最常用的四条骨架。
-                   文案在 worldbook.js 的 WB_ENTRY_TEMPLATE。 -->
-              <m-button id="btn-wb-entry-template" variant="ghost" size="sm"
-                      title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</m-button>
-              <!-- 「＋ 事件」：一条一个事件、靠关键词激活（和上面那条常驻的「事件表」配套：
-                   前者给地图，后者给开关）。文案在 worldbook.js 的 WB_EVENT_CONTENT。 -->
-              <m-button id="btn-wb-add-event" variant="ghost" size="sm"
-                      title="新建一条「事件」条目：填上关键词，聊到就把这段演出来">＋ 事件</m-button>
+              <div id="wb-char-list" class="wb-char-list"></div>
             </div>
           </div>
-          <div id="wb-entry-list" class="wb-entry-list"></div>
-        </section>
         </div><!-- /wb-book-wrap -->
-
-        <!-- 右：条目编辑 -->
-        <section class="wb-main">
-          <div id="wb-form-empty" class="wb-empty">选中一条条目后在这里编辑</div>
-
-          <div id="wb-form" class="wb-form hidden">
-            <label class="field field-stack">
-              <span class="field-label">条目名称</span>
-              <m-input id="wb-e-title" placeholder="例如：小镇广场"></m-input>
-            </label>
-
-            <label class="field field-stack">
-              <span class="field-label">关键词</span>
-              <m-input id="wb-e-keys" placeholder="逗号分隔，例如：广场, 喷泉, 告示牌"></m-input>
-              <span class="field-help">
-                对话里出现任意一个就注入。中文按子串匹配，英文按单词匹配。<br />
-                写成 <code>/正则/</code> 也可以。勾选「常驻」则不需要关键词。
-              </span>
-            </label>
-
-            <label class="field field-stack">
-              <span class="field-label">内容</span>
-              <m-textarea id="wb-e-content" rows="12" spellcheck="false" placeholder="关键词命中时要塞给模型的设定。写成一个能独立看懂的段落。"></m-textarea>
-            </label>
-
-            <!-- 次要字段折起来，把高度让给「内容」这个真正要长时间写的框 -->
-            <details class="wb-advanced">
-              <summary>更多选项（插入顺序、概率、附加条件）</summary>
-
-              <div class="field-grid">
-                <label class="field field-stack">
-                  <span class="field-label">插入顺序</span>
-                  <m-input id="wb-e-order" type="number" min="0" max="9999" step="1" value="100"></m-input>
-                  <span class="field-help">数字大的更靠后，影响更大。</span>
-                </label>
-                <label class="field field-stack">
-                  <span class="field-label">触发概率 %</span>
-                  <m-input id="wb-e-prob" type="number" min="0" max="100" step="1" value="100"></m-input>
-                  <span class="field-help">100 = 必中。调低可做随机事件。</span>
-                </label>
-              </div>
-
-              <label class="field field-stack">
-                <span class="field-label">附加关键词（可选）</span>
-                <m-input id="wb-e-keys2" placeholder="留空则忽略"></m-input>
-              </label>
-
-              <label class="field">
-                <span class="field-label">附加条件</span>
-                <m-select id="wb-e-logic">
-                  <option value="AND_ANY">同时命中任意一个</option>
-                  <option value="AND_ALL">同时命中全部</option>
-                  <option value="NOT_ANY">这些词都不出现</option>
-                  <option value="NOT_ALL">这些词不同时出现</option>
-                </m-select>
-              </label>
-            </details>
-
-            <div class="wb-checks">
-              <label class="check">
-                <input id="wb-e-constant" type="checkbox" />
-                <span class="check-text">
-                  <span class="check-title">常驻条目</span>
-                  <span class="check-desc">不需要关键词，每轮都注入</span>
-                </span>
-              </label>
-              <label class="check">
-                <input id="wb-e-recursive" type="checkbox" />
-                <span class="check-text">
-                  <span class="check-title">递归</span>
-                  <span class="check-desc">
-                    这条命中后，把它的正文也拿去做下一轮匹配 —— 正文里提到的词能再带出别的条目，
-                    一路连锁（最多几层在「设置 → 行为」里调，默认 1 层；<b>那里填 0 时勾了这个也不生效</b>）<br />
-                    对应酒馆的「Prevent further recursion」：那边是勾上才禁止，这里是勾上才允许。<br />
-                    <b>会明显增加 token</b>，只给「总览 / 索引」这类条目开
-                  </span>
-                </span>
-              </label>
-              <label class="check">
-                <input id="wb-e-enabled" type="checkbox" checked />
-                <span class="check-text">
-                  <span class="check-title">启用这条条目</span>
-                </span>
-              </label>
-            </div>
-
-            <div class="wb-form-foot">
-              <m-button id="btn-del-entry" variant="danger" size="sm">删除条目</m-button>
-              <!-- 条目没有自己的「保存」：书名 / 开场白 / 条目一起算这本书的内容，
-                   改动先落在草稿里，点页头那颗「保存」才一起写进磁盘。 -->
-              <span class="wb-form-foot-hint">条目改动跟着整本书一起保存</span>
-            </div>
-          </div>
-        </section>
         </div><!-- /worldbook-body -->
 
         <footer class="page-foot">

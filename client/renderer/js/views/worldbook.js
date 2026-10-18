@@ -65,7 +65,12 @@ function syncEditorLayout() {
   renderBookFacts();
 }
 
-/** 「书籍设置」右侧的本书信息卡：条目 / 启用 / 常驻 / 字数 / 角色 / 最后修改 */
+/**
+ * 「书籍设置」右侧的本书信息卡：条目 / 启用 / 常驻 / 字数 / 角色 / 最后修改。
+ *
+ * 卡片标题（「本书信息」）现在是 HTML 里的 <h3>，这里只铺下面的行 ——
+ * 上一版是这里现拼一颗 .wb-fact-head 塞进去，结果标题和卡片头重了一份。
+ */
 function renderBookFacts() {
   const host = el.wb.bookFacts;
   if (!host) return;
@@ -87,13 +92,6 @@ function renderBookFacts() {
     ['最后修改', modified]
   ];
   const frag = document.createDocumentFragment();
-  const head = document.createElement('div');
-  head.className = 'wb-fact wb-fact-head';
-  const headLabel = document.createElement('span');
-  headLabel.className = 'field-label';
-  headLabel.textContent = '本书信息';
-  head.appendChild(headLabel);
-  frag.appendChild(head);
   for (const [dt, dd] of rows) {
     const row = document.createElement('div');
     row.className = 'wb-fact';
@@ -160,8 +158,14 @@ export function initWorldbook(opts = {}) {
   el.wb.btnPreview.addEventListener('click', runAsync(previewWorldbook));
   el.wb.btnAddChars.addEventListener('click', openWorldbookCharPicker);
   el.wb.btnNewChar.addEventListener('click', newWorldbookCharacter);
-  // 「本书角色」标题整块就是折叠开关：副本一多，那一排 chip 会把条目和开场白挤没
-  if (el.wb.btnToggleChars) el.wb.btnToggleChars.addEventListener('click', toggleWorldbookCharsFold);
+  // 书籍条那颗封面缩略 = 通往「书籍设置」的捷径。上传入口**只有设置屏那一个**——
+  // 在 28×42 的缩略图上再挂一套裁剪流程，等于同一件事两条路、两处状态要同步。
+  if (el.wb.bookbarCover) {
+    el.wb.bookbarCover.addEventListener('click', () => {
+      setWorldbookPanel('settings');
+      el.wb.cover?.focus({ preventScroll: true });
+    });
+  }
   // 「AI 生成」→ 按这本书的设定生成一个 NPC 副本。生成结果一样落到角色编辑器
   // 草稿里（和「＋ 新建」同一条路），看过再保存。
   if (el.wb.btnAiChar) {
@@ -585,6 +589,12 @@ function renderEntryList() {
   }
 
   for (const entry of entries) {
+    // 一行两行：① 名称 + 状态徽章 + 「字数 · 顺序」（靠右，**不再压着 × 按钮**）
+    //           ② 关键词
+    // 上一版是三行（标题 / 别名 / 元信息各占一行），88px 一条，一屏只看得到 7 条；
+    // 而且元信息是绝对定位的 × 的受害者 —— 「顺序 100」显示成「1」。
+    const order = entry.order ?? WB_NEW_ENTRY_DEFAULTS.order;
+    const words = String(entry.content || '').length;
     el.wb.entryList.appendChild(
       h(
         'div',
@@ -605,18 +615,13 @@ function renderEntryList() {
         h(
           'div',
           { class: 'wb-entry-title' },
-          h('span', { text: entry.title }),
+          h('span', { class: 'wb-entry-name', text: entry.title }),
           entry.constant && h('span', { class: 'wb-badge', text: '常驻' }),
-          entry.enabled === false && h('span', { class: 'wb-badge', text: '停用' })
+          entry.enabled === false && h('span', { class: 'wb-badge', text: '停用' }),
+          // 决定这条「生不生效 / 什么时候生效」的两样，一行读完
+          h('span', { class: 'wb-entry-meta', text: `${words} 字 · ${order}`, title: `${words} 字 · 插入顺序 ${order}` })
         ),
         h('div', { class: 'wb-entry-keys', text: (entry.keys || []).join(' / ') || '（无关键词）' }),
-        // 字数 + 插入顺序：决定这条「生不生效 / 什么时候生效」的两样，得一眼看得到
-        h(
-          'div',
-          { class: 'wb-entry-meta' },
-          h('span', { text: `${String(entry.content || '').length} 字` }),
-          h('span', { text: `顺序 ${entry.order ?? WB_NEW_ENTRY_DEFAULTS.order}` })
-        ),
         // 行上的 ×：一键删（不问确认框 —— 删的只是草稿，整本书点「保存」才落盘，
         // 反悔的办法是不保存）。stopPropagation 是必须的：不然这一下同时把该条选中了。
         button({
@@ -744,32 +749,12 @@ function selectEntry(id) {
 //  和角色库里的那个角色互相独立 —— 改这边不影响那边，反之亦然。
 //
 //  这一块同时就是「这本书的 NPC 名单」（GM 提示词里的名单按它拼）。一本酒馆书
-//  动辄十来号人，所以标题整块做成折叠开关，默认按副本数决定收不收。
+//  动辄十来号人，2026-10-18 起它有了**自己的一屏**（分区标签的第三屏），
+//  所以上一版那套「标题整块当折叠开关 / 副本超过 6 个自动收起」全部撤掉了 ——
+//  那是单栏时代为了不让一排 chip 把开场白挤没才做的，现在列表自己有滚动区。
 // ---------------------------------------------------------------------------
 
-/**
- * 副本到这个数就先收起来。
- * 一排 chip 能占掉半栏，下面的条目和开场白会被挤成一条缝。
- * 手动点过就以用户的选择为准；状态只记在内存里（和设置页的折叠卡片一样不落盘）。
- */
-const WB_CHARS_COLLAPSE_AT = 6;
-const wbCharsExpanded = new Map(); // bookId → 用户手动切过的展开状态（有值就压过默认）
-
-function charsExpanded(book, count) {
-  const manual = wbCharsExpanded.get(book.id);
-  return typeof manual === 'boolean' ? manual : count < WB_CHARS_COLLAPSE_AT;
-}
-
-/** 点标题：本书角色 展开 ⇄ 收起 */
-function toggleWorldbookCharsFold() {
-  const book = currentWorldbook();
-  if (!book) return;
-  const count = worldbookCharacters(book).length;
-  wbCharsExpanded.set(book.id, !charsExpanded(book, count));
-  renderWorldbookChars();
-}
-
-/** 画「本书角色」那一排（外加标题上的副本数 / 折叠状态） */
+/** 画「本书角色」这一屏（卡片网格 + 空态引导卡） */
 export function renderWorldbookChars() {
   syncEditorLayout();
   const host = el.wb.charList;
@@ -780,13 +765,26 @@ export function renderWorldbookChars() {
   if (!book) return;
 
   const copies = worldbookCharacters(book);
-  const expanded = charsExpanded(book, copies.length);
 
-  // 收起是 CSS 藏起来（chip 仍在 DOM 里）—— 读 textContent 的检查照样认得到
-  if (el.wb.charCount) el.wb.charCount.textContent = copies.length ? `${copies.length} 个` : '';
-  if (el.wb.btnToggleChars) el.wb.btnToggleChars.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  const box = host.closest('.wb-chars');
-  if (box) box.classList.toggle('collapsed', !expanded);
+  // 一个副本都没有：给一张虚线引导卡（上一版是「一片空白」，
+  // 用户根本不知道这里该有东西、也不知道副本和角色库是两回事）
+  if (!copies.length) {
+    host.appendChild(
+      h(
+        'div',
+        { class: 'wb-char-empty' },
+        h('h3', { text: '这本书还没有角色' }),
+        h('p', {
+          text: '世界书里的角色只在绑定了这本书的会话里出现，和角色库相互独立 —— 在这里改，不会动到角色库里的原卡。'
+        }),
+        h('span', {
+          class: 'wb-char-empty-hint',
+          text: `用上面的「＋ 从角色库加入」复制一个进来，或「AI 生成」按这本书已有的 ${(book.entries || []).length} 条设定起一个草稿。`
+        })
+      )
+    );
+    return;
+  }
 
   for (const c of copies) {
     const desc = String(c.description || '').trim();
@@ -802,7 +800,13 @@ export function renderWorldbookChars() {
             { class: 'wb-char-card-avatar' },
             c.avatar ? h('img', { src: c.avatar, alt: '' }) : String(c.name || '').slice(0, 1) || '?'
           ),
-          h('strong', { class: 'wb-char-card-name', text: c.name })
+          h(
+            'strong',
+            { class: 'wb-char-card-name' },
+            h('span', { class: 'wb-char-card-title', text: c.name }),
+            // 「本书副本」：同一张卡在角色库里还有一份原件，标清楚改的是哪一份
+            h('span', { class: 'wb-local-tag', text: '本书副本', title: '从角色库复制进来的一份快照；改它不会动角色库里的原卡' })
+          )
         ),
         // 设定只读预览：真正的编辑走「编辑」按钮进角色编辑器（那里才是全集）
         h('p', { class: 'wb-char-card-desc', text: desc ? desc.slice(0, 90) : '还没有人物设定' }),
@@ -831,7 +835,7 @@ export function renderWorldbookChars() {
             }),
             button({
               class: 'wb-char-card-btn wb-char-card-remove',
-              text: '移除',
+              text: '移出本书',
               title: '从本书移除（角色库里的不受影响）',
               onClick: runAsync(() => removeWorldbookCharacter(c.id))
             })

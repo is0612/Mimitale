@@ -1,105 +1,70 @@
-// Layout only: original controls retain their IDs, values and event handlers.
-import { mButton } from '../components/index.js';
+// ---------------------------------------------------------------------------
+//  世界书编辑页的「壳」：分区切换 + 搜索筛选 + 那几个数字
+//
+//  2026-10-18 按设计稿 A「条目工作台」重写（design/wb-editor-2versions）。
+//  和上一版最大的区别：**结构全在 index.html 里了**。上一版这里用 createElement
+//  现拼书籍头 / 分区标签 / 两栏工作区（因为当时 HTML 里还是「弹窗时代」的平铺结构）；
+//  现在三屏各自的结构都是定死的（三栏 / 两栏 / 卡片网格），JS 再拼一遍只会让
+//  「HTML 里看到的」和「跑起来看到的」对不上。所以这里只做三件事：
+//
+//    ① 分区标签 → setWorldbookPanel（三屏互斥，siblings 用 hidden 收）
+//    ② 搜索框 / 状态筛选 → onFilter（过滤逻辑仍是 worldbookEntryVisible）
+//    ③ 把草稿里的数字铺到页面上：书籍条统计、分区标签角标、字数角标、本书信息
+//
+//  ⚠️ 三个面板（条目 / 书籍设置 / 本书角色）都是 #wb-book-wrap 的直接子级，
+//     同一个时刻只有一个不带 hidden —— 它们各自内部再分栏。
+// ---------------------------------------------------------------------------
+
 let layout;
+
+const PANEL_KEYS = [
+  ['entries', '条目'],
+  ['settings', '书籍设置'],
+  ['characters', '本书角色']
+];
 
 export function initWorldbookLayout({ onFilter }) {
   if (layout) return;
   const root = document.getElementById('view-wb-editor');
-  const wrap = document.getElementById('wb-book-wrap');
-  const book = root.querySelector('.wb-book');
-  const entries = root.querySelector('.wb-entries');
-  const main = root.querySelector('.wb-main');
-  const chars = root.querySelector('.wb-chars');
-  const make = (tag, className, id, text) => {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (id) node.id = id;
-    if (text) node.textContent = text;
-    return node;
-  };
-  const crumb = document.getElementById('wb-crumb');
-
-  // 书籍头：封面 + 书名 + 统计行 + 书级动作（预览命中 / 导出）。
-  // 预览命中、导出是「这本书自己的动作」，贴着书名放 —— 页头只留「返回 / 保存」。
-  const bar = make('div', 'wb-bookbar', 'wb-bookbar');
-  const summary = make('div', 'wb-summary');
-  const cover = make('div', 'wb-summary-cover', 'wb-summary-cover');
-  const summaryText = make('div', 'wb-summary-text');
-  const name = make('strong', '', 'wb-summary-name');
-  const stats = make('ul', 'wb-stats', 'wb-summary-stats');
-  summaryText.append(name, stats);
-  summary.append(cover, summaryText);
-  const actions = make('div', 'wb-bookbar-actions');
-  for (const id of ['btn-preview-wb', 'btn-export-wb']) {
-    const action = document.getElementById(id);
-    if (action) actions.append(action);
-  }
-  bar.append(summary, actions);
-
-  const tabs = make('nav', 'wb-tabs', 'wb-tabs');
-  tabs.setAttribute('aria-label', '世界书分区');
-  const workspace = make('div', 'wb-workspace', 'wb-panel-entries');
-  workspace.append(entries, main);
-  const characterPanel = make('section', 'wb-character-panel', 'wb-panel-characters');
-  characterPanel.append(chars);
-  book.id = 'wb-panel-settings';
-  const panels = { entries: workspace, settings: book, characters: characterPanel };
+  const panels = {};
   const buttons = {};
-  for (const [key, label] of [['entries', '条目'], ['settings', '书籍设置'], ['characters', '本书角色']]) {
-    const tab = make('button', 'wb-tab', `wb-tab-${key}`, label);
-    tab.type = 'button';
-    tab.setAttribute('aria-controls', panels[key].id);
-    tab.addEventListener('click', () => setWorldbookPanel(key));
-    buttons[key] = tab;
-    tabs.append(tab);
+  for (const [key] of PANEL_KEYS) {
+    panels[key] = document.getElementById(`wb-panel-${key}`);
+    buttons[key] = document.getElementById(`wb-tab-${key}`);
+    buttons[key].addEventListener('click', () => setWorldbookPanel(key));
   }
-  wrap.replaceChildren(bar, tabs, workspace, book, characterPanel);
-  // 书籍头里的动作条已经搬走了，旧的空壳容器收掉（HTML 里没有就跳过）
-  const oldActions = root.querySelector('.wb-book-actions');
-  if (oldActions) oldActions.remove();
 
-  // ⚙ 组件化：它被同一行 stretch 成 44px（= 组件的默认档），
-  // 字号从 xs 变成正文级（和旁边那个筛选下拉一致）。
-  // 下面 search.type / search.placeholder 是**直接设 property** 的写法，
-  // 靠组件的 reflectProperties 桥到里层原生 input（base.js 有注释）。
-  const search = make('m-input', 'wb-search', 'wb-search');
-  search.type = 'search';
-  search.placeholder = '搜索条目';
-  search.setAttribute('aria-label', '搜索条目');
-  // ⚙ 组件化：状态筛选用 <m-select>。按标签名建就行 —— 组件在启动时注册过，
-  // createElement('m-select') 拿到的已经是升级好的自定义元素；里面的 <option>
-  // 由组件搬进里层那颗原生 select。
-  // 类名 `.wb-state` 留在宿主上，所以 style.css 里那两条（min-width / flex 宽度）
-  // 一个字都不用改。
-  const filter = make('m-select', 'wb-state', 'wb-state');
-  filter.setAttribute('aria-label', '条目状态筛选');
-  for (const [value, label] of [['all', '全部条目'], ['enabled', '已启用'], ['disabled', '已停用'], ['constant', '常驻条目']]) {
-    const option = make('option', '', '', label);
-    option.value = value;
-    filter.append(option);
-  }
-  // 搜索 + 筛选并排一行；列表头上的「N 条 · N 启用 · N 常驻」小头条由 worldbook.js 铺
-  const listTools = make('div', 'wb-list-tools');
-  listTools.append(search, filter);
-  entries.insertBefore(listTools, document.getElementById('wb-entry-list'));
+  // ⚙ 搜索框和状态筛选都是组件（m-input / m-select），HTML 里已经写好 ——
+  //   组件在启动时注册过，静态标记照样会被升级，`<option>` 由组件自己搬进
+  //   里层那颗原生 select（见 components/select.js 的 _moveOptions）。
+  const search = document.getElementById('wb-search');
+  const filter = document.getElementById('wb-state');
   search.addEventListener('input', onFilter);
   filter.addEventListener('change', onFilter);
 
-  const detailHead = make('div', 'wb-detail-head');
-  const back = mButton({ variant: 'ghost', size: 'sm', class: 'wb-list-back', id: 'wb-list-back', text: '条目列表' });
-  back.addEventListener('click', () => { workspace.dataset.mobile = 'list'; search.focus(); });
-  const headTitle = make('strong', 'wb-detail-title', '', '条目设定');
-  const contentCount = make('small', 'wb-content-count', 'wb-content-count');
-  detailHead.append(back, headTitle, contentCount);
-  main.prepend(detailHead);
-
-  // 检查项（启用 / 常驻 / 递归）留在表单 DOM 里（change 才能冒泡到表单的脏标记），
-  // 位置交给 CSS order 提到最顶 —— 和正文同屏，写完不用往回滚。
-  root.querySelector('.page-sub').hidden = true;
-  root.querySelector('#worldbooks-title').textContent = '编辑世界书';
-  const form = document.getElementById('wb-form');
-  form.querySelector('.wb-advanced summary').textContent = '高级选项 · 顺序、概率、附加条件';
-  layout = { root, panels, buttons, workspace, name, stats, cover, search, filter, contentCount, crumb, bookId: null };
+  layout = {
+    root,
+    panels,
+    buttons,
+    search,
+    filter,
+    bookWrap: document.getElementById('wb-book-wrap'),
+    crumb: document.getElementById('wb-crumb'),
+    name: document.getElementById('wb-bookbar-name'),
+    sub: document.getElementById('wb-bookbar-sub'),
+    cover: document.getElementById('wb-bookbar-cover'),
+    totalWords: document.getElementById('wb-total-words'),
+    tabEntryCount: document.getElementById('wb-tab-entries-n'),
+    tabCharCount: document.getElementById('wb-tab-characters-n'),
+    contentCount: document.getElementById('wb-content-count'),
+    keysCount: document.getElementById('wb-keys-count'),
+    entryWords: document.getElementById('wb-e-words'),
+    entryKeyCount: document.getElementById('wb-e-keycount'),
+    openingCount: document.getElementById('wb-opening-count'),
+    charHint: document.getElementById('wb-chars-hint'),
+    dangerHint: document.getElementById('wb-danger-hint'),
+    bookId: null
+  };
   setWorldbookPanel('entries');
 }
 
@@ -118,10 +83,10 @@ export function resetWorldbookLayout(bookId) {
   layout.bookId = bookId;
   layout.search.value = '';
   layout.filter.value = 'all';
-  layout.workspace.dataset.mobile = 'list';
   setWorldbookPanel('entries');
 }
 
+/** 选中某条条目后把视图切到「条目」屏（外部点条目、新建条目都走这里） */
 export function revealWorldbookEntry(entry) {
   if (!layout) return;
   if (entry && !worldbookEntryVisible(entry)) {
@@ -129,7 +94,6 @@ export function revealWorldbookEntry(entry) {
     layout.filter.value = 'all';
   }
   setWorldbookPanel('entries');
-  layout.workspace.dataset.mobile = 'detail';
 }
 
 export function worldbookEntryVisible(entry) {
@@ -140,15 +104,7 @@ export function worldbookEntryVisible(entry) {
     && [entry.title, ...(entry.keys || []), entry.content].join(' ').toLocaleLowerCase().includes(query);
 }
 
-/** 统计行的一项：数字加粗 + 灰色单位 */
-function statItem(num, label) {
-  const li = document.createElement('li');
-  const b = document.createElement('b');
-  b.textContent = num;
-  li.append(b, ' ' + label);
-  return li;
-}
-
+/** 把草稿里的数字铺到页面上（书名 / 统计 / 角标 / 封面缩略 / 本书信息） */
 export function syncWorldbookLayout(book, draft, characterCount) {
   if (!layout) return;
   const bookName = draft?.name || book?.name || '世界书';
@@ -157,19 +113,24 @@ export function syncWorldbookLayout(book, draft, characterCount) {
     layout.crumb.textContent = `世界书 / ${bookName}`;
     layout.crumb.hidden = false;
   }
+
   const entries = Array.isArray(draft?.entries) ? draft.entries : [];
   const on = entries.filter((entry) => entry.enabled !== false).length;
   const constant = entries.filter((entry) => entry.constant).length;
   const words = entries.reduce((sum, entry) => sum + String(entry.content || '').length, 0);
-  layout.stats.replaceChildren(
-    statItem(String(entries.length), '条设定'),
-    statItem(String(on), '启用'),
-    statItem(String(constant), '常驻'),
-    statItem(String(characterCount), '角色'),
-    statItem(words.toLocaleString(), '字')
-  );
-  layout.buttons.entries.textContent = `条目 ${entries.length}`;
-  layout.buttons.characters.textContent = `本书角色 ${characterCount}`;
+  const total = entries.length;
+  const chars = Number(characterCount) || 0;
+
+  // 书籍条：一行读完这本书的全貌（统计只在这里出现）
+  layout.sub.textContent = `${total} 条 · ${on} 启用 · ${constant} 常驻 · ${chars} 角色`;
+  layout.totalWords.textContent = `全文 ${words.toLocaleString()} 字`;
+
+  // 分区标签上的角标：数字挂在哪一屏，就是在说「那一屏里有几个」
+  layout.tabEntryCount.textContent = String(total);
+  layout.tabCharCount.textContent = String(chars);
+
+  // 书籍条左端那颗封面缩略（28×42，2:3 和封面框同一个比例）。
+  // 点它 = 去「书籍设置」换封面 —— 那里才是唯一的上传入口，不在这里再放一份。
   const cover = draft?.cover || '';
   if (layout.cover.dataset.cover !== cover) {
     layout.cover.dataset.cover = cover;
@@ -181,6 +142,48 @@ export function syncWorldbookLayout(book, draft, characterCount) {
       layout.cover.append(image);
     } else layout.cover.textContent = '世';
   }
-  layout.contentCount.textContent = document.getElementById('wb-form').classList.contains('hidden')
-    ? '' : `${document.getElementById('wb-e-content').value.length} 字`;
+
+  // 开场白那张稿纸右上角的字数
+  if (layout.openingCount) {
+    const opening = String(draft?.opening || '');
+    layout.openingCount.textContent = opening ? `${opening.length} 字` : '';
+  }
+
+  // 「删除这本书」那张卡上说清后果 —— 数字跟着草稿走，不是跟上一次保存的那份
+  if (layout.dangerHint) {
+    layout.dangerHint.textContent = chars
+      ? `会连同 ${total} 条条目和 ${chars} 个角色副本一起删掉，不可恢复。想留底先用书籍条的「导出」。`
+      : `会连同 ${total} 条条目一起删掉，不可恢复。想留底先用书籍条的「导出」。`;
+  }
+
+  // 「本书角色」屏右上角那句：数字 + 一句「副本是副本」
+  if (layout.charHint) {
+    layout.charHint.textContent = chars
+      ? `${chars} 个角色 · 副本只属于这本书，改它不动角色库`
+      : '副本只属于这本书，改它不动角色库';
+  }
+
+  syncEntryCounts();
+}
+
+/**
+ * 条目屏那三处字数：内容稿纸右上角、识别卡右上角的关键词数、右栏「本条目」两行。
+ *
+ * 读的是**表单里的值**而不是草稿里那条条目 —— 用户正在打字时草稿每敲一下都会
+ * 重新 stash（见 worldbook.js 的 input 监听），但那是异步落在另一处的；表单值
+ * 永远是当前可见的那一份，页面上显示的数字必须和框里看到的一致。
+ */
+function syncEntryCounts() {
+  if (!layout) return;
+  const form = document.getElementById('wb-form');
+  const open = form && !form.classList.contains('hidden');
+  const content = document.getElementById('wb-e-content');
+  const keys = String(document.getElementById('wb-e-keys')?.value || '');
+  const words = open ? String(content?.value || '').length : 0;
+  const keyCount = keys.split(/[,，]/).map((k) => k.trim()).filter(Boolean).length;
+
+  if (layout.contentCount) layout.contentCount.textContent = open ? `${words} 字` : '';
+  if (layout.keysCount) layout.keysCount.textContent = open ? `关键词 ${keyCount} 个` : '';
+  if (layout.entryWords) layout.entryWords.textContent = open ? String(words) : '—';
+  if (layout.entryKeyCount) layout.entryKeyCount.textContent = open ? String(keyCount) : '—';
 }

@@ -4030,35 +4030,67 @@ await scenario('世界书：新建条目', async () => {
   check('导出世界书后有提示', $('#toast').textContent.includes('已导出'), $('#toast').textContent);
 
   // --- 「条目」标题 + 行上的 × ---
-  check('「条目」有自己的标题（跟开场白一个样式）',
-    $('.wb-entry-head .field-label').textContent === '条目', $('.wb-entry-head .field-label').textContent);
+  check('「条目」有自己的标题（左栏顶部那行）',
+    $('.wb-side-title').textContent.includes('条目'), $('.wb-side-title').textContent);
   check('条目数挂在标题旁边（不再挂在书名下面）',
-    $('.wb-entry-head .wb-count') === byId('wb-entry-count'));
+    $('.wb-side-title .wb-count') === byId('wb-entry-count'));
 
-  // --- 布局：本书设置 / 条目列表 / 条目编辑 三栏 ---
-  // 2026-10-13 之前书级设置和条目列表挤在同一个 268px 里，条目卡被压得只露三四张。
-  // 这里钉住「谁在哪一栏」+「编辑区是不是最宽的那个」，免得以后有人挪回去。
+  // --- 布局：条目屏是三栏（列表 / 正文 / 本条属性） ---
+  // 2026-10-18 按设计稿 A「条目工作台」重排：一天里九成时间在写条目，
+  // 所以三个开关和两个数字搬进右栏（改完立刻看见），正文收进舒适阅读宽度。
   const wbRect = (sel) => $(sel).getBoundingClientRect();
-  check('条目列表和编辑区组成双栏工作区',
-    getComputedStyle($('#wb-panel-entries')).gridTemplateColumns.split(/\s+/).length === 2,
+  check('条目屏是三栏（列表 / 正文 / 属性）',
+    getComputedStyle($('#wb-panel-entries')).gridTemplateColumns.split(/\s+/).length === 3,
     getComputedStyle($('#wb-panel-entries')).gridTemplateColumns);
   check('书籍设置与本书角色不挤占条目编辑区',
     byId('wb-panel-settings').hidden && byId('wb-panel-characters').hidden);
-  check('条目编辑区比条目列表宽（它才是主工作区）',
-    wbRect('.wb-main').width > wbRect('.wb-entries').width,
-    `编辑 ${Math.round(wbRect('.wb-main').width)} vs 列表 ${Math.round(wbRect('.wb-entries').width)}`);
+  check('正文列比条目列表宽（它才是主工作区）',
+    wbRect('.wb-doc').width > wbRect('.wb-list').width,
+    `正文 ${Math.round(wbRect('.wb-doc').width)} vs 列表 ${Math.round(wbRect('.wb-list').width)}`);
+  // 舒适阅读区 30–45 字/行：14px 的汉字大约 14px 一个，420–680 折算约 30–48 字
+  check('正文收进舒适阅读宽度（≤ 680）',
+    wbRect('.wb-measure').width <= 680 && wbRect('.wb-measure').width >= 420,
+    `${Math.round(wbRect('.wb-measure').width)}px`);
+  check('三个开关和两个数字都在右栏（同一屏可见）',
+    ['wb-e-enabled', 'wb-e-constant', 'wb-e-recursive', 'wb-e-order', 'wb-e-prob']
+      .every((id) => $('.wb-aside').contains(byId(id))),
+    ['wb-e-enabled', 'wb-e-constant', 'wb-e-recursive', 'wb-e-order', 'wb-e-prob']
+      .filter((id) => !$('.wb-aside').contains(byId(id))).join(', ') || '全在右栏');
+  // 元信息被 × 压住是改版前的旧账（「顺序 100」显示成「1」）——这里用几何位置钉住
+  const entryMeta = $('#wb-entry-list .wb-entry .wb-entry-meta');
+  const entryDel = $('#wb-entry-list .wb-entry .wb-entry-del');
+  check('「字数 · 顺序」不再被 × 压住',
+    !!entryMeta && !!entryDel &&
+    entryMeta.getBoundingClientRect().right <= entryDel.getBoundingClientRect().left + 1,
+    entryMeta && entryDel ? `元信息右 ${Math.round(entryMeta.getBoundingClientRect().right)} vs × 左 ${Math.round(entryDel.getBoundingClientRect().left)}` : '找不到元信息或 ×');
+  check('条目行比改版前瘦（≤ 72px）',
+    wbRect('#wb-entry-list .wb-entry').height <= 72,
+    `${Math.round(wbRect('#wb-entry-list .wb-entry').height)}px`);
   check('书籍设置和本书角色各自独立分区',
     $('#wb-panel-settings').contains(byId('wb-name')) &&
     $('#wb-panel-settings').contains(byId('wb-opening')) &&
-    $('#wb-panel-characters').contains($('#wb-char-list').closest('.wb-chars')));
+    $('#wb-panel-characters').contains(byId('wb-char-list')));
   check('条目列表栏里不再有书级字段',
-    !$('.wb-entries').contains(byId('wb-name')) && !$('.wb-entries').contains(byId('wb-opening')),
-    '书名 / 开场白还留在 .wb-entries 里');
-  check('导出 / 预览命中位于书籍头，删除本书留在设置中',
+    !$('.wb-list').contains(byId('wb-name')) && !$('.wb-list').contains(byId('wb-opening')),
+    '书名 / 开场白还留在 .wb-list 里');
+  check('导出 / 预览命中位于书籍条，删除本书留在设置屏',
     $('#wb-bookbar').contains(byId('btn-export-wb')) &&
     $('#wb-bookbar').contains(byId('btn-preview-wb')) &&
     $('#wb-panel-settings').contains(byId('btn-del-worldbook')));
-  check('「＋ 条目」跟着条目列表走', $('.wb-entries').contains(byId('btn-new-entry')));
+  // 统计去重：全书统计只在书籍条出现一次，页头只留字数
+  check('书籍条一行读完这本书（条 / 启用 / 常驻 / 角色）',
+    /条/.test(byId('wb-bookbar-sub').textContent) && /角色/.test(byId('wb-bookbar-sub').textContent),
+    byId('wb-bookbar-sub').textContent);
+  check('页头只剩全文总字数（统计不再重复三处）',
+    /^全文 [\d,]+ 字$/.test(byId('wb-total-words').textContent),
+    byId('wb-total-words').textContent);
+  // 右栏三张卡（三颗开关 / 两个数字 / 本条目）要一屏看完 —— 溢出就说明有卡被裁，
+  // 「删除条目」会藏在滚动条下面（1440×900 是这个断言的前提，窗口尺寸变了要一起调）
+  const aside = $('.wb-aside');
+  check('右栏三张卡一屏放得下（不用滚）',
+    aside.scrollHeight <= aside.clientHeight + 1,
+    `${aside.scrollHeight} / ${aside.clientHeight}`);
+  check('「＋ 条目」跟着条目列表走', $('.wb-list').contains(byId('btn-new-entry')));
   const draftText = byId('wb-e-content').value;
   click('#wb-tab-settings');
   check('书籍设置切换后只显示书级字段', !byId('wb-panel-settings').hidden && byId('wb-panel-entries').hidden);
@@ -4067,7 +4099,7 @@ await scenario('世界书：新建条目', async () => {
   setValue('#wb-search', '世界总览');
   check('世界书搜索过滤条目列表', $$('#wb-entry-list .wb-entry').length === 1);
   setValue('#wb-search', '');
-  check('页脚只剩那行状态提示（导出搬进书设置栏了）',
+  check('页脚只剩那行状态提示（导出搬进书籍条了）',
     !$('#view-wb-editor .page-foot').contains(byId('btn-export-wb')),
     $('#view-wb-editor .page-foot').textContent.trim());
 
@@ -4170,22 +4202,17 @@ await scenario('世界书：本书角色', async () => {
   check('本书角色复用角色库相同的分区编辑器', !!byId('char-field-index') && !!byId('char-section-tab-state'));
   check('共享角色编辑器返回原世界书角色分区', shown('#view-wb-editor') && !byId('wb-panel-characters').hidden);
 
-  // 「本书角色」标题整块是折叠开关：副本一多，那一排 chip 会把条目和开场白挤没。
-  // 收起只是 CSS display:none（chip 还在 DOM 里），所以这里查 computed style 才算数。
-  const charsBox = $('#wb-char-list').closest('.wb-chars');
-  check('标题上标着副本数', byId('wb-char-count').textContent.includes('个'), byId('wb-char-count').textContent);
-  check('副本少的时候默认展开', !charsBox.classList.contains('collapsed'));
-  click('#btn-toggle-wb-chars');
-  await sleep(120);
-  check('点标题收起整块', charsBox.classList.contains('collapsed'));
-  check('收起后 chip 真的不占地方', getComputedStyle(byId('wb-char-list')).display === 'none');
-  check('收起后操作按钮也跟着收', getComputedStyle($('.wb-chars-actions')).display === 'none');
-  check('收起时 aria-expanded 跟着变', byId('btn-toggle-wb-chars').getAttribute('aria-expanded') === 'false');
-  click('#btn-toggle-wb-chars');
-  await sleep(120);
-  check('再点一下又展开', !charsBox.classList.contains('collapsed')
-    && getComputedStyle(byId('wb-char-list')).display !== 'none');
-  check('展开后副本还在', $('#wb-char-list').textContent.includes('冒烟NPC'), $('#wb-char-list').textContent);
+  // 2026-10-18：「本书角色」有了自己的一屏，标题那套「整块折叠」撤了
+  // （那是单栏时代为了不让一排 chip 把开场白挤没才做的）。这里改成钉住新形态。
+  check('副本数标在分区标签上', byId('wb-tab-characters-n').textContent === String(after),
+    byId('wb-tab-characters-n').textContent);
+  check('每张副本卡都标着「本书副本」',
+    $$('#wb-char-list .wb-local-tag').length === after,
+    `${$$('#wb-char-list .wb-local-tag').length} / ${after}`);
+  check('副本卡上面那颗是「移出本书」（说的是从这本书里移出去）',
+    $$('#wb-char-list .wb-char-card-btn').some((b) => b.textContent === '移出本书'));
+  check('角色屏顶部那行写着「副本只属于这本书」',
+    byId('wb-chars-hint').textContent.includes('副本只属于这本书'), byId('wb-chars-hint').textContent);
 
   click('#btn-close-worldbooks');
   await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));

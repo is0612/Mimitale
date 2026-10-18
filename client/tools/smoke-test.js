@@ -3886,9 +3886,11 @@ app.whenReady().then(async () => {
           if (t) { t.classList.add('hidden'); t.textContent = ''; }
           document.querySelector('#btn-worldbooks')?.click();
           await new Promise(r => setTimeout(r, 400));
+          // 卡片上的两颗按钮是组件（m-button），里层那颗才是 button ——
+          // 按元素上的 btn 类名找，从 2026-10-16 那批组件化之后就已经找不到了。
           const cards = Array.from(document.querySelectorAll('#wb-page-grid .char-card'));
-          const withCover = cards.find(c => c.querySelector('.wb-card-cover img'));
-          const btn = withCover && Array.from(withCover.querySelectorAll('.btn')).find(b => b.textContent === '编辑');
+          const card = cards.find(c => c.querySelector('.wb-card-cover img')) || cards[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (btn) btn.click();
           await new Promise(r => setTimeout(r, 600));`,
         // 世界书编辑器的「书籍设置」分区：书名那格在这儿（`wb-name`，页面规则原来给的是
@@ -3899,12 +3901,29 @@ app.whenReady().then(async () => {
           if (t) { t.classList.add('hidden'); t.textContent = ''; }
           document.querySelector('#btn-worldbooks')?.click();
           await new Promise(r => setTimeout(r, 400));
+          // 卡片上的两颗按钮是组件（m-button），里层那颗才是 button ——
+          // 按元素上的 btn 类名找，从 2026-10-16 那批组件化之后就已经找不到了。
           const cards = Array.from(document.querySelectorAll('#wb-page-grid .char-card'));
-          const withCover = cards.find(c => c.querySelector('.wb-card-cover img'));
-          const btn = withCover && Array.from(withCover.querySelectorAll('.btn')).find(b => b.textContent === '编辑');
+          const card = cards.find(c => c.querySelector('.wb-card-cover img')) || cards[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (btn) btn.click();
           await new Promise(r => setTimeout(r, 600));
           document.querySelector('#wb-tab-settings')?.click();
+          await new Promise(r => setTimeout(r, 350));
+          if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 世界书编辑器的「本书角色」分区（2026-10-18 起它有了自己的一屏）：
+        // 动作行 + 卡片网格 / 空态引导卡 —— 卡片里「本书副本」那枚标最容易挤掉。
+        wbChars: `
+          const t = document.querySelector('#toast');
+          if (t) { t.classList.add('hidden'); t.textContent = ''; }
+          document.querySelector('#btn-worldbooks')?.click();
+          await new Promise(r => setTimeout(r, 400));
+          const cards = Array.from(document.querySelectorAll('#wb-page-grid .char-card'));
+          const card = cards.find(c => c.querySelector('.wb-card-cover img')) || cards[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await new Promise(r => setTimeout(r, 600));
+          document.querySelector('#wb-tab-characters')?.click();
           await new Promise(r => setTimeout(r, 350));
           if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         panel: `

@@ -5785,101 +5785,6 @@ m-button.btn-new > .mi-btn__control:hover {
 
 /* ------------------------------ 世界书 ------------------------------ */
 
-/* 世界书里的「本书角色」条：一排副本卡片 */
-.wb-chars {
-  flex: 0 0 auto;
-  border-bottom: 1px solid var(--border-soft);
-  background: var(--bg-side);
-  padding: 0;
-  margin: 0;
-  border: 0;
-}
-
-.wb-chars-head {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-.wb-chars-head .field-label {
-  padding-top: 0;
-}
-
-/* 标题整块是折叠开关。收起只藏 chip 和按钮（DOM 留着），所以收起状态不影响
-   程序化找元素。副本多的时候默认就是收起的，见 worldbook.js 的 WB_CHARS_COLLAPSE_AT。 */
-.wb-chars-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-
-.wb-chars-toggle:hover {
-  color: var(--accent);
-}
-
-/* 小三角：展开时朝下、收起时朝右。用 border 画，跟着 currentColor 走 */
-.wb-caret {
-  flex: 0 0 auto;
-  width: 0;
-  height: 0;
-  border-left: 5px solid currentColor;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  opacity: 0.55;
-  transition: transform 0.15s ease;
-}
-
-.wb-chars:not(.collapsed) .wb-caret {
-  transform: rotate(90deg);
-}
-
-.wb-chars.collapsed .wb-chars-actions {
-  display: none;
-}
-
-.wb-chars.collapsed .wb-char-list {
-  display: none;
-}
-
-.wb-chars.collapsed .wb-chars-head {
-  margin-bottom: 0;
-}
-
-/* 按钮排不下了就换行（宁可两行，也别溢出被裁） */
-.wb-chars-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-/* （原 `.wb-chars-actions .btn { white-space: nowrap }` 已删：
-   共用皮肤本来就在 `.mi-btn__control` 上给了 nowrap，这里再写一遍是死声明。） */
-
-.wb-char-list {
-  flex-wrap: wrap;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 310px), 1fr));
-  padding-top: 20px;
-}
-
-/* 没有角色时给一句引导，不用另开一个空状态元素 */
-.wb-char-list:empty::after {
-  content: '还没有角色。点「从角色库加入」复制一个进来，或直接新建。';
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-}
-
 /* 从角色库多选加入的弹窗 */
 .wb-picker-card {
   max-width: 520px;
@@ -5982,340 +5887,6 @@ m-button.btn-new > .mi-btn__control:hover {
   overflow: hidden;
 }
 
-/* 书籍设置：两列（封面 | 字段）。列宽和间距由 `#view-wb-editor .wb-book` 给，
-   这里只留骨架 —— 别重复写一份会被盖掉的。 */
-.wb-book {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  align-content: start;
-  padding: 28px;
-  border: 0;
-  overflow-y: auto;
-  min-width: 0;
-}
-
-/* 这一栏的分组标题。和侧栏那种标签一个路子（小字 + 字距）——
-   一眼看出是「分组名」，不是某个字段的名字。 */
-.wb-book-title {
-  flex: 0 0 auto;
-  font-weight: 600;
-  color: var(--text-dim);
-  grid-column: 1 / -1;
-  padding: 0;
-  letter-spacing: 0;
-  font-size: var(--fs-sm);
-}
-
-/* 这一栏是上下叠的一列，块间距由各块自己的 padding 决定 ——
-   .field 那 20px 的 margin-bottom 在这儿只会叠出一片空白。 */
-.wb-book .field {
-  margin-bottom: 0;
-}
-
-.wb-cover {
-  flex: 0 0 auto;
-  padding: 0;
-}
-
-/* .field-label 自带 12px padding-top 是为了在 grid 里和右侧输入框对齐；
-   这里不是 grid，去掉它 */
-.wb-cover > .field-label {
-  padding-top: 0;
-}
-
-.wb-cover-row {
-  display: flex;
-  margin-top: 6px;
-}
-
-/* 说明文字通栏放在下面：挤在封面框右边那一小条里会折成三行 */
-.wb-cover-help {
-  margin-top: 6px;
-  display: none;
-}
-
-.wb-cover-frame {
-  position: relative;
-  flex: none;
-  width: 96px;
-  aspect-ratio: 2 / 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  color: var(--text-faint);
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.wb-cover-frame:hover {
-  border-color: var(--border-hover);
-}
-
-
-.wb-cover-frame.has {
-  border-color: var(--border-soft);
-  border-style: solid;
-}
-
-
-.wb-cover-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-
-.wb-book-name {
-  flex: 0 0 auto;
-}
-
-.wb-book-foot {
-  display: flex;
-}
-
-.wb-entries {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-right: 1px solid var(--border-soft);
-  overflow: hidden;
-  min-width: 0;
-  background: var(--bg-side);
-  padding-top: 16px;
-}
-
-.wb-opening {
-  flex: 0 0 auto;
-}
-
-.wb-entry-head {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  padding: 0 16px 12px;
-  gap: 8px;
-}
-
-.wb-entry-head m-button {
-  align-self: center;
-}
-
-.wb-entry-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-self: center;
-  margin-left: 0;
-  width: 100%;
-  gap: 4px;
-}
-
-.wb-entry-head .field-label {
-  padding-top: 0;
-}
-
-/* 书名输入比别的字段高一点（它是这一栏里最常用的一颗输入框） */
-/* ⚙ 已组件化（2026-10-16）：书名那格是 <m-input size="sm">。
-   这条原来给的是 **34px**（页面自己写的一个没有档位对应的高度）——
-   靠到组件的 sm 档：字号本来就是正文级（不变），高度 34 → 28。
-   宿主自带 width: 100%，.wb-book-name 只负责 flex: 0 0 auto（那条留着）。 */
-
-
-.wb-entry-list {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  display: flex;
-  min-height: 0;
-  padding: 0 8px 12px;
-  gap: 2px;
-  flex-direction: column;
-  flex-wrap: nowrap;
-  max-height: none;
-}
-
-/* 条目不收缩：列表是竖排的，条目按内容定高（`flex: 0 0 auto` 由
-   `#view-wb-editor .wb-entry-list .wb-entry` 统一给，这里不再写一遍） */
-.wb-entry {
-  position: relative;
-  border: 1px solid transparent;
-  cursor: pointer;
-  min-width: 0;
-  padding: 14px 30px 14px 10px;
-  border-radius: 3px;
-}
-
-.wb-entry:hover {
-  background: var(--bg-card);
-  border-color: var(--border);
-}
-
-.wb-entry.active {
-  background: var(--accent-soft);
-  border-color: var(--accent-border-faint);
-}
-
-.wb-entry.disabled {
-  opacity: 0.5;
-}
-
-/* 行上的 ×：平时淡着、鼠标扫过来（或键盘 Tab 到）才亮 —— 点一下直接删，
-   不问确认框（删的只是草稿，点「保存」才落盘，反悔的办法是不保存）。 */
-.wb-entry-del {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-faint);
-  font-size: var(--fs-sm);
-  opacity: 0.45;
-  cursor: pointer;
-  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
-  width: 24px;
-  height: 24px;
-}
-
-.wb-entry:hover .wb-entry-del {
-  opacity: 1;
-}
-
-.wb-entry-del:focus-visible {
-  opacity: 1;
-}
-
-
-.wb-entry-title {
-  font-size: var(--fs-sm);
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.wb-entry-title > span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* 常驻条目给个标记，一眼能认出来 */
-.wb-badge {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.wb-entry-keys {
-  margin-top: 4px;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.wb-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 30px 18px;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  min-height: 160px;
-}
-
-.wb-main {
-  overflow-y: auto;
-  min-height: 0;
-  min-width: 0;
-  padding: 18px 28px 28px;
-  background: var(--bg-elev);
-}
-
-/* 让条目表单撑满右栏，内容框跟着变高。
-   列方向 / 间距由 `#view-wb-editor .wb-form` 给（14px），这里只留 min-height 兜底。 */
-.wb-form {
-  min-height: 0;
-}
-
-/* 「内容」是这里的主要工作区：占满剩余高度，min-height 兜住矮窗口 */
-.wb-form > .field-stack:has(#wb-e-content) {
-  min-height: 0;
-  flex: 0 0 auto;
-}
-
-/* ⚠️ 原来这里有一条 `.wb-form textarea { min-height: 240px; height: 100% }` ——
-   「内容」框的实际尺寸由 `#view-wb-editor #wb-e-content`（260px / 340px）给，
-   整条被盖住，2026-10-16 清掉。 */
-
-.wb-form > .field-stack:has(#wb-e-content) > .field-label {
-  flex: 0 0 auto;
-}
-
-/* 弹窗里标签列窄一点，给输入框留够宽度 */
-.wb-form .field {
-  min-width: 0;
-}
-
-.wb-form .field-label {
-  padding-top: 0;
-  font-size: var(--fs-xs);
-}
-
-.wb-checks {
-  flex-direction: row;
-  margin: 0 0 22px;
-}
-
-.wb-form-foot {
-  bottom: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 0;
-  border-top: 1px solid var(--border-soft);
-  background: var(--bg-elev);
-  position: static;
-  margin-top: 18px;
-  flex-wrap: wrap;
-}
-
-.wb-form-foot-hint {
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  text-align: left;
-}
-
-/* 底部「有未保存的改动」：保存前一直亮着，保存完自己消失 */
-.wb-dirty {
-  font-size: var(--fs-xs);
-  color: var(--accent);
-  background: var(--accent-soft);
-  padding: 4px 10px;
-  white-space: normal;
-  border-radius: 3px;
-}
 
 .pr-dirty {
   font-size: var(--fs-xs);
@@ -6647,259 +6218,6 @@ m-button.btn-new > .mi-btn__control:hover {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
   color: var(--text-faint);
-}
-
-/* Worldbook editor: all changes stay inside the existing view. */
-#view-wb-editor {
-  min-width: 0;
-  letter-spacing: 0;
-}
-
-#view-wb-editor [hidden] {
-  display: none !important;
-}
-
-#view-wb-editor .page-head {
-  flex-wrap: wrap;
-  gap: 12px;
-  height: auto;
-  min-height: 78px;
-  padding: 14px 24px;
-}
-
-#view-wb-editor .page-actions {
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-#view-wb-editor .wb-bookbar {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 28px 14px;
-  border-bottom: 1px solid var(--border);
-}
-
-#view-wb-editor .wb-summary {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-  padding-bottom: 0;
-}
-
-#view-wb-editor .wb-summary-cover {
-  display: grid;
-  place-items: center;
-  flex: 0 0 46px;
-  width: 46px;
-  height: 69px;
-  overflow: hidden;
-  border-radius: 3px;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-#view-wb-editor .wb-summary-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-#view-wb-editor .wb-summary-text {
-  min-width: 0;
-}
-
-#view-wb-editor .wb-summary-text strong {
-  display: block;
-  max-width: 420px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: var(--fs-lg);
-  font-weight: 600;
-}
-
-#view-wb-editor .wb-summary-text small {
-  display: block;
-  margin-top: 4px;
-  color: var(--text-faint);
-  font-size: var(--fs-xs);
-}
-
-#view-wb-editor .wb-tabs {
-  display: flex;
-  align-self: auto;
-  gap: 26px;
-  flex-shrink: 0;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-#view-wb-editor .wb-tab {
-  padding: 12px 2px 14px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  border-radius: 0;
-  color: var(--text-dim);
-  font: inherit;
-  font-size: var(--fs-sm);
-  cursor: pointer;
-}
-
-#view-wb-editor .wb-tab.active {
-  border-bottom-color: var(--accent);
-  color: var(--accent);
-}
-
-#view-wb-editor .wb-tab:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-#view-wb-editor .wb-workspace {
-  display: grid;
-  flex: 1;
-  grid-template-columns: 280px minmax(0, 1fr);
-  min-height: 0;
-  overflow: hidden;
-}
-
-#view-wb-editor .wb-entry-actions m-button > .mi-btn__control {
-  padding: 6px 8px;
-}
-
-/* 搜索框和状态筛选都是 `.wb-list-tools` 里的 flex item ——
-   flex item 的 min-width 初值是 auto（= min-content），不归零就会被控件自身的
-   默认宽度顶住、收不下来。
-   宽度 / 间距由 `#view-wb-editor .wb-list-tools .wb-search` 和 `... .wb-state`
-   分别给（一个是撑满、一个是固定 104px），这里不再重复写一份被盖掉的。
-   box-sizing 走全局 `*`，也不必再写。 */
-#view-wb-editor .wb-search,
-#view-wb-editor .wb-state {
-  min-width: 0;
-}
-
-/* ⚙ 已组件化（2026-10-16）：它被同一行 stretch 成 44px（= 默认档），
-   内边距/圆角/字号全归组件的默认皮肤（字号从 xs 变成正文级，和旁边那个筛选下拉一致）。
-   这里只留**上下文特有**的底色：工具条上是内凹的输入区，用 --bg-input。 */
-#view-wb-editor .wb-search > .mi-input__control {
-  background: var(--bg-input);
-}
-
-/* 聚焦观感统一走全局控件规则（border-color: --accent），不再单独写一套 outline */
-
-#view-wb-editor .wb-entry-list .wb-entry {
-  flex: 0 0 auto;
-  max-width: none;
-}
-
-#view-wb-editor .wb-entry:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-#view-wb-editor .wb-detail-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  min-height: 25px;
-  margin-bottom: 14px;
-}
-
-#view-wb-editor .wb-list-back {
-  display: none;
-}
-
-#view-wb-editor .wb-content-count {
-  margin-left: auto;
-  color: var(--text-faint);
-  font-size: var(--fs-xs);
-}
-
-/* ⚙ 2026-10-16 组件化：`> textarea` —— 高度长在里层那颗原生框上
-   （写在宿主上只会撑出一个空壳，而且宿主不滚动）。 */
-#view-wb-editor #wb-e-content > textarea {
-  height: 340px;
-  min-height: 260px;
-  resize: vertical;
-}
-
-#view-wb-editor .wb-form .field-help {
-  display: none;
-}
-
-#view-wb-editor .wb-checks .check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  padding: 6px 12px;
-  margin: 0;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: transparent;
-  box-shadow: none;
-  min-height: 24px;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-}
-
-#view-wb-editor .wb-checks .check input[type='checkbox'] {
-  order: 0;
-  appearance: auto;
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  accent-color: var(--accent);
-  flex: 0 0 15px;
-}
-
-#view-wb-editor .wb-checks .check input[type='checkbox']::before,
-#view-wb-editor .wb-checks .check input[type='checkbox']::after {
-  content: none;
-}
-
-#view-wb-editor .wb-checks .check-text {
-  display: inline;
-}
-
-#view-wb-editor .wb-checks .check-desc {
-  display: none;
-}
-
-#view-wb-editor .wb-checks .check-title {
-  font-size: var(--fs-xs);
-  font-weight: 400;
-}
-
-#view-wb-editor .wb-advanced summary {
-  color: var(--text-dim);
-  font-size: var(--fs-xs);
-  cursor: pointer;
-  margin-bottom: 14px;
-}
-
-#view-wb-editor .wb-book-name, #view-wb-editor .wb-opening {
-  grid-column: 1;
-  padding: 0;
-  min-width: 0;
-}
-
-#view-wb-editor #wb-opening > textarea {
-  min-height: 240px;
-  resize: vertical;
-}
-
-#view-wb-editor .wb-character-panel {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 20px 28px;
 }
 
 #view-presets .preset-toolbar {
@@ -9472,245 +8790,980 @@ m-button.btn-new > .mi-btn__control:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* ------------------------------ 编辑世界书 · 书籍头 ------------------------------ */
+/* ------------------------------ 编辑世界书 · A 稿「条目工作台」 ------------------------------ */
+/* 设计稿 design/wb-editor-2versions（A 稿），2026-10-18 落地。
+   主张：一天里九成时间在写条目，所以条目是一台**三栏工具**（列表 / 正文 / 本条属性）；
+   书本身很少改，于是它退成一条 64px 的信息条，书籍设置 / 本书角色 是两个二级屏。
 
-/* 统计行：条设定 / 启用 / 常驻 / 角色 / 字 —— 数字加粗，一眼读完这本书的全貌 */
-#view-wb-editor .wb-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
+   垂直预算（1440×900）：页头 56 + 书籍条 64 + 分区标签 44 = 164
+                        （改版前 78 + 100 + 47 = 225 —— 900 的窗口里四分之一还没看到一个字段）
+   横向预算：336 | minmax(0,1fr) | 248 —— 正文收进「舒适阅读区」（30–45 字/行）。
+   原先三处重复的统计（页头 / 书籍头 / 书籍设置右栏）现在只在书籍条出现一次。
+
+   ⚠️ `#wb-form` 是 `display: contents` —— 它自己不画盒子，正文列和属性栏**直接**
+      落进 `.wb-work` 的三列网格。这样「表单里任何一下改动都算未保存」那两条
+      input/change 监听（worldbook.js）不用为了布局拆成三份。
+      `.hidden` 用的是 `!important`，所以收起表单照样有效（见 style.css 顶部）。
+   ⚠️ 世界书编辑器**只有这一处样式**了：分散在第七区 / 文件中部 / 文件尾部的那几段
+      旧规则已经删掉，别再把新的往那几处塞 —— 两处定义同一选择器会被 check-css 记成
+      重复，而先后顺序一乱就是「改了没反应」。 */
+
+/* ----- 页头：面包屑和标题并到一行，统计不再出现（那是书籍条的事） ----- */
+
+/* 三个面板靠 hidden 属性互斥（setWorldbookPanel）。这一条**不能省**：下面那些
+   `display: grid / flex` 都是 (1,1,0)，压得过 UA 的 `[hidden] { display: none }`，
+   删掉它三屏就会同时出现。 */
+#view-wb-editor [hidden] {
+  display: none !important;
 }
 
-#view-wb-editor .wb-stats b {
+/* 没选书时那句「左边选一本书」占满整块，垂直居中 */
+#view-wb-editor .worldbook-body > .wb-empty {
+  flex: 1 1 auto;
+}
+
+#view-wb-editor .wb-head {
+  min-height: 56px;
+  padding: 12px 24px;
+  gap: 16px;
+}
+
+#view-wb-editor .wb-head-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+#view-wb-editor .wb-head .page-crumb {
+  margin: 0;
+  white-space: nowrap;
+}
+
+#view-wb-editor .wb-total {
+  font-size: var(--fs-xs);
   color: var(--text-dim);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 底部那颗「有未保存的改动」：保存前一直亮着，保存完自己消失 */
+#view-wb-editor .wb-dirty {
+  padding: 4px 10px;
+  font-size: var(--fs-xs);
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+}
+
+/* ----- 书籍条 64px：封面缩略 + 书名 + 一行统计 + 两个书级动作 ----- */
+
+#view-wb-editor .wb-bookbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: 64px;
+  padding: 10px 24px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+
+/* 28×42 —— 和封面框同一个 2:3 比例，只是缩到「书脊」那么大。
+   它是个按钮，但**不是第二个上传入口**：点了去「书籍设置」那一屏换。 */
+#view-wb-editor .wb-bookbar-cover {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 42px;
+  padding: 0;
+  overflow: hidden;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+#view-wb-editor .wb-bookbar-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+#view-wb-editor .wb-bookbar-name {
+  min-width: 0;
+  max-width: 320px;
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--fs-md);
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#view-wb-editor .wb-bookbar-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
 #view-wb-editor .wb-bookbar-actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
-  flex: 0 0 auto;
+  margin-left: auto;
 }
 
-/* 分区标签独立成行：下划线式，和左侧导航/分段控件三种形态各司其职 */
-/* ------------------------------ 编辑世界书 · 条目列表 ------------------------------ */
+/* ----- 分区标签 44px（条目 / 书籍设置 / 本书角色，数字是角标） ----- */
 
-#view-wb-editor .wb-list-tools {
+#view-wb-editor .wb-tabs {
   display: flex;
-  gap: 8px;
-  padding: 12px;
-  border-bottom: 1px solid var(--border-soft);
+  flex: none;
+  align-items: stretch;
+  gap: 24px;
+  height: 44px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
 }
 
-#view-wb-editor .wb-list-tools .wb-search {
-  flex: 1 1 auto;
-  width: auto;
-  margin: 0;
-}
-
-#view-wb-editor .wb-list-tools .wb-state {
-  flex: 0 0 104px;
-  width: auto;
-  margin: 0;
-}
-
-/* 行尾的「字数 · 顺序」：决定这条生不生效 / 什么时候生效的两样 */
-.wb-entry-meta {
-  margin-top: 6px;
-  display: flex;
-  gap: 12px;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ------------------------------ 编辑世界书 · 条目详情 ------------------------------ */
-
-#view-wb-editor .wb-detail-title {
+#view-wb-editor .wb-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px;
+  font-family: inherit;
   font-size: var(--fs-sm);
-  font-weight: 600;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
 }
 
-/* 表单收成一列；检查项用 order 提到最顶，和正文同屏（DOM 不动，脏标记照常冒泡） */
-#view-wb-editor .wb-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-#view-wb-editor .wb-checks {
-  order: -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-#view-wb-editor .wb-checks .check:hover {
-  border-color: var(--border-hover);
+#view-wb-editor .wb-tab:hover {
   color: var(--text);
 }
 
-#view-wb-editor .wb-checks .check:has(input:checked) {
-  border-color: var(--accent-border);
-  background: var(--accent-soft-strong);
+#view-wb-editor .wb-tab.active {
   color: var(--accent);
-}
-
-/* ------------------------------ 编辑世界书 · 书籍设置 ------------------------------ */
-
-/* 「本书设置」分组标题和分区标签重名，藏掉 */
-#view-wb-editor .wb-book-title {
-  display: none;
-}
-
-/* 两栏：左 = 封面 / 书名 / 开场白，右 = 本书信息，底 = 危险区 */
-#view-wb-editor .wb-book {
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-  gap: 24px;
-}
-
-#view-wb-editor .wb-cover {
-  grid-column: 1;
-  grid-row: auto;
-}
-
-#view-wb-editor .wb-cover-row {
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 14px;
-}
-
-/* 本书信息卡 */
-#view-wb-editor .wb-facts {
-  grid-column: 2;
-  grid-row: 1 / span 3;
-  align-self: start;
-  margin: 0;
-  padding: 16px 18px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  display: grid;
-  gap: 12px;
-}
-
-#view-wb-editor .wb-fact {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: var(--fs-xs);
-}
-
-#view-wb-editor .wb-fact dt {
-  margin: 0;
-  color: var(--text-faint);
-}
-
-#view-wb-editor .wb-fact dd {
-  margin: 0;
-  color: var(--text-dim);
+  border-bottom-color: var(--accent);
   font-weight: 600;
+}
+
+#view-wb-editor .wb-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#view-wb-editor .wb-tab-n {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
 
-#view-wb-editor .wb-fact-head {
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-soft);
+#view-wb-editor .wb-tab.active .wb-tab-n {
+  color: var(--accent);
 }
 
-/* 危险区：删除本书 */
-#view-wb-editor .wb-book-foot {
-  grid-column: 1 / -1;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 8px;
-  padding: 14px 16px;
-  border: 1px solid var(--danger-border);
-  border-radius: var(--radius);
-  background: var(--danger-bg);
-}
+/* ----- 空态（没选书 / 没选条目） ----- */
 
-#view-wb-editor .wb-book-foot-hint {
+#view-wb-editor .wb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 30px 18px;
+  text-align: center;
   font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
-/* ------------------------------ 编辑世界书 · 本书角色 ------------------------------ */
+/* ==========================================================================
+   屏 1 · 条目（三栏）
+   ========================================================================== */
 
-#view-wb-editor .wb-char-list {
-  gap: 14px;
+#view-wb-editor .wb-work {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 336px minmax(0, 1fr) 248px;
+  min-height: 0;
+  overflow: hidden;
 }
 
-/* 副本卡：头像 + 名字 / 设定预览 / 「显示状态 + 编辑 + 移除」 */
-.wb-char-card {
-  padding: 14px 16px;
+/* 表单壳不画盒子：正文列 / 属性栏直接落进上面那三列 */
+#view-wb-editor .wb-form {
+  display: contents;
+}
+
+/* ----- 左：条目列表 336 ----- */
+
+#view-wb-editor .wb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 14px 16px 0;
+  background: var(--bg-side);
+  border-right: 1px solid var(--border);
+}
+
+#view-wb-editor .wb-list-tools {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+/* flex item 的 min-width 初值是 auto（= min-content），不归零收不下来 */
+#view-wb-editor .wb-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#view-wb-editor .wb-state {
+  flex: 0 0 104px;
+  min-width: 0;
+}
+
+/* 工具条上的搜索框是内凹的输入区（和列表底色分得开） */
+#view-wb-editor .wb-search > .mi-input__control {
+  background: var(--bg-input);
+}
+
+#view-wb-editor .wb-side-title {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 8px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+#view-wb-editor .wb-side-title .wb-count {
+  margin-left: auto;
+  font-weight: 400;
+  text-align: right;
+}
+
+#view-wb-editor .wb-entry-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  margin: 0 -8px;
+  padding: 0 8px 14px;
+  overflow-y: auto;
+}
+
+/* 三颗跟列表走的动作贴底：列表滚到第 51 条时它们还在原地 */
+#view-wb-editor .wb-entry-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 0 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+#view-wb-editor .wb-entry-actions m-button > .mi-btn__control {
+  padding: 6px 8px;
+}
+
+/* 行：两行（名称 + 徽章 + 「字数 · 顺序」 / 关键词），59px 左右。
+   ⚠️ 右侧 30px 是**给绝对定位的 × 留的位** —— 不留位它就会压住「顺序 100」的后两位
+      （改版前那本 51 条的书里，元信息显示成「51 字 · 1」就是这个原因）。 */
+#view-wb-editor .wb-entry {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 10px 30px 10px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+#view-wb-editor .wb-entry:hover {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+
+#view-wb-editor .wb-entry.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border-faint);
+}
+
+#view-wb-editor .wb-entry.disabled {
+  opacity: 0.5;
+}
+
+#view-wb-editor .wb-entry:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+#view-wb-editor .wb-entry-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+#view-wb-editor .wb-entry-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#view-wb-editor .wb-badge {
+  flex: none;
+  padding: 2px 6px;
+  font-size: var(--fs-xs);
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+}
+
+#view-wb-editor .wb-entry-meta {
+  flex: none;
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ⚠️ 必须 display: block —— 它是 .wb-entry 的直接子级，而 .wb-entry 不是 flex 容器，
+   inline 的 span 上 overflow / text-overflow 一律不生效（截断查不出来）。 */
+#view-wb-editor .wb-entry-keys {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 行上的 ×：平时淡着、鼠标扫过来（或键盘 Tab 到）才亮 —— 点一下直接删，
+   不问确认框（删的只是草稿，点「保存」才落盘，反悔的办法是不保存）。 */
+#view-wb-editor .wb-entry-del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+#view-wb-editor .wb-entry:hover .wb-entry-del,
+#view-wb-editor .wb-entry-del:focus-visible {
+  opacity: 1;
+}
+
+/* ----- 中：正文（640 居中，两侧留白） ----- */
+
+#view-wb-editor .wb-doc {
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+#view-wb-editor .wb-measure {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* 稿纸卡：沿用「编辑角色」那边已经落地的语言（一张卡 = 一段内容，
+   头栏是「序号 + 名称 + 角标」，说明收在卡底的折叠条里） */
+#view-wb-editor .wb-sheet {
+  overflow: hidden;
   background: var(--bg-card);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
 }
 
-.wb-char-card-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+#view-wb-editor .wb-sheet:focus-within {
+  border-color: var(--accent-border);
 }
 
-.wb-char-card-avatar {
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+#view-wb-editor .wb-sheet-head {
   display: flex;
   align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+/* 序号：两张稿纸靠它对上号（和右栏三张卡一一对应） */
+#view-wb-editor .wb-sheet-no {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
   justify-content: center;
-  background: var(--accent-soft-strong);
+  width: 20px;
+  height: 20px;
+  font-size: var(--fs-xs);
   color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 50%;
+  font-variant-numeric: tabular-nums;
+}
+
+#view-wb-editor .wb-sheet-name {
+  margin: 0;
   font-size: var(--fs-sm);
   font-weight: 600;
 }
 
-.wb-char-card-avatar img {
+#view-wb-editor .wb-sheet-kind {
+  padding: 0 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+#view-wb-editor .wb-sheet-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+#view-wb-editor .wb-sheet-body {
+  padding: 14px 16px;
+}
+
+/* 「这条怎么被认出来」：名称 + 关键词并排 —— 这两个说的是「怎么被命中」，不是正文，
+   所以不跟「内容」挤在同一张纸里。 */
+#view-wb-editor .wb-ident {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 12px;
+  align-items: start;
+}
+
+#view-wb-editor .wb-ident-help {
+  grid-column: 1 / -1;
+}
+
+/* 框自己的描边 / 底色归零：卡本身就是那个「框」，聚焦反馈交给 .wb-sheet:focus-within。
+   ⚠️ `> textarea` 是**里层**那颗原生框（组件化之后高度、内边距都要落在这里）。 */
+#view-wb-editor .wb-sheet > m-textarea > .mi-textarea__control {
+  min-height: 240px;
+  padding: 14px 16px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  resize: vertical;
+}
+
+#view-wb-editor #wb-e-content > .mi-textarea__control {
+  height: 320px;
+  min-height: 260px;
+}
+
+#view-wb-editor #wb-opening > .mi-textarea__control {
+  min-height: 280px;
+}
+
+/* 写法说明：折叠条（默认收起 —— 一直铺着会把正文淹掉） */
+#view-wb-editor .wb-fold {
+  border-top: 1px solid var(--border-soft);
+}
+
+#view-wb-editor .wb-fold > summary {
+  padding: 8px 16px;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+#view-wb-editor .wb-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+#view-wb-editor .wb-fold > summary::before {
+  content: '▸ ';
+  color: var(--text-faint);
+}
+
+#view-wb-editor .wb-fold[open] > summary::before {
+  content: '▾ ';
+}
+
+#view-wb-editor .wb-fold-body {
+  padding: 0 16px 14px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+#view-wb-editor .wb-fold-body p {
+  margin: 0 0 6px;
+}
+
+#view-wb-editor .wb-fold-body p:last-child {
+  margin-bottom: 0;
+}
+
+#view-wb-editor .wb-fold-body b {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+#view-wb-editor .wb-fold-body code {
+  padding: 0 4px;
+  font-family: ui-monospace, Consolas, monospace;
+  color: var(--code-text);
+  background: var(--code-bg);
+  border-radius: var(--radius-sm);
+}
+
+/* ----- 右：本条属性 248（三个开关 + 两个数字 + 两条事实） ----- */
+
+#view-wb-editor .wb-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px 16px 12px;
+  overflow-y: auto;
+  background: var(--bg-side);
+  border-left: 1px solid var(--border);
+}
+
+#view-wb-editor .wb-aside-card {
+  flex: none;
+  padding: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+}
+
+#view-wb-editor .wb-aside-card h3 {
+  margin: 0 0 6px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+/* 三颗开关：和设置页同一个开关皮肤（.check 的 40×22 轨道），只把**开关挪到左边**、
+   去掉那一整行的卡片外壳 —— 这里是「一条的三个状态」，不是三张功能卡。
+   ⚠️ 全域 .check 把 input 的 order 设成 2（开关靠右）；这里 order: 0 翻回来。 */
+#view-wb-editor .wb-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+#view-wb-editor .wb-checks .check {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+
+#view-wb-editor .wb-checks .check + .check {
+  border-top: 1px solid var(--border-soft);
+}
+
+#view-wb-editor .wb-checks .check:hover,
+#view-wb-editor .wb-checks .check:has(input:checked) {
+  background: none;
+  border-color: var(--border-soft);
+}
+
+#view-wb-editor .wb-checks .check > input[type='checkbox'] {
+  order: 0;
+  margin-top: 2px;
+}
+
+#view-wb-editor .wb-checks .check-text {
+  flex: 1 1 auto;
+  gap: 0;
+}
+
+#view-wb-editor .wb-checks .check-title {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--text);
+}
+
+#view-wb-editor .wb-checks .check-desc {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* 卡片底部那条折叠：`>` 的关系被 .wb-fold 的 ID 规则压着，
+   所以这里每条都要带上 #view-wb-editor 才翻得过来。 */
+#view-wb-editor .wb-fold-flat {
+  margin-top: 6px;
+  border-top: 1px solid var(--border-soft);
+}
+
+#view-wb-editor .wb-fold-flat > summary {
+  padding: 8px 0 0;
+}
+
+#view-wb-editor .wb-fold-flat > .wb-fold-body {
+  padding: 6px 0 0;
+}
+
+/* 两个数字：输入框 72px + 单位说明（「顺序，小的先插」/「% 命中概率」） */
+#view-wb-editor .wb-num-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#view-wb-editor .wb-num-row + .wb-num-row {
+  margin-top: 6px;
+}
+
+#view-wb-editor .wb-num-row m-input {
+  flex: 0 0 72px;
+  width: 72px;
+}
+
+#view-wb-editor .wb-num-unit {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+#view-wb-editor .wb-aside-card .field {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+#view-wb-editor .wb-aside-card .field-label {
+  padding-top: 0;
+}
+
+/* 本条目：一行事实 + 一句预测（「这段话什么时候才会进提示词」）。
+   事实排两列而不是两行 —— 900 高的窗口里，右栏就靠这 26px 才把「删除条目」露出来。 */
+#view-wb-editor .wb-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  /* 窄窗里三张卡横排、卡片会变宽；不封顶的话「关键词 1」会飘到卡片最右边 */
+  max-width: 200px;
+  margin: 0;
+}
+
+#view-wb-editor .wb-facts > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+#view-wb-editor .wb-facts dt {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+#view-wb-editor .wb-facts dd {
+  margin: 0 0 0 auto;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+#view-wb-editor .wb-predict {
+  margin: 4px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+#view-wb-editor .wb-form-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+  flex-wrap: wrap;
+}
+
+#view-wb-editor .wb-form-foot-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* ==========================================================================
+   屏 2 · 书籍设置（左两张稿纸 | 右本书信息 + 删除）
+   ========================================================================== */
+
+#view-wb-editor .wb-set {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  min-height: 0;
+}
+
+#view-wb-editor .wb-set-main {
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+#view-wb-editor .wb-set-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 14px 16px 16px;
+  overflow-y: auto;
+  background: var(--bg-side);
+  border-left: 1px solid var(--border);
+}
+
+/* 危险区贴底：位置稳定、不占正文宽度（改版前它是横在左栏下面的一条红杠） */
+#view-wb-editor .wb-set-aside .wb-danger {
+  margin-top: auto;
+}
+
+#view-wb-editor .wb-cover-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+#view-wb-editor .wb-cover-frame {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  aspect-ratio: 2 / 3;
+  padding: 0;
+  overflow: hidden;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  background: var(--bg-input);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+#view-wb-editor .wb-cover-frame:hover {
+  border-color: var(--border-hover);
+}
+
+#view-wb-editor .wb-cover-frame.has {
+  border-color: var(--border-soft);
+  border-style: solid;
+}
+
+#view-wb-editor .wb-cover-side {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+#view-wb-editor .wb-cover-side .field {
+  align-self: stretch;
+  margin: 0;
+}
+
+#view-wb-editor .wb-cover-side .field-label {
+  padding-top: 0;
+}
+
+#view-wb-editor .wb-danger {
+  flex: none;
+  padding: 14px 16px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius);
+}
+
+#view-wb-editor .wb-danger h3 {
+  margin: 0 0 6px;
+  font-size: var(--fs-sm);
+  color: var(--danger-text);
+}
+
+#view-wb-editor .wb-danger p {
+  margin: 0 0 12px;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+/* ==========================================================================
+   屏 3 · 本书角色（卡片网格 + 空态引导卡）
+   ========================================================================== */
+
+#view-wb-editor .wb-chars-panel {
+  flex: 1;
+  min-height: 0;
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+#view-wb-editor .wb-chars-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 1100px;
+}
+
+#view-wb-editor .wb-chars-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+#view-wb-editor .wb-chars-hint {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+#view-wb-editor .wb-char-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+#view-wb-editor .wb-char-card {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+#view-wb-editor .wb-char-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* 56×56 —— 卡片上认人靠这张脸，34px 太小（改版前那个尺寸） */
+#view-wb-editor .wb-char-card-avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft-strong);
+  border-radius: var(--radius-sm);
+}
+
+#view-wb-editor .wb-char-card-avatar img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
 }
 
-.wb-char-card-name {
+#view-wb-editor .wb-char-card-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
   font-size: var(--fs-sm);
+}
+
+#view-wb-editor .wb-char-card-title {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.wb-char-card-desc {
-  margin: 10px 0 0;
+/* 「本书副本」：同一张卡在角色库里还有一份原件，标清楚改的是哪一份 */
+#view-wb-editor .wb-local-tag {
+  flex: none;
+  padding: 0 6px;
   font-size: var(--fs-xs);
+  font-weight: 400;
   color: var(--text-faint);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
 }
 
-.wb-char-card-foot {
+#view-wb-editor .wb-char-card-desc {
+  margin: 8px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+#view-wb-editor .wb-char-card-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--border-soft);
 }
 
-.wb-char-card-show {
+#view-wb-editor .wb-char-card-show {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -9720,7 +9773,7 @@ m-button.btn-new > .mi-btn__control:hover {
   user-select: none;
 }
 
-.wb-char-card-show input {
+#view-wb-editor .wb-char-card-show input {
   width: 14px;
   height: 14px;
   margin: 0;
@@ -9728,32 +9781,127 @@ m-button.btn-new > .mi-btn__control:hover {
   cursor: pointer;
 }
 
-.wb-char-card-show:has(input:checked) {
+#view-wb-editor .wb-char-card-show:has(input:checked) {
   color: var(--accent);
 }
 
-.wb-char-card-actions {
+#view-wb-editor .wb-char-card-actions {
   display: flex;
-  gap: 8px;
   flex: 0 0 auto;
+  gap: 8px;
 }
 
-.wb-char-card-btn {
-  border: 0;
-  background: none;
+#view-wb-editor .wb-char-card-btn {
   padding: 4px 8px;
+  font-family: inherit;
   font-size: var(--fs-xs);
   color: var(--text-faint);
-  cursor: pointer;
+  background: none;
+  border: 0;
   border-radius: var(--radius-sm);
+  cursor: pointer;
 }
 
-.wb-char-card-btn:hover {
+#view-wb-editor .wb-char-card-btn:hover {
   color: var(--text);
   background: var(--border-soft);
 }
 
-.wb-char-card-remove:hover {
+#view-wb-editor .wb-char-card-remove:hover {
   color: var(--danger-text);
   background: var(--danger-bg);
+}
+
+/* 空态：给一张有引导性的虚线卡，不是一片空白（改版前这里什么都不画，
+   用户不知道这里该有东西、也不知道副本和角色库是两回事） */
+#view-wb-editor .wb-char-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 24px;
+  text-align: center;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-hover);
+  border-radius: var(--radius);
+}
+
+#view-wb-editor .wb-char-empty h3 {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+#view-wb-editor .wb-char-empty p {
+  max-width: 420px;
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+
+#view-wb-editor .wb-char-empty-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* ==========================================================================
+   窄窗：属性栏从右边折到下面横排（纯 CSS，不需要 JS 配合）
+   ==========================================================================
+   1180 那一档窗宽下「列表固定 + 正文舒适宽 + 属性固定」三者不可能同时满足 ——
+   正文会被挤到 30 字/行以下。与其把三栏等比压小，不如让属性栏折到**下面**横排：
+   正文拿回舒适宽度，属性也没有被藏掉。断点定在 1366（笔记本常见的整档宽度），
+   因为本应用的左导航占 300px，比设计稿假设的 224 更吃宽度。 */
+@media (max-width: 1366px) {
+  #view-wb-editor .wb-work {
+    grid-template-columns: 300px minmax(0, 1fr);
+    grid-template-areas: 'list doc' 'aside aside';
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  #view-wb-editor .wb-list {
+    grid-area: list;
+  }
+
+  #view-wb-editor .wb-doc {
+    grid-area: doc;
+  }
+
+  #view-wb-editor .wb-aside {
+    grid-area: aside;
+    flex-direction: row;
+    padding: 12px 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
+  #view-wb-editor .wb-aside-card {
+    flex: 1 0 240px;
+  }
+
+  #view-wb-editor .wb-ident {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 书籍设置同理：320 的右栏在窄窗下会把稿纸压成一条缝 */
+  #view-wb-editor .wb-set {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  #view-wb-editor .wb-set-aside {
+    flex-direction: row;
+    padding: 12px 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
+  #view-wb-editor .wb-set-aside > .wb-aside-card,
+  #view-wb-editor .wb-set-aside > .wb-danger {
+    flex: 1 0 240px;
+    margin-top: 0;
+  }
 }
