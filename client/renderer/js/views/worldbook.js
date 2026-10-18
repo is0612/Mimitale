@@ -318,25 +318,27 @@ function markDraftDirty() {
 }
 
 /**
- * 底部的「有未保存的改动」提示。
+ * 页头右侧的保存状态胶囊（和角色编辑页那颗 .save-pill 同一套观感）。
  * 只显示当前这本的状态 + 顺带说一句别的书还欠着几本 ——
  * 把别的书的改动说成本书的，会让人以为点了「保存」就全存了。
+ *
+ * 2026-10-18：从「只在脏的时候亮一条 amber 提示」改成**常驻三态胶囊**。
+ * 好处是页头高度和角色编辑页一致，而且「已保存」这件事也有地方交代。
  */
 function renderDirtyHint() {
   syncEditorLayout();
-  const node = el.wb.dirtyHint;
+  const node = el.wb.saveState;
   if (!node) return;
 
   const mine = currentDraft();
   const all = unsavedDrafts().length;
   const others = all - (mine && mine.dirty ? 1 : 0);
+  const dirty = !!(mine && mine.dirty) || others > 0;
 
-  let text = '';
-  if (mine && mine.dirty) text = others ? `有未保存的改动（另有 ${others} 本）` : '有未保存的改动';
-  else if (others) text = `另有 ${others} 本有未保存的改动`;
-
-  node.textContent = text;
-  node.classList.toggle('hidden', !text);
+  node.dataset.state = dirty ? 'dirty' : 'saved';
+  node.textContent = mine && mine.dirty
+    ? others ? `有未保存的改动（另有 ${others} 本）` : '有未保存的改动'
+    : others ? `另有 ${others} 本有未保存的改动` : '所有更改已保存';
 }
 
 /** 草稿写回世界书（点「保存」时用）。返回是否真的提交了 */

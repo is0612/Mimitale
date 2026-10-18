@@ -5567,8 +5567,15 @@ m-button.btn-new > .mi-btn__control:hover {
   container-type: inline-size;
 }
 
+/* 宽屏时给写作面一个上限：1440 下中栏本来只有 ~725px（左栏 220 + 右栏 272），
+   但窗口再宽就会一路涨到 50+ 字/行。760 − 稿纸内边距 40 ≈ 720px 正文宽，
+   16px 字号下约 42 字/行（设计稿给的是 650 稿纸 / 40 字，这里按真实窗口留了余量）。
+   1440 下不触发这条；属性 / 表情 / 世界书 / 高级设置同宽居中，切分区时左缘不会跳。 */
 #view-char-editor .char-editor-panel {
+  width: 100%;
+  max-width: 760px;
   min-width: 0;
+  margin: 0 auto;
 }
 
 #view-char-editor .char-panel-heading {
@@ -5614,11 +5621,14 @@ m-button.btn-new > .mi-btn__control:hover {
    ⚙ 2026-10-16 多行框组件化之后，这五行落到**里层那颗原生框**上（`> textarea`）：
      min-height / height 这种「输入框自己多高」的属性写在宿主上只会撑出一个空壳，
      而且 auto-grow 量的也是里层那颗的 min-height（见 ui/auto-grow.js 的 controlOf）。 */
-#view-char-editor #c-desc > textarea { min-height: 264px; }
-#view-char-editor #c-personality > textarea { min-height: 120px; }
-#view-char-editor #c-scenario > textarea { min-height: 100px; }
-#view-char-editor #c-first > textarea { min-height: 160px; }
-#view-char-editor #c-example > textarea { min-height: 140px; }
+/* 2026-10-18 再压一档：原来 264/120/100/160/140 一屏只放得下两栏，空白比正文多。
+   现在描述 200（≈6 行正文）、其余 84–128；都在 160 以下的三栏仍会被 auto-grow
+   拉到内容高度（上限 160），描述固定 200，表单不会因为一段长描述无限变长。 */
+#view-char-editor #c-desc > textarea { min-height: 200px; }
+#view-char-editor #c-personality > textarea { min-height: 96px; }
+#view-char-editor #c-scenario > textarea { min-height: 84px; }
+#view-char-editor #c-first > textarea { min-height: 128px; }
+#view-char-editor #c-example > textarea { min-height: 112px; }
 
 #view-char-editor .attr-add-row,
 #view-char-editor .attr-range,
@@ -6790,17 +6800,70 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--text-faint);
 }
 
-/* 卡片网格：列宽自适应，窗口变窄自动减列（角色页和世界书页共用） */
-.char-grid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(198px, 1fr));
+/* 列表工具条：角色库 / 世界书共用。左边搜索、右边计数 —— 卡片网格上方只有这一条，
+   不和页头的三个动作抢位置。 */
+.lib-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin-bottom: 18px;
 }
 
+.lib-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(340px, 100%);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+
+.lib-search:focus-within {
+  border-color: var(--accent);
+}
+
+/* ⚙ 搜索框是 <m-input>：无边框 / 透明底要落到里层原生控件上，
+   外层的方框由 .lib-search 自己画（和预设页 .preset-search 一个路子）。 */
+.lib-search m-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lib-search m-input > .mi-input__control {
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.lib-search .field-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+}
+
+.lib-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 卡片网格：列宽自适应，窗口变窄自动减列。
+   ⚠️ 角色库和世界书**必须同一组数** —— 以前一个是 198、一个是 240，
+   切换页面时卡片宽度和每行列数都会变，像两个产品。改一处就得改另一处；
+   现在直接并列写出同一个值，比对时一眼能看出是否一致。 */
+.char-grid,
 .wb-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
+  /* 216 = 1440 窗口下正好 5 列（5×216 + 4×18 = 1152 ≤ 正文 1168）；
+     再大 4px 就会掉成 4 列 —— 角色库以前 198 / 世界书 240 的差异就是从这里来的。 */
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  gap: 18px;
 }
 
 /* 角色卡 / 世界书卡共用同一副骨架：封面从卡片顶边一路铺到左右两边（设计稿就是
@@ -6823,8 +6886,9 @@ m-button.btn-new > .mi-btn__control:hover {
   transition: box-shadow 0.15s, transform 0.12s;
 }
 
-.char-card:hover {
+.char-card:is(:hover, :focus-within) {
   box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
 }
 
 /* 卡片右上角的删除：跟左侧会话列表的 × 一样，平时透明、鼠标移上来才浮出。
@@ -6861,15 +6925,15 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 
-/* ⚠️ 这里**不能**写 background —— 它比 `.g1`~`.g6` 这些单类 (0,1,0) 同优先级
-   但位置更靠后，写了浅底就会把 JS 挂的渐变整个盖掉（表现为"浅色圆 + 主色字"）。
-   尺寸是 2:3 竖版封面，铺满卡片宽度。
-   只有角色库（build.js 的 card()）用这类名，所以形态直接写死在这里。 */
+/* 封面里的媒体层（libraryCard 的 mediaBox）。高度由外层 .wb-card-cover 定，
+   自己只管铺满 + 居中。角色卡的首字色块和世界书的「世」字占位都走这一层。
+   ⚠️ 这里**不能**写 background —— 它比 `.g1`~`.g6` 这些单类 (0,1,0) 同优先级
+   但位置更靠后，写了浅底就会把 JS 挂的渐变整个盖掉（表现为"浅色圆 + 主色字"）。 */
 .char-card-avatar {
   width: 100%;
-  height: auto;
-  aspect-ratio: 2 / 3;
-  flex: 0 0 auto;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -6880,7 +6944,6 @@ m-button.btn-new > .mi-btn__control:hover {
   user-select: none;
 }
 
-
 .char-card-avatar.clickable {
   padding: 0;
   border: 0;
@@ -6889,33 +6952,15 @@ m-button.btn-new > .mi-btn__control:hover {
   cursor: zoom-in;
 }
 
-
-/* 角色卡 / 世界书卡的封面下面那几块信息：左对齐、各自带自己的内边距 */
-#char-page-grid .char-card-name {
-  padding: 10px 10px 0;
-  text-align: left;
-}
-
-#char-page-grid .char-card-sub {
-  padding: 6px 10px 0;
-  text-align: left;
-}
-
-#char-page-grid .char-card-actions {
-  margin-top: auto;
-  padding: 8px 10px 10px;
-}
-
-/* 世界书卡的删除按钮多一个 z-index —— 它的封面底部压了渐变层，要浮在上面。
-   悬停变危险色由文件顶部那条「危险色悬停」组（`.convo-del:hover, …,
-   .char-card-del:hover, …`）统一给，这里不再写一遍。 */
-.wb-card .char-card-del {
-  z-index: 2;
-}
-
-.char-card-name {
+/* 角色卡 / 世界书卡的封面下面那几块信息：左对齐、各自带自己的内边距。
+   两套类名挂在同一个元素上（libraryCard 同时给 char-card-* 和 wb-card-*），
+   所以这里只写一份，旧选择器仍然命中。 */
+.char-card-name,
+.wb-card-name {
   max-width: 100%;
+  padding: 10px 10px 0;
   overflow: hidden;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-sm);
@@ -6923,24 +6968,25 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--text);
 }
 
-/* 这一行是「来源 · 分类标签…」，标签可能很多，所以单行截断不让卡片变形 */
-.char-card-sub {
+.char-card-sub,
+.wb-card-meta {
   max-width: 100%;
+  padding: 6px 10px 0;
   overflow: hidden;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-xs);
   color: var(--text-faint);
 }
 
-/* 角色卡 / 世界书卡底部的操作区共用一套骨架。
-   贴底（margin-top: auto）分别写在 `#char-page-grid .char-card-actions` 和
-   `.wb-card-actions` 里 —— 两边各自还带自己的内边距，所以这里不重复写。 */
 .char-card-actions,
 .wb-card-actions {
   display: flex;
   gap: 8px;
   width: 100%;
+  margin-top: auto;
+  padding: 8px 10px 10px;
 }
 
 /* ⚠️ `flex` 基准挂在**宿主**上（宿主就是 .char-card-actions 那个 flex 行里的 item），
@@ -6962,8 +7008,9 @@ m-button.btn-new > .mi-btn__control:hover {
   box-shadow: none;
 }
 
-/* `flex: 0 0 auto`：卡片是 flex 列，显式写死基准，免得以后有人往这张卡里
-   加东西时，子项按内容算高度、把 aspect-ratio 绕过去（封面就会变形）。 */
+/* 2:3 封面：角色形象和世界书封面共用。`flex: 0 0 auto` 是必要的 ——
+   卡片是 flex 列，不写死基准的话，以后往卡里加东西时子项会按内容算高度，
+   把 aspect-ratio 绕过去（封面就变形了）。 */
 .wb-card-cover {
   position: relative;
   flex: 0 0 auto;
@@ -6982,18 +7029,6 @@ m-button.btn-new > .mi-btn__control:hover {
   cursor: zoom-in;
 }
 
-/* 底部压暗：书名压在浅色封面上时全靠它读得出来 */
-.wb-card-cover::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 58px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
-  pointer-events: none;
-}
-
 /* 没封面：深灰占位块 + 一个半透明的「世」字。
    ⚠️ 别改回 entityTone 那套渐变色 —— 76px 的小方块上好看，
       铺成 2:3 的大色块就太吵，而且会让人误以为那是一张图。 */
@@ -7010,42 +7045,6 @@ m-button.btn-new > .mi-btn__control:hover {
   color: rgba(255, 255, 255, 0.34);
   letter-spacing: 0.06em;
   user-select: none;
-}
-
-.wb-card-name {
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  z-index: 1;
-  font-size: var(--fs-md);
-  font-weight: 700;
-  color: #fff;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  user-select: none;
-  pointer-events: none;
-}
-
-/* 下面这两块自己带内边距（卡片本身 padding: 0，见 .wb-card 那段） */
-.wb-card-meta {
-  flex: 0 0 auto;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 10px 10px 0;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-}
-
-/* margin-top: auto —— 同一行里卡片等高时，按钮贴着底边（和设计稿一致）。
-   骨架（display / gap / 按钮形态）在 .char-card-actions 那组合并规则里。 */
-.wb-card-actions {
-  margin-top: auto;
-  padding: 8px 10px 10px;
 }
 
 /* 进入世界前创建玩家自己的角色 */
@@ -8435,10 +8434,39 @@ m-button.btn-new > .mi-btn__control:hover {
 
 /* ------------------------------ 页头：面包屑 + 保存状态 ------------------------------ */
 
+/* 两个编辑页的页头同高：角色页原来把面包屑 / 标题 / 说明叠成三行（78px），
+   世界书页是一行（56px）—— 来回切换时内容区会上下跳 22px。现在都一行。 */
 #view-char-editor .page-head {
   height: auto;
-  min-height: 78px;
-  padding: 14px 24px;
+  min-height: 56px;
+  padding: 12px 24px;
+}
+
+/* 两个编辑页共用：面包屑 + 标题（+ 角色页那句说明）一行排开 */
+.editor-head-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+#view-char-editor .editor-head-left .page-crumb {
+  flex: 0 0 auto;
+  margin: 0;
+  white-space: nowrap;
+}
+
+#view-char-editor .editor-head-left .page-title {
+  flex: 0 0 auto;
+}
+
+#view-char-editor .editor-head-left .page-sub {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .page-crumb {
@@ -8828,32 +8856,17 @@ m-button.btn-new > .mi-btn__control:hover {
   gap: 16px;
 }
 
-#view-wb-editor .wb-head-left {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-
 #view-wb-editor .wb-head .page-crumb {
   margin: 0;
   white-space: nowrap;
 }
 
-#view-wb-editor .wb-total {
+/* 两个编辑页页头右侧的「全文 N 字」：同一个类、同一个字号，别各写一份 */
+.editor-total {
   font-size: var(--fs-xs);
   color: var(--text-dim);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-}
-
-/* 底部那颗「有未保存的改动」：保存前一直亮着，保存完自己消失 */
-#view-wb-editor .wb-dirty {
-  padding: 4px 10px;
-  font-size: var(--fs-xs);
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-radius: var(--radius-sm);
 }
 
 /* ----- 书籍条 64px：封面缩略 + 书名 + 一行统计 + 两个书级动作 ----- */
@@ -9513,6 +9526,15 @@ m-button.btn-new > .mi-btn__control:hover {
   font-size: var(--fs-xs);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+}
+
+/* 「本书信息」那一列比条目右栏宽（320 vs 248），但标签更长（常驻条目 / 最后修改），
+   挤两列会把「3 条 · 3 启用」折成「条 / 目」那种断行。这里改成一列一行：
+   仍然贴右对齐，数字一眼能扫，也不和条目屏的 2×2 事实卡冲突。 */
+#view-wb-editor #wb-book-facts {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  max-width: none;
 }
 
 #view-wb-editor .wb-predict {

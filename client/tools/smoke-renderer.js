@@ -856,7 +856,7 @@ await scenario('角色库：放弃新建', async () => {
 //
 //  2026-10-16（V2 重组版）之后，这里守的已经不是「自动增高」而是**反过来**的一件事：
 //    · 高度由**字段**决定，不由内容决定 —— 每格在 style.css 里按字段写了 min-height
-//      （`#c-desc { min-height: 264px }` 那五行）。五栏同屏，表单总长必须是常数，
+//      （`#c-desc { min-height: 200px }` 那五行）。五栏同屏，表单总长必须是常数，
 //      多写几十行不能把下面的字段顶到屏幕外。
 //    · 短内容不许把框压塌（塌成一行就没法写东西了）。
 //    · 装不下的内容走**框内**滚动。
@@ -975,7 +975,7 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
   click('#char-section-tab-writing');
   check('切回写作分区保留未保存输入', desc.value === '一行字' && shown('#c-desc'));
 
-  // 内容多：把**描述**填满 —— 它那格的地板是 264px，比 GROW_MAX(160) 高，
+  // 内容多：把**描述**填满 —— 它那格的地板是 200px，比 GROW_MAX(160) 高，
   // 所以它是完全刚性的：塞多少行都不动高度，多出来的在框内滚。
   // （地板低于 160 的格子会在地板和 160 之间随内容浮动，那是有意的宽松度。）
   const floorOf = (id) => Math.round(parseFloat(getComputedStyle(asControl(byId(id))).minHeight) || 0);
@@ -990,7 +990,7 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
   );
   check(
     '短内容不会把写作框压塌（保留足够编辑空间）',
-    hShort >= 240,
+    hShort >= 180,
     `实际 ${hShort}px`
   );
   check(
@@ -1029,7 +1029,7 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
 // ---------------------------------------------------------------------------
 //  场景 5.6：角色编辑器 —— 字数角标
 //
-//  框高按字段分别给定之后（描述 264、性格 120……），「写了多少」得一眼能看到
+//  框高按字段分别给定之后（描述 200、性格 96……），「写了多少」得一眼能看到
 //  （输入和回填两条路都要刷）。
 //
 //  2026-10-16：字段行右边那颗「↗ 放大编辑」按钮撤掉了（编辑页本来就是整屏，
@@ -4013,7 +4013,7 @@ await scenario('世界书：新建条目', async () => {
   check('没保存的条目不会提前落盘',
     !((await savedWorldbooks())[0].entries || []).some((e) => e.title === '冒烟测试条目'),
     `落盘的是 ${JSON.stringify(((await savedWorldbooks())[0].entries || []).map((e) => e.title))}`);
-  check('底部亮起「有未保存的改动」', shown('#wb-dirty-hint'), byId('wb-dirty-hint').textContent);
+  check('页头保存胶囊翻成「有未保存的改动」', byId('wb-save-state').dataset.state === 'dirty', byId('wb-save-state').textContent);
 
   click('#btn-save-wb');
   await sleep(300);
@@ -4021,7 +4021,7 @@ await scenario('世界书：新建条目', async () => {
   const books = await savedWorldbooks();
   const titles = (books[0].entries || []).map((e) => e.title);
   check('点「保存」之后条目才落盘', titles.includes('冒烟测试条目'), `落盘的是 ${JSON.stringify(titles)}`);
-  check('保存完「有未保存的改动」自己收掉', !shown('#wb-dirty-hint'), byId('wb-dirty-hint').textContent);
+  check('保存完保存胶囊回到「所有更改已保存」', byId('wb-save-state').dataset.state === 'saved', byId('wb-save-state').textContent);
   check('保存有提示', $('#toast').textContent.includes('已保存'), $('#toast').textContent);
 
   // 顺便把这本书导出一次（这时书里已经有条目了，才验得到条目字段的映射）
@@ -4142,7 +4142,7 @@ await scenario('世界书：放弃未保存的改动', async () => {
 
   setValue('#wb-name', '改了一半的名字');
   await sleep(120);
-  check('改名之后亮起未保存提示', shown('#wb-dirty-hint'), byId('wb-dirty-hint').textContent);
+  check('改名之后保存胶囊翻成未保存', byId('wb-save-state').dataset.state === 'dirty', byId('wb-save-state').textContent);
 
   // 点关闭 → 先问一句；选「继续改」就什么都别动
   click('#btn-close-worldbooks');
@@ -6822,6 +6822,108 @@ await scenario('世界书：封面', async () => {
   check('卡片退回「世」字占位块', !!card() && !!card().querySelector('.wb-card-glyph'));
   const after = (await savedWorldbooks()).find((b) => b.name === NAME);
   check('清除也落了盘（cover 是空串）', !!after && after.cover === '', JSON.stringify(after && after.cover));
+});
+
+// ---------------------------------------------------------------------------
+//  场景 26d：角色库 / 世界书列表共用同一副卡片和工具条
+//
+//  2026-10-18：两块列表从「各写一套卡片 + 列宽 198/240」合并成
+//  ui/build.js 的 libraryCard()。这里钉三件最容易悄悄分叉的事：
+//    · 两个网格的列数 / 列宽 / 间距必须一样；
+//    · 名字在封面**下方**（不再压在图里），两边的卡片结构同构；
+//    · 工具条（搜索 + 计数）两边都有，搜不到时空态说的是「没有匹配」。
+// ---------------------------------------------------------------------------
+await scenario('两个列表：同一副卡片和工具条', async () => {
+  const cols = (grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean);
+
+  click('#btn-chars');
+  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  check('角色库有搜索工具条', !!$('#char-page-search') && !!$('#char-page-count'));
+
+  const charCols = cols($('#char-page-grid'));
+  const charGap = getComputedStyle($('#char-page-grid')).columnGap;
+  const charCard = $('#char-page-grid .char-card');
+  check('角色卡的结构是「封面 → 名字」', !!charCard &&
+    !!charCard.querySelector('.wb-card-cover .char-card-avatar') &&
+    !!charCard.querySelector('.char-card-name'));
+  if (charCard) {
+    const cover = charCard.querySelector('.wb-card-cover').getBoundingClientRect();
+    const name = charCard.querySelector('.char-card-name').getBoundingClientRect();
+    check('角色名字在封面下方（不是压在图上）', name.top >= cover.bottom - 1,
+      `封面底 ${Math.round(cover.bottom)} / 名字顶 ${Math.round(name.top)}`);
+  }
+
+  const allChars = $$('#char-page-grid .char-card').length;
+  const firstName = charCard && charCard.querySelector('.char-card-name').textContent;
+  if (firstName) {
+    setValue('#char-page-search', firstName);
+    await sleep(140);
+    check('搜索按名字筛掉了不匹配的角色', $$('#char-page-grid .char-card').length < allChars,
+      `筛后 ${$$('#char-page-grid .char-card').length} / 全部 ${allChars}`);
+    check('计数写的是「匹配 / 总数」', /^\d+ \/ \d+ 个角色$/.test($('#char-page-count').textContent),
+      $('#char-page-count').textContent);
+  }
+  setValue('#char-page-search', '这个关键词肯定没有角色会用');
+  await sleep(140);
+  check('搜不到时的空态是「没有匹配的角色」',
+    $('#char-page-empty').textContent.includes('没有匹配的角色'),
+    $('#char-page-empty').textContent.trim());
+  setValue('#char-page-search', '');
+  await sleep(140);
+  check('清空搜索后角色卡片都回来', $$('#char-page-grid .char-card').length === allChars,
+    `${$$('#char-page-grid .char-card').length} / ${allChars}`);
+
+  click('#btn-worldbooks');
+  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
+  check('世界书有同一副工具条', !!$('#wb-page-search') && !!$('#wb-page-count'));
+
+  const wbCols = cols($('#wb-page-grid'));
+  check('两个列表的列数一致', wbCols.length === charCols.length,
+    `角色 ${charCols.length} 列 / 世界书 ${wbCols.length} 列`);
+  // 列宽允许一条滚动条的差：角色库 8 张卡会把 page-body 撑出竖向滚动条，
+  // 世界书 5 张不撑 —— 两边的可用宽度本来就差 ~10px，1fr 自然分得略不同。
+  check('两个列表的列宽一致（不算滚动条占位）',
+    Math.abs(parseFloat(wbCols[0]) - parseFloat(charCols[0])) <= 16,
+    `${charCols[0]} vs ${wbCols[0]}`);
+  check('两个列表的列间距一致', getComputedStyle($('#wb-page-grid')).columnGap === charGap,
+    `${charGap} vs ${getComputedStyle($('#wb-page-grid')).columnGap}`);
+
+  const wbCard = $('#wb-page-grid .char-card');
+  check('世界书卡的结构也是「封面 → 名字」', !!wbCard &&
+    !!wbCard.querySelector('.wb-card-cover') &&
+    !!wbCard.querySelector('.char-card-name'));
+  if (wbCard) {
+    const cover = wbCard.querySelector('.wb-card-cover').getBoundingClientRect();
+    const name = wbCard.querySelector('.char-card-name').getBoundingClientRect();
+    check('世界书名字也在封面下方', name.top >= cover.bottom - 1,
+      `封面底 ${Math.round(cover.bottom)} / 名字顶 ${Math.round(name.top)}`);
+  }
+
+  // 角色编辑页的「全文 N 字」：数字来自五个写作栏 + 高级设置三栏，别再漏一处
+  click('#btn-chars');
+  await waitFor('回到角色库', () => shown('#view-chars'));
+  click(buttonByText($$('#char-page-grid .char-card')[0], '编辑'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
+  const total = ['c-desc', 'c-personality', 'c-scenario', 'c-first', 'c-example', 'c-system', 'c-post', 'c-notes']
+    .reduce((sum, id) => sum + String(byId(id)?.value || '').length, 0);
+  check('角色页头显示全文 N 字，且和表单实际字数一致',
+    byId('char-total-words').textContent === `全文 ${total.toLocaleString()} 字`,
+    `${byId('char-total-words').textContent} / 实际 ${total}`);
+  const charHeadHeight = Math.round($('#view-char-editor .page-head').getBoundingClientRect().height);
+
+  click('#btn-close-chars');
+  await waitFor('回到角色库（收尾）', () => shown('#view-chars'));
+
+  // 两个编辑器的页头同高：角色页原来是三行（78px），世界书是一行（56px）
+  click('#btn-worldbooks');
+  await waitFor('切到世界书页面（页头对比）', () => shown('#view-worldbooks'));
+  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
+  await waitFor('世界书编辑器打开（页头对比）', () => shown('#view-wb-editor'));
+  const wbHeadHeight = Math.round($('#view-wb-editor .page-head').getBoundingClientRect().height);
+  check('两个编辑器的页头同高', Math.abs(charHeadHeight - wbHeadHeight) <= 2,
+    `角色 ${charHeadHeight}px / 世界书 ${wbHeadHeight}px`);
+  click('#btn-close-worldbooks');
+  await waitFor('世界书编辑器关闭（收尾）', () => !shown('#view-wb-editor'));
 });
 
 // ---------------------------------------------------------------------------

@@ -140,35 +140,55 @@ export function renderListPage({ grid, empty, sub, subText, items, card }) {
 }
 
 /**
- * 列表页的卡片外壳：头像 + 名字 + 一行小字 + 操作区。
- * 角色卡和世界书卡长得一样，只是内容不同；`extra` 用来塞角色卡右上角那个删除按钮。
+ * 角色库 / 世界书共用的卡片外壳。
  *
- * `onMediaClick` 给了就说明这张图能点开看大图（角色库的立绘）——
- * 那时候图外面包一个 button，键盘也能按到。
+ * 两块列表以前各写一套：角色卡是「图 + 名字 + 小字 + 按钮」，世界书卡把书名压在
+ * 封面上。同一屏里切换时连列宽都不一样（198 / 240），看起来像两个产品。
+ * 现在两边都走这里 —— 2:3 封面 → 名字 → 一行说明 → 操作区，高度和间距完全一致。
+ *
+ *   · 封面：`media` 给 img / 文本节点；没有图时给首字或「世」字占位。
+ *   · `onMediaClick` 给了就说明这张图能点开看大图 —— 那时候封面包一层 button，
+ *     键盘也能按到（测试按 `.char-card-avatar.clickable` 找它）。
+ *   · `extra` 塞右上角那颗删除 ×（静止透明、悬停浮出）。
+ *   · 书名 / 说明 / 操作行同时带角色卡和世界书卡两套类名：样式只有一份，
+ *     旧选择器和冒烟断言（`.char-card-name` / `.wb-card-name` 等）都不用改。
  */
-export function card({ title, sub, subTitle, avatar, avatarText, avatarClass, actions, extra, onMediaClick, mediaTitle }) {
-  const media = avatar ? h('img', { src: avatar, alt: '' }) : avatarText;
+export function libraryCard({
+  title,
+  sub,
+  subTitle,
+  media,
+  mediaText,
+  mediaClass,
+  coverClass,
+  actions,
+  extra,
+  onMediaClick,
+  mediaTitle
+}) {
+  const content = media || mediaText;
+  const boxClass = ['char-card-avatar', ...(Array.isArray(mediaClass) ? mediaClass : mediaClass ? [mediaClass] : [])];
   const mediaBox = onMediaClick
     ? h(
         'button',
         {
           type: 'button',
-          class: ['char-card-avatar', 'clickable', 'art-edge', avatarClass],
+          class: [...boxClass, 'clickable'],
           title: mediaTitle || title,
           'aria-label': mediaTitle || title,
           onclick: onMediaClick
         },
-        media
+        content
       )
-    : h('div', { class: ['char-card-avatar', 'art-edge', avatarClass] }, media);
+    : h('div', { class: boxClass }, content);
 
   return h(
     'div',
     { class: 'char-card', role: 'listitem', title },
     extra,
-    mediaBox,
-    h('div', { class: 'char-card-name', text: title }),
-    h('div', { class: 'char-card-sub', text: sub, title: subTitle || sub }),
-    h('div', { class: 'char-card-actions' }, actions)
+    h('div', { class: ['wb-card-cover', coverClass] }, mediaBox),
+    h('div', { class: 'char-card-name wb-card-name', text: title }),
+    h('div', { class: 'char-card-sub wb-card-meta', text: sub, title: subTitle || sub }),
+    h('div', { class: 'char-card-actions wb-card-actions' }, actions)
   );
 }

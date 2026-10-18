@@ -19,14 +19,13 @@
 //  重绘入口是 renderWorldbookPage()，由入口层的 refreshLibraryPage()
 //  在「当前正停在世界书页」时调用（那个分发要读 currentView，属于入口层）。
 //
-//  ⚠️ 2026-10-14：卡片改成**封面铺满整卡**（封面 2:3 竖版），不再走 ui/build.js
-//     的 `card()` —— 那个壳是「居中媒体位 + 名字 + 小字 + 按钮」竖排，给角色库
-//     正合适（它上面那张图是 2:3 立绘、居中摆着就好看），但世界书要的是
-//     「书名压在封面上」。两者结构不同，硬套只会让 card() 长出一堆开关。
+//  ⚠️ 2026-10-18：卡片外壳改成和角色库共用 ui/build.js 的 libraryCard()。
+//     上一版是「书名压在封面底部」，角色库是「图下另起名字」—— 同一类内容
+//     两种骨架，列宽也不一样。现在统一成 2:3 封面 + 图下名字 + 一行说明 + 操作区。
 // ---------------------------------------------------------------------------
 
 import { el } from '../core/dom.js';
-import { h, button, renderListPage } from '../ui/build.js';
+import { h, libraryCard, renderListPage } from '../ui/build.js';
 import { mButton } from '../components/index.js';
 import { openLightbox } from '../ui/lightbox.js';
 import { worldbooks, worldbookCharacters, worldbookCover } from '../data/library.js';
@@ -36,35 +35,67 @@ import { openPlayerModal } from './player.js';
 let openEditor = () => {};
 /** 删掉一本书（入口层注入，和角色卡右上角那个 × 同一套路） */
 let removeBook = () => {};
+let query = '';
+
+const EMPTY_TITLE = '还没有世界书';
+const EMPTY_HINT = '点右上角「导入世界书」选一个酒馆的 lorebook JSON，或者点「＋ 新建世界书」自己写一个世界。';
+
+/** 这本书匹不匹配搜索词（书名 / 条目名 / 关键词都算） */
+function matchesQuery(book, needle) {
+  if (!needle) return true;
+  const entries = Array.isArray(book.entries) ? book.entries : [];
+  return [
+    book.name,
+    ...entries.flatMap((entry) => [entry.title, ...(Array.isArray(entry.keys) ? entry.keys : [])])
+  ].join(' ').toLocaleLowerCase().includes(needle);
+}
 
 export function initWorldbookList({ openEditor: fn, remove: removeFn } = {}) {
   if (typeof fn === 'function') openEditor = fn;
   if (typeof removeFn === 'function') removeBook = removeFn;
+  if (el.wbPageSearch) {
+    el.wbPageSearch.addEventListener('input', (event) => {
+      query = event.target.value;
+      renderWorldbookPage();
+    });
+  }
 }
 
 export function renderWorldbookPage() {
-  const list = worldbooks();
+  const all = worldbooks();
+  const needle = query.trim().toLocaleLowerCase();
+  const list = all.filter((book) => matchesQuery(book, needle));
+
   renderListPage({
     grid: el.wbPageGrid,
     empty: el.wbPageEmpty,
     sub: el.wbPageSub,
-    subText: list.length
-      ? `共 ${list.length} 个世界 · 点「游玩」进入，进去前先创建你自己的角色`
+    subText: all.length
+      ? `共 ${all.length} 个世界 · 点「游玩」进入，进去前先创建你自己的角色`
       : '导入酒馆的 lorebook，或自己写一个世界',
     items: list,
     card: worldbookCard
   });
+
+  if (el.wbPageCount) {
+    el.wbPageCount.textContent = needle ? `${list.length} / ${all.length} 个世界` : `${all.length} 个世界`;
+  }
+
+  const emptyTitle = el.wbPageEmpty && el.wbPageEmpty.querySelector('.page-empty-title');
+  const emptyHint = el.wbPageEmpty && el.wbPageEmpty.querySelector('.page-empty-hint');
+  const searching = !!needle && all.length > 0;
+  if (emptyTitle) emptyTitle.textContent = searching ? '没有匹配的世界' : EMPTY_TITLE;
+  if (emptyHint) emptyHint.textContent = searching ? '换个关键词再试，或者清空搜索框。' : EMPTY_HINT;
 }
 
 /**
- * 一张世界书卡片：**封面铺满整卡** + 书名压在封面底部 + 一行条数 + 编辑/游玩，
- * 右上角悬停浮出删除 ×。
+ * 一张世界书卡片：封面 + 书名 + 一行条数 + 编辑/游玩，右上角悬停浮出删除 ×。
  *
  * 没设封面的书退回「世」字占位块（深灰底，不是随机渐变色）——
  * 「一本书一个色」那套（entityTone）在 76px 的小方块上好看，铺成 2:3 的大色块
  * 就太吵了；而且没有封面的书本来就该安静，别让人误以为那是一张图。
  *
- * 封面能点开看大图（和角色库的形象一个路子）—— 卡片上只有 ~170px 宽，
+ * 封面能点开看大图（和角色库的形象一个路子）—— 卡片上只有 ~220px 宽，
  * 800×1200 的图缩得看不清细节。
  *
  * × 和角色卡那一颗是同一套（静止透明、悬停浮出、键盘 Tab 得到也能看见）。
@@ -78,36 +109,28 @@ function worldbookCard(book) {
   const cover = worldbookCover(book);
   const entryCount = Array.isArray(book.entries) ? book.entries.length : 0;
 
-  return h(
-    'div',
-    { class: 'char-card wb-card', role: 'listitem', title: book.name },
-    button({
+  return libraryCard({
+    title: book.name,
+    sub: charCount ? `${entryCount} 条设定 · ${charCount} 个角色` : `${entryCount} 条设定`,
+    media: cover ? h('img', { src: cover, alt: '' }) : h('span', { class: 'wb-card-glyph', text: '世' }),
+    mediaClass: 'wb-card-media',
+    coverClass: cover ? '' : 'is-empty',
+    mediaTitle: `${book.name} · 点开看大图`,
+    onMediaClick: cover ? () => openLightbox(cover, { title: book.name }) : null,
+    extra: h('button', {
+      type: 'button',
       class: 'char-card-del',
       text: '×',
       title: '删除这个世界书',
-      ariaLabel: `删除世界书：${book.name}`,
-      onClick: (event) => {
+      'aria-label': `删除世界书：${book.name}`,
+      onclick: (event) => {
         event.stopPropagation();
         removeBook(book.id);
       }
     }),
-    h(
-      'div',
-      { class: ['wb-card-cover', !cover && 'is-empty'] },
-      cover
-        ? h('img', { src: cover, alt: '', onclick: () => openLightbox(cover, { title: book.name }) })
-        : h('span', { class: 'wb-card-glyph', text: '世' }),
-      h('span', { class: 'wb-card-name', text: book.name })
-    ),
-    h('div', {
-      class: 'wb-card-meta',
-      text: charCount ? `${entryCount} 条设定 · ${charCount} 个角色` : `${entryCount} 条设定`
-    }),
-    h(
-      'div',
-      { class: 'wb-card-actions' },
+    actions: [
       mButton({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => openEditor(book.id) }),
       mButton({ variant: 'primary', size: 'sm', text: '游玩', onClick: () => openPlayerModal(book.id) })
-    )
-  );
+    ]
+  });
 }

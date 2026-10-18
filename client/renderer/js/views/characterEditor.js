@@ -135,9 +135,22 @@ function updateCharCount(textarea) {
   badge.textContent = `${n.toLocaleString()} 字`;
 }
 
+/** 页头右侧的「全文 N 字」：五个写作栏 + 高级设置三栏，和世界书页头同一种读法 */
+function updateCharTotalWords() {
+  if (!el.charTotalWords) return;
+  let total = 0;
+  for (const [node] of longTextAreas()) total += String(node.value || '').length;
+  for (const id of ['c-system', 'c-post', 'c-notes']) {
+    const node = document.getElementById(id);
+    if (node) total += String(node.value || '').length;
+  }
+  el.charTotalWords.textContent = `全文 ${total.toLocaleString()} 字`;
+}
+
 /** 刷新全部五个框的角标 + 左栏徽章 + 右栏字段目录（fillCharForm 回填之后用） */
 function syncAllCharCounts() {
   for (const [node] of longTextAreas()) updateCharCount(node);
+  updateCharTotalWords();
   // 徽章与目录上的字数/已写圆点都从 DOM 现算，回填之后必须补一次
   refreshCharSectionCounts();
 }
@@ -1543,6 +1556,7 @@ export function initCharacterEditor(injected) {
       updateCharCount(node);
     }
     // 左栏徽章（已写 x/5）与右栏字段目录的字数都跟着输入走，不然它们是开局那一刻的快照
+    updateCharTotalWords();
     refreshCharSectionCounts();
   });
   // 勾选框 / 下拉不触发 input，单独挂 change（自带世界书开关、剧情选项、显示状态都走这儿）
