@@ -7,8 +7,8 @@
 //  共同点：都是「改数据 + 弹确认 + 全量重绘 + 落盘」——所以集中在这里一份，
 //  左侧列表（views/chatList.js）和消息气泡（views/chatMessages.js）都直接用它。
 //
-//  这些动作以前挂在入口层，靠注入传给列表页和消息渲染；现在它们自己成模块，
-//  谁要用谁 import —— 视图之间单向 import 不会成环，比绕一圈注入清楚。
+//  这些动作集中在 view 层，谁要用谁 import —— 单向 import 不成环，
+//  比绕入口层注入清楚。
 // ============================================================================
 
 import { state } from '../core/state.js';
@@ -24,6 +24,8 @@ import { renderAll } from './redraw.js';
 import { resetPetTurns } from '../data/petContext.js';
 
 export function switchConvo(id) {
+  // 会话可能在点击/异步之间被删掉了：别把 activeId 指到一个不存在的会话上。
+  if (!state.conversations.some((c) => c.id === id)) return;
   if (state.streaming) {
     showToast('正在生成回答，先点「停止生成」再切换会话');
     return;
@@ -41,8 +43,8 @@ export async function removeConvo(id) {
 
   // 正在生成时不能删：删完 state.activeId 就换人了，而流式回调是按「当前会话的
   // 最后一条消息」追加的（main.js 的 onChunk）—— 后面那些分片会写进**另一个会话**，
-  // 再被 finally 里的 persistConversations 落盘。旁边的 switchConvo / removeMessage /
-  // branchFromMessage 都有这道守卫，就这里当初漏了。
+  // 再被 finally 里的 persistConversations 落盘。switchConvo / removeMessage /
+  // branchFromMessage 也都有这道守卫，别只给某一处加。
   if (state.streaming) {
     showToast('正在生成回答，先点「停止生成」再删除会话');
     return;

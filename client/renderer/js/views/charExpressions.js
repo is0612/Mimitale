@@ -326,8 +326,7 @@ function buildExpressionRow(expr, index) {
   else thumb.appendChild(h('span', { class: 'char-avatar-empty', text: '点击上传' }));
 
   // 打字时**不重绘**（重绘会重建输入框、光标就跑了），直接写进草稿那一项。
-  // ⚙ 组件化（2026-10-16）：26px + xs 字号 = 组件的 size="xs"
-  // （页面那条 .char-expr-row input[type="text"] 已经删掉）
+  // 26px + xs 字号 = 组件的 size="xs"
   const nameInput = mInput({
     class: 'char-expr-name',
     size: 'xs',
@@ -521,9 +520,13 @@ async function batchImportExpressions() {
     }
   }
 
-  btn.disabled = false;
-  btn.textContent = label;
-  refresh();
+  try {
+    refresh();
+  } finally {
+    // refresh 抛了也要把按钮恢复，否则弹窗里这颗按钮会永久停在「导入中…」
+    btn.disabled = false;
+    btn.textContent = label;
+  }
 
   const bits = [`导入 ${added} 张`];
   if (dupe) bits.push(`跳过 ${dupe} 张已有的`);
@@ -542,13 +545,20 @@ async function pickExpressionImage(index) {
     return;
   }
 
-  const cropped = await pickAndCrop({
-    aspect: EXPRESSION_RATIO,
-    outWidth: EXPRESSION_WIDTH,
-    title: '裁剪表情图',
-    hint: '状态卡上铺的就是这一块',
-    pickTitle: '选一张表情图'
-  });
+  let cropped = null;
+  try {
+    cropped = await pickAndCrop({
+      aspect: EXPRESSION_RATIO,
+      outWidth: EXPRESSION_WIDTH,
+      title: '裁剪表情图',
+      hint: '状态卡上铺的就是这一块',
+      pickTitle: '选一张表情图'
+    });
+  } catch (err) {
+    console.error('表情图裁剪失败', err);
+    showToast('这张图没能处理，换一张试试', 'error');
+    return;
+  }
   if (!cropped) return;
 
   const target = draft()[index];
@@ -571,6 +581,9 @@ export function openCharExpressionsEditor() {
   renderCharExpressions(draft());
   el.exprModal.classList.remove('hidden');
 
+  // 重复打开（双击按钮、或别处再调一次）时先摘掉旧监听，否则 Esc 会叠加多层，
+  // 而且 escHandler 被覆盖后旧监听再也摘不掉。
+  if (escHandler) document.removeEventListener('keydown', escHandler, true);
   escHandler = (event) => {
     if (event.key !== 'Escape') return;
     event.stopPropagation();

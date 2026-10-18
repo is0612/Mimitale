@@ -11,6 +11,7 @@
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
+import { CONFIG } from '../core/config.js';
 import { showToast } from '../ui/toast.js';
 import { characters, worldbooks, dialoguePresets } from './library.js';
 
@@ -19,10 +20,9 @@ let saveTimer = null;
 /**
  * 写盘失败后**隔一会儿自动再试一次**。
  *
- * 主进程那边已经有一套退避重试（30·70·150·250ms，合计约 0.5 秒），但那只覆盖几百毫秒：
+ * 主进程那套退避重试（30·70·150·250ms，合计约 0.5 秒）只覆盖几百毫秒：
  * 索引 / 同步盘 / 杀软扫描这类**真的**瞬时占用，占上几百毫秒到一两秒都算正常。
- * 撞上这种情况原来就是一次失败到底 —— 用户看到「没能写进磁盘」，得自己发现、
- * 自己再点一次，而且多半不知道刚才那下其实没生效。
+ * 只靠它的话，偶尔一次失败就会直接顶到用户面前，用户多半不知道刚才那下没生效。
  *
  * 这里补的是**更晚的那一次**：绝大多数时候用户完全无感，只有两次都失败才会看到
  * 提示、界面才会回滚。调用方拿到的语义不变：
@@ -75,15 +75,13 @@ function queueWrite(key, call) {
 /**
  * 写盘失败时统一的说法。
  *
- * ⚠️ 2026-10-08 更正、2026-10-10 定论：原来这里一口咬定「文件可能被杀软临时占用
- *    或带了只读属性」，实测**两条都不是**。真实的一次（同一台机器）是这样：
- *      EPERM: operation not permitted, open '...\characters.json.tmp'
- *    每次点删除都失败、重试 0.5 秒 + 1.2 秒之后照样失败 —— 那是**权限判定**：
- *    会话沙箱给工作区整棵打了**低完整性标签**，进程（完整性 = min(令牌, exe 的标签)）
- *    因此写不了任何中完整性的位置，跟 ACL / 只读属性一点关系都没有。
- *    猜错原因会把人支去关杀软、改只读属性，全是白费功夫。
+ * ⚠️ 不要一口咬定「文件可能被杀软临时占用或带了只读属性」—— 真正常见的失败是
+ *    **权限判定**：错误原文长这样 `EPERM: ... open '...characters.json.tmp'`，
+ *    重试 0.5 秒 + 1.2 秒之后照样失败。常见原因是进程被降成低完整性
+ *    （见 main/store.js 文件头），跟 ACL / 只读属性无关。猜错原因会把人支去
+ *    关杀软、改只读属性，全是白费功夫。
  *
- *    所以现在把**真正的错误原文**带出来，只对确凿的错误码给提示。
+ *    所以这里把**真正的错误原文**带出来，只对确凿的错误码给提示。
  *    只有真撞上 ENOSPC 才说磁盘满（角色卡头像是内嵌 base64，几十张卡确实吃得掉空间）。
  */
 function writeFailedText(what, err) {
@@ -110,7 +108,7 @@ export function persistConversations(delay) {
       console.error('保存会话失败（已自动重试过）', err);
       showToast(writeFailedText('会话', err), 'error');
     });
-  }, typeof delay === 'number' ? delay : 350);
+  }, typeof delay === 'number' ? delay : CONFIG.SAVE_DEBOUNCE_MS);
 }
 
 /**

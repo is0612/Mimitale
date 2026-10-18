@@ -117,7 +117,11 @@ export function initModelMenu(options = {}) {
 
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || !isOpen) return;
+    // 和 ui/menu.js / ui/select.js 一样：菜单开着时 Esc 只关菜单，
+    // 不能让底下正在开的弹窗也跟着关掉。
+    event.preventDefault();
+    event.stopImmediatePropagation();
     setOpen(false);
     el.modelSwitch.focus();
-  });
+  }, true);
 }

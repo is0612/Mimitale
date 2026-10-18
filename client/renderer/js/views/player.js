@@ -48,15 +48,14 @@ function updatePlayerCharPreview() {
   if (!host) return;
 
   const character = characterById(el.playerChar.value);
+  host.innerHTML = '';
   if (!character) {
-    host.innerHTML = '';
     host.classList.add('hidden');
     return;
   }
 
   const attrs = characterAttrs(character);
 
-  host.innerHTML = '';
   if (character.avatar) {
     const img = document.createElement('img');
     img.src = character.avatar;

@@ -733,24 +733,38 @@ function healPrefixedKeys(convo) {
 
   const panel = { ...convoPanel(convo) };
   const remove = new Set();
+  const manual =
+    convo.panelManual && typeof convo.panelManual === 'object' ? convo.panelManual : null;
 
   for (const key of fields) {
     const { name, owner } = panelKeyParts(key);
-    if (!owner || !name.includes(OWNER_LABEL_SEP)) continue;
+    if (!name.includes(OWNER_LABEL_SEP)) continue;
 
     const i = name.indexOf(OWNER_LABEL_SEP);
     const head = name.slice(0, i).trim();
     const rest = name.slice(i + 1).trim();
     if (!head || !rest) continue;
-    if (ownerIdByLabel(convo, head) !== owner) continue;
 
-    const target = panelKey(rest, owner);
+    // 老数据里前缀可能**没拆开**：键的 owner 是空的，但名字里带着「角色名·」。
+    // 这时按前缀反查 owner；反查不到就不动（字段名里本来就可能带间隔号）。
+    // 键里已有 owner 时仍要核对前缀，避免把合法的「A·B」字段误并给 C。
+    let resolvedOwner = owner;
+    if (!resolvedOwner) {
+      resolvedOwner = ownerIdByLabel(convo, head);
+    } else if (ownerIdByLabel(convo, head) !== resolvedOwner) {
+      continue;
+    }
+    if (!resolvedOwner) continue;
+
+    const target = panelKey(rest, resolvedOwner);
     if (!fields.includes(target)) continue;
 
     // 手改过的以面板里的为准；否则用这份 —— 它是模型最近写进来的
-    if (!(convo.panelManual && convo.panelManual[target]) && String(panel[key] || '').trim()) {
+    if (!(manual && manual[target]) && String(panel[key] || '').trim()) {
       panel[target] = panel[key];
     }
+    if (manual && manual[key] && !manual[target]) manual[target] = manual[key];
+    if (manual) delete manual[key];
     remove.add(key);
   }
 
@@ -828,7 +842,7 @@ export function syncConvoPanel(convo) {
         // 模型自己冒出来的字段：从值的形状补个定义（「63/100」= 带范围的数值），
         // 否则它永远没有进度条、也不受范围约束。
         if (!defs[key]) {
-          const inferred = inferPanelDef(name, value);
+          const inferred = inferPanelDef(value);
           if (inferred) {
             const d = { ...inferred };
             if (owner) d.owner = owner;
@@ -904,13 +918,15 @@ export function absorbTopLevelIntoPlayer(convo) {
     }
   }
 
-  // 单角色聊天（绑了卡、但没进世界）→ 无主字段全归那张卡。
-  // 判据只看「会话绑了哪张卡」：开聊时挑一张卡当自己也会写 convo.player，
-  // 但那不改变「这张卡是这局的主角」—— 拿玩家身份当条件会把字段认给错的人。
+  // 单角色聊天（绑了卡、但没开 GM）→ 无主字段全归那张卡。
+  // 判据只看「会话绑了哪张卡」和「卡还在不在」：不再要求这张卡已经持有字段 ——
+  // 卡上没写属性时，AI 自己冒出来的状态同样该归角色，否则会全落到玩家名下。
   // 进世界的会话 characterId 为空，这里自然拿不到。
-  const soloOwner = (convo.characterId && activeOwners.has(convo.characterId))
-    ? convo.characterId
-    : '';
+  const soloCard =
+    convo.characterId && convo.gmMode !== true
+      ? findCardForOwner(convo, convo.characterId)
+      : null;
+  const soloOwner = soloCard ? String(convo.characterId) : '';
 
   const fields = [...convoPanelFields(convo)];
   const panel = { ...convoPanel(convo) };
@@ -1156,12 +1172,12 @@ function panelGroupHeader(title) {
  * 刻意**不**推断 min：分母只能告诉我们上限，下限猜不出来（写 0 会错，
  * 留空则由夹取逻辑按「只夹上限」处理）。
  */
-function inferPanelDef(name, value) {
+function inferPanelDef(value) {
   const m = String(value == null ? '' : value).trim().match(/^([-+]?\d+(?:\.\d+)?)\s*\/\s*([-+]?\d+(?:\.\d+)?)$/);
   if (!m) return null;
 
   const total = Number(m[2]);
-  if (!isFinite(total) || total <= 0) return null;
+  if (!Number.isFinite(total) || total <= 0) return null;
 
   return { type: 'meter', max: total };
 }
@@ -1189,7 +1205,8 @@ const PANEL_PROMPT_LEAD = '这是本局的状态表，由你在每轮回复的�
 /** 收尾的格式承诺：放在整块的最末（离生成位置最近，权重最高） */
 const PANEL_PROMPT_TAIL =
   '正文写完后，另起一行接着把更新过的状态表写出来 —— 每行都是「【字段名】：新值」的写法，\n' +
-  '冒号用全角「：」，字段名和顺序照上面那份表原样保留，一个都不能少。\n' +
+  '冒号用全角「：」，字段名和顺序照上面那份表原样保留：\n' +
+  '动态字段一个都不能少；静态字段只在发生变化时写。\n' +
   // 值防膨胀：不加这条，模型会习惯往值里塞括号补充说明，状态表就慢慢长回十几二十行。
   // 值是**快照**，细节属于正文。
   '每行的值要短（十几个字以内）—— 不要用括号补充说明，细节写进正文，不要堆进状态值。\n' +
@@ -1497,7 +1514,9 @@ export function mergePlayerOwnedFields(convo) {
     const target = panelKey(name, 'player');
     // 目标键是否已经存在（原本就在 fields 里，或前面几条刚搬过去）
     const hasTarget = fields.includes(target) && !remove.has(target);
-    if (!hasTarget && fields.length + 1 - remove.size <= MAX_PANEL_FIELDS) {
+    if (!hasTarget) {
+      // 到顶了：目标键建不出来，这条源字段必须原样留着 —— 不能只删不搬。
+      if (fields.length + 1 - remove.size > MAX_PANEL_FIELDS) continue;
       if (panel[key] !== undefined) panel[target] = panel[key];
       if (defs[key]) defs[target] = { ...defs[key], owner: 'player' };
       fields.push(target);
@@ -1506,7 +1525,8 @@ export function mergePlayerOwnedFields(convo) {
     delete panel[key];
     delete defs[key];
     if (manual && manual[key]) {
-      manual[target] = true;
+      // 手改时刻要跟着搬；目标已有手改记录时保留目标那份。
+      if (!manual[target]) manual[target] = manual[key];
       delete manual[key];
     }
     remove.add(key);

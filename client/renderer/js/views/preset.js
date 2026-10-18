@@ -314,10 +314,17 @@ export async function deletePresetById(id) {
 function deletePreset() {
   const id = draft && draft.id;
   if (!id) return;
-  deletePresetById(id).then((done) => {
-    if (done) {
-      el.pr.modal.classList.add('hidden');
-      el.input.focus();
-    }
-  });
+  deletePresetById(id)
+    .then((done) => {
+      if (done) {
+        el.pr.modal.classList.add('hidden');
+        el.input.focus();
+      }
+    })
+    .catch((err) => {
+      // deletePresetById 内部已经处理了「写盘失败」；这里兜的是意外异常，
+      // 不让它变成 unhandled rejection。
+      console.error('删除预设失败', err);
+      showToast('删除预设失败', 'error');
+    });
 }

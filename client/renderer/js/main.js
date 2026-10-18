@@ -115,13 +115,21 @@ import { startPlayerFlow, chatWithCharacter } from './views/worldPlay.js';
 // 「设置页里当前正在编辑的服务商」的初始值随设置页状态走（views/settings.js），
 // 入口层只在启动时把它带过去（setEditingProvider）。
 
+// 事件监听器里跑异步动作：出错只落日志，避免变成 unhandled rejection。
+function runAsync(action) {
+  return () => {
+    Promise.resolve()
+      .then(action)
+      .catch((err) => console.error('界面动作失败', err));
+  };
+}
+
 /**
- * 登记「谁需要被重绘」。顺序 = 绘制顺序，和以前 renderAll 里的调用顺序一致。
+ * 登记「谁需要被重绘」。顺序 = 绘制顺序。
  *
- * 这里是 views/ 拆分的接线板：功能搬进自己的文件之后，登记语句跟着搬过去 ——
- * 由那个模块导出的 initXxx() 在原位登记（下面带 → 注释的两行就是）。
- * 保持原位是为了绘制顺序和以前一致；各视图只写自己的 DOM 区域，
- * 顺序其实不影响结果，但没必要改。
+ * 这里是 views/ 拆分的接线板：各模块导出的 initXxx() 在自己的 init 里登记
+ * （下面带 → 注释的那几行）。顺序固定下来是为了绘制顺序稳定；
+ * 各视图只写自己的 DOM 区域，顺序其实不影响结果，但没必要改。
  */
 function registerRefreshListeners() {
   onRefresh(renderConvoList);
@@ -205,30 +213,35 @@ function bindEvents() {
   /**
    * 发消息的统一入口：**先发再清**，发不出去就把文字留在框里。
    *
-   * 以前三个入口（发送按钮 / 回车 / Ctrl+回车）都是「先把 value 清空、再调
-   * sendMessage」，而 sendMessage 有一堆早退路径（没配模型、没填 Key、正在生成中）——
-   * 每一条都会把用户刚打的字吃掉，而且不报错、只弹个提示。
-   * 现在由 sendMessage 返回「到底发出去没有」，清了才清。
+   * sendMessage 有一堆早退路径（没配模型、没填 Key、正在生成中），
+   * 它返回「到底发出去没有」，只有 true 才清空输入框。
    */
   const submitInput = () => {
     const text = el.input.value;
     const sent = sentTextOf(text);
-    return sendMessage(text).then((didSend) => {
-      if (didSend) clearInputAfterSend(sent);
-      return didSend;
-    });
+    return sendMessage(text)
+      .then((didSend) => {
+        if (didSend) clearInputAfterSend(sent);
+        return didSend;
+      })
+      .catch((err) => {
+        console.error('发送失败', err);
+        showToast((err && err.message) || '发送失败', 'error');
+        return false;
+      });
   };
 
   el.btnSend.addEventListener('click', () => {
     submitInput();
   });
 
-  el.btnStop.addEventListener('click', stopGenerating);
-  el.btnClear.addEventListener('click', clearConvo);
+  el.btnStop.addEventListener('click', runAsync(stopGenerating));
+  el.btnClear.addEventListener('click', runAsync(clearConvo));
 
-  el.btnCopyAll.addEventListener('click', () => {
+  el.btnCopyAll.addEventListener('click', async () => {
     const convo = activeConvo();
-    if (!convo || !convo.messages.length) {
+    const messages = asArray(convo && convo.messages);
+    if (!convo || !messages.length) {
       showToast('当前会话是空的');
       return;
     }
@@ -236,15 +249,23 @@ function bindEvents() {
     // 通用助手没填名字时 speakerName 是空串，这里得有个称呼顶着
     const assistantLabel = speakerName(convo) || 'AI';
     const meLabel = convoUserName(convo);
-    const text = convo.messages
-      .map((m) => `${m.role === 'user' ? meLabel : m.role === 'error' ? '错误' : assistantLabel}：${m.content}`)
+    const text = messages
+      .map((m) => {
+        const role = m && m.role;
+        const who = role === 'user' ? meLabel : role === 'error' ? '错误' : assistantLabel;
+        return `${who}：${String((m && m.content) || '')}`;
+      })
       .join('\n\n');
-    api.copyText(text);
-    showToast('已复制整段对话', 'ok');
+    try {
+      await api.copyText(text);
+      showToast('已复制整段对话', 'ok');
+    } catch (err) {
+      showToast(`复制失败：${(err && err.message) || '未知错误'}`, 'error');
+    }
   });
 
-  el.btnExportChar.addEventListener('click', exportCharacter);
-  el.btnExportConvo.addEventListener('click', exportConversation);
+  el.btnExportChar.addEventListener('click', runAsync(exportCharacter));
+  el.btnExportConvo.addEventListener('click', runAsync(exportConversation));
   // 预设页右上角「＋ 新建预设」：打开空草稿（真正建出来要等点保存）
   if (el.btnNewPreset) el.btnNewPreset.addEventListener('click', newPreset);
   // 状态卡入口条不用在这里绑事件 —— 头像的点击由 views/panelUi.js 铺的时候就地挂上。
@@ -252,7 +273,7 @@ function bindEvents() {
   // 记忆管理：弹窗本体（开关 / 摘要增删改 / 存档点）在 views/memoryUi.js 里绑定。
   // 这里只留「手动压一段」—— 它要改头部的「正在整理记忆…」提示，
   // 等 header 独立成模块之后再让它归位。
-  el.btnSummarizeNow.addEventListener('click', summarizeNow);
+  el.btnSummarizeNow.addEventListener('click', runAsync(summarizeNow));
 
   // 进入世界前创建玩家角色
   el.btnClosePlayer.addEventListener('click', closePlayerModal);
@@ -306,8 +327,8 @@ function bindEvents() {
 
   el.input.addEventListener('keydown', (event) => {
     // 中文/日文输入法：敲拼音时按回车是**选词**，那一下在 Chromium 里也会报成
-    // Enter（keyCode 229，且 isComposing 为 true）。不挡的话会拿半截拼音去发消息
-    // （再加上以前「先清空再校验」，连半截都没了）。两个判据都看，各家输入法不一致。
+    // Enter（keyCode 229，且 isComposing 为 true）。不挡的话会拿半截拼音去发消息。
+    // 两个判据都看，各家输入法不一致。
     if (event.isComposing || event.keyCode === 229) return;
 
     // 数字键 1~9 快捷选剧情选项：只在输入框为空、且不是组合键时触发，
@@ -383,7 +404,7 @@ function bindEvents() {
     }
     // 世界书编辑器同样是**页面**而不是弹窗，判据跟着换。
     if (!el.viewWbEditor.classList.contains('hidden')) {
-      leaveWorldbookEditor();
+      leaveWorldbookEditor().catch((err) => console.error('离开世界书编辑器失败', err));
       return;
     }
     if (!el.pr.modal.classList.contains('hidden')) {
@@ -484,7 +505,12 @@ function bindEvents() {
 
   window.addEventListener('beforeunload', () => {
     if (!startupDataLoaded) return;
-    api.saveConversationsNow({ conversations: state.conversations, activeId: state.activeId });
+    try {
+      const saved = api.saveConversationsNow({ conversations: state.conversations, activeId: state.activeId });
+      if (saved && typeof saved.catch === 'function') saved.catch(() => {});
+    } catch (err) {
+      console.warn('关窗前保存会话失败', err);
+    }
     // 角色和世界书一起写（主进程收到 worldbooks 才会更新那个文件，漏掉的话
     // 角色绑定关系会指向一本已经不在磁盘上的书）。
     // 必须走 persistCharacters —— 它带着「世界书没读出来就别写」的守卫
@@ -644,7 +670,9 @@ async function init() {
   // 所以右键菜单点「让桌宠现在说话」是**反着来**的：
   // 主进程通知界面 → 界面组好上下文再发回去。
   api.onPetWantSpeak((payload) => {
-    speakNow(payload && payload.reason === 'manual' ? 'manual' : 'auto');
+    speakNow(payload && payload.reason === 'manual' ? 'manual' : 'auto').catch((err) =>
+      console.error('桌宠发言失败', err)
+    );
   });
 
   // 右键菜单点「桌宠设置 / 查看记忆」→ 把主窗口叫到前面并打开设置
@@ -688,7 +716,7 @@ async function init() {
 
   // 主题以设置里的值为准（preload 已经按启动参数先打过一次，这里只是对齐）
   applyTheme(state.settings.theme);
-  // 配色方案同理（粉色默认，蓝色按设置；preload 已先打标记）
+  // 配色方案同理（默认 amber；preload 已先打标记）
   applyAccent(state.settings.accent);
   applyChatAppearance();
   // ⚠️ 抓手的位置也得按**真实**内缩值再摆一次 —— initChatPad() 跑在 state.settings
@@ -752,9 +780,9 @@ async function init() {
     //   · 非空字符串   → 老数据（单值），迁成一条
     //   · 其它/缺失    → null = 没配过，自动跟随全局预设
     if (Array.isArray(convo.dialoguePresetIds)) {
-      convo.dialoguePresetIds = convo.dialoguePresetIds.filter(
-        (id) => typeof id === 'string' && id.trim()
-      );
+      convo.dialoguePresetIds = convo.dialoguePresetIds
+        .filter((id) => typeof id === 'string' && id.trim())
+        .map((id) => id.trim());
     } else if (typeof convo.dialoguePresetId === 'string' && convo.dialoguePresetId.trim()) {
       convo.dialoguePresetIds = [convo.dialoguePresetId];
     } else {

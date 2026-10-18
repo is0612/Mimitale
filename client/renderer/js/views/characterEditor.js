@@ -11,12 +11,9 @@
 //  「新建角色」是个**草稿**：它先只活在编辑器里，不进任何列表、也不写磁盘，
 //  点了「保存角色」才真正被创建（commitCharDraft）。离开编辑器就等于放弃。
 //
-//  ⚠️ 2026-10-13 从弹窗改成了**页面**（跟设置页同一套路）：不再是自己 add/remove
-//     `hidden`，而是走 viewSwitch 的 showView('charEditor')，离开时回到进来之前
-//     那一屏（角色库，或从世界书编辑器点进来时的那一屏）。所以：
-//       · 「关掉」= leaveCharacterEditor()，语义和步骤都没变，只是最后一步从
-//         「藏起弹窗」换成了「切回上一屏」；
-//       · 没有遮罩了，也就没有「点空白处关闭」那件事（原来那个监听器已删）。
+//  角色编辑器是主区域里的一屏，走 viewSwitch 的 showView('charEditor')；
+//  离开时回到进来之前那一屏（角色库，或从世界书编辑器点进来时的那一屏）。
+//  页头的「返回」和 Esc 管离开。
 //
 //  表单里的改动是「读的时候填进去、保存/切走的时候收回来」（fillCharForm /
 //  stashCharForm）—— 中途不写回角色卡，所以填到一半离开不会留下半个改动。
@@ -39,7 +36,7 @@ import { el } from '../core/dom.js';
 import { uid, now } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
-import { button, h, clear } from '../ui/build.js';
+import { h, clear } from '../ui/build.js';
 import { showView, currentViewName } from './viewSwitch.js';
 import { MAX_PANEL_FIELDS } from '../data/panel.js';
 import { MAX_EXPRESSIONS } from '../data/expressions.js';
@@ -115,17 +112,14 @@ function wireAutoGrow() {
 //
 //  五个框的高度上限压到 160px 之后（auto-grow 的 GROW_MAX），框矮了，
 //  「里面到底写了多少」得有个一眼能看到的信号 —— 角标干这个。
-//
-//  2026-10-16：原来字段行右边还有一颗「↗ 放大编辑」按钮，弹一层近乎全屏的
-//  浮层写长内容。编辑页改成整屏之后框本身就够大了，那颗按钮已撤掉。
 // ---------------------------------------------------------------------------
 
 /**
  * 一个长文本框的字数角标节点（id 约定：宿主 id + `-count`）。
  *
- * ⚙ 组件化（2026-10-16）之后这个函数会被两种东西叫到：`longTextAreas()` 给的是**宿主**，
+ * ⚙ 组件化之后这个函数会被两种东西叫到：`longTextAreas()` 给的是**宿主**，
  * 而 input 事件委托递过来的是**里层那颗原生框**（id 挂在宿主上，里层那颗没有 id）。
- * 不还原成宿主就会去查 `.getElementById('-count')` —— 查不到，而这句写的是
+ * 不还原成宿主就会去查 `.getElementById('-count')` —— 查不到，而这里写的是
  * 「找不到角标就静默跳过」，于是角标**再也不刷新**（不报错、没人发现）。
  */
 function charCountNode(textarea) {
@@ -215,8 +209,7 @@ function isCharDraft() {
 // ---------------------------------------------------------------------------
 
 /**
- * 进来之前停在哪一屏。离开时（返回 / Esc / 保存完自动走）都回到它 ——
- * 弹窗时代这三件事都是「关掉弹窗」，语义没变，只是落点从「弹窗消失」变成「切回那一屏」。
+ * 进来之前停在哪一屏。离开时（返回 / Esc / 保存完自动走）都回到它。
  */
 let editorReturnView = 'chars';
 
@@ -272,9 +265,8 @@ function updateCharEditorScopeUi() {
         ? `填好内容点「保存角色」才会加进这本书${book ? ` · ${book.name}` : ''}`
         : '填好内容点「保存角色」，保存后才会出现在角色库里';
     } else {
-      // 原来这里是「改完记得点右上角『保存角色』」—— 那句话是在用文案补交互。
       // 保存状态胶囊（.save-pill）已经会说「有未保存的改动」，这里改成说一件
-      // 用户看不出来的事：这几栏写下去会去哪儿。见 2026-10-16 的 UI/UX 检查报告 P1-5。
+      // 用户看不出来的事：这几栏写下去会去哪儿。
       el.charsSub.textContent = inBook
         ? `这本书里的独立副本，改它不影响角色库${book ? ` · ${book.name}` : ''}`
         : '描述与性格每轮都会注入给 AI，改完在右上角保存';
@@ -291,9 +283,8 @@ function updateCharEditorScopeUi() {
 /**
  * 离开编辑器：回到进来之前那一屏。
  *
- * 页头的「返回」、Esc、保存完自动走，三条路都走它 —— 在弹窗时代这三件事
- * 都是「关掉弹窗」。保存、删除、导出之后也调它，所以名字从 closeCharsModal
- * 改成了 leaveCharacterEditor（跟设置页的 leaveSettings 对齐）。
+ * 页头的「返回」、Esc、保存完自动走，三条路都走它。
+ * 保存、删除、导出之后也调它。
  */
 export async function leaveCharacterEditor() {
   // 表情弹窗挂在 body 上、盖着编辑页，编辑页走了不能留着
@@ -538,7 +529,7 @@ function fillCharForm(character) {
   charExpressions = draftExpressionsOf(character);
 
   el.c.name.value = character.name || '';
-  el.c.tags.value = (character.tags || []).join(', ');
+  el.c.tags.value = (Array.isArray(character.tags) ? character.tags : []).join(', ');
   el.c.desc.value = character.description || '';
   el.c.personality.value = character.personality || '';
   el.c.scenario.value = character.scenario || '';
@@ -551,7 +542,7 @@ function fillCharForm(character) {
   el.c.post.value = character.postHistoryInstructions || '';
   el.c.notes.value = character.creatorNotes || '';
 
-  // 年龄/性别/种族已从表单移除（归入描述文字），不再回填这三个输入框。
+  // 年龄/性别/种族不在这张表单里，归入描述文字；这里不回填这三个输入框。
 
   // 长文本框：值刚被程序塞进去，不走 input 事件 —— 所以这里显式重算一次高度。
   // 漏了这一步的表现是「框里明明写着两千字，高度还是两行」，得手动敲一下才展开。
@@ -638,8 +629,8 @@ function renderShowInPanelBox() {
 /**
  * 角色自带世界书那一块。
  *
- * 这块**始终显示**（以前是「有绑定才显示」，结果没绑定过的角色
- * 根本找不到入口加书）。没绑定时列出空状态提示，开关和说明照常给。
+ * 这块**始终显示**：没绑定过的角色也要有入口加书。
+ * 没绑定时列出空状态提示，开关和说明照常给（开关此时是隐藏的）。
  */
 function renderCharWorldbookBox(character) {
   if (!character) return;
@@ -735,16 +726,39 @@ async function bindWorldbookToCharacter(bookId) {
     return;
   }
 
+  // 写盘失败要能退回去；新建草稿还没进任何列表，只改草稿、等保存角色时一起落盘
+  const hadIds = Array.isArray(character.worldbookIds);
+  const beforeIds = hadIds ? [...character.worldbookIds] : [];
+  const beforeEnabled = character.worldbookEnabled;
+  const beforeDraftWbEnabled = charDraftWbEnabled;
+  const beforeUpdatedAt = character.updatedAt;
+
   ids.push(bookId);
   character.worldbookIds = ids;
-  // 刚绑上就默认启用 —— 绑了却因为开关关着不生效，会让人以为是 bug
+  // 刚绑上就默认启用 —— 绑了却因为开关关着不生效，会让人以为是 bug。
+  // 草稿开关也要一起改，否则 renderCharWorldbookBox / stashCharForm 还会按旧值
+  // 把刚打开的开关写回 false。
   if (character.worldbookEnabled === false && ids.length === 1) {
     character.worldbookEnabled = true;
+    charDraftWbEnabled = true;
   }
   character.updatedAt = now();
-
   renderCharWorldbookBox(character);
-  await persistLibrary();
+
+  if (isCharDraft()) {
+    showToast('已绑定世界书，保存角色后生效');
+    return;
+  }
+
+  if (!(await persistLibrary())) {
+    if (hadIds) character.worldbookIds = beforeIds;
+    else delete character.worldbookIds;
+    character.worldbookEnabled = beforeEnabled;
+    charDraftWbEnabled = beforeDraftWbEnabled;
+    character.updatedAt = beforeUpdatedAt;
+    renderCharWorldbookBox(character);
+    return;
+  }
   showToast('已绑定世界书');
 }
 
@@ -754,11 +768,24 @@ async function unbindWorldbookFromCharacter(bookId) {
   if (!character) return;
 
   const book = worldbookById(bookId);
-  character.worldbookIds = (character.worldbookIds || []).filter((id) => id !== bookId);
-  character.updatedAt = now();
+  const beforeIds = Array.isArray(character.worldbookIds) ? [...character.worldbookIds] : [];
+  const beforeUpdatedAt = character.updatedAt;
 
+  character.worldbookIds = beforeIds.filter((id) => id !== bookId);
+  character.updatedAt = now();
   renderCharWorldbookBox(character);
-  await persistLibrary();
+
+  if (isCharDraft()) {
+    showToast(book ? `已解绑「${book.name}」（世界书还在库里）` : '已解绑');
+    return;
+  }
+
+  if (!(await persistLibrary())) {
+    character.worldbookIds = beforeIds;
+    character.updatedAt = beforeUpdatedAt;
+    renderCharWorldbookBox(character);
+    return;
+  }
   showToast(book ? `已解绑「${book.name}」（世界书还在库里）` : '已解绑');
 }
 
@@ -894,8 +921,8 @@ function stashCharForm() {
   character.systemPrompt = el.c.system.value;
   character.postHistoryInstructions = el.c.post.value;
   character.creatorNotes = el.c.notes.value;
-  // 年龄/性别/种族已从表单移除（归入描述文字），不再从输入框写回。
-  // 老卡/导入卡可能还带着 age/gender/race，保留不动（messages.js/cast.js 仍会读）。
+  // 年龄/性别/种族不从输入框写回；老卡上已有的字段保留不动
+  //（messages.js / cast.js 仍会读）。
   // 属性是编辑期间的草稿（charAttrs），保存时才写回角色卡。
   // 只摘掉界面自己的临时状态（_moreOpen），其余字段原样带走。
   character.attributes = charAttrs
@@ -919,7 +946,9 @@ function stashCharForm() {
     .filter((item) => item && String(item.name || '').trim())
     .map((item) => ({
       name: String(item.name).trim().slice(0, 24),
-      keywords: (item.keywords || []).map((k) => String(k).trim().slice(0, 24)).filter(Boolean),
+      keywords: (Array.isArray(item.keywords) ? item.keywords : [])
+        .map((k) => String(k).trim().slice(0, 24))
+        .filter(Boolean),
       ...(String(item.key || '').trim() ? { key: String(item.key).trim().toLowerCase() } : {}),
       ...(item.default === true ? { default: true } : {}),
       image: typeof item.image === 'string' && item.image.startsWith('data:image/') ? item.image : ''
@@ -931,15 +960,19 @@ function stashCharForm() {
   // 当成「默认开 4 条」，只有明确的 false 才活得过存盘，否则关掉的角色一重启又开了。
   // 数量夹在 1~6，和注入时用的上限保持一致。
   if (el.c.optionsOn.checked) {
-    const raw = Number(el.c.optionsCount.value);
-    const count = isFinite(raw) ? Math.max(1, Math.min(6, Math.round(raw))) : DEFAULT_OPTIONS_COUNT;
+    const rawText = String(el.c.optionsCount.value || '').trim();
+    const raw = Number(rawText);
+    // 空输入框的 Number('') 是 0，不能让它悄悄变成 1 条；空 = 用默认 4 条
+    const count = rawText && Number.isFinite(raw)
+      ? Math.max(1, Math.min(6, Math.round(raw)))
+      : DEFAULT_OPTIONS_COUNT;
     character.optionsSpec = { count, hint: el.c.optionsHint.value.trim().slice(0, 200) };
   } else {
     character.optionsSpec = false;
   }
   // 角色自带世界书的开关（草稿）。没有绑书时不写这个字段，
   // 免得给没有书的角色平白加一个属性。
-  if ((character.worldbookIds || []).length) {
+  if (Array.isArray(character.worldbookIds) && character.worldbookIds.length) {
     character.worldbookEnabled = charDraftWbEnabled;
   }
   // 在状态栏显示：**只对世界书副本写**。角色库的卡写了也没用（单角色会话
@@ -971,7 +1004,7 @@ function newCharacter() {
  *                 一样要点「保存角色」才会真正创建。
  */
 function startCharDraft(preset) {
-  // 上一个角色的表单里可能还有没保存的改动，先收进内存（和以前一样），
+  // 上一个角色的表单里可能还有没保存的改动，先收进内存，
   // 再把上一份没保存完的草稿丢掉，免得留下一个永远不会被创建的幽灵角色。
   stashCharForm();
   discardCharDraft();
@@ -1122,15 +1155,12 @@ async function saveCharacter() {
  * 删除一个角色。
  * scope：'library' = 从角色库删掉（默认）；'worldbook' = 只从当前这本书里移除副本。
  *
- * 两个入口共用这一份逻辑：角色卡右上角的 ×，和编辑弹窗底部的「删除角色」。
- * 以前它俩是「谁打开编辑器谁负责」，所以在卡片上删不了 —— 得先点进编辑。
+ * 两个入口共用这一份逻辑：角色卡右上角的 ×，和编辑页底部的「删除角色」。
  *
  * ⚠️ 写盘失败时**要把内存也退回去**，不能只弹个提示就完了。
- *    2026-10-08 的「删掉了、重开还有」就是这里：characters.json 被拒写（EPERM，当时是
- *    进程低完整性，见 main/store.js 开头）—— 界面却已经把卡片移掉、还弹了「已删除」，
- *    用户以为删干净了，
- *    重启一看又回来了（而且中间的会话解绑也白做）。
- *    「写不进磁盘 = 没删掉」才和用户看到的东西一致。
+ *    characters.json 被拒写（EPERM，常见是进程低完整性，见 main/store.js 开头）时，
+ *    界面若已经把卡片移掉、还弹了「已删除」，用户会以为删干净了，重启又回来了
+ *    （而且中间的会话解绑也白做）。「写不进磁盘 = 没删掉」才和用户看到的一致。
  */
 export async function deleteCharacterById(id, scope) {
   const inBook = scope === 'worldbook';
@@ -1154,6 +1184,7 @@ export async function deleteCharacterById(id, scope) {
     const book = currentWorldbook();
     if (book) {
       const beforeChars = worldbookCharacters(book);
+      const beforeBookUpdatedAt = book.updatedAt;
       book.characters = beforeChars.filter((c) => c.id !== character.id);
       book.updatedAt = now();
 
@@ -1164,6 +1195,7 @@ export async function deleteCharacterById(id, scope) {
       if (!(await persistCharacters())) {
         // 写盘失败 → 把副本放回去，界面跟磁盘保持一致
         book.characters = beforeChars;
+        book.updatedAt = beforeBookUpdatedAt;
         renderWorldbookChars();
         renderWorldbookPage();
         return;
@@ -1198,8 +1230,7 @@ export async function deleteCharacterById(id, scope) {
   }
 
   // 编辑器如果正开在这个角色上，就没有可编辑的对象了 —— 离开它。
-  // （从卡片删的时候编辑器根本没开，这一段会跳过 —— 那个判据以前是「弹窗还开着吗」，
-  //  现在是「主区域停在这一屏吗」，同一个意思。）
+  // 从卡片删的时候编辑器根本没开，这一段会跳过。
   // 放在写盘成功之后：失败时角色还在，编辑器不该被关掉。
   if (editingCharacterId === character.id) {
     editingCharacterId = null;
@@ -1335,7 +1366,6 @@ function draftAltGreetingsOf(character) {
   const list = character && Array.isArray(character.alternateGreetings) ? character.alternateGreetings : [];
   return list
     .filter((s) => typeof s === 'string' && s.trim())
-    .map((s) => s)
     .slice(0, MAX_ALT_GREETINGS);
 }
 
@@ -1517,9 +1547,6 @@ export function initCharacterEditor(injected) {
   });
   // 勾选框 / 下拉不触发 input，单独挂 change（自带世界书开关、剧情选项、显示状态都走这儿）
   el.charForm.addEventListener('change', () => setCharSaveState('dirty'));
-
-  // ⛔ 「点遮罩空白处关闭」那一条 2026-10-13 删了：编辑页没有遮罩这回事
-  //    （它现在是主区域里的一屏，不是浮在上面的弹窗）。页头的「返回」和 Esc 管离开。
 
   // 属性区的按钮（分组标签栏是渲染时就带的）
   initCharAttrsUi({ getList: () => charAttrs });

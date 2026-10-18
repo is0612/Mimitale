@@ -133,8 +133,8 @@ export async function summarizeNow() {
     return;
   }
 
-  // 手动触发只绕过「攒够没有」的阈值，**不绕过并发闸** —— 以前这里直接
-  // delete 掉闸，后台摘要还在跑时点一下，同一段原文会被压两次、存两段重复摘要。
+  // 手动触发只绕过「攒够没有」的阈值，**不绕过并发闸**：
+  // 后台摘要还在跑时点一下，同一段原文会被压两次、存两段重复摘要。
   if (summarizingConvos.has(convo.id)) {
     showToast('正在压缩中，稍等一下', 'error');
     return;

@@ -253,7 +253,7 @@ export function dialoguePresetSampling(convo) {
 }
 
 /**
- * 这一局真正要发出去的采样参数：**会话覆盖 → 预设**（再往下就交给主进程的全局设置）。
+ * 这一局真正要发出去的采样参数：**预设**（再往下就交给主进程的全局设置）。
  *
  * 主进程（ipc.js 的 chat:send）的逻辑是「请求里带的 sampling 逐项覆盖全局设置」，
  * 这里只传递预设中明确填写的参数；其余项采用设置页中的全局值。
@@ -262,7 +262,7 @@ export function dialoguePresetSampling(convo) {
 export function effectiveSampling(convo) {
   const preset = dialoguePresetSampling(convo) || {};
   const out = { ...preset };
-  // Legacy conversation overrides remain on disk for compatibility, but global controls are authoritative.
+  // 旧会话的 sampling 仍留在磁盘上，但不再覆盖全局设置。
   return Object.keys(out).length ? out : null;
 }
 
@@ -291,10 +291,13 @@ function worldbookParts(value) {
  */
 export function buildApiMessages(convo, worldbook, ragSection) {
   const settings = state.settings || {};
-  const character = characterForConvo(convo);
   // 进了世界的会话用玩家自己创建的角色名，其它会话用设置里的名字
   const me = convoUserName(convo);
   const gmMode = isGmMode(convo);
+  // ⚠️ GM 模式没有「某个人」：哪怕会话上还绑着卡（视角弹窗里可以手动开 GM），
+  //    也不注入卡的人设 / 设定 / 示例对话 / 对话后指令 —— 否则主持规则会跟卡打架，
+  //    模型会把「你扮演 X」和「你是叙述者」揉在一起。
+  const character = gmMode ? null : characterForConvo(convo);
   // 「纯聊天」= 既没绑角色卡、也不是世界模式 —— 那就是**跟模型聊天**，不是扮演。
   // 判定收在 cast.js 的 isPlainChatConvo 里（视角弹窗、顶栏标签也用同一份，口径只有一处）。
   // 这种会话只带人设、历史、摘要、日期和预设；酒馆那一套（扮演 / GM 规则、世界书、

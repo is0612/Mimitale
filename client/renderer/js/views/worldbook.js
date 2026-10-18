@@ -9,10 +9,9 @@
 //  没保存就离开要问一句「放弃改动？」。角色副本不在此列 ——
 //  见 wbDrafts 上面那段注释。
 //
-//  ⚠️ 2026-10-13 从弹窗改成了**页面**（跟设置页 / 角色编辑器同一套路）：
-//     不再自己 add/remove `hidden`，改走 viewSwitch 的 showView('wbEditor')，
-//     离开时回到进来之前那一屏（世界书列表页）。所以没有遮罩了，
-//     也就没有「点空白处关闭」那件事（原来那个监听器已删）。
+//  ⚠️ 它是主区域里的一屏（走 viewSwitch 的 showView('wbEditor')），
+//     离开时回到进来之前那一屏（世界书列表页）。没有遮罩，所以也没有
+//     「点空白处关闭」这回事；页头的「返回」和 Esc 管离开。
 //
 //  两处刻意的边界：
 //
@@ -122,6 +121,18 @@ let importBooks = async () => {};
 // 打开「AI 生成 NPC」弹窗（视图不向上 import 入口层，编排放注入里）
 let aiDraftInBook = () => {};
 
+/** 事件处理器里跑异步动作：出错统一 toast，别变成 unhandled rejection */
+function runAsync(action) {
+  return () => {
+    Promise.resolve()
+      .then(action)
+      .catch((err) => {
+        console.error('[worldbook] 操作失败', err);
+        showToast((err && err.message) || '操作失败', 'error');
+      });
+  };
+}
+
 export function initWorldbook(opts = {}) {
   if (typeof opts.openInBook === 'function') openInBook = opts.openInBook;
   if (typeof opts.draftInBook === 'function') draftInBook = opts.draftInBook;
@@ -136,17 +147,17 @@ export function initWorldbook(opts = {}) {
   } });
 
   // --- 编辑器本体 ---
-  el.wb.btnExport.addEventListener('click', exportWorldbook);
-  el.wb.btnClose.addEventListener('click', leaveWorldbookEditor);
-  el.wb.btnImport.addEventListener('click', importBooks);
+  el.wb.btnExport.addEventListener('click', runAsync(exportWorldbook));
+  el.wb.btnClose.addEventListener('click', runAsync(leaveWorldbookEditor));
+  el.wb.btnImport.addEventListener('click', runAsync(importBooks));
   el.wb.btnNew.addEventListener('click', newWorldbook);
   el.wb.btnNewEntry.addEventListener('click', newEntry);
   if (el.wb.btnEntryTemplate) el.wb.btnEntryTemplate.addEventListener('click', applyEntryTemplate);
   if (el.wb.btnWbAddEvent) el.wb.btnWbAddEvent.addEventListener('click', addEventEntry);
-  el.wb.btnDelBook.addEventListener('click', deleteWorldbook);
-  el.wb.btnDelEntry.addEventListener('click', deleteEntry);
-  el.wb.btnSave.addEventListener('click', saveWorldbook);
-  el.wb.btnPreview.addEventListener('click', previewWorldbook);
+  el.wb.btnDelBook.addEventListener('click', runAsync(deleteWorldbook));
+  el.wb.btnDelEntry.addEventListener('click', runAsync(deleteEntry));
+  el.wb.btnSave.addEventListener('click', runAsync(saveWorldbook));
+  el.wb.btnPreview.addEventListener('click', runAsync(previewWorldbook));
   el.wb.btnAddChars.addEventListener('click', openWorldbookCharPicker);
   el.wb.btnNewChar.addEventListener('click', newWorldbookCharacter);
   // 「本书角色」标题整块就是折叠开关：副本一多，那一排 chip 会把条目和开场白挤没
@@ -160,12 +171,12 @@ export function initWorldbook(opts = {}) {
       aiDraftInBook(book.id);
     });
   }
-  if (el.wb.btnSyncAttrs) el.wb.btnSyncAttrs.addEventListener('click', syncWorldbookCharAttrs);
+  if (el.wb.btnSyncAttrs) el.wb.btnSyncAttrs.addEventListener('click', runAsync(syncWorldbookCharAttrs));
 
   // 从角色库多选加入
   el.wbPicker.btnClose.addEventListener('click', closeWorldbookCharPicker);
   el.wbPicker.btnCancel.addEventListener('click', closeWorldbookCharPicker);
-  el.wbPicker.btnConfirm.addEventListener('click', confirmWorldbookCharPicker);
+  el.wbPicker.btnConfirm.addEventListener('click', runAsync(confirmWorldbookCharPicker));
   el.wbPicker.modal.addEventListener('click', (event) => {
     if (event.target === el.wbPicker.modal) closeWorldbookCharPicker();
   });
@@ -180,7 +191,7 @@ export function initWorldbook(opts = {}) {
   });
 
   // 封面：点击框上传 / 更换，旁边那颗清除。和书名一样只动草稿，点「保存」才落盘。
-  if (el.wb.cover) el.wb.cover.addEventListener('click', pickWorldbookCover);
+  if (el.wb.cover) el.wb.cover.addEventListener('click', runAsync(pickWorldbookCover));
   if (el.wb.btnClearCover) el.wb.btnClearCover.addEventListener('click', clearWorldbookCover);
 
   el.wb.opening.addEventListener('input', () => {
@@ -207,8 +218,7 @@ export function initWorldbook(opts = {}) {
     });
   }
 
-  // 条目名 / 关键词跟着左栏那一行实时走。以前这一步是「保存条目」那颗按钮干的，
-  // 现在没有它了 —— 不同步的话，新建的条目会一直叫「新条目」，
+  // 条目名 / 关键词跟着左栏那一行实时走。不同步的话，新建的条目会一直叫「新条目」，
   // 直到整本书保存才改过来，看着像名字没生效。
   el.wb.e.title.addEventListener('input', () => {
     const entry = currentEntry();
@@ -224,8 +234,7 @@ export function initWorldbook(opts = {}) {
     renderEntryList();
   });
 
-  // ⛔ 「点遮罩空白处关闭」那条 2026-10-13 删了：世界书编辑器现在是主区域里的一屏，
-  //    不是浮在上面的弹窗，没有遮罩可点。页头的「返回」和 Esc 管离开。
+  // 世界书编辑器是主区域里的一屏，没有遮罩可点；页头的「返回」和 Esc 管离开。
 }
 
 // ---------------------------------------------------------------------------
@@ -235,12 +244,10 @@ export function initWorldbook(opts = {}) {
 const WB_NEW_ENTRY_DEFAULTS = {
   order: 100,
   probability: 100,
-  selectiveLogic: 'AND_ANY',
-  constant: false,
-  enabled: true
+  selectiveLogic: 'AND_ANY'
 };
 
-let editingWorldbookId = null; // 世界书弹窗里当前选中的世界书
+let editingWorldbookId = null; // 世界书编辑器里当前选中的书
 let editingEntryId = null; // 编辑器里当前选中的条目
 
 /**
@@ -256,7 +263,7 @@ let editingEntryId = null; // 编辑器里当前选中的条目
  *   · **不含 characters**。世界书里的角色副本由「本书角色」那一排按钮直接改、直接落盘，
  *     角色编辑器也在往上写（它认的是 currentWorldbook()）。草稿只认书名/开场白/条目，
  *     提交时也只覆盖这三个字段，两边才不会互相踩。
- *   · `isNew`：新建出来还没保存过的书。关弹窗时要是被放弃，连壳一起收掉
+ *   · `isNew`：新建出来还没保存过的书。离开编辑器时要是被放弃，连壳一起收掉
  *     （它从来没进过 worldbooks.json，留着就是一个重启就没的幽灵）。
  */
 const wbDrafts = new Map();
@@ -288,7 +295,7 @@ function currentDraft() {
   return currentWorldbook() ? draftFor(currentWorldbook()) : null;
 }
 
-/** 有未保存改动的那些书（关弹窗时用它拼提示语） */
+/** 有未保存改动的那些书（离开编辑器时用它拼提示语） */
 function unsavedDrafts() {
   const out = [];
   for (const [id, draft] of wbDrafts) {
@@ -346,7 +353,7 @@ function commitDraft(bookId) {
 }
 
 /**
- * 丢掉所有草稿（关弹窗时「放弃改动」那一步）。
+ * 丢掉所有草稿（离开编辑器时「放弃改动」那一步）。
  * 新建但没保存过的书连壳一起收掉 —— 它还不算存在。
  */
 function discardDrafts() {
@@ -536,11 +543,19 @@ function stashEntryForm() {
   entry.selectiveLogic = el.wb.e.logic.value;
   entry.content = el.wb.e.content.value.slice(0, 20000);
 
-  const order = Number(el.wb.e.order.value);
-  entry.order = isFinite(order) ? Math.max(0, Math.min(9999, Math.floor(order))) : WB_NEW_ENTRY_DEFAULTS.order;
+  // 空串不能走 Number('') → 0：顺序清空会变成 0（合法但意外），
+  // 概率清空会变成 0（这条从此永远不触发）。空 = 用默认值。
+  const orderText = el.wb.e.order.value.trim();
+  const order = Number(orderText);
+  entry.order = orderText !== '' && Number.isFinite(order)
+    ? Math.max(0, Math.min(9999, Math.floor(order)))
+    : WB_NEW_ENTRY_DEFAULTS.order;
 
-  const prob = Number(el.wb.e.prob.value);
-  entry.probability = isFinite(prob) ? Math.max(0, Math.min(100, Math.floor(prob))) : 100;
+  const probText = el.wb.e.prob.value.trim();
+  const prob = Number(probText);
+  entry.probability = probText !== '' && Number.isFinite(prob)
+    ? Math.max(0, Math.min(100, Math.floor(prob)))
+    : WB_NEW_ENTRY_DEFAULTS.probability;
 
   entry.constant = el.wb.e.constant.checked;
   entry.recursive = el.wb.e.recursive.checked;
@@ -734,7 +749,7 @@ function selectEntry(id) {
 
 /**
  * 副本到这个数就先收起来。
- * 一排 chip 能占掉半栏，下面的条目和开场白被挤成一条缝（2026-10-10 用户反馈）。
+ * 一排 chip 能占掉半栏，下面的条目和开场白会被挤成一条缝。
  * 手动点过就以用户的选择为准；状态只记在内存里（和设置页的折叠卡片一样不落盘）。
  */
 const WB_CHARS_COLLAPSE_AT = 6;
@@ -785,7 +800,7 @@ export function renderWorldbookChars() {
           h(
             'div',
             { class: 'wb-char-card-avatar' },
-            c.avatar ? h('img', { src: c.avatar, alt: '' }) : c.name.slice(0, 1)
+            c.avatar ? h('img', { src: c.avatar, alt: '' }) : String(c.name || '').slice(0, 1) || '?'
           ),
           h('strong', { class: 'wb-char-card-name', text: c.name })
         ),
@@ -802,7 +817,7 @@ export function renderWorldbookChars() {
             (() => {
               const cb = h('input', { type: 'checkbox' });
               cb.checked = c.showInPanel === true;
-              cb.addEventListener('change', () => toggleWorldbookCharShowInPanel(c.id, cb.checked));
+              cb.addEventListener('change', runAsync(() => toggleWorldbookCharShowInPanel(c.id, cb.checked)));
               return cb;
             })(),
             h('span', { text: '显示状态' })
@@ -818,7 +833,7 @@ export function renderWorldbookChars() {
               class: 'wb-char-card-btn wb-char-card-remove',
               text: '移除',
               title: '从本书移除（角色库里的不受影响）',
-              onClick: () => removeWorldbookCharacter(c.id)
+              onClick: runAsync(() => removeWorldbookCharacter(c.id))
             })
           )
         )
@@ -894,12 +909,21 @@ async function removeWorldbookCharacter(id) {
   });
   if (!ok) return;
 
+  const before = worldbookCharacters(book).slice();
+  const beforeUpdated = book.updatedAt;
   book.characters = worldbookCharacters(book).filter((c) => c.id !== id);
   book.updatedAt = now();
 
   renderWorldbookChars();
   renderWorldbookPage();
-  await persistLibrary();
+  if (!(await persistLibrary())) {
+    // 写盘失败：把内存也退回去，别让界面显示「已移除」而磁盘上还在。
+    book.characters = before;
+    book.updatedAt = beforeUpdated;
+    renderWorldbookChars();
+    renderWorldbookPage();
+    return;
+  }
   showToast('已移除', 'ok');
 }
 
@@ -970,11 +994,21 @@ async function toggleWorldbookCharShowInPanel(id, on) {
   const target = worldbookCharacters(book).find((c) => c.id === id);
   if (!target) return;
 
+  const beforeShow = target.showInPanel;
+  const beforeTargetUpdated = target.updatedAt;
+  const beforeBookUpdated = book.updatedAt;
   target.showInPanel = on === true;
   target.updatedAt = now();
   book.updatedAt = now();
 
-  await persistLibrary();
+  if (!(await persistLibrary())) {
+    // 写盘失败：把勾选状态退回去，别让界面和磁盘两边不一致。
+    target.showInPanel = beforeShow;
+    target.updatedAt = beforeTargetUpdated;
+    book.updatedAt = beforeBookUpdated;
+    renderWorldbookChars();
+    return;
+  }
   // 「当前状态」入口条是按当前会话的面板画的 —— 正在玩这本书就得重绘一次，
   // 头像才会立刻增删。别的会话不动。
   if (activeConvo() && convoWorldbookIds(activeConvo()).includes(book.id)) {
@@ -1041,7 +1075,7 @@ function renderWorldbookCharPicker() {
       img.alt = '';
       av.appendChild(img);
     } else {
-      av.textContent = c.name.slice(0, 1);
+      av.textContent = String(c.name || '').slice(0, 1) || '?';
     }
 
     const name = document.createElement('span');
@@ -1075,8 +1109,7 @@ async function confirmWorldbookCharPicker() {
 // ---------------------------------------------------------------------------
 //  世界书编辑器
 //  只负责编辑「当前这一本」：选书、新建、游玩、导入都在世界书列表页那边。
-//  「绑定到会话」整套已经拿掉 —— 世界书是一个世界，从列表页点「游玩」进入，
-//  不再往已经开始的对话上挂。
+//  世界书是一个世界，从列表页点「游玩」进入。
 // ---------------------------------------------------------------------------
 
 /**
@@ -1103,9 +1136,8 @@ export function openWorldbookEditor(id) {
  * ⚠️ 这里**只传目标 id，不先改 editingWorldbookId** —— 顺序是这套东西的全部要点：
  * selectWorldbook 一上来会把「界面上正在显示的表单」写回 currentWorldbook()，
  * 也就是**还没切走的那一本**。要是调用方抢先把 editingWorldbookId 换成新书，
- * 那次回写就落在新书头上，输入框里残留的旧书名会被写进新书、界面也仍然显示旧名字。
- * 用户看到的就是「导入世界书后，书名还是上一本的名字」；
- * 点另一张卡的「编辑」也一样会改名（那本真的会被存成上一本的名字，是丢数据）。
+ * 那次回写就落在新书头上，输入框里残留的旧书名会被写进新书、界面也仍然显示旧名字，
+ * 甚至把另一本书的名字覆盖掉。
  */
 function openWorldbooksModal(targetId) {
   // 角色库可能没开着（侧边栏可以直接进世界书），stashCharForm 内部会自己判断
@@ -1114,7 +1146,7 @@ function openWorldbooksModal(targetId) {
   const wanted = typeof targetId === 'string' && targetId ? targetId : editingWorldbookId;
   const next = worldbookById(wanted) ? wanted : worldbooks().length ? worldbooks()[0].id : null;
 
-  // 记下来处：Esc / 页头「返回」/ 保存完都会回到它（弹窗时代是「关掉弹窗」，语义没变）。
+  // 记下来处：Esc / 页头「返回」/ 保存完都会回到它。
   // 已经在编辑页里就别覆盖，不然「返回」会在原地打转。
   const from = currentViewName();
   if (from !== 'wbEditor') editorReturnView = from;
@@ -1458,17 +1490,19 @@ async function deleteEntry() {
 export async function deleteWorldbookById(id) {
   const book = worldbookById(id);
   if (!book) return false;
+  const wasEditingBook = editingWorldbookId === book.id;
 
   // 表单里正在填的东西先收进草稿 —— 确认框弹出来这一下 currentWorldbook()
   // 还指着这本，写进去才有地方落（确认之后整本连同草稿一起没了，不会留下脏数据）。
-  if (editingWorldbookId === book.id) {
+  if (wasEditingBook) {
     stashWorldbookName();
     stashEntryForm();
   }
 
   const charCount = worldbookCharacters(book).length;
   const usedByConvo = state.conversations.filter((c) => convoWorldbookIds(c).includes(book.id)).length;
-  const bits = [`${(book.entries || []).length} 条条目`];
+  const entryCount = Array.isArray(book.entries) ? book.entries.length : 0;
+  const bits = [`${entryCount} 条条目`];
   if (charCount) bits.push(`${charCount} 个角色副本`);
   const tail = usedByConvo ? `；它还在 ${usedByConvo} 个会话里生效，删掉后那些会话会失去它的设定` : '';
 
@@ -1500,11 +1534,10 @@ export async function deleteWorldbookById(id) {
   releaseScope();
 
   // ⚠️ 编辑器里正显示着这本时必须走 selectWorldbook 真正「切」到另一本 ——
-  // 它会重填书名 / 开场白 / 条目表单。以前这里只改 editingWorldbookId 再重画列表页，
-  // 编辑区里还留着**刚删掉那本**的字段；接着关弹窗时 stashWorldbookName() 会把这个
-  // 残留书名写进 currentWorldbook() —— 也就是列表里第一本书 —— 等于把别人的书改名 +
-  // 覆盖开场白。（现在草稿是按书存的，这一步仍然要有：不切的话界面显示的就是不存在的那本。）
-  if (editingWorldbookId === book.id) {
+  // 只改 editingWorldbookId 再重画列表页的话，编辑区里还留着**刚删掉那本**的字段；
+  // 接着 stashWorldbookName() 会把这个残留书名写进 currentWorldbook()（列表第一本），
+  // 等于把别人的书改名并覆盖开场白。
+  if (wasEditingBook) {
     selectWorldbook(worldbooks().length ? worldbooks()[0].id : null);
   }
 
@@ -1516,7 +1549,9 @@ export async function deleteWorldbookById(id) {
     // 界面和磁盘一致，用户能直接再删一次。草稿故意留到最后才删，就是为了这一下。
     state.worldbooks = beforeBooks;
     for (const [convo, ids] of unbound) convo.worldbookIds = ids;
-    if (editingWorldbookId !== book.id) selectWorldbook(book.id);
+    // 只有「刚才正在编辑这本」才需要重新选中它；删的是另一本时，
+    // 别把编辑器从用户正在看的那本切走。
+    if (wasEditingBook) selectWorldbook(book.id);
     renderWorldbookPage();
     renderDirtyHint();
     return false;
@@ -1579,7 +1614,11 @@ async function previewWorldbook() {
       messages: history.slice(-WORLDBOOK_SCAN_DEPTH).map((m) => ({ role: m.role, content: m.content }))
     });
 
-    const hits = (result && result.hits) || [];
+    if (!result) {
+      showToast('预览失败', 'error');
+      return;
+    }
+    const hits = Array.isArray(result.hits) ? result.hits : [];
     if (!hits.length) {
       showToast(`扫了最近 ${result.scanDepth} 条消息，${result.total} 条条目一条都没命中`, 'error');
       return;

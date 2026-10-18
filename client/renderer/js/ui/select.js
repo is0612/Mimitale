@@ -88,7 +88,12 @@ export function readGroups(select) {
         if (opt.tagName !== 'OPTION') continue;
         rows.push({ value: String(opt.value), label: optionText(opt), disabled: !!opt.disabled });
       }
-      if (rows.length) groups.push({ label: String(child.label || ''), rows });
+      if (rows.length) {
+        groups.push({ label: String(child.label || ''), rows });
+        // 分组后面再出现的散项要另起一组：否则它们会被并回分组**前面**那组，
+        // 显示顺序就和原生 <select> 的 DOM 顺序不一致了。
+        plain = null;
+      }
     } else if (child.tagName === 'OPTION') {
       if (!plain) {
         plain = { label: '', rows: [] };
@@ -348,9 +353,12 @@ function open(select) {
   // 反过来的话，第一行的 offsetTop 是按上一个宽度算的（宽度决定换行 → 决定行高），
   // 「一打开就滚到当前项」偶尔会差一两行。
   place();
-  // 一打开就先落在「我现在选的是哪个」上，不用自己在十几行里找
+  // 一打开就先落在「我现在选的是哪个」上，不用自己在十几行里找。
+  // 当前值如果是禁用项（原生 select 允许“选中但禁用”），就落到第一个可用项，
+  // 不能让键盘高亮停在一个按 Enter 也选不了的行上。
   const current = rows.findIndex((row) => row.value === String(select.value));
-  highlight(current >= 0 ? current : firstEnabled(rows));
+  const initial = current >= 0 && !rows[current].disabled ? current : firstEnabled(rows);
+  if (initial >= 0) highlight(initial);
 }
 
 function close(refocus) {
@@ -467,7 +475,8 @@ function onDocKey(event) {
       case 'Enter':
       case ' ':
         event.preventDefault();
-        if (list[index]) commit(list[index].value);
+        // 和鼠标点击同一条口径：禁用项不能提交
+        if (list[index] && !list[index].disabled) commit(list[index].value);
         return;
       default:
         break;

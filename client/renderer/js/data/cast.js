@@ -138,7 +138,7 @@ export async function matchWorldbookSections(convo) {
   const allIds = [...new Set(effectiveWorldbookIds(convo))];
   if (!allIds.length) return { ...EMPTY_WORLDBOOK };
 
-  const history = convo.messages.filter(
+  const history = (convo.messages || []).filter(
     (m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
   );
 
@@ -200,8 +200,11 @@ export function convoPlayer(convo) {
   if (!p || typeof p !== 'object') return null;
   const name = String(p.name || '').trim();
   const profile = String(p.profile || '').trim();
-  if (!name && !profile) return null;
-  return { name, profile };
+  // ⚠️ characterId 必须带出去：panelEntities 要靠它找玩家挑的那张卡（立绘 / 表情）。
+  //    只回 name/profile 的话，那条「优先角色库那张卡」的分支永远拿不到 id。
+  const characterId = typeof p.characterId === 'string' ? p.characterId.trim() : '';
+  if (!name && !profile && !characterId) return null;
+  return { name, profile, characterId };
 }
 
 /**
@@ -375,8 +378,11 @@ export function panelCastForDisplay(convo) {
  *   · 都没有 → 通用助手，用设置里「默认人设」那个名字
  */
 export function speakerName(convo) {
-  const character = characterForConvo(convo);
-  if (character) return character.name;
+  // GM 模式没有「某个人」：世界名优先于会话上可能残留的绑定卡。
+  if (!isGmMode(convo)) {
+    const character = characterForConvo(convo);
+    if (character) return character.name;
+  }
 
   const book = convoWorldbookIds(convo)
     .map((id) => worldbookById(id))
@@ -416,6 +422,9 @@ export function worldbookCast(convo) {
   if (!cast.length) return '';
 
   const playerName = convoUserName(convo);
+  // 先算清「真正的 NPC 总数」：玩家本人的同名副本不算 NPC。
+  // 不先扣掉它的话，超预算时那句「还有 N 人没列出」会把玩家自己也算进去。
+  const npcTotal = cast.filter((c) => !isPlayerCharacterCopy(convo, c)).length;
 
   const lines = [];
   let total = 0;
@@ -433,7 +442,9 @@ export function worldbookCast(convo) {
     const line = `- ${c.name}：${bits.slice(0, MAX_CAST_PER_NPC) || '（没写设定）'}`;
 
     if (total + line.length > MAX_CAST_CHARS) {
-      lines.push(`- （还有 ${cast.length - npcCount + 1} 人没列出）`);
+      // 当前这条 + 后面还没处理的，都算「没列出」
+      const remaining = npcTotal - npcCount + 1;
+      lines.push(`- （还有 ${remaining} 人没列出）`);
       break;
     }
     lines.push(line);

@@ -96,10 +96,9 @@ export function buildPetContext() {
 
   // 助手那侧显示成谁，交给 cast.js 的 speakerName 统一裁决：
   // 绑了卡 → 卡名；进了世界 → 世界名；都没有 → 「默认人设」那个名字。
-  // ⚠️ 这里以前直接取 assistantName(convo)，于是绑卡 / 进世界的会话里，
-  //    助手那些消息会被贴上「默认人设」的名字 —— 跟 messages.js 里那个
-  //    「人设漏进世界模式」是同一类漏法（宠物会被绕晕：明明在演顾言，
-  //    上下文里却写着这些台词是「团子」说的）。
+  // ⚠️ 别在这里直接取 assistantName：绑卡 / 进世界的会话里，助手那些消息
+  //    会被贴上「默认人设」的名字，宠物会被绕晕（明明在演顾言，上下文里
+  //    却写着这些台词是「团子」说的）。
   const charName = speakerName(convo) || '';
   const userName = convoUserName(convo) || '我';
   const panelFields = convoPanelFields(convo);

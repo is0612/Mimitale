@@ -39,14 +39,15 @@ export function ensureConvoEndpoint(convo) {
   if (!provider) {
     provider = providerById(s.activeProviderId) || list[0];
     convo.providerId = provider.id;
-    convo.model = s.activeModel || provider.models[0] || '';
+    convo.model = s.activeModel || asArray(provider.models)[0] || '';
   }
   if (!convo.model) {
-    convo.model = provider.models[0] || s.activeModel || '';
+    convo.model = asArray(provider.models)[0] || s.activeModel || '';
   }
   // 模型可能被用户从列表里删掉了，临时补回去，免得下拉框里找不到当前值
-  if (convo.model && !provider.models.includes(convo.model)) {
-    provider.models = [convo.model, ...provider.models];
+  const models = asArray(provider.models);
+  if (convo.model && !models.includes(convo.model)) {
+    provider.models = [convo.model, ...models];
   }
 
   return { provider, model: convo.model };
@@ -59,5 +60,5 @@ export function currentEndpoint() {
 
   const s = state.settings || {};
   const provider = providerById(s.activeProviderId) || providers()[0] || null;
-  return provider ? { provider, model: s.activeModel || provider.models[0] || '' } : null;
+  return provider ? { provider, model: s.activeModel || asArray(provider.models)[0] || '' } : null;
 }

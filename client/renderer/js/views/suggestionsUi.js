@@ -125,7 +125,7 @@ export async function suggestNextActions(trigger) {
     return;
   }
 
-  const history = convo.messages.filter(
+  const history = (convo.messages || []).filter(
     (m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
   );
   if (!history.length) {
@@ -234,6 +234,9 @@ export async function rerollOptions(convo) {
     if (!current || current.id !== convo.id) return false;
 
     convo.options = items;
+    // 选项是会话数据：正常回复结束时会落盘，这里也走同一条路，
+    // 否则换完一批直接关窗口/切会话，新选项在磁盘上就不存在。
+    persistConversations(0);
     refreshAll();
     return true;
   } catch (err) {

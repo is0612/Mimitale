@@ -121,6 +121,8 @@ export function fillSelect(select, items, opts = {}) {
   if (!list.length) {
     if (opts.emptyText != null) target.appendChild(optionEl({ value: '', text: opts.emptyText }));
     target.disabled = true;
+    // <m-select> 的 disabled 是宿主属性；只设里层会把宿主那份留在旧状态
+    if (select && select.tagName === 'M-SELECT') select.disabled = true;
     return '';
   }
 
@@ -134,6 +136,7 @@ export function fillSelect(select, items, opts = {}) {
   }
 
   target.disabled = false;
+  if (select && select.tagName === 'M-SELECT') select.disabled = false;
   const values = Array.from(target.options).map((o) => o.value);
   const want = opts.prefer == null ? '' : String(opts.prefer);
   target.value = values.includes(want) ? want : values[0] || '';

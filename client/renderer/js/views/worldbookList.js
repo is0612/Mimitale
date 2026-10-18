@@ -76,6 +76,7 @@ export function renderWorldbookPage() {
 function worldbookCard(book) {
   const charCount = worldbookCharacters(book).length;
   const cover = worldbookCover(book);
+  const entryCount = Array.isArray(book.entries) ? book.entries.length : 0;
 
   return h(
     'div',
@@ -100,7 +101,7 @@ function worldbookCard(book) {
     ),
     h('div', {
       class: 'wb-card-meta',
-      text: charCount ? `${book.entries.length} 条设定 · ${charCount} 个角色` : `${book.entries.length} 条设定`
+      text: charCount ? `${entryCount} 条设定 · ${charCount} 个角色` : `${entryCount} 条设定`
     }),
     h(
       'div',

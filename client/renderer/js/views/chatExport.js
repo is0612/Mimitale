@@ -46,9 +46,8 @@ function base64Utf8(text) {
  * 酒馆也认这个字段，会当成「角色绑定的世界书」。
  *
  * ⚠️ 导出（export）：`tools/smoke-test.js` 要拿它验「备选开场白 / 作者 / 版本」
- *    这三个字段**能被写回去** —— 它们以前在这里写死成空值，而角色编辑器里
- *    没有它们的输入框，不走这一步就测不到。和 library.js 的 worldbookPayload
- *    是同一个理由（宿主要能直接调到那个纯函数）。
+ *    这三个字段**能被写回去** —— 角色编辑器里没有它们的输入框，只能从导出这里测。
+ *    和 library.js 的 worldbookPayload 是同一个理由（宿主要能直接调到那个纯函数）。
  */
 export function characterCardPayload(character) {
   // 只带第一本：v2 规范里 character_book 是单本（酒馆同样只导出主世界书）
@@ -69,8 +68,8 @@ export function characterCardPayload(character) {
       system_prompt: character.systemPrompt || '',
       post_history_instructions: character.postHistoryInstructions || '',
       tags: Array.isArray(character.tags) ? character.tags : [],
-      // 备选开场白要原样带上。⚠️ 这里以前写死成 `[]` —— 等于「导入侧读了也白读」：
-      // 一张带 4 条开场白的卡，导入再导出就被抹成 0 条。读写必须成对。
+      // 备选开场白要原样带上。⚠️ 读写必须成对：写死成 `[]` 的话，一张带 4 条
+      // 开场白的卡导入再导出就被抹成 0 条，而导入侧读了也白读。
       alternate_greetings: Array.isArray(character.alternateGreetings) ? character.alternateGreetings : [],
       ...(boundBook ? { character_book: characterBookPayload(boundBook) } : {}),
       // 同上：creator / character_version 也从角色上带出来，别写死空串
@@ -146,6 +145,10 @@ function avatarPngDataUrl(character) {
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      resolve('');
+      return;
+    }
 
     const placeholder = () => {
       ctx.fillStyle = '#4a86e8';
@@ -189,6 +192,19 @@ export async function exportCharacter() {
   const name = safeFileName(character.name);
   const json = JSON.stringify(characterCardPayload(character), null, 2);
   const png = await avatarPngDataUrl(character);
+  // 理论上只有 canvas 拿不到 2d context 才会空；别把空 base64 当 PNG 存出去。
+  // 这时仍然可以导出 JSON —— 直接把保存框切成 JSON 那一种，而不是让用户再点一次
+  // 同一个按钮、再撞一次同样的错误。
+  if (!png) {
+    showToast('头像生成失败，改为导出 JSON 角色卡', 'error');
+    await saveExport({
+      title: '导出角色卡（JSON）',
+      fileName: `${name}.json`,
+      filters: [{ name: 'JSON 角色卡（纯数据，方便改）', extensions: ['json'] }],
+      text: json
+    });
+    return;
+  }
 
   await saveExport({
     title: '导出角色卡',

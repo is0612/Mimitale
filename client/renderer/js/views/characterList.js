@@ -61,7 +61,7 @@ function characterCard(c) {
     title: c.name,
     sub: subText,
     avatar: portrait,
-    avatarText: c.name.slice(0, 1),
+    avatarText: String(c.name || '').slice(0, 1) || '?',
     // 渐变圆 + 白字（设计稿的 .kface）：和侧栏 / 在场角色栏 / 消息区共用同一套色板，
     // 同一个角色在哪一屏都是同一个颜色。
     avatarClass: entityTone(c.id, c.name),

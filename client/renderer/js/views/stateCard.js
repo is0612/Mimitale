@@ -12,14 +12,13 @@
 //  卡片默认只读（纯文本展示），点「编辑」才切成输入框。
 //  写入复用 data/panel.js 的 setPanelField / appendPanelFields，与游戏内改值走同一条落盘路径。
 //
-//  —— 为什么是浮动的（2026-09-30 星宝定）——
-//  中间做过一版「固定 300px 右栏」，理由是浮动卡会盖住正文、开两张互相压。
-//  但固定版的代价是**对话区永久少 300px**，而状态是「边聊边瞄一眼」的东西，
-//  钉在栏里不如浮在眼前。所以换回浮动，当初那两个毛病各自解决：
-//    · 「开两张互相压」→ 开新卡时按 layoutSideBySide 算一个**并排**的落点
-//      （整卡宽 + 间距地铺开，多到一行装不下才换行），不再只错开 26px 叠着；
-//    · 「盖住正文」→ 卡片能拖（拖过之后位置记住），收起态只有一行标题。
-//  ⚠️ 不要再为了「不挡正文」把它改回固定栏 —— 已经来回过一次了，见 CHANGELOG。
+//  —— 为什么是浮动的 ——
+//  固定右栏会让对话区永久少 300px，而状态是「边聊边瞄一眼」的东西，
+//  钉在栏里不如浮在眼前。浮动的两个代价各自解决：
+//    · 开两张互相压 → layoutSideBySide 算一个并排落点（整卡宽 + 间距地铺开，
+//      多到一行装不下才换行），不再只错开 26px 叠着；
+//    · 盖住正文 → 卡片能拖（拖过之后位置记住），收起态只有一行标题。
+//  ⚠️ 不要再为了「不挡正文」把它改回固定栏。
 //
 //  位置 / 开合 / 编辑态都是「此刻怎么摆」，挂在模块里的 openCards 上，**不落盘**。
 // ============================================================================
@@ -46,8 +45,8 @@ import { panelEntities } from '../data/cast.js';
 import { stateCardPhoto } from '../data/expressions.js';
 import { persistConversations } from '../data/persist.js';
 import { onRefresh, refreshAll } from './refresh.js';
-// 组件库：编辑行里的输入框（见 components/index.js）
-import { mInput } from '../components/index.js';
+// 组件库：编辑行里的输入框（见 components/index.js）；hostOf 用来把里层 input 还原成宿主
+import { mInput, hostOf } from '../components/index.js';
 
 // 卡片尺寸常量。**定位和「并排铺开」都按这几个数算**，改宽度要一起改。
 // 320 而不是更窄：卡上要铺一张角色图，太窄的话图和右侧的字段列都挤。
@@ -100,8 +99,7 @@ function syncCardsForConvo(convo) {
  *
  * ⚠️ 不能再写死成 ROW_STEP。卡片高度跟着字段多少走，右栏也一直在变可用宽度 ——
  * 一行只放得下一张时（右栏在场角色占了 264px 之后就是这么回事），
- * 写死的行距比卡片矮，两张卡就会**上下叠着压一起**（2026-10-12 冒烟报的
- * 「开两张卡时自动并排，不互相压」）。
+ * 写死的行距比卡片矮，两张卡就会**上下叠着压一起**。
  * 量不到（第一张卡）就退回默认值。
  */
 function rowStep() {
@@ -242,7 +240,7 @@ function viewRow(convo, key) {
 /** 编辑行：值变成输入框，右边一个删除。改完走 setPanelField（和面板同一条路）。 */
 function editRow(convo, key) {
   const name = panelFieldName(key);
-  // ⚙ 组件化（2026-10-16）：28px + 正文级字号正好是组件的 size="sm" 档
+  // 28px + 正文级字号正好是组件的 size="sm" 档
   const input = mInput({
     class: 'sc-input',
     size: 'sm',
@@ -295,10 +293,8 @@ function addRow(convo, owner) {
     }
 
     // 字段名在「同一个人身上」只能有一个；不同的人（不同 owner）可以各自有
-    // 同名字段（世界书里姐姐妹妹都有自己的「好感度」）。所以分三种情况说清楚：
-    //   · 这张卡自己已经有了 → 提示重复；
-    //   · 这张卡没有、但**别人**（角色）占了同名的 → 换名字或去别人那边改；
-    //   · 谁都没有 → 加。
+    // 同名字段（世界书里姐姐妹妹都有自己的「好感度」）。但在这个卡片里手动加
+    // 一个已被别人占用的名字，界面上会分不清是哪一份，所以还是拦下来并说清原因。
     const holders = convoPanelFields(convo).filter((key) => panelFieldName(key) === name);
     if (holders.some((key) => panelFieldOwner(convo, key) === owner)) {
       showToast(`这张卡里已经有「${name}」了`, 'error');
@@ -423,7 +419,7 @@ function buildCard(convo, entity, state, charCount) {
   if (entity && entity.avatar) {
     avatar.appendChild(h('img', { src: entity.avatar, alt: '' }));
   } else {
-    avatar.textContent = owner === 'player' ? '我' : name.slice(0, 1);
+    avatar.textContent = owner === 'player' ? '我' : String(name || '').slice(0, 1) || '?';
   }
 
   // 头部的按钮随开合变：收起时只给「展开」，展开后才出现「编辑」和「收起」。
@@ -518,12 +514,16 @@ export function renderStateCards() {
   syncCardsForConvo(convo);
 
   const active = document.activeElement;
+  // 组件化之后焦点落在里层原生 input 上，而 sc-input / sc-new 类挂在宿主上 ——
+  // 只查 active.classList 会永远判 false，于是每敲一个字都可能被重绘打断。
+  const activeHost = hostOf(active);
   const typingValue =
     active &&
     active.tagName === 'INPUT' &&
-    active.classList.contains('sc-input') &&
-    !active.classList.contains('sc-new') &&
-    host.contains(active);
+    activeHost &&
+    activeHost.classList.contains('sc-input') &&
+    !activeHost.classList.contains('sc-new') &&
+    host.contains(activeHost);
   if (typingValue) return;
 
   clear(host);

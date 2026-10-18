@@ -67,7 +67,7 @@ function renderTopbarAvatar(convo, character) {
   if (character) {
     host.classList.add(entityTone(character.id, character.name));
     if (character.avatar) host.appendChild(h('img', { src: character.avatar, alt: '' }));
-    else host.textContent = character.name.slice(0, 1);
+    else host.textContent = String(character.name || '').slice(0, 1) || '?';
     return;
   }
 
@@ -135,15 +135,13 @@ export function renderHeader() {
     el.convoMeta.textContent = `${prefix}还没有填「${endpoint.provider.name}」的 API Key —— 点左下角「设置」`;
   } else {
     // 元信息行的构成（设计稿：`谢临舟 · deepseek-flash · 第 12 轮 · 6.2k / 128k`）。
-    // ⚠️ 这里**不放世界书**了 —— 2026-10-12 挪到右侧在场角色面板的脚注
-    //    （设计稿指定的位置，见 views/castPanel.js），腾出来的位置给轮数和用量。
+    // 世界书不放这里：它由右侧在场角色面板的脚注负责（见 views/castPanel.js），
+    // 这一行留给轮数和用量。
     const bits = [];
     if (character) bits.push(character.name);
     bits.push(endpoint.model || '未选模型');
-    // ⚠️ 「第 N 轮」是**轮数**，不是消息条数 —— 本项目自己的口径是
-    //    「一轮 = 一问一答 = 2 条」（见 data/memory.js 的 SUMMARY_TRIGGER_MESSAGES 注释）。
-    //    原来直接把 messages.length 当轮数，于是聊了 12 个来回会显示「第 24 轮」，
-    //    跟设计稿的「第 12 轮」差一倍。
+    // ⚠️ 「第 N 轮」是**轮数**，不是消息条数 —— 本项目口径是「一轮 = 一问一答 = 2 条」
+    //    （见 data/memory.js 的 SUMMARY_TRIGGER_MESSAGES 注释）。
     //    ⚠️ dateSeparator（views/chatMessages.js）用的是同一个口径，两处要一起改。
     const rounds = convo && Array.isArray(convo.messages) ? Math.ceil(convo.messages.length / 2) : 0;
     if (rounds) bits.push(`第 ${rounds} 轮`);
@@ -191,12 +189,12 @@ export function renderHeader() {
     el.convoMeta.textContent += ` · 自带世界书 ${charBooks.map((b) => b.name).join('、')}（已关掉）`;
   }
 
-  // 视角：只在偏离默认（标准 + 一步一步 + 非 GM）时提示。
-  // 2026-09-30 从 meta 那行文字里搬到了标题旁边的**小胶囊**（设计稿的 .pill-tag）——
-  // 「这一局怎么跑的」和标题同级，混在服务商/模型那串信息里根本挑不出来。
+  // 视角：只在偏离默认（标准 + 一步一步 + 非 GM）时显示在标题旁的**小胶囊**
+  // （设计稿的 .pill-tag）——「这一局怎么跑的」和标题同级，混在服务商/模型
+  // 那串信息里根本挑不出来。
   //
-  // ⛔ 2026-10-13：纯聊天（「＋ 新对话」）**一个标签都不显示**。那两项对纯聊天已经
-  //    完全不生效（提示词不注入、视角弹窗里也不给，见 data/messages.js 文件头），
+  // ⛔ 纯聊天（「＋ 新对话」）一个标签都不显示：那两项对纯聊天完全不生效
+  //    （提示词不注入、视角弹窗里也不给，见 data/messages.js 文件头），
   //    挂个「上帝视角」出来等于撒谎。
   const viewTags = [];
   if (isGmMode(convo)) viewTags.push('GM 模式');

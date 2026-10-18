@@ -239,12 +239,18 @@ export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = 'è£
       });
 
       function syncZoomInput() {
-        const value = Math.round(((scale - minScale) / (maxScale - minScale)) * 100);
+        const range = maxScale - minScale;
+        const value = range > 0
+          ? Math.round(((scale - minScale) / range) * 100)
+          : 100;
         if (Number(zoomInput.value) !== value) zoomInput.value = String(value);
       }
 
       zoomInput.addEventListener('input', () => {
-        const next = minScale + (maxScale - minScale) * (Number(zoomInput.value) / 100);
+        const range = maxScale - minScale;
+        const next = range > 0
+          ? minScale + range * (Number(zoomInput.value) / 100)
+          : minScale;
         zoomTo(next, vw / 2, vh / 2);
       });
 

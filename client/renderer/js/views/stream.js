@@ -32,7 +32,7 @@ export function scrollToBottom(force) {
 
   // 直接给一个远大于最大值的数，浏览器会自动夹到最底部。
   // 不读 scrollHeight 是故意的：读它会强制一次同步布局（reflow），
-  // 而流式输出时这里每 50ms 就跑一次，长对话下这个开销很明显。
+  // 而流式输出时这里每帧都可能跑一次，长对话下这个开销很明显。
   // 写 scrollTop 则可以让浏览器把布局推迟到下一个渲染帧。
   el.messages.scrollTop = 1e9;
 }

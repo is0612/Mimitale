@@ -151,7 +151,7 @@ app.whenReady().then(async () => {
     const wiring = [
       ['summarize.js 不再用会砍最早几条的 buildTranscript', !/\bbuildTranscript\(/.test(sum)],
       ['summarize.js 两处都按实际条数记 end', (sum.match(/end:\s*start\s*\+\s*covered/g) || []).length === 2],
-      ['summarize.js 两处记范围前都核对 summaryRangeIntact', (sum.match(/summaryRangeIntact\(convo,\s*start,\s*slice,\s*covered\)/g) || []).length === 2],
+      ['summarize.js 两处记范围前都核对 summaryRangeIntact', (sum.match(/summaryRangeIntact\(convo,\s*start,\s*slice,\s*covered(?:,\s*snapshot)?\)/g) || []).length === 2],
       // memoryUi.js 的「重新生成某段」同样用超长时会砍最早几条的 buildTranscript，
       // 只是它写回的是 target.text（不动 start/end）—— 上一轮改到这就断了，特别钉住
       ['memoryUi.js 重新生成也用 buildTranscriptFromStart', !/\bbuildTranscript\(/.test(memUi) && /\bbuildTranscriptFromStart\(/.test(memUi)],

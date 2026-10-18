@@ -97,8 +97,13 @@ export function summaryRangeIntact(convo, start, sent, count, snapshot) {
   if (summarizedCount(convo) !== start) return false;
   const context = convoContextMessages(convo);
   for (let i = 0; i < count; i += 1) {
-    if (context[start + i] !== sent[i]) return false;
-    if (snapshot && (sent[i].role !== snapshot[i].role || sent[i].content !== snapshot[i].content)) return false;
+    const current = context[start + i];
+    const sentItem = sent[i];
+    if (!current || !sentItem || current !== sentItem) return false;
+    if (snapshot) {
+      const snapItem = snapshot[i];
+      if (!snapItem || sentItem.role !== snapItem.role || sentItem.content !== snapItem.content) return false;
+    }
   }
   return true;
 }
@@ -108,7 +113,7 @@ export function invalidateSummariesForEdit(convo, message) {
   if (index < 0) return;
   const list = convoSummaries(convo);
   const affected = list.findIndex((seg) => index >= (Number(seg.start) || 0) && index < (Number(seg.end) || 0));
-  // Later summaries were generated with this segment as previous context.
+  // 后面的摘要都是把这一段当「上文」生成的；这一段改了，它们也站不住。
   if (affected >= 0) convo.summaries = list.slice(0, affected);
 }
 
@@ -178,11 +183,10 @@ function transcriptLine(m, charName) {
  * 给「往后压一段」用的原文：**从最早那条往后**装，装满为止。
  * 返回 { text, count } —— count 是真正写进原文的条数，摘要的 end 必须按它记。
  *
- * ⚠️ 别改回「从最后往前装」的那种（旧的 buildTranscript 就是这么写的，已删）：
- *    它超长时砍的是**最早**的几条，而调用方照样按整段 slice.length 记覆盖范围 ——
- *    被砍掉的那几条既不在摘要里、又被当成「已压缩」挡在上下文外面，永久消失。
- *    长回复的角色扮演（每条两千多字）十几条就会撞上。
- *    **所有调用点都走这个函数**（summarize.js 的压一段 / memoryUi.js 的重新生成），
+ * ⚠️ 必须**从头往后装**：如果从最后往前装，超长时砍掉的是最早的几条，
+ *    而调用方却按整段 `slice.length` 记覆盖范围 —— 被砍掉的那几条既不在摘要里、
+ *    又被当成「已压缩」挡在上下文外面，永久消失。长回复（每条两千多字）十几条就会撞上。
+ *    所有调用点都走这个函数（summarize.js 的压一段 / memoryUi.js 的重新生成），
  *    从头装、按实际条数记，装不下的那几条留到下一段再压。
  */
 export function buildTranscriptFromStart(messages, charName) {
@@ -191,8 +195,10 @@ export function buildTranscriptFromStart(messages, charName) {
 
   for (const m of messages) {
     const line = transcriptLine(m, charName);
-    if (total + line.length > MAX_SUMMARY_INPUT_CHARS && lines.length) break;
-    total += line.length;
+    // join('\n\n') 每两条之间还要占 2 个字符，预算里一起算。
+    const nextTotal = total + (lines.length ? 2 : 0) + line.length;
+    if (nextTotal > MAX_SUMMARY_INPUT_CHARS && lines.length) break;
+    total = nextTotal;
     lines.push(line);
   }
 

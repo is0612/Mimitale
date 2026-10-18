@@ -11,8 +11,8 @@
 //  正好是我们自己 import 认得的三种形态之一（单条 / 数组 / {presets:[]}），
 //  所以导出的文件能被自己的导入原样吃回来。
 //
-//  落盘之后要重绘预设页 —— 但那一页归 presetList.js 管，本模块不向上 import，
-//  由入口层通过 initPresetIo 注入 rerender。
+//  落盘之后要重绘预设页：直接调 renderPresetPage()（本模块单向 import 它）；
+//  入口层还会通过 initPresetIo 注入 rerender()，用来刷新预设页以外的全局视图。
 // ============================================================================
 
 import { api } from '../core/api.js';

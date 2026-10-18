@@ -3,7 +3,7 @@
 // ============================================================================
 //  views/chatPad.js —— 对话区宽度（消息流两侧可拖的线）
 //
-//  抓手是唯一入口（顶栏那颗「对话宽度」按钮及其弹层已去掉）。本文件管三件事：
+//  抓手是唯一入口。本文件管三件事：
 //    · 两侧的抓手（拖动改内缩）
 //    · 拖动时浮出的小标签（「左内缩 224px · 可拖动」）—— 它是**唯一能看到
 //      准确值的地方**，别删
@@ -47,7 +47,9 @@ function clamp(px) {
 
 /** 只改内存里的值 + 立刻重刷 CSS 变量：拖动过程中的预览，不落盘 */
 function preview(side, px) {
-  state.settings = { ...(state.settings || {}), [KEYS[side]]: px };
+  // 就地改，别替换 state.settings 对象 —— 别处可能已经持有它的引用
+  state.settings = state.settings || {};
+  state.settings[KEYS[side]] = px;
   applyChatAppearance();
 }
 
@@ -101,7 +103,7 @@ function showGuide(side, px) {
   //    只画消息区那段会让人以为「输入框不会动」，拖完发现它也跟着缩，就突兀了。
   const col = msgs.parentElement; // .chat-col
   const top = msgs.offsetTop;
-  const height = col ? col.clientHeight - top : msgs.offsetHeight;
+  const height = col ? Math.max(0, col.clientHeight - top) : msgs.offsetHeight;
   guide.style.top = `${top}px`;
   guide.style.height = `${height}px`;
   if (side === 'left') {

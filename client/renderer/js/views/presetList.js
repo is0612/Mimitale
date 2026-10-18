@@ -15,7 +15,8 @@ export function initPresetList(injected) {
   openEditor = injected?.openEditor || (() => {});
   removePreset = injected?.remove || (() => {});
   exportOne = injected?.exportOne || (() => {});
-  const page = el.presetPageGrid.closest('#view-presets');
+  const page = el.presetPageGrid && el.presetPageGrid.closest('#view-presets');
+  if (!page) return;
   page.querySelector('#preset-search').addEventListener('input', (event) => {
     query = event.target.value;
     renderPresetPage();
@@ -44,7 +45,8 @@ export function renderPresetPage() {
     items: list,
     card: presetRow
   });
-  const page = el.presetPageGrid.closest('#view-presets');
+  const page = el.presetPageGrid && el.presetPageGrid.closest('#view-presets');
+  if (!page) return;
   page.querySelectorAll('[data-preset-filter]').forEach((item) => {
     const active = item.dataset.presetFilter === status;
     item.classList.toggle('active', active);
@@ -52,8 +54,8 @@ export function renderPresetPage() {
   });
   const title = el.presetPageEmpty.querySelector('.page-empty-title');
   const hint = el.presetPageEmpty.querySelector('.page-empty-hint');
-  title.textContent = all.length ? '没有匹配的预设' : '还没有预设';
-  hint.textContent = all.length ? '调整搜索词或筛选条件。' : '新建或导入预设。';
+  if (title) title.textContent = all.length ? '没有匹配的预设' : '还没有预设';
+  if (hint) hint.textContent = all.length ? '调整搜索词或筛选条件。' : '新建或导入预设。';
 }
 
 function presetRow(preset) {

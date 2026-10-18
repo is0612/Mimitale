@@ -1,7 +1,7 @@
 'use strict';
 
 // ============================================================================
-//  views/petSettings.js —— 设置弹窗里的「桌宠」区块
+//  views/petSettings.js —— 设置页里的「桌宠」区块
 //
 //  这个区块和普通设置项有个根本区别：**它改的是另一个窗口里的东西**。
 //  所以这里的改动是**即时生效**的，不走「点保存才落盘」——原因是
@@ -79,9 +79,18 @@ async function patchPet(patch) {
   // 漏掉任何一项都等于把用户刚敲的值抹掉。
   const pending = flushPendingNumbers();
   const merged = { ...(pending || {}), ...(patch || {}) };
-  await api.petUpdate({ petId: pet.id, patch: merged });
-  await refreshPetCache();
-  renderPetSettings();
+  try {
+    await api.petUpdate({ petId: pet.id, patch: merged });
+    await refreshPetCache();
+    renderPetSettings();
+    return true;
+  } catch (err) {
+    // 这些调用点大多是事件监听里的 fire-and-forget，不接住就会变成
+    // unhandled rejection；按缓存重画一次，把界面拉回真实状态。
+    showToast(`保存桌宠设置失败：${(err && err.message) || '未知错误'}`, 'error');
+    renderPetSettings();
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -145,7 +154,7 @@ function renderModelSelect() {
 }
 
 // 形象下拉里那些候选（assets/pet/<名字>/ + 用户导入的 skins/<名字>/）
-// 只在设置弹窗打开时拉一次就够，没必要每次重画都读盘
+// 只在设置页打开时拉一次就够，没必要每次重画都读盘
 let skinCache = null;
 
 /**
@@ -211,7 +220,10 @@ function renderMemory(items, digest) {
   }
 
   for (const item of items) {
-    const when = item.at ? new Date(item.at).toLocaleString('zh-CN', { hour12: false }) : '';
+    const at = Number(item.at);
+    const when = Number.isFinite(at) && at > 0
+      ? new Date(at).toLocaleString('zh-CN', { hour12: false })
+      : '';
     const kind = item.kind === 'say' ? '说过' : item.kind === 'user' ? '偏好' : '记事';
     // 每条一个删除按钮。记的是 item.id（不是数组下标）——
     // 列表是从新到旧排的、而且随时可能被追加，下标会错位。
@@ -431,9 +443,14 @@ export function initPetSettings(opts) {
   // ---- 开关 / 数字 ----
 
   el.pet.enabled.addEventListener('change', async () => {
-    await api.petUpdate({ patch: { enabled: el.pet.enabled.checked } });
-    await refreshPetCache();
-    renderPetSettings();
+    try {
+      await api.petUpdate({ patch: { enabled: el.pet.enabled.checked } });
+      await refreshPetCache();
+    } catch (err) {
+      showToast(`切换桌宠失败：${(err && err.message) || '未知错误'}`, 'error');
+    } finally {
+      renderPetSettings();
+    }
   });
 
   el.pet.speakEnabled.addEventListener('change', () => patchPet({ speakEnabled: el.pet.speakEnabled.checked }));
@@ -460,7 +477,8 @@ export function initPetSettings(opts) {
   // 温度允许留空 = 跟随全局，所以不能走上面那套「必须是数字」
   el.pet.temp.addEventListener('change', () => {
     const raw = el.pet.temp.value.trim();
-    patchPet({ temperature: raw === '' ? null : Math.max(0, Math.min(2, Number(raw))) });
+    const n = Number(raw);
+    patchPet({ temperature: raw === '' || !Number.isFinite(n) ? null : Math.max(0, Math.min(2, n)) });
   });
 
   el.pet.style.addEventListener('change', () => patchPet({ style: el.pet.style.value.trim() }));
@@ -481,8 +499,8 @@ export function initPetSettings(opts) {
       const [source, skin] = String(el.pet.skin.value || '').split('\u0000');
       if (!skin) return;
       el.pet.persona.value = '';       // 让下一步的重画把新形象的人格装进来
-      await patchPet({ look: { kind: 'rig', source: source || 'assets', skin } });
-      showToast('形象已切换（人格也跟着这张形象走）', 'ok');
+      const saved = await patchPet({ look: { kind: 'rig', source: source || 'assets', skin } });
+      if (saved) showToast('形象已切换（人格也跟着这张形象走）', 'ok');
     });
   }
 
@@ -545,8 +563,12 @@ export function initPetSettings(opts) {
   el.pet.persona.addEventListener('change', async () => {
     const pet = currentPet();
     if (!pet) return;
-    await api.petPersonaSave({ petId: pet.id, text: el.pet.persona.value });
-    showToast('人格设定已保存', 'ok');
+    try {
+      await api.petPersonaSave({ petId: pet.id, text: el.pet.persona.value });
+      showToast('人格设定已保存', 'ok');
+    } catch (err) {
+      showToast(`人格保存失败：${(err && err.message) || '未知错误'}`, 'error');
+    }
   });
 
   el.pet.btnPersonaReset.addEventListener('click', async () => {
@@ -560,8 +582,13 @@ export function initPetSettings(opts) {
     const pet = currentPet();
     if (!pet) return;
     // 传空文本 = 让主进程把内置那份重新写出来（主进程那边把空当「还原」处理）
-    const result = await api.petPersonaSave({ petId: pet.id, text: '' });
-    el.pet.persona.value = (result && result.persona) || '';
+    let result;
+    try {
+      result = await api.petPersonaSave({ petId: pet.id, text: '' });
+    } catch (err) {
+      showToast(`还原失败：${(err && err.message) || '未知错误'}`, 'error');
+      return;
+    }
     await refreshPetCache();
     el.pet.persona.value = (result && result.persona) || petState().persona || '';
     renderPetSettings();
@@ -573,9 +600,11 @@ export function initPetSettings(opts) {
   el.pet.btnSpeak.addEventListener('click', async () => {
     el.pet.btnSpeak.disabled = true;
     try {
-      // 走 options.requestSpeak（入口层注入）—— 它和「右键菜单点现在说话」
+      // 走 options.speakNow（入口层注入）—— 它和「右键菜单点现在说话」
       // 是同一条路：组上下文 → 生成 → 推给宠物窗口
       await options.speakNow?.('manual');
+    } catch (err) {
+      showToast(`让它说话失败：${(err && err.message) || '未知错误'}`, 'error');
     } finally {
       el.pet.btnSpeak.disabled = false;
       await refreshPetCache();
@@ -591,7 +620,11 @@ export function initPetSettings(opts) {
   el.pet.btnVisible.addEventListener('click', async () => {
     const pet = currentPet();
     if (!pet) return;
-    await api.petSetVisible({ visible: !pet.visible });
+    try {
+      await api.petSetVisible({ visible: !pet.visible });
+    } catch (err) {
+      showToast(`切换显示失败：${(err && err.message) || '未知错误'}`, 'error');
+    }
     await refreshPetCache();
     renderPetSettings();
   });
@@ -621,7 +654,12 @@ export function initPetSettings(opts) {
       danger: true
     });
     if (!ok) return;
-    await api.petMemoryClear({ keepDigest: true });
+    try {
+      await api.petMemoryClear({ keepDigest: true });
+    } catch (err) {
+      showToast(`重置失败：${(err && err.message) || '未知错误'}`, 'error');
+      return;
+    }
     await refreshPetCache();
     renderPetSettings();
     await refreshMemory();
@@ -636,7 +674,12 @@ export function initPetSettings(opts) {
       danger: true
     });
     if (!ok) return;
-    await api.petMemoryClear({ keepDigest: false });
+    try {
+      await api.petMemoryClear({ keepDigest: false });
+    } catch (err) {
+      showToast(`清空失败：${(err && err.message) || '未知错误'}`, 'error');
+      return;
+    }
     await refreshPetCache();
     renderPetSettings();
     await refreshMemory();
@@ -655,13 +698,13 @@ export function initPetSettings(opts) {
     // 这些刚落盘的设置要等到下一次成功说话才生效 —— 表现就是
     // 「我明明点了隐藏，过几轮它又自己冒出来」。
     await refreshPetCache();
-    // 2026-10-09 设置从弹窗改成页面：这条判据从「弹窗显不显示」换成「在不在这一屏」。
+    // 设置现在是主区域的一屏：判据是「在不在这一屏」，不是弹窗显不显示。
     if (el.viewSettings && el.viewSettings.classList.contains('hidden')) return;
     onPetStateChanged();
   });
 }
 
-/** 设置弹窗打开时调：拉最新状态 + 铺表单 + 顺便把记忆也拉出来 */
+/** 设置页打开时调：拉最新状态 + 铺表单 + 顺便把记忆也拉出来 */
 export async function openPetSection(focus) {
   await refreshPetCache();
   renderPetSettings();

@@ -66,8 +66,8 @@ export async function recallSection(convo) {
       worldbookIds: effectiveWorldbookIds(convo),
       // 最近这些本来就会进上下文，别捞回来占位置。
       // ⚠️ 口径必须和 buildApiMessages 一致：那边发出去的是最后 `maxTurns * 2` 条
-      //    （见 data/messages.js），这里只排除 6 条的话，第 7~40 条会被当成
-      //    「早先的回忆」捞回来 —— 和原文重复，还白占 topK 的位置。
+      //    （见 data/messages.js）。这里少排除一些的话，已经进上下文的近期消息
+      //    会被当成「早先的回忆」捞回来 —— 和原文重复，还白占 topK 的位置。
       recentCount: Math.max(1, Number(settings.maxTurns) || 20) * 2,
       query,
       topK: RAG_TOP_K,

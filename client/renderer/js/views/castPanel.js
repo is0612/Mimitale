@@ -12,8 +12,8 @@
 //  名单跟入口条共用 panelCastForDisplay()：普通聊天不列「我」，
 //  只列真的持有字段的人。
 //
-//  ⚠️ 脚注那两行「世界书 · 书名 / N 条已触发」是设计稿指定的位置 ——
-//     「世界书」原来挂在顶栏的元信息行里，挪过来之后顶栏才放得下「第 N 轮 · 用量」。
+//  ⚠️ 脚注那两行「世界书 · 书名 / N 条已触发」是设计稿指定的位置；
+//     顶栏只放「第 N 轮 · 用量」。
 // ============================================================================
 
 import { el } from '../core/dom.js';
@@ -68,14 +68,11 @@ function fieldValueText(convo, key) {
   return text || '—';
 }
 
-/** 带范围的数值字段（meter）在值下面再给一条 3px 的进度条 */
 /** 带范围的数值字段（meter）在值下面再给一条 3px 的进度条。
  *
- *  ⚠️ 2026-10-12 晚修的真 bug：这里原来自己 `Number(panel[key])` 算百分比，
- *  而 meter 的值存的是 **`"63/100"` 这种「当前/上限」字符串**（状态卡就是这么显示的），
- *  `Number("63/100")` = **NaN** → 于是**每一条进度条都画不出来**，
- *  而状态卡那边是好的（它走 main/panel-fields.js 的 fieldProgress，会解析斜杠）。
- *  现在两边共用同一个 fieldProgress —— 别在渲染层再手写一套解析。 */
+ *  ⚠️ 这里**不能**自己 `Number(panel[key])` 算百分比：meter 的值存的是
+ *  `"63/100"` 这种「当前/上限」字符串，`Number("63/100")` 是 NaN，进度条会
+ *  每条都画不出来。必须和状态卡共用 `fieldProgress`（它会解析斜杠）。 */
 function meterBar(convo, key) {
   const def = convoPanelDef(convo, key);
   if (!def || def.type !== 'meter') return null;
@@ -91,8 +88,8 @@ function meterBar(convo, key) {
   return bar;
 }
 
-function cardFor(convo, ent) {
-  const photo = ent.card ? stateCardPhoto(convo, ent.card, ent.name, panelCastForDisplay(convo).length === 1) : null;
+function cardFor(convo, ent, allowLoose) {
+  const photo = ent.card ? stateCardPhoto(convo, ent.card, ent.name, allowLoose) : null;
   const card = h('div', {
     class: ['cast-card', photo && photo.src && 'has-portrait'],
     role: 'button', tabindex: '0',
@@ -177,7 +174,7 @@ export function renderCastPanel() {
   const entities = convo ? panelCastForDisplay(convo) : [];
   const books = convo ? convoWorldbookIds(convo).map((id) => worldbookById(id)).filter(Boolean) : [];
   // 角色自带的世界书：会话没绑书时生效的就是它 —— 脚注必须标出来源，
-  // 否则「这本书是哪来的」在界面上根本看不出来（原来顶栏那行是标了的）。
+  // 否则「这本书是哪来的」在界面上根本看不出来。
   const character = convo ? characterForConvo(convo) : null;
   const charBooks =
     character && Array.isArray(character.worldbookIds)
@@ -194,7 +191,8 @@ export function renderCastPanel() {
   if (el.castPanelCount) el.castPanelCount.textContent = String(entities.length);
 
   clear(host);
-  for (const ent of entities) host.appendChild(cardFor(convo, ent));
+  const allowLoose = entities.length === 1;
+  for (const ent of entities) host.appendChild(cardFor(convo, ent, allowLoose));
   const sceneBlock = h('section', { class: 'current-scene', 'aria-label': '当前场景' },
     h('h3', { text: '当前场景' }));
   if (scene.length) {

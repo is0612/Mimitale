@@ -73,10 +73,9 @@ function setStreaming(on) {
 }
 
 /** 输入框跟着内容长高（上限见 CONFIG.MAX_INPUT_HEIGHT）
- *  ⚙ 组件化（2026-10-16）之后 `el.input` 是 `<m-textarea>` 的**宿主**：量高度、写高度
- *    都得落到里层那颗原生框上（过 controlOf）—— 对宿主写 style.height 是写在一个
- *    不画描边的空盒子上，量 scrollHeight 也只会拿到「现在渲染出来的高度」，
- *    症状是**不报错但框永远不长高**。 */
+ *  `el.input` 是 `<m-textarea>` 的**宿主**：量高度、写高度都得落到里层那颗原生框上
+ *  （过 controlOf）—— 对宿主写 style.height 是写在一个不画描边的空盒子上，
+ *  量 scrollHeight 也只会拿到「现在渲染出来的高度」，症状是**不报错但框永远不长高**。 */
 export function autoGrowInput() {
   const box = controlOf(el.input);
   box.style.height = 'auto';
@@ -87,8 +86,7 @@ export function autoGrowInput() {
  * 发一条消息。
  *
  * **返回值**：真的发出去了返回 true，任何早退路径返回 false。
- * 调用方（发送按钮 / 回车）必须**先看返回值再清空输入框** ——
- * 以前是「先清空再调这个函数」，于是下面每一条早退都会把用户刚打的字吃掉：
+ * 调用方（发送按钮 / 回车）必须**先看返回值再清空输入框** —— 早退路径包括：
  *   · 没配模型服务 / 没填 API Key（全新安装第一条「你好」就是这么没的）
  *   · 正在生成中（输入框在流式期间并没有禁用，回车照样进得来）
  *   · 空消息（只按了个回车）
@@ -119,6 +117,7 @@ export async function sendMessage(text) {
     return false;
   }
 
+  if (!Array.isArray(convo.messages)) convo.messages = [];
   if (convo.messages.length === 0) {
     convo.title = content.slice(0, 24) || '新对话';
   }
@@ -155,9 +154,7 @@ export function clearInputAfterSend(sentText) {
 
 /**
  * 就地编辑一条消息：把气泡内容换成 textarea，保存/取消。
- *
- * 以前改个错字只能「删除 → 重发」，而重发会换一整条新回复。
- * 这里直接改原文，改完接着聊，历史也就跟着变了（发出去的是改后的版本）。
+ * 直接改原文，改完接着聊 —— 不用「删除 → 重发」，重发会换一整条新回复。
  */
 export function editMessage(index) {
   const convo = activeConvo();
@@ -172,7 +169,7 @@ export function editMessage(index) {
 
   const original = String(message.content || '');
 
-  // ⚙ 组件化（2026-10-16）：这个框是就地建/就地扔的，用工厂形态。
+  // 这个框是就地建/就地扔的，用工厂形态。
   //    `.msg-edit-box` 留在宿主持布局，观感那条规则跟着改成 `.msg-edit-box > textarea`。
   //    keydown / value / focus / setSelectionRange 这几样都由组件代理或冒泡，调用点不用改。
   const textarea = mTextarea({
@@ -184,7 +181,12 @@ export function editMessage(index) {
 
   const finish = (save) => {
     if (save) {
-      if (state.streaming || !convo.messages.includes(message)) return;
+      // 流式已经开始了、或者这条消息已经被删了 —— 这次编辑不能再落地。
+      // 重绘一次把编辑框收掉，别让用户对着一个按了没反应的框。
+      if (state.streaming || !convo.messages.includes(message)) {
+        renderAll({ forceScroll: false });
+        return;
+      }
       const next = textarea.value;
       if (!next.trim()) {
         showToast('内容不能为空 —— 想删掉这条就用「删除」', 'error');
@@ -200,9 +202,11 @@ export function editMessage(index) {
       }
       convo.updatedAt = now();
       // 助手消息里可能写着状态栏，改完要重新扫一遍面板
-      if (message.role === 'assistant') syncConvoPanel(convo);
-      if (message.role === 'assistant') syncConvoOptions(convo);
-      if (message.role === 'assistant') syncPlayerNameFromPanel(convo);
+      if (message.role === 'assistant') {
+        syncConvoPanel(convo);
+        syncConvoOptions(convo);
+        syncPlayerNameFromPanel(convo);
+      }
       persistConversations(0);
       showToast('已保存', 'ok');
     }
@@ -367,7 +371,8 @@ async function ensurePanelWritten(convo, endpoint, worldbook, ragSection, assist
 /**
  * 「继续」：让模型接着最后一条回复往下写（回复被 maxTokens 截断时用）。
  */
-export async function continueLastMessage() {  const convo = activeConvo();
+export async function continueLastMessage() {
+  const convo = activeConvo();
   if (!convo) return;
   if (state.streaming) {
     showToast('正在生成，等它写完再继续');
@@ -469,13 +474,15 @@ async function autoContinueTruncated(convo, index, endpoint, worldbook, ragSecti
  * 而不是把老的直接扔掉。
  */
 async function requestCompletion(convo, options) {
+  // 已经在生成中就别再进来 —— 先判这个，避免 ensureConvoEndpoint 顺手改会话
+  if (state.streaming) return;
+
   const endpoint = ensureConvoEndpoint(convo);
   if (!endpoint) {
     showToast('还没有配置模型服务', 'error');
     return;
   }
 
-  if (state.streaming) return;
   setStreaming(true);
   let assistant = null;
   let index = -1;
@@ -483,8 +490,8 @@ async function requestCompletion(convo, options) {
 
   try {
     // 世界书在渲染层匹配（和 buildApiMessages 同一个进程，省一次往返）。
-    // 之前这里要求「消息数 ≥ 3」才匹配，但那会让世界模型的第一个回合拿不到设定 ——
-    // 而开场引导往往正是最需要世界书的时候。匹配本身是本地纯计算，不省这一下。
+    // 不要求「消息数 ≥ 3」：世界模型的第一个回合也要拿到设定，
+    // 而开场引导往往正是最需要世界书的时候。匹配本身是本地纯计算。
     const { worldbook, ragSection } = await prepareCompletion(convo);
 
     if (preparationStopped) return;
@@ -580,7 +587,7 @@ async function requestCompletion(convo, options) {
       await attachGeneratedImage(assistant, response.image, response.model);
     }
 
-    // 收尾信号与用量都记在这条消息上（以前只图省事看了一眼 usage，不留痕）：
+    // 收尾信号与用量都记在这条消息上，方便事后核对「思考吃了多少 / 上限有没有生效」：
     //   · finishReason === 'length' 是服务商权威的「撞上限被截断」信号。光看
     //     「正文为空 + 有思考」只能猜 —— 模型也可能只是思考完自己没落笔，
     //     或者服务商按模型自己的上限截断（那种情况调大 max_tokens 根本没用）。
@@ -746,7 +753,7 @@ async function requestCompletion(convo, options) {
 /**
  * 重新生成：删掉这条之后的全部内容，再问一次。
  *
- * 和以前不同的是**老的那条不扔** —— 它作为一个候选留着，生成完可以用
+ * 老的那条**不扔** —— 它作为一个候选留着，生成完可以用
  * 「‹ 2/3 ›」翻回去。写了一大段舍不得删、只想再抽一次的时候很有用。
  */
 export function regenerateFrom(index) {
@@ -809,5 +816,12 @@ export async function stopGenerating() {
     preparationStopped = true;
     if (cancelPreparation) cancelPreparation();
   }
-  if (state.requestId) await api.stopChat(state.requestId);
+  if (state.requestId) {
+    // 停止失败只意味着「那边可能已经自己结束了」，不该冒成未捕获异常
+    try {
+      await api.stopChat(state.requestId);
+    } catch (err) {
+      console.error('停止生成失败', err);
+    }
+  }
 }

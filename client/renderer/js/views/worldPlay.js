@@ -41,10 +41,11 @@ import { applyCharacterChoice } from './chatList.js';
  */
 function applyPlayerIdentity(convo, draft) {
   if (!convo) return;
-  convo.player =
-    draft.name || draft.profile
-      ? { name: draft.name, profile: draft.profile, characterId: draft.card ? draft.card.id : null }
-      : null;
+  // 选了卡但名字/设定都留空也是有效的身份 —— 不能把刚挑的卡丢掉。
+  const hasIdentity = draft && (draft.name || draft.profile || draft.card);
+  convo.player = hasIdentity
+    ? { name: draft.name || '', profile: draft.profile || '', characterId: draft.card ? draft.card.id : null }
+    : null;
   convo.updatedAt = now();
 }
 
@@ -59,7 +60,14 @@ export function startPlayerFlow() {
     return;
   }
   if (start.kind === 'world') startWorldPlay(start.book);
-  else startCharacterChat(start.character);
+  else {
+    // startCharacterChat 是 async（可能会等「选一条开场白」的弹窗）——
+    // 这里不接住 rejection 的话，失败会变成 unhandled rejection。
+    startCharacterChat(start.character).catch((err) => {
+      console.error('开始聊天失败', err);
+      showToast((err && err.message) || '开始聊天失败', 'error');
+    });
+  }
 }
 
 /**
@@ -69,7 +77,7 @@ export function startPlayerFlow() {
 export function startWorldPlay(book) {
   if (!book) return;
 
-  const draft = readPlayerDraft();
+  const draft = readPlayerDraft() || {};
 
   const convo = createConvo(true);
   convo.worldbookIds = [book.id];
@@ -84,8 +92,7 @@ export function startWorldPlay(book) {
 
   // 剧情选项：**所有会话默认都开**，每轮 4 条。
   //   · 选了一张卡当自己 → 按那张卡的配置来（卡上明确关掉的除外）；
-  //   · 没选卡（进世界时自己写的主角、或者干脆留空）→ 也给默认的 4 条 ——
-  //     以前这里落的是 null，导致「世界书里自己写的主角」全程没有剧情选项。
+  //   · 没选卡（进世界时自己写的主角、或者干脆留空）→ 也给默认的 4 条。
   // 用复制（和绑定角色卡那套一致），改卡不该悄悄改掉正在玩的这一局。
   convo.optionsSpec = optionsSpecFromCharacter(pickedCard);
   if (!convo.optionsSpec) convo.options = [];
@@ -109,7 +116,7 @@ export function startWorldPlay(book) {
     convo.messages = [
       {
         role: 'assistant',
-        content: applyMacros(opening, null, draft.name),
+        content: applyMacros(opening, null, draft.name, '叙述者'),
         at: now(),
         greeting: true
       }
@@ -137,7 +144,7 @@ export function startWorldPlay(book) {
 async function startCharacterChat(character) {
   if (!character) return;
 
-  const draft = readPlayerDraft();
+  const draft = readPlayerDraft() || {};
 
   createConvo(true);
   const convo = activeConvo();
@@ -207,8 +214,8 @@ async function generateWorldOpening(convo, book) {
     const cast = worldbookCast(convo);
     if (cast) parts.push(cast);
     // 开局这段不按关键词，把这本书的设定尽量都带上，免得开局世界是空的
-    const lore = book.entries
-      .filter((e) => e.enabled !== false && String(e.content || '').trim())
+    const lore = (Array.isArray(book.entries) ? book.entries : [])
+      .filter((e) => e && e.enabled !== false && String(e.content || '').trim())
       .slice(0, 40)
       .map((e) => `【${e.title}】\n${String(e.content).trim()}`)
       .join('\n\n');

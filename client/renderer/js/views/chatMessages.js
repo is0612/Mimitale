@@ -73,10 +73,8 @@ function dayLabel(at) {
  * 只在**跨天**时插一条：聊到第三天时，上下两段一眼分得清是另一天了 ——
  * 之前只能自己拿每条消息的时间戳去算。
  *
- * ⚠️ 「第 N 轮」按**一问一答算一轮**（本项目自己的口径，见 data/memory.js:
- *    「一轮 = 一问一答 = 2 条」）。⚠️ 原来是 `index + 1`（消息条数）——
- *    那会让「第 12 轮」显示成「第 24 轮」，而且和顶栏 `renderHeader` 里
- *    同一个数字对不上（两处必须同口径，改一处就得改另一处）。
+ * ⚠️ 「第 N 轮」按**一问一答算一轮**（见 data/memory.js 的「一轮 = 2 条」），
+ *    不是消息条数；要和顶栏 renderHeader 里同一个数字保持同口径。
  */
 function dateSeparator(message, index) {
   const at = Number(message.at);
@@ -227,7 +225,7 @@ function messageNode(message, index, character, labels, ctx) {
   // 说话人显示名：助手那侧，绑了角色卡就是角色名，进了世界就是世界名；
   // 你自己那侧用会话上存的玩家角色名，没设就是「你」。
   const userLabel = (labels && labels.user) || userName();
-  const assistantLabel = speaker ? speaker.name : (labels && labels.assistant) || 'AI';
+  const assistantLabel = String((speaker ? speaker.name : labels && labels.assistant) || 'AI');
 
   const wrap = document.createElement('div');
   wrap.className = `msg ${isError ? 'error' : isUser ? 'user' : 'assistant'}`;
@@ -274,8 +272,7 @@ function messageNode(message, index, character, labels, ctx) {
   body.className = 'msg-body';
 
   // 消息头（设计稿：「谢临舟 掌柜 [deepseek-flash] ……… ‹2/3› 22:41」）
-  // 2026-10-12 之前这里只有一行灰色小字写着角色名，模型标签和候选翻页挂在它后面；
-  // 现在整行是 flex，右端多了时间，正文上面不再另起一行。
+  // 整行是 flex：左端名字，右端候选翻页和时间，正文上面不再另起一行。
   const role = document.createElement('div');
   role.className = 'msg-role';
 
@@ -301,7 +298,9 @@ function messageNode(message, index, character, labels, ctx) {
   // 放在消息头而不是操作栏：操作栏是悬停才浮出的，那样就**看不出这条有几个版本**了。
   const variants = Array.isArray(message.variants) ? message.variants : null;
   if (!isUser && !isError && variants && variants.length > 1) {
-    const at = Number.isFinite(message.variantIndex) ? message.variantIndex : 0;
+    const at = Number.isFinite(message.variantIndex)
+      ? Math.max(0, Math.min(variants.length - 1, Math.trunc(message.variantIndex)))
+      : 0;
     role.appendChild(
       h(
         'span',
@@ -356,7 +355,7 @@ function messageNode(message, index, character, labels, ctx) {
   const content = document.createElement('div');
   content.className = 'msg-content';
   if (isUser || isError) {
-    content.textContent = message.content;
+    content.textContent = String(message.content == null ? '' : message.content);
   } else {
     // 气泡里也要剥掉「状态栏行」和「剧情选项行」：
     //   · 状态值已经由面板权威持有并在顶部常驻显示，正文里再来一份是重复的；
@@ -403,9 +402,8 @@ function messageNode(message, index, character, labels, ctx) {
   }
 
   // 操作按钮。
-  // 2026-10-13（星宝：「工具条收一收」）：8 颗文字按钮排一行太密 —— 鼠标扫过去
-  // 满眼是字，常用的那几颗反倒找不到。现在只留**复制 / 编辑 / 重新生成**，
-  // 其余（继续 / 配图 / 帮我想想 / 分支 / 删除）收进末尾那颗「⋯」，点开才出现。
+  // 低频操作（继续 / 配图 / 帮我想想 / 分支 / 删除）收进末尾那颗「⋯」，
+  // 常用操作只留复制 / 编辑 / 重新生成。
   // ⚠️ 收的是**视觉**不是 DOM：低频按钮仍然留在 .msg-actions 里（只是 display:none），
   //    因为冒烟是靠 `.msg-actions .mini-btn` 的文字找按钮的 —— 节点不在就全断。
   const actions = document.createElement('div');
@@ -418,9 +416,13 @@ function messageNode(message, index, character, labels, ctx) {
     copy.textContent = '复制';
     copy.title = '复制这条消息';
     copy.setAttribute('aria-label', '复制这条消息');
-    copy.addEventListener('click', () => {
-      api.copyText(message.content);
-      showToast('已复制到剪贴板', 'ok');
+    copy.addEventListener('click', async () => {
+      try {
+        await api.copyText(message.content);
+        showToast('已复制到剪贴板', 'ok');
+      } catch (err) {
+        showToast(`复制失败：${(err && err.message) || '未知错误'}`, 'error');
+      }
     });
     actions.appendChild(copy);
 
@@ -549,7 +551,7 @@ export function renderMessages(options) {
   const character = characterForConvo(convo);
   el.messages.innerHTML = '';
 
-  if (!convo || !convo.messages.length) {
+  if (!convo || !Array.isArray(convo.messages) || !convo.messages.length) {
     const empty = document.createElement('div');
     empty.className = 'empty';
 
@@ -595,7 +597,7 @@ export function renderMessages(options) {
     return;
   }
 
-  // 每条消息都要用的几样东西，在循环外算一次 —— 以前是每条各算一遍
+  // 每条消息都要用的几样东西，在循环外算一次。
   const labels = {
     user: convoUserName(convo),
     assistant: speakerName(convo)

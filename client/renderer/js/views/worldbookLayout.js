@@ -30,7 +30,10 @@ export function initWorldbookLayout({ onFilter }) {
   summaryText.append(name, stats);
   summary.append(cover, summaryText);
   const actions = make('div', 'wb-bookbar-actions');
-  actions.append(document.getElementById('btn-preview-wb'), document.getElementById('btn-export-wb'));
+  for (const id of ['btn-preview-wb', 'btn-export-wb']) {
+    const action = document.getElementById(id);
+    if (action) actions.append(action);
+  }
   bar.append(summary, actions);
 
   const tabs = make('nav', 'wb-tabs', 'wb-tabs');
@@ -51,10 +54,11 @@ export function initWorldbookLayout({ onFilter }) {
     tabs.append(tab);
   }
   wrap.replaceChildren(bar, tabs, workspace, book, characterPanel);
-  // 原来嵌在「本书设置」里的那个动作条（预览命中）已被搬进书籍头，空壳收掉
-  root.querySelector('.wb-book-actions').remove();
+  // 书籍头里的动作条已经搬走了，旧的空壳容器收掉（HTML 里没有就跳过）
+  const oldActions = root.querySelector('.wb-book-actions');
+  if (oldActions) oldActions.remove();
 
-  // ⚙ 组件化（2026-10-16）：它被同一行 stretch 成 44px（= 组件的默认档），
+  // ⚙ 组件化：它被同一行 stretch 成 44px（= 组件的默认档），
   // 字号从 xs 变成正文级（和旁边那个筛选下拉一致）。
   // 下面 search.type / search.placeholder 是**直接设 property** 的写法，
   // 靠组件的 reflectProperties 桥到里层原生 input（base.js 有注释）。
@@ -62,9 +66,9 @@ export function initWorldbookLayout({ onFilter }) {
   search.type = 'search';
   search.placeholder = '搜索条目';
   search.setAttribute('aria-label', '搜索条目');
-  // ⚙ 组件化（2026-10-16）：状态筛选从原生 <select> 换成 <m-select>。
-  // 按标签名建就行 —— 组件在启动时注册过，createElement('m-select') 拿到的已经是
-  // 升级好的自定义元素；里面的 <option> 由组件搬进里层那颗原生 select。
+  // ⚙ 组件化：状态筛选用 <m-select>。按标签名建就行 —— 组件在启动时注册过，
+  // createElement('m-select') 拿到的已经是升级好的自定义元素；里面的 <option>
+  // 由组件搬进里层那颗原生 select。
   // 类名 `.wb-state` 留在宿主上，所以 style.css 里那两条（min-width / flex 宽度）
   // 一个字都不用改。
   const filter = make('m-select', 'wb-state', 'wb-state');
@@ -153,7 +157,7 @@ export function syncWorldbookLayout(book, draft, characterCount) {
     layout.crumb.textContent = `世界书 / ${bookName}`;
     layout.crumb.hidden = false;
   }
-  const entries = draft?.entries || [];
+  const entries = Array.isArray(draft?.entries) ? draft.entries : [];
   const on = entries.filter((entry) => entry.enabled !== false).length;
   const constant = entries.filter((entry) => entry.constant).length;
   const words = entries.reduce((sum, entry) => sum + String(entry.content || '').length, 0);

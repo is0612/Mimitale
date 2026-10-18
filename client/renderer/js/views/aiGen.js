@@ -26,7 +26,7 @@
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { uid } from '../core/util.js';
-import { h, button } from '../ui/build.js';
+import { h } from '../ui/build.js';
 // 字段（标签 + 控件 + 说明）的规范件，见 ui/controls.js
 import { field } from '../ui/controls.js';
 // 组件库：生成弹窗里的两个多行框（见 components/index.js）
@@ -84,7 +84,7 @@ ${FIELDS_SPEC}
  * 只会和条目内容打架。而角色库那侧没有这层上下文，模型只能靠一句描述
  * 自己脑补世界观，写出来容易飘 —— 这个框补的就是那层缺口。
  *
- * 做成可选：不填就整段不注入，提示词和以前一字不差。
+ * 做成可选：不填就整段不注入，提示词保持最短。
  */
 function briefSection(brief) {
   const text = String(brief || '').trim();
@@ -179,7 +179,7 @@ function buildBookContext(book, prompt) {
   const copies = worldbookCharacters(book);
   if (copies.length) {
     const names = copies.map((c) => c.name).filter(Boolean).join('、');
-    parts.push(`【这个世界已有的角色】\n${names}\n请生成一个和上面这些人都不同的新角色。`);
+    if (names) parts.push(`【这个世界已有的角色】\n${names}\n请生成一个和上面这些人都不同的新角色。`);
   }
 
   const entries = pickEntries(book, prompt, MAX_ENTRY_CHARS);
@@ -195,13 +195,11 @@ function buildBookContext(book, prompt) {
 /**
  * 从响应里取出模型写的正文。
  *
- * ⚠️ 两种形状不一样，别写成一回事：
+ * ⚠️ 两种形状不一样，不能写成一回事：
  *   · OpenAI 兼容：主进程的 streamChat 已经把 choices[].message.content 收成
  *     平铺的 `content` 了（见 main/http.js 的 resolve）。
  *   · 本机桥接：桥接的 /chat 与 /chat_with_image 都返回 `{ text, image }`，
  *     正文在 `text` 上。
- * 以前这里是照着原始 OpenAI 响应写的（去读 choices 数组），而 IPC 根本不会
- * 把那一层递过来 —— 结果正文永远是空串，生成出来永远是「未命名角色」。
  */
 function responseText(response, bridge) {
   if (!response) return '';
@@ -267,17 +265,33 @@ function parseAttrs(value) {
     const rawType = String(item.type || '').toLowerCase();
     const type = rawType === 'number' || rawType === 'meter' ? 'meter' : rawType === 'list' ? 'list' : 'text';
     const value0 = item.value;
-    const fieldValue =
-      type === 'text' && typeof value0 !== 'string' ? String(value0 == null ? '' : value0) : value0;
+    let fieldValue = value0;
+    if (type === 'text' && typeof value0 !== 'string') {
+      fieldValue = String(value0 == null ? '' : value0);
+    } else if (type === 'list' && Array.isArray(value0)) {
+      // 面板里的列表值是「多项用、隔开」的字符串，模型给数组时先拼好
+      fieldValue = value0
+        .filter((v) => typeof v === 'string' && v.trim())
+        .map((v) => v.trim())
+        .join('、');
+    }
 
     const field = { name, type, value: fieldValue == null ? '' : fieldValue };
-    // 数字字段的范围：模型给了就带上，没给就算了（归一化器两种都收）
+    // 数字字段的范围：模型给了就带上，没给就算了（归一化器两种都收）。
+    // 不能直接 Number(null) / Number('') —— 那会得到 0，凭空多一个范围。
+    const finiteNumber = (v) => {
+      if (v === null || v === undefined) return null;
+      if (typeof v === 'string' && v.trim() === '') return null;
+      return Number(v);
+    };
     if (type === 'meter') {
-      if (Number.isFinite(Number(item.max))) field.max = Number(item.max);
-      if (Number.isFinite(Number(item.min))) field.min = Number(item.min);
+      const max = finiteNumber(item.max);
+      const min = finiteNumber(item.min);
+      if (Number.isFinite(max)) field.max = max;
+      if (Number.isFinite(min)) field.min = min;
     }
     // 「几乎不动」才值得标出来；dynamic 是默认，不写
-    if (item.mode === 'static') field.mode = 'static';
+    if (String(item.mode || '').trim().toLowerCase() === 'static') field.mode = 'static';
 
     out.push(field);
     if (out.length >= 40) break;
@@ -351,7 +365,6 @@ export function initAiGen(opts = {}) {
   if (typeof opts.startDraft === 'function') startDraft = opts.startDraft;
 }
 
-
 function bookFor(id) {
   const list = Array.isArray(state.worldbooks) ? state.worldbooks : [];
   return list.find((w) => w.id === id) || null;
@@ -364,6 +377,9 @@ function bookFor(id) {
  * @param {string} [options.bookId] 世界书模式下要依据哪本书
  */
 export function openAiGenModal(options = {}) {
+  // 同一时间只允许一层：已经开着就先按「放弃这次」收掉，别叠出第二层
+  if (layerEl) closeLayer();
+
   scope = options.scope === 'worldbook' ? 'worldbook' : 'library';
   targetBook = scope === 'worldbook' ? bookFor(options.bookId) : null;
 
@@ -423,8 +439,8 @@ function closeLayer() {
 function buildLayer() {
   layerEl = h('div', { class: 'modal ai-gen-modal' });
 
-  // ⚙ 2026-10-16：两个多行框都换成组件（工厂形态）。观感走 style.css 的
-  //    `.ai-gen-body textarea`（后代选择器，里层那颗照样命中），宿主管布局。
+  // 两个多行框都用组件（工厂形态）。观感走 style.css 的 `.ai-gen-body textarea`
+  // （后代选择器，里层那颗照样命中），宿主管布局。
   const prompt = mTextarea({
     id: 'ai-gen-prompt',
     rows: '5',
@@ -503,7 +519,10 @@ function buildLayer() {
 /** 中止这次生成：只停自己这一个请求（按 requestId），不碰聊天 */
 function stopGen() {
   if (!busy) return;
-  if (currentGenId) api.stopChat(currentGenId);
+  if (currentGenId) {
+    // invoke 是 Promise；中止失败只记日志，不能让这里冒 unhandled rejection
+    api.stopChat(currentGenId).catch((err) => console.warn('[aiGen] 中止请求失败:', err));
+  }
   currentGenId = null;
   busy = false;
   updateButtons();
@@ -588,7 +607,14 @@ async function generate() {
 
     acceptDraft(parsed.fields);
   } catch (err) {
-    showToast((err && err.message) || '生成失败', 'error');
+    // 弹窗已经关掉 / 又开了一轮：这份失败属于作废的请求，别弹到新弹窗上
+    if (currentGenId !== requestId) return;
+    const message = (err && err.message) || '生成失败';
+    if (/abort|中止|cancel/i.test(message)) {
+      if (nodes && nodes.status) nodes.status.textContent = '已中止';
+      return;
+    }
+    showToast(message, 'error');
   } finally {
     // 只收拾自己这一轮：已作废的旧请求别把新一轮的 busy 也复位掉
     if (currentGenId === requestId) {

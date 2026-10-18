@@ -30,7 +30,7 @@ import { h, clear } from '../ui/build.js';
  *
  * 加一条短语：照下面加一行即可，面板的行数是跟着这张表走的，别处不用改。
  *
- * ⚠️ 为什么整条都用**全角括号**包起来：这是「场外指令」的老写法（酒馆那套）——
+ * ⚠️ 为什么整条都用**全角括号**包起来：这是「场外指令」的通行写法（酒馆那套）——
  *    括号里的内容是说给模型听的，不是剧情里的台词。所以它必须原样进输入框，
  *    不能在渲染面板时才补上括号（那样发出去的就没有括号了）。
  * ⚠️ 前四条是**前缀**（末尾那个冒号就是给你接着写内容用的），别顺手改成整句。
@@ -215,10 +215,14 @@ export function initQuickPhrases() {
     setOpen(false);
   });
 
-  // Esc 收起，焦点还给输入框（键盘用户不至于掉到页面开头）
+  // Esc 收起，焦点还给输入框（键盘用户不至于掉到页面开头）。
+  // 和 ui/menu.js / ui/modelMenu.js 一样用捕获阶段拦下：菜单开着时 Esc 只关菜单，
+  // 不能让底下正在开的弹窗也跟着关。
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape' || !isOpen) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
     setOpen(false);
     el.input.focus();
-  });
+  }, true);
 }

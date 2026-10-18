@@ -105,9 +105,8 @@ function fillPresetList(convo) {
  * 一动手就转成「手动配过」：读现有勾选状态写回会话。
  *
  * ⚠️ 这个监听器**只在 initPerspectiveUi 里绑一次**（事件委托挂在容器上）。
- * 以前它写在 fillPresetList 里 —— 那个函数每开一次弹窗都跑一遍，于是监听器
- * 一次叠一个：开过 N 次之后点一下勾选会连着存 N 次盘（commit 每次都读一遍 DOM，
- * 结果没错，但白写 N 次磁盘）。容器本身不会被 clear() 删掉，所以它会一直攒着。
+ *    别挪回 fillPresetList：那个函数每开一次弹窗都跑一遍，监听器一次叠一个，
+ *    开过 N 次之后点一下勾选会连着存 N 次盘。
  */
 function commitPresetChoice() {
   const convo = activeConvo();
@@ -151,9 +150,9 @@ function openPerspectiveModal() {
 
   // 纯聊天（没绑角色卡、也不是世界模式）= 就是跟模型聊天，**没有「演」这回事**。
   // 所以叙述模式和推进节奏这两组在这里直接不出现 —— 提示词里也不注入它们
-  // （见 data/messages.js 文件头 2026-10-13 那一段）。
+  // （见 data/messages.js 文件头）。
   // ⚠️ 藏起来不是“眼不见为净”：留着才是 bug —— 能选、能存、顶栏还显示标签，
-  //    对模型却一个字都不影响（2026-10-08 修过一次「叙述模式好像有 bug」，就是它）。
+  //    对模型却一个字都不影响。
   const plain = isPlainChatConvo(convo);
 
   el.pNarration.value = convoNarrationMode(convo);

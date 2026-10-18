@@ -1,11 +1,12 @@
 // ---------------------------------------------------------------------------
 //  设置页（含服务商编辑 / 生图 / 语义检索 / 桌宠）
 //
-//  ⚠️ 2026-10-09：它从**弹窗**改成了**页面**（视图六 `#view-settings`）。理由和
-//  迁移口径见 index.html 那段注释 + CHANGELOG。对外的接口只变了两处：
-//   · openSettings() 现在切屏（showView('settings')）并记下来处；
-//   · closeSettings() 改名 leaveSettings()：回到进来之前那一屏
-//     （保存 / 返回 / Esc 都走它，等于以前「关掉弹窗」的语义）。
+//  对外接口（入口层 / 其它视图在用，别改）：
+//   · openSettings() 切到这一屏，并记下来处；
+//   · leaveSettings() 回到进来之前那一屏（保存 / 返回 / Esc 都走它）；
+//   · expandSettingsSection(id) 切到某一组（桌宠右键菜单「查看记忆」用）。
+//  这三个都必须导出：composer / chatImages 在没配模型或生图时要把用户带进来；
+//  入口层的 Esc 判断链依赖 leaveSettings；桌宠右键菜单依赖 expandSettingsSection。
 //
 //  两处刻意的边界：
 //
@@ -14,24 +15,12 @@
 //     initSettings 注入（refreshModelSwitch / afterSettingsSave）。
 //     「对话头部」不在此列：views/header.js 只依赖 core / data，可以直接单向 import。
 //
-//   · openSettings 必须导出：发消息前发现没配模型、点「配图」发现没配生图时，
-//     那两个流程（发送在 views/composer.js、配图在 views/chatImages.js）
-//     要把用户带到这一屏。
+//   · 内容只在「进这一屏」时刷新，不参与整体重绘，所以不向刷新总线登记
+//     （和 views/perspectiveUi.js 一样，只做事件绑定）。
 //
-//   · leaveSettings 也要导出：入口层的 Esc 判断链里有固定顺序
-//     （确认框 → 玩家弹窗 → 角色选择 → 角色编辑器 → 设置 → 外观），
-//     那一条留在入口层，拆成两个监听器会让顺序失效。
-//
-//   · expandSettingsSection 也要导出：桌宠右键菜单的「查看记忆」是入口层接的
-//     （renderer/js/main.js），它得先把「桌宠」那一组**切到前台**再滚过去。
-//
-//  2026-10-10：大版块从「一列折叠卡片」改成**左侧导航 + 右侧内容**。
-//  逻辑在本文件下半段（分组导航那一段），样式在 style.css 的 .settings-nav /
-//  .settings-shell。对外接口没变：id 还是那六个，expandSettingsSection 照用
-//  —— 只是它现在的语义从「拆开那张卡」变成了「切到那一组」。
-//
-//  内容只在「进这一屏」时刷新，不参与整体重绘，所以不向刷新总线登记
-//  （和 views/perspectiveUi.js 一样，只做事件绑定）。
+//  布局：左侧导航 + 右侧内容。分组导航在本文件下半段，样式在 style.css 的
+//  .settings-nav / .settings-shell。对外接口没变：id 还是那六个，
+//  expandSettingsSection 的语义从「拆开折叠卡」变成了「切到那一组」。
 //
 //  内置目录兜底（模型清单 / 生图尺寸规则）在 views/settingsCatalog.js ——
 //  本模块只 import 它导出的查询和「铺进界面」的动作。往「服务商表单」里写字的
@@ -47,7 +36,7 @@ import { h, clear } from '../ui/build.js';
 import { fillSelect } from '../ui/controls.js';
 // 桌宠区块（它自己不依赖本模块，单向 import，不成环）
 import { openPetSection } from './petSettings.js';
-// 外观那一组（2026-10-12 深夜从顶栏弹窗搬进本页，见 index.html 的 #sec-appearance）。
+// 外观那一组（从顶栏弹窗搬进本页，见 index.html 的 #sec-appearance）。
 // 同样单向：appearance.js 不认识本模块。
 import { renderAppearanceForm } from './appearance.js';
 import { showToast } from '../ui/toast.js';
@@ -72,7 +61,7 @@ let personaShownModel = '';
 
 /**
  * 进设置页之前停在哪一屏。保存 / 返回 / Esc 都回到它 ——
- * 这就是「弹窗时代关掉弹窗」的效果，别让它变成永远回聊天。
+ * 别让它变成永远回聊天。
  */
 let returnView = 'chat';
 
@@ -90,7 +79,7 @@ export function initSettings(opts = {}) {
   if (typeof opts.afterSettingsSave === 'function') afterSettingsSave = opts.afterSettingsSave;
 
   el.btnSettings.addEventListener('click', openSettings);
-  // 「返回」= 不保存直接走（就是以前那颗 × 的位置）
+  // 「返回」= 不保存直接走
   el.btnBackSettings.addEventListener('click', leaveSettings);
   el.btnSaveSettings.addEventListener('click', () => saveSettings(false));
   el.btnTest.addEventListener('click', testConnection);
@@ -197,11 +186,6 @@ export function setEditingProvider(id) {
 /** 这次运行里选中哪一组（存 section 的 id）。默认第一组「模型服务」 */
 let currentSectionId = 'sec-models';
 
-/** 左栏导航里某个 data-target 对应的按钮 */
-function navItemFor(id) {
-  return el.viewSettings.querySelector(`.settings-nav-item[data-target="${id}"]`);
-}
-
 /**
  * 切到某一组：左栏高亮那个按钮，右栏只显示对应的那张卡，其余隐藏，内容滚回顶部。
  *
@@ -238,7 +222,7 @@ export function showSettingsSection(id) {
   if (id === 'sec-appearance') renderAppearanceForm();
 }
 
-/** 旧名保留：外部（入口层）一直按这个名字喊，语义已从「展开折叠卡」变成「切到那一组」 */
+/** 兼容名：外部一直按这个名字喊，语义已从「展开折叠卡」变成「切到那一组」 */
 export function expandSettingsSection(id) {
   showSettingsSection(id);
 }
@@ -305,8 +289,8 @@ function fillModelSelect(select, providerId, current, emptyHint, keepMissing = t
  *   2. 弹窗现在编辑的是哪一条？ → editingAssistantModel()
  *      = 弹窗顶部那个下拉框选中的模型。
  *
- * 这两个**刻意分开**。以前只取了 1 就拿它当编辑对象，界面上又没有任何地方能改，
- * 于是「想给另一个模型配人设」完全无从下手 —— 弹窗永远只有会话那一个模型的一份。
+ * 这两个**刻意分开**：只取 1 当编辑对象的话，弹窗永远只有会话那一个模型的一份，
+ * 想给另一个模型配人设就没有入口。
  */
 function defaultAssistantModel() {
   const convo = activeConvo();
@@ -414,15 +398,13 @@ function updatePersonaHint(settings) {
   const name = String(entry.name || '').trim();
   const hasText = !!String(entry.persona || '').trim();
 
-  // 顺手说一句「还存着别的模型的人设」：不然用户看着这一行，
-  // 会以为人设只跟当前这个模型绑死、别的地方没法配（就是这么以为才报的 bug）。
+  // 顺手说一句「还存着别的模型的人设」：否则用户会以为人设只跟当前模型绑死。
   const configured = Object.keys(assistantPersonaMap(source)).length;
   const others = configured - (name || hasText ? 1 : 0);
   const tail = others > 0 ? ` · 另有 ${others} 个模型配过` : '';
 
   // 再说一句生效范围：这份人设**只管**没绑角色卡、也没进世界的通用对话。
-  // 不写清楚的话，用户会以为它是对所有对话都生效的全局设定（进世界时看到
-  // 模型拿人设跟世界书打架，就是这么来的）。
+  // 不写清楚会被当成对所有对话生效的全局设定（进世界时拿它跟世界书打架）。
   el.assistantHint.textContent =
     (name || hasText
       ? `「${model}」已设置：${name || '（没写名字）'}`
@@ -487,14 +469,15 @@ async function savePersonaDialog() {
     return;
   }
 
-  // 走和设置弹窗同一条保存链路（白名单 / 归一化 / 重绘都在里面）。
-  // silent=true：不关设置弹窗、不弹「设置已保存」，提示由这里给得更准。
+  // 走和设置页同一条保存链路（白名单 / 归一化 / 重绘都在里面）。
+  // silent=true：不关设置页、不弹「设置已保存」，提示由这里给得更准。
   const savedModel = personaShownModel || editingAssistantModel();
   const prev = state.settings;
-  await saveSettings(true);
+  // 保存失败时别关弹窗：关了等于把用户刚写的草稿一起丢掉。
+  if (!(await saveSettings(true))) return;
   closePersonaDialog();
 
-  // 保存成功才会换成一个新对象（见 saveSettings 里的赋值）；失败时原样返回，别再报「已保存」
+  // 保存成功才会换成一个新对象（见 saveSettings 里的赋值）
   if (state.settings !== prev) showToast(`已保存「${savedModel}」的默认人设`, 'ok');
 }
 
@@ -547,21 +530,31 @@ async function applyPersonaTemplate() {
 
 // ------------------------------ 填表单 ------------------------------
 
+/**
+ * 读一个已保存的数字。
+ * ⚠️ `Number(null)` / `Number('')` 都是 0，不能直接拿 `Number.isFinite(Number(v))`
+ *    判断「有没有存过」—— 那会把 null 当成 0 填进表单。这里显式把空值当缺失。
+ */
+function savedNumber(value, fallback) {
+  if (value === null || value === undefined || value === '') return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function fillSettingsForm(settings) {
-  el.s.temp.value = settings.temperature ?? 0.7;
-  el.s.maxTokens.value = settings.maxTokens ?? 8192;
-  if (el.s.topP) el.s.topP.value = settings.topP ?? 0.95;
+  el.s.temp.value = savedNumber(settings.temperature, 0.7);
+  el.s.maxTokens.value = Math.floor(savedNumber(settings.maxTokens, 8192));
+  if (el.s.topP) el.s.topP.value = savedNumber(settings.topP, 0.95);
   if (el.s.thinking) el.s.thinking.checked = settings.thinking !== false;
   el.s.sendOnEnter.checked = settings.sendOnEnter !== false;
   el.s.showDate.checked = settings.showDate !== false;
   el.s.showUsage.checked = settings.showUsage !== false;
   el.s.autoContinue.checked = settings.autoContinue !== false;
   el.s.wbDepth.value = String(
-    Number.isFinite(Number(settings.worldbookRecursiveDepth)) ? Number(settings.worldbookRecursiveDepth) : 1
+    Math.min(5, Math.max(0, Math.floor(savedNumber(settings.worldbookRecursiveDepth, 1))))
   );
-  el.s.maxTurns.value = String(
-    Number.isFinite(Number(settings.maxTurns)) && Number(settings.maxTurns) >= 1 ? Math.floor(Number(settings.maxTurns)) : 20
-  );
+  const turns = savedNumber(settings.maxTurns, 20);
+  el.s.maxTurns.value = String(turns >= 1 ? Math.floor(turns) : 20);
 
   // 默认人设：弹窗字段跟着设置表单一起刷新，这样「设置里点保存」读到的
   // 永远是当前这一份 —— 用户从头到尾没开过弹窗，也不会把它清空。
@@ -633,7 +626,7 @@ function fillProviderForm() {
   el.p.name.value = p ? p.name || '' : '';
   el.p.baseUrl.value = p ? p.baseUrl || '' : '';
   el.p.apiKey.value = p ? p.apiKey || '' : '';
-  el.p.models.value = p ? (p.models || []).join('\n') : '';
+  el.p.models.value = p ? asArray(p.models).join('\n') : '';
   el.btnDelProvider.disabled = providers().length <= 1;
 }
 
@@ -742,11 +735,11 @@ function renderSectionStats() {
 function renderPresets() {
   el.providerPresets.innerHTML = '';
 
-  for (const preset of state.presets || []) {
+  for (const preset of asArray(state.presets)) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'preset-chip';
-    btn.textContent = preset.name;
+    btn.textContent = String(preset.name || '');
     btn.title = preset.baseUrl ? preset.baseUrl : '自己填写接口地址';
     btn.addEventListener('click', () => addProvider(preset));
     el.providerPresets.appendChild(btn);
@@ -761,7 +754,7 @@ function addProvider(preset) {
     name: preset.name || '新提供商',
     baseUrl: preset.baseUrl || '',
     apiKey: '',
-    models: [...(preset.models || [])],
+    models: [...asArray(preset.models)],
     type: preset.type || 'openai'
   };
 
@@ -803,6 +796,14 @@ async function removeProvider() {
   });
   if (!ok) return;
 
+  // 写盘失败要能退回去：下面会先改内存里的服务商列表，再走保存链路
+  const before = {
+    providers: state.settings.providers,
+    activeProviderId: state.settings.activeProviderId,
+    activeModel: state.settings.activeModel,
+    editingProviderId
+  };
+
   state.settings.providers = providers().filter((p) => p.id !== provider.id);
   const next = state.settings.providers[0];
   editingProviderId = next.id;
@@ -810,7 +811,7 @@ async function removeProvider() {
   // 删掉的正好是当前用的服务商，就切到剩下的第一个
   if (state.settings.activeProviderId === provider.id) {
     state.settings.activeProviderId = next.id;
-    state.settings.activeModel = next.models[0] || '';
+    state.settings.activeModel = asArray(next.models)[0] || '';
   }
 
   // 关键：先把表单切到下一个服务商。
@@ -819,7 +820,17 @@ async function removeProvider() {
   renderProviderTabs();
   fillProviderForm();
 
-  await saveSettings(true);
+  // 写盘失败时 saveSettings 已经弹过错误；这里不能再说「已删除」，
+  // 而且内存里的删除也要退回去，保持界面和磁盘一致。
+  if (!(await saveSettings(true))) {
+    state.settings.providers = before.providers;
+    state.settings.activeProviderId = before.activeProviderId;
+    state.settings.activeModel = before.activeModel;
+    editingProviderId = before.editingProviderId;
+    renderProviderTabs();
+    fillProviderForm();
+    return;
+  }
   showToast(`已删除「${provider.name}」`);
 }
 
@@ -858,36 +869,40 @@ function readSettingsForm() {
     // 用常量兜底会把「磁盘上明明是 512」悄悄改成 8192。
     temperature: numberFrom(
       el.s.temp,
-      Number.isFinite(Number(saved.temperature)) ? Number(saved.temperature) : 0.7,
+      savedNumber(saved.temperature, 0.7),
       0,
       2,
       false
     ),
     maxTokens: numberFrom(
       el.s.maxTokens,
-      Number.isFinite(Number(saved.maxTokens)) ? Number(saved.maxTokens) : 8192,
+      savedNumber(saved.maxTokens, 8192),
       64,
       32000,
       true
     ),
     thinking: el.s.thinking ? el.s.thinking.checked : saved.thinking !== false,
-    topP: numberFrom(el.s.topP, saved.topP ?? 0.95, 0, 1, false),
+    topP: numberFrom(
+      el.s.topP,
+      savedNumber(saved.topP, 0.95),
+      0,
+      1,
+      false
+    ),
     sendOnEnter: el.s.sendOnEnter.checked,
     showDate: el.s.showDate.checked,
     showUsage: el.s.showUsage.checked,
     autoContinue: el.s.autoContinue.checked,
     worldbookRecursiveDepth: numberFrom(
       el.s.wbDepth,
-      Number.isFinite(Number(saved.worldbookRecursiveDepth))
-        ? Number(saved.worldbookRecursiveDepth)
-        : 1,
+      savedNumber(saved.worldbookRecursiveDepth, 1),
       0,
       5,
       true
     ),
     maxTurns: numberFrom(
       el.s.maxTurns,
-      Number.isFinite(Number(saved.maxTurns)) ? Number(saved.maxTurns) : 20,
+      savedNumber(saved.maxTurns, 20),
       1,
       200,
       true
@@ -919,7 +934,7 @@ export function openSettings() {
   // 那会把没保存的改动当场冲掉。什么都不做即可。
   if (currentViewName() === 'settings') return;
 
-  // 记下来处：保存 / 返回 / Esc 都回到它（弹窗时代是「关掉弹窗」，语义没变）
+  // 记下来处：保存 / 返回 / Esc 都回到它
   returnView = currentViewName();
 
   if (!editingProviderId || !providerById(editingProviderId)) {
@@ -950,17 +965,16 @@ export function openSettings() {
 
   // 焦点落在页头那颗「返回」上：键盘（Esc / Tab）有个明确的落点。
   //
-  // ⚠️ **不要**去聚焦任何输入框：以前这里是「服务商填过 Key 就把光标放进温度框」，
-  // 而 <input type="number"> 一获得焦点就**整段选中** —— 每次进设置，第一眼都是
-  // 「温度 0.7」被高亮成一块蓝，像是自己不小心改了什么；分组之后那个框还可能在
-  // 没选中那一组里（display:none），更不该往里丢焦点。
+  // ⚠️ **不要**去聚焦任何输入框：<input type="number"> 一获得焦点就**整段选中** ——
+  // 每次进设置，第一眼都是「温度 0.7」被高亮成一块蓝；而且那个框还可能在
+  // 没选中的分组里（display:none），更不该往里丢焦点。
   if (el.btnBackSettings) el.btnBackSettings.focus();
 }
 
 /**
  * 离开设置页：回到进来之前那一屏。
  *
- * 保存 / 返回 / Esc 三条路都走它 —— 在弹窗时代这三件事都是「关掉弹窗」。
+ * 保存 / 返回 / Esc 三条路都走它。
  * 只保证回到**视图**：进来之前要是正开着一个弹窗（比如从桌宠右键菜单跳进来时
  * 旁边还开着记忆弹窗），那个不管，它自己那套 Esc / 关闭按钮照旧。
  */
@@ -975,15 +989,12 @@ async function saveSettings(silent) {
     state.settings = await api.saveSettings(patch);
   } catch (err) {
     showToast((err && err.message) || '保存失败', 'error');
-    return state.settings;
+    return null;
   }
 
   // 主进程可能重新整理了服务商，这里同步回界面
-  if (!providerById(editingProviderId)) {
-    editingProviderId = state.settings.activeProviderId;
-  } else {
-    editingProviderId = providerById(editingProviderId).id;
-  }
+  const kept = providerById(editingProviderId);
+  editingProviderId = kept ? kept.id : state.settings.activeProviderId;
   renderProviderTabs();
   fillProviderForm();
 
@@ -1016,9 +1027,10 @@ function applyCatalogModels(catalog, replace) {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const next = replace ? [...catalog.models] : [...existing];
+  const models = asArray(catalog.models);
+  const next = replace ? [...models] : [...existing];
   if (!replace) {
-    for (const m of catalog.models) {
+    for (const m of models) {
       if (!next.includes(m)) next.push(m);
     }
   }
@@ -1057,7 +1069,7 @@ async function fetchModels() {
   el.btnFetchModels.disabled = true;
   el.btnFetchModels.textContent = '获取中…';
   try {
-    const models = await api.listModels({ provider });
+    const models = asArray(await api.listModels({ provider }));
 
     // 模型可能上百个，填太多反而难挑，只取前 120 个
     const capped = models.slice(0, 120);

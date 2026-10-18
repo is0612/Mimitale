@@ -12,8 +12,8 @@
 //  表现是「卡导进来了、书也在库里、但聊起来就是不生效」——
 //  全程不报错，只能靠人发现。
 //
-//  单独成模块是为了能测：以前这段写在 importCards() / importWorldbooks()
-//  两个函数里各一份，而这两个函数夹在弹窗和落盘中间，
+//  单独成模块是为了能测：这段如果写在 importCards() / importWorldbooks()
+//  两个函数里各一份，而那两个函数夹在弹窗和落盘中间，
 //  冒烟测试根本走不到（characters:import 在测试里是个桩）。
 // ============================================================================
 
@@ -28,14 +28,14 @@ import { asArray } from '../core/util.js';
  * @returns {{ books: object[], chars: object[] }}
  */
 export function reissueImportedIds(books, chars, stamp) {
-  const list = asArray(books);
-  const list2 = asArray(chars);
+  const bookList = asArray(books);
+  const charList = asArray(chars);
   const prefix = String(stamp || '');
 
   // 旧 id → 新 id。角色的 worldbookIds 靠这张表改写。
   const bookIdMap = new Map();
 
-  const freshBooks = list.map((w, i) => {
+  const freshBooks = bookList.map((w, i) => {
     const book = { ...w, id: `w${prefix}-${i}` };
     if (w && typeof w.id === 'string') bookIdMap.set(w.id, book.id);
     // 书里的角色副本也一起换，免得两次导入撞上同一个 id
@@ -45,7 +45,7 @@ export function reissueImportedIds(books, chars, stamp) {
     return book;
   });
 
-  const freshChars = list2.map((c, i) => {
+  const freshChars = charList.map((c, i) => {
     const character = { ...c, id: `c${prefix}-${i}` };
     if (Array.isArray(character.worldbookIds)) {
       character.worldbookIds = character.worldbookIds.map((id) =>

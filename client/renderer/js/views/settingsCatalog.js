@@ -32,8 +32,7 @@ import { providerById } from '../data/providers.js';
  * ⚠️ 这份清单和 main/providers.js 的 PROVIDER_PRESETS **是两件事**：
  *    · PRESETS 是「第三方模型提供商」点开时一键填充的**起步值**（可以随便改）；
  *    · 这里是拉取失败时兜底填进去的**内置目录**（本质是「这家有哪些模型」的知识）。
- *    两边都只收国内平台：2026-10-12 撤掉了 OpenAI，并一起收敛到同一批 6 家
- *    （对不上时以 PRESETS 为准）。
+ *    两边都只收国内平台（对不上时以 PRESETS 为准）。
  *
  * imageModels 是「生图」那一组能用的模型。文本模型不能拿来生图，
  * 选错了接口会报 404 —— 这个坑很容易踩，所以单独列出来。
@@ -127,16 +126,14 @@ export function looksLikeUnsupportedModelList(message) {
  * 各生图模型支持的图片尺寸。
  *
  * 这个必须按模型区分：两家都只认自己那份「推荐尺寸 + 自定义区间」，
- * 而本应用早期一律发 1024x1024，在只收固定档的模型上被接口拒掉
+ * 一律发 1024x1024 在只收固定档的模型上会被接口拒掉
  * （智谱错误码 1210「参数有误」）。参数照各自官方文档抄：
  *   · GLM-Image  推荐 7 档，自定义 512-2048、长宽均为 32 的整数倍
  *   · CogView-3  推荐 7 档，自定义 512-2048、长宽均被 16 整除，且总像素 ≤ 2^21
  *
- * ⚠️ 修过一次的坑：glm-image 的自定义下限当初写成 1024，是照「推荐尺寸里最小的
- *    那个」抄的 —— 实际文档写的是 512px。结果是 512x512、800x800 这类**合法**
- *    尺寸被自家校验判成非法、被悄悄换掉；而 1024x1024 本来就是合法的
- *    （在 512-2048 内、也是 32 的倍数），并不需要被「纠正」。
- */
+ * ⚠️ glm-image 的自定义下限是 **512**，不是推荐尺寸里最小的 1024：
+ *    512x512、800x800 这类合法尺寸不能被自家校验判成非法而悄悄换掉；
+ *    1024x1024 本来就在 512-2048 内、也是 32 的倍数，不需要被「纠正」。
 const MAX_CUSTOM_PIXELS = 2 ** 21; // CogView 的硬上限：总像素不超过 2^21
 
 const IMAGE_SIZE_RULES = [
@@ -202,12 +199,14 @@ function isValidImageSize(model, size) {
  */
 export function preferImageModel(provider) {
   if (!provider) return;
+  const select = el.s && el.s.imageModel;
+  if (!select) return;
 
   const imageModels = imageCatalogModels(provider.id);
   if (!imageModels.length) return;
 
   const available = Array.isArray(provider.models) ? provider.models.filter(Boolean) : [];
-  const current = String(el.s.imageModel.value || '').trim();
+  const current = String(select.value || '').trim();
 
   // 当前已经是这家已知的生图模型 —— 不用动
   if (current && imageModels.includes(current)) return;
@@ -217,12 +216,12 @@ export function preferImageModel(provider) {
   const target = imageModels[0];
   if (target === current) return;
 
-  const option = Array.from(el.s.imageModel.options || []).find((o) => o.value === target);
+  const option = Array.from(select.options || []).find((o) => o.value === target);
   if (option) {
-    el.s.imageModel.value = target;
+    select.value = target;
   } else {
-    el.s.imageModel.appendChild(h('option', { value: target, text: `${target}（内置）` }));
-    el.s.imageModel.value = target;
+    select.appendChild(h('option', { value: target, text: `${target}（内置）` }));
+    select.value = target;
   }
 
   showToast(
@@ -238,7 +237,7 @@ export function preferImageModel(provider) {
  * 模型不认识时用通用尺寸，不拦着用户。
  */
 export function fillImageSizeOptions(model, current) {
-  const select = el.s.imageSize;
+  const select = el.s && el.s.imageSize;
   if (!select) return;
 
   const sizes = sizesForImageModel(model);

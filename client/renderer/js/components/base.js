@@ -132,8 +132,9 @@ export function applyOptions(el, opts = {}) {
 
   if (variant != null) setAttr(el, 'variant', variant);
   if (size != null) setAttr(el, 'size', size);
-  if (block) setAttr(el, 'block', true);
-  if (disabled) setAttr(el, 'disabled', true);
+  // 用 != null 而不是真值判断：false 表示「明确关掉」，要能把旧属性删掉
+  if (block != null) setAttr(el, 'block', block);
+  if (disabled != null) setAttr(el, 'disabled', disabled);
 
   if (className) {
     const names = Array.isArray(className) ? className : String(className).split(/\s+/);

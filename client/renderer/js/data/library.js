@@ -33,7 +33,7 @@ export function characterForConvo(convo) {
  *
  * 老数据只有 {name, value}，这里走一遍共享归一化，于是 type/min/max/hint
  * 缺省都补成合理的值（type 默认 text）。范围/hint 是可选增强 ——
- * 没有它们的属性行为和以前完全一样。
+ * 没有它们的属性就是普通文本字段，行为和纯文本一致。
  */
 export function characterAttrs(character) {
   if (!character || !Array.isArray(character.attributes)) return [];
@@ -134,7 +134,9 @@ export function convoDialoguePresetIds(convo) {
     if (typeof legacy === 'string' && legacy.trim()) return [legacy];
     return null;
   }
-  return raw.filter((id) => typeof id === 'string' && id.trim());
+  return raw
+    .filter((id) => typeof id === 'string' && id.trim())
+    .map((id) => id.trim());
 }
 
 /**
@@ -220,7 +222,7 @@ function worldbookCharacterPayload(character) {
  */
 export function worldbookPayload(book) {
   const entries = {};
-  (book.entries || []).forEach((entry, index) => {
+  asArray(book.entries).forEach((entry, index) => {
     entries[String(index)] = {
       uid: index,
       comment: entry.title || '',

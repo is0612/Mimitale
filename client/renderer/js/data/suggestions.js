@@ -90,8 +90,8 @@ export function defaultOptionsSpec() {
  *   · 卡上配过 → 复制一份（改卡不该动到正在进行的这一局）；
  *   · 没配过 / 没有卡（进世界时自己写的那个「主角」）→ 默认 4 条。
  *
- * 以前这里只认「卡上配过」，导致在角色编辑器里没勾过选项的卡、以及进世界时
- * 手写的主角，全程都没有剧情选项 —— 现在一律默认给。
+ * 没配过 / 没有卡（进世界时自己写的那个「主角」）→ 默认 4 条。
+ * 这样在角色编辑器里没勾过选项的卡、以及进世界时手写的主角，都不会整局没有选项。
  */
 export function optionsSpecFromCharacter(character) {
   const spec = character && character.optionsSpec;

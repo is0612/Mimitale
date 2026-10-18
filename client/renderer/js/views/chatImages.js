@@ -50,9 +50,10 @@ function shrinkChatImage(dataUrl) {
         canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
 
-        // 先按 0.82 压；还是太大就降到 0.6 —— 宁可糊一点也别把请求撑爆
+        // 先按 0.82 压；浏览器不支持 webp 时会回一张 PNG，再退到 JPEG。
+        // 只看 `data:image/` 前缀是不够的：PNG 也匹配那个前缀，于是 fallback 永远不触发。
         let out = canvas.toDataURL('image/webp', 0.82);
-        if (!out.startsWith('data:image/')) {
+        if (!out.startsWith('data:image/webp')) {
           out = canvas.toDataURL('image/jpeg', 0.85);
         }
         if (out.length > CHAT_IMAGE_MAX_CHARS && out.startsWith('data:image/webp')) {
@@ -121,7 +122,7 @@ export async function illustrateMessage(index) {
     return;
   }
 
-  const message = convo.messages[index];
+  const message = Array.isArray(convo.messages) ? convo.messages[index] : null;
   if (!message || message.role !== 'assistant') return;
 
   const settings = state.settings || {};

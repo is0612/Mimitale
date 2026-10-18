@@ -25,7 +25,7 @@ import { el } from '../core/dom.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear, append } from '../ui/build.js';
-// 轻量输入框工厂：还剩「＋ 新建分组」那颗**药丸形**的临时输入框用它
+// 轻量输入框工厂：「＋ 新建分组」那颗**药丸形**的临时输入框用它
 //（它是个一次性的定制件，不归通用组件管）。见 ui/controls.js
 import { input } from '../ui/controls.js';
 import { MAX_PANEL_FIELDS, panelFieldAllowed } from '../data/panel.js';
@@ -48,10 +48,9 @@ const ATTR_TYPES = [
  * 它把「这一轮到底要不要写这行」这个判断**交给模型**。剧情明明变了（脱了衣服、
  * 钱花掉了），模型也可能自判「这轮我没细写它」而整行省掉 —— 于是状态卡上的值
  * 就停在那儿不动，用户看到的现象是「属性卡不同步更新」。
- * 这个坑已经踩过两次（见 CHANGELOG 的 2199ae1、以及 2026-09-30 那次排查），
- * 所以宁可让标签长一点，也要让人在选择的那一刻就知道风险。
+ * 这个坑已经踩过两次，所以宁可让标签长一点，也要让人在选择的那一刻就知道风险。
  * ⚠️ 也别在这儿写具体字段名（穿着/身高/钱包…）—— 那是用户自己的卡，
- * 应用里写死别人的字段名曾经被明确要求去掉（commit db5c5de）。
+ * 应用里不应写死别人的字段名。
  */
 const ATTR_MODES = [
   { value: 'dynamic', label: '每轮维护' },
@@ -283,6 +282,7 @@ function renameGroup(list, from, to) {
 
   let moved = 0;
   for (const attr of list) {
+    if (!attr) continue;
     if (String(attr.group || '').trim() !== from) continue;
     if (target) attr.group = target;
     else delete attr.group;
@@ -339,6 +339,7 @@ async function deleteGroup(list, id) {
   }
 
   for (const attr of list) {
+    if (!attr) continue;
     if (String(attr.group || '').trim() !== group) continue;
     delete attr.group;
   }
@@ -403,8 +404,7 @@ function renderAttrTabs(list, buckets, active) {
   // 也不能删（删了零散字段就没地方落了）。
   //
   // 做成一个独立入口而不是「双击标签改名」之类的手势：手势没人猜得到，
-  // 而这两个操作以前**根本没有入口**（分组是在「更多」里靠改字段上的 group
-  // 一次性建出来的，建完就没法整组改名或删除了）。
+  // 而整组改名 / 删除需要一个明确入口，不能只靠「更多」里逐个改字段的 group。
   // 靠 margin-left:auto 推到卡头最右边，和标签拉开距离，免得被看成一个特殊标签。
   if (active) {
     el.c.attrTabs.appendChild(
@@ -517,7 +517,7 @@ function renderAttrRows(list, bucket) {
       }
     });
 
-    // ⚙ 组件化（2026-10-16）：尺寸（26px / xs 字号 / 小圆角）归组件的 size="xs"，
+    // 尺寸（26px / xs 字号 / 小圆角）归组件的 size="xs"，
     // 页面 CSS 只剩「它在行里占多宽」和这个上下文的文字颜色。
     const typeSelect = mSelect(
       {
@@ -603,7 +603,7 @@ function buildMoreBox(list, attr) {
         'aria-label': `${attr.name} 的${label}`,
         oninput: (event) => {
           const raw = String(event.target.value || '').trim();
-          if (raw === '' || !isFinite(Number(raw))) delete attr[key];
+          if (raw === '' || !Number.isFinite(Number(raw))) delete attr[key];
           else attr[key] = Number(raw);
         }
       });
@@ -771,8 +771,7 @@ function createGroupAndMove(list, attr, rawName) {
 
 /**
  * 加字段那一行的占位文案要跟着当前分组走 ——
- * 否则用户不知道「添加」到底加进了哪一组
- * （以前得先加了、再点开「更多」补分组，多两步还容易漏）。
+ * 否则用户不知道「添加」到底加进了哪一组。
  */
 function renderAttrAddRow(bucket) {
   if (!el.c.attrNew) return;
@@ -812,7 +811,7 @@ function parseAttributesFromText(text) {
       continue;
     }
 
-    const name = m[1].trim();
+    const name = m[1].trim().slice(0, 24);
     const value = String(m[2] || '').trim().slice(0, 200);
     if (!name || seen.has(name)) continue;
     if (!panelFieldAllowed(name)) {
@@ -821,7 +820,7 @@ function parseAttributesFromText(text) {
     }
 
     seen.add(name);
-    pairs.push({ name: name.slice(0, 24), value });
+    pairs.push({ name, value });
   }
 
   return { pairs, skipped };
@@ -839,7 +838,7 @@ function applyParsedAttributes(list, pairs) {
   const group = activeGroupOf(list);
 
   for (const item of pairs) {
-    const existing = list.find((a) => a.name === item.name);
+    const existing = list.find((a) => a && a.name === item.name);
     if (existing) {
       if (existing.value !== item.value) {
         existing.value = item.value;
@@ -900,14 +899,14 @@ function addCharAttr(list, rawName) {
     showToast(`「${name}」是状态栏的保留字段名，换一个吧`, 'error');
     return;
   }
-  if (list.some((a) => a.name === name)) {
+  if (list.some((a) => a && a.name === name)) {
     showToast(`已经有「${name}」了`);
     return;
   }
   if (list.length >= MAX_PANEL_FIELDS) return;
 
   const attr = { name, value: '' };
-  // 未分组就不写 group —— 数据形状和以前完全一样（老存盘里没有 group 这个键）
+  // 未分组就不写 group —— 老存盘里本来就没有这个键，保持数据形状一致
   const group = activeGroupOf(list);
   if (group) attr.group = group;
 

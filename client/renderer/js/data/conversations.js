@@ -66,7 +66,7 @@ export function createConvo(activate) {
     optionsSpec: null,
     // 视角设置：叙述模式（标准/内心描写/上帝视角）、推进节奏、GM 模式
     // ⚠️ 纯聊天（「＋ 新对话」）**用不上**这两个档 —— 提示词里不注入、视角弹窗里也不显示
-    //    （见 data/messages.js 文件头 2026-10-13 那段）。但这里照旧写上默认值：
+    //    （见 data/messages.js 文件头）。但这里照旧写上默认值：
     //    这个会话万一被切成 GM 模式，默认档直接可用，不用再补一次字段。
     narrationMode: DEFAULT_NARRATION_MODE,
     // 默认「一步一步」：不这样的话模型会一口气把整场戏演完，玩家只剩看的份
@@ -100,10 +100,9 @@ export function branchSkeleton(convo, cut) {
       return ids === null ? null : [...ids];
     })(),
     gmMode: convo.gmMode === true,
-    // 视角设置也要照搬 —— 注释里一直写着「视角设置」，实现却漏了这两个键：
-    // convoNarrationMode / convoPaceMode 查不到就回落到默认档，于是
-    // 从「上帝视角 + 快节奏」分出来的新线悄悄变回「标准 + 一步一步」，
-    // 提示词变了、顶栏的档位标签也没了，而且不报任何错。
+    // 视角设置也要照搬：不照搬的话，从「上帝视角 + 快节奏」分出来的新线
+    // 会悄悄变回「标准 + 一步一步」—— 提示词变了、顶栏的档位标签也没了，
+    // 而且不报任何错。
     narrationMode: convoNarrationMode(convo),
     paceMode: convoPaceMode(convo),
     player: convo.player ? { ...convo.player } : null,

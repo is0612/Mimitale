@@ -14,11 +14,8 @@
 //    · 摘要的编辑 / 重新生成 / 删除 / 清空
 //    · 存档点的存 / 读 / 删
 //
-//  「什么时候该自动压一段」是后台调度，留在 main.js 的 maybeSummarize()——
-//  它由聊天流程触发，而且压缩开始/结束要改头部的「正在整理记忆…」提示，
-//  而 header 还没拆出来。等 header 独立成模块时再考虑把它归位。
-//  「手动压一段」按钮（summarizeNow）同理留在 main.js。
-//
+//  「什么时候该自动压一段」的调度在 views/summarize.js 的 maybeSummarize()，
+//  「手动压一段」按钮也由那边导出；本模块只负责弹窗和摘要 / 存档点的管理。
 //  摘要的参数、纯逻辑（区间计算 / 提示词 / 转录 / 请求）都在 data/memory.js，
 //  运行态（summarizingConvos / summaryFailures）也在那儿 —— 两头都能向下取，
 //  谁都不必认识谁。
@@ -29,7 +26,7 @@ import { el } from '../core/dom.js';
 import { uid, now, activeConvo } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
-import { h, button, clear } from '../ui/build.js';
+import { h, clear } from '../ui/build.js';
 // 组件库：就地编辑一段摘要用的多行框（见 components/index.js）
 import { mTextarea, mButton } from '../components/index.js';
 import { persistConversations } from '../data/persist.js';
@@ -64,9 +61,6 @@ export function renderMemoryIndicator() {
   el.btnMemory.title = count
     ? `已压缩 ${count} 段早期剧情`
     : '较早的对话会自动压成摘要';
-
-  // ⛔ 「⋯」上那颗小圆点（moreDot）2026-10-12 深夜删：记忆已经提到顶栏，
-  //    它自己那颗角标（上面那个 #memory-count）就是提示，不用再在菜单上点一下。
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +109,7 @@ export function renderMemoryModal() {
   // 存档点在下面那一节，跟摘要没关系 —— 得放在「没有摘要就 return」之前
   renderCheckpoints(convo);
 
-  el.memoryList.innerHTML = '';
+  el.memoryList.textContent = '';
 
   if (!list.length) {
     const empty = document.createElement('div');
@@ -195,8 +189,8 @@ function buildMemoryCard(convo, seg, index, total) {
   body.className = 'memory-card-body';
 
   if (isEditing) {
-    // ⚙ 组件化（2026-10-16）：就地编辑摘要用的多行框走工厂形态；
-    //    `.memory-edit-box` 留在宿主持布局，观感那条规则跟着改成 `> textarea`。
+    // 就地编辑摘要用多行框组件；`.memory-edit-box` 留在宿主持布局，
+    // 观感规则落在里层 `> textarea` 上。
     const box = mTextarea({
       class: 'memory-edit-box',
       value: String(seg.text || ''),
@@ -301,21 +295,27 @@ async function regenerateSummary(convo, segmentId) {
 }
 
 async function deleteSummarySegment(convo, segmentId) {
-  const seg = convoSummaries(convo).find((s) => s.id === segmentId);
-  if (!seg) return;
+  const list = convoSummaries(convo);
+  const index = list.findIndex((s) => s.id === segmentId);
+  if (index < 0) return;
+  const seg = list[index];
+  const later = list.length - index - 1;
 
+  // 摘要的 start/end 是连续区间，summarizedCount 又只取最大 end。
+  // 只删中间一段、把后面各段往前挪，会让被删段的原文继续被挡在上下文外，
+  // 而后面摘要的文字其实覆盖的是另一段原文 —— 等于静默丢消息。
+  // 所以删除目标段时，把它之后依赖它的摘要一起删掉，让原文真正从这段开始回到上下文。
   const ok = await confirmDialog({
     title: '删除摘要',
-    message: `删除「${seg.title}」？对应的原文会重新进入上下文，占用更多 token。`,
+    message: later
+      ? `删除「${seg.title}」以及它后面的 ${later} 段摘要？这些摘要对应的原文会重新进入上下文，占用更多 token。`
+      : `删除「${seg.title}」？对应的原文会重新进入上下文，占用更多 token。`,
     confirmText: '删除',
     danger: true
   });
   if (!ok) return;
 
-  convo.summaries = convoSummaries(convo).filter((s) => s.id !== segmentId);
-  // 删掉中间某段后，后面各段的覆盖范围就断了 —— 把范围重新编号，
-  // 否则 buildApiMessages 会从错误的覆盖点往后取历史。
-  renumberSummaries(convo);
+  convo.summaries = list.slice(0, index);
   convo.updatedAt = now();
   persistConversations(0);
   renderMemoryModal();
@@ -324,28 +324,8 @@ async function deleteSummarySegment(convo, segmentId) {
 }
 
 /**
- * 删除某段后，把各段的 start/end 重新串起来。
- * 摘要内容不重写 —— 只是让覆盖范围保持连续。
- */
-function renumberSummaries(convo) {
-  const list = convoSummaries(convo);
-  const messages = convoContextMessages(convo);
-  let cursor = 0;
-
-  for (const seg of list) {
-    const span = Math.max(0, (Number(seg.end) || 0) - (Number(seg.start) || 0));
-    seg.start = cursor;
-    seg.end = Math.min(messages.length, cursor + span);
-    cursor = seg.end;
-  }
-
-  // 只保留真正覆盖了内容的段
-  convo.summaries = list.filter((s) => s.end > s.start);
-}
-
-/**
  * 清空全部摘要（弹窗右上角那颗红按钮）。
- * 全部删掉之后**不用** renumberSummaries —— 一段都不剩，没有范围要重排。
+ * 全部删掉之后不用重排范围 —— 一段都不剩。
  */
 async function clearAllSummaries() {
   const convo = activeConvo();
@@ -392,7 +372,8 @@ function snapshotConvo(convo) {
     panelFields: [...convoPanelFields(convo)],
     panelDefs: JSON.parse(JSON.stringify(convoPanelDefs(convo))),
     options: [...(Array.isArray(convo.options) ? convo.options : [])],
-    optionsSpec: convo.optionsSpec ? { ...convo.optionsSpec } : null,
+    // false 是「这张卡明确不要剧情选项」，不能被吞成 null（null = 没配过）
+    optionsSpec: convo.optionsSpec === false ? false : convo.optionsSpec ? { ...convo.optionsSpec } : null,
     summaries: JSON.parse(JSON.stringify(convoSummaries(convo))),
     player: convo.player ? { ...convo.player } : null
   };
@@ -446,9 +427,11 @@ async function restoreCheckpoint(id) {
   convo.panelFields = data.panelFields || [];
   convo.panelDefs = normalizePanelDefs(data.panelDefs);
   convo.options = Array.isArray(data.options) ? data.options : [];
-  convo.optionsSpec = data.optionsSpec || null;
+  // 保持三态：false = 明确关掉，null/缺省 = 没配过，对象 = 具体配置
+  convo.optionsSpec = data.optionsSpec === false ? false : data.optionsSpec || null;
   convo.summaries = data.summaries || [];
-  if (data.player) convo.player = data.player;
+  // 存档时是 null 就恢复成 null，不能因为「现在有玩家角色」把存档前的状态留错
+  convo.player = data.player || null;
   convo.updatedAt = now();
   state.usage = null;
 
