@@ -19,6 +19,8 @@ const {
 const DEFAULT_BASE_URL = 'https://api.deepseek.com';
 const DEFAULT_MODEL = 'deepseek-chat';
 
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
 /**
  * 待告知用户的「设置迁移」通知。
  *
@@ -36,9 +38,9 @@ function takeSettingsNotices() {
 
 // 内置的模型提供商预设：「第三方模型提供商」按钮点开时一键填充。
 //
-// ⚠️ 这里**只放国内平台** —— 2026-10-12 撤掉了 OpenAI 等境外平台，
-//    并把一开始铺开的 12 家**收敛到 6 家**（星宝：「太多了」）。
-//    预设是给「刚上手、想赶紧填个 Key 就能聊」的人看的 —— 选择越多越挑不动。
+// ⚠️ 这里**只放国内平台**，而且刻意只留少数几家 —— 预设是给「刚上手、
+//    想赶紧填个 Key 就能聊」的人看的，选择越多越挑不动。其余 OpenAI 兼容
+//    平台（豆包 / 硅基流动 / 百度文心 / 境外平台 …）走最下面的「自定义模型API」。
 //
 // baseUrl 一律是各家公开的 **OpenAI 兼容端点**，别换成 SDK 文档里的原生协议地址
 // （比如混元是 api.hunyuan.cloud.tencent.com/v1，不是腾讯云签名那套
@@ -145,13 +147,12 @@ const DEFAULT_SETTINGS = {
   topP: 0.95,
   thinking: true,
   // 界面主题：light（白天）/ dark（夜间）
-  // ⚠️ 必须是**真实的出厂默认**，不能是「以前那版的默认」—— 它不只用来补缺键：
+  // ⚠️ 必须是**真实的出厂默认**，不能随手写一个值 —— 它不只用来补缺键：
   //    main/window.js 拿它当**首屏窗口底色**（loadSettings 抛错时的兜底），
   //    写错就是「深色应用启动先闪一下白底」。
   theme: 'dark',
-  // 配色方案：只剩 amber（琥珀灯）一套 —— pink / blue / matcha 已下线，
-  // 老配置里那几个值会在归一化时退回 ACCENTS[0]。
-  // 与明暗模式正交。默认见 ACCENTS[0]。
+  // 配色方案：只剩 amber（琥珀灯）一套，与明暗模式正交。
+  // 不认识的值会在归一化时退回 ACCENTS[0]。
   accent: 'amber',
   sendOnEnter: true,
   showDate: true,
@@ -175,8 +176,6 @@ const DEFAULT_SETTINGS = {
   worldbookRecursiveDepth: 1,
   // 最多把多少轮对话带进请求（1 轮 = 一问一答）。
   // 调大 = 记得更牢，但每轮都重发一遍，token 花得更多；再早的内容归「记忆摘要」管。
-  // ⚠️ 这个值原来写死在 renderer/js/core/config.js 的 CONFIG.MAX_TURNS 里，
-  //    2026-10-07 挪到设置 —— 它是「用户能明显感觉到」的项（记性好不好），不该藏在代码里。
   maxTurns: 20,
   // --- 生图（和聊天是两套：不同端点，通常也是不同模型）---
   imageProviderId: '',
@@ -188,10 +187,10 @@ const DEFAULT_SETTINGS = {
   embeddingModel: '',
   // --- 对话窗口外观（只影响显示，不进提示词）---
   chatFontSize: 14,     // 消息正文字号（px）
-  // 界面字号（2026-10-12 深夜加）：三档，样式表里换成一个 --ui-size 系数
+  // 界面字号：三档，样式表里换成一个 --ui-size 系数
   // （small 0.9 / medium 1 / large 1.15），全站字号 token 都乘它。
   uiSize: 'medium',
-  // 界面字体（2026-10-12 深夜加）：key 对应 renderer 那边 UI_FONTS 里的一套字体栈。
+  // 界面字体：key 对应 renderer 那边 UI_FONTS 里的一套字体栈。
   uiFont: 'default',
   chatBoldColor: '',    // **加粗** 用什么颜色，空 = 跟随主题
   chatBackground: '',   // 自定义聊天背景（dataURL）
@@ -204,12 +203,8 @@ const DEFAULT_SETTINGS = {
   chatPadLeft: 20,
   chatPadRight: 20,
   // --- 界面自己写得出来的键，**必须列在这儿** ---
-  // saveSettings 的白名单是「默认设置里有 or 磁盘上本来就有」。autoContinue 和
-  // commonAttributes 当初都漏在 DEFAULT_SETTINGS 之外，靠的就是「用户磁盘上早
-  // 写过了」才没被拦 —— 全新装一份（config.json 里还没有它们）时，第一次保存
-  // 就会被静默丢掉：自动续写怎么改都不生效，只在主进程打一行看不见的 warn。
-  // （commonAttributes 对应的功能 2026-10-09 已删，见 normalizeSettings 里那句
-  //   `delete s.commonAttributes`。）
+  // saveSettings 的白名单是「默认设置里有 or 磁盘上本来就有」。新加设置项如果
+  // 只从界面保存、却没列进 DEFAULT_SETTINGS，全新安装时第一次保存就会被静默丢掉。
   autoContinue: true,       // 正文被 maxTokens 截断时自动接着写完
   // --- 默认人设：**没绑定角色卡**的会话（通用助手）用这一套，而且**按模型各存一份** ---
   // 换模型（推理写手 / 日常闲聊往往不是同一个模型）时人设跟着换，
@@ -239,16 +234,18 @@ function newProviderId() {
 function normalizeProvider(raw, fallbackId) {
   const p = raw && typeof raw === 'object' ? raw : {};
 
-  const models = Array.isArray(p.models)
+  const rawModels = Array.isArray(p.models)
     ? p.models
-    : String(p.models || '').split(/[\n,，]/);
+    : typeof p.models === 'string'
+      ? p.models.split(/[\n,，]/)
+      : [];
 
   return {
     id: p.id || fallbackId || newProviderId(),
     name: String(p.name || '').trim() || '未命名提供商',
     baseUrl: String(p.baseUrl || '').trim() || DEFAULT_BASE_URL,
     apiKey: typeof p.apiKey === 'string' ? p.apiKey.trim() : '',
-    models: [...new Set(models.map((m) => String(m || '').trim()).filter(Boolean))],
+    models: [...new Set(rawModels.map((m) => String(m || '').trim()).filter(Boolean))],
     // 服务商协议类型：'openai' 是默认的 OpenAI 兼容协议；'tavern-bridge'
     // 是本机酒馆桥接服务（/chat_with_image，免 Key、非流式）。
     type: p.type === 'tavern-bridge' ? 'tavern-bridge' : 'openai'
@@ -308,11 +305,11 @@ function normalizeSettings(saved) {
 
   if (!hasProviders) {
     // ---- 旧版扁平配置（或全新安装）：整体搬进 providers[0] ----
-    const legacyUrl = String(raw.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '');
+    const legacyUrl = String(raw.baseUrl || DEFAULT_BASE_URL).trim().replace(/\/+$/, '');
     const preset = PROVIDER_PRESETS.find(
       (p) => p.baseUrl && p.baseUrl.replace(/\/+$/, '') === legacyUrl
     );
-    const legacyModels = [raw.model].filter(Boolean);
+    const legacyModels = raw.model ? [String(raw.model).trim()].filter(Boolean) : [];
     // 自定义地址匹配不到预设时，别硬套「DeepSeek」这个名字
     const fallbackName = raw.baseUrl ? '自定义模型API' : DEFAULT_SETTINGS.providers[0].name;
 
@@ -349,12 +346,11 @@ function normalizeSettings(saved) {
 
   // 让「当前服务商」跟着「当前模型」走 —— 但要**先尊重已经选好的那一对**。
   //
-  // 模型名在各个服务商之间是会重的（默认列表里 deepseek-chat 到处都是），
-  // 原来的写法是 `s.providers.find((p) => p.models.includes(s.activeModel))`，
-  // 也就是「谁第一个有这个模型名就是谁」：用户在顶栏显式切到 B 服务商，
-  // 只要 A 也列着同一个模型名，保存时就被静默改回 A ——
-  // 新会话、以及所有回落到全局默认的地方都用了 B 的地址和 Key，
-  // 表现是「刚切过去，新建一条又回去了」，而且不报错。
+  // 模型名在服务商之间会重复（默认列表里 deepseek-chat 到处都是），所以不能
+  // 直接 `find((p) => p.models.includes(activeModel))`：那是「谁先有就归谁」，
+  // 用户显式切到 B、只要 A 也列着同名模型，保存时就会被静默改回 A ——
+  // 新会话和所有回落到全局默认的地方都用了 B 的地址和 Key，表现是
+  // 「刚切过去，新建一条又回去了」，而且不报错。
   const current = s.providers.find((p) => p.id === s.activeProviderId);
   const currentHasModel = !!(current && current.models.includes(s.activeModel));
   if (!currentHasModel) {
@@ -367,7 +363,7 @@ function normalizeSettings(saved) {
     }
   }
 
-  // 界面主题。2026-10-12 起默认夜间 —— 只有明确写了 'light' 才走浅色。
+  // 界面主题：默认夜间，只有明确写了 'light' 才走浅色。
   s.theme = raw.theme === 'light' ? 'light' : 'dark';
 
   // 配色方案（不认识的值退回默认方案，见 ACCENTS 第一项：琥珀灯）
@@ -426,7 +422,7 @@ function normalizeSettings(saved) {
   // 免得有人往里塞 `red; background:url(...)` 这种东西
   s.chatBoldColor = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(boldColor) ? boldColor : '';
 
-  // 界面字号 / 字体（2026-10-12 深夜）：**白名单**，不认识就退回默认。
+  // 界面字号 / 字体：**白名单**，不认识就退回默认。
   // 这两个值会被写进 `--ui-size` / `--font-ui`，是 CSS 变量 ——
   // 不能把用户手改 config.json 时塞进来的任意字符串直接透到样式里。
   // ⚠️ 白名单要和 renderer/js/views/appearance.js 的 UI_SCALES / UI_FONTS 保持一致；
@@ -442,8 +438,8 @@ function normalizeSettings(saved) {
   // 消息区的左右内边距。夹取而不是「不合法就退回默认」：
   // 这两个值只影响显示，但被夹到边界比整个跳回默认更不容易让人困惑 ——
   // 拖到头就是头，不应该忽然弹回 20。
-  // 下限 12（2026-10-13，星宝：「拖动的边距最小值设为 12px」）：太小正文会贴住窗口边；
-  // 上限 360：再大消息区就窄得没法读了（1440 宽的窗口，两侧各 360 只剩 470）。
+  // 下限 12：太小正文会贴住窗口边；上限 360：再大消息区就窄得没法读了
+  // （1440 宽的窗口，两侧各 360 只剩 470）。
   // ⚠️ 渲染层 views/appearance.js 里的 CHAT_PAD_MIN / CHAT_PAD_MAX 是同一套值 ——
   //    这里是主进程，import 不到它，**改一处必须手改另一处**。
   //    两边各夹一次是故意的：手改 config.json 能绕过「保存」那条路。
@@ -452,11 +448,8 @@ function normalizeSettings(saved) {
     s[key] = Number.isFinite(n) ? Math.min(360, Math.max(12, Math.round(n))) : DEFAULT_SETTINGS[key];
   }
 
-  // 角色「属性」的快捷候选词（commonAttributes）：功能本身 2026-10-09 删了 ——
-  // 属性名按角色写，一份全局清单省不了几个字，编辑器里却多占一行、还要人去维护。
-  // 键从 DEFAULT_SETTINGS 里撤掉的同时在这儿删一次：老 config.json 里显式写着
-  // 它（normalizeSettings 是 `{...DEFAULT_SETTINGS, ...raw}`，不删就会一直留着）。
-  // ⚠️ 保存白名单是「默认里有 or 磁盘上有」，光从默认里撤掉**拦不住**它落回磁盘。
+  // 清掉旧版遗留键，别让它跟着保存白名单落回磁盘。
+  // ⚠️ 保存白名单是「默认里有 or 磁盘上有」，光从 DEFAULT_SETTINGS 撤掉拦不住它。
   delete s.commonAttributes;
 
   // 默认人设：按模型各存一份（没绑角色卡的会话用）。
@@ -488,15 +481,11 @@ function normalizeSettings(saved) {
   delete s.baseUrl;
   delete s.apiKey;
   delete s.model;
-  // 早期版本在设置里存过一份「全局人设」（键名 systemPrompt / userName），那时的语义是
-  // 「所有会话的人设」。现在的人设只走角色卡，没绑卡的会话则由上面的
-  // assistantPersonas 兜底 —— 两者不是一回事，留着会在文件里积两套数据。
+  // 旧版遗留的「全局人设」键：现在人设只走角色卡 / assistantPersonas，
+  // 留着会在 config.json 里积两套数据。
   //
-  // ⚠️ 这里**不能**再 delete s.maxTurns：它以前是上面的扁平字段（那会儿确实是废键），
-  //    但 2026-10-07 起 maxTurns 已经变成真正的设置项（见 DEFAULT_SETTINGS 和上面的
-  //    归一化）。留着这一行会把刚归一化好的值当场删掉，症状是「设置里改对话轮数
-  //    怎么改都不生效、一存就变回 20」—— 而且因为键还在 DEFAULT_SETTINGS 里，
-  //    保存白名单也拦不住，整条链路一声不响。
+  // ⚠️ maxTurns 不是遗留键：它是上面的真实设置项，别顺手 delete，否则会把
+  //    刚归一化好的值当场删掉，症状是设置里改轮数不生效、一存就变回默认。
   delete s.systemPrompt;
   delete s.userName;
 
@@ -566,10 +555,9 @@ function saveSettingsPatch(patch) {
   // config.json —— 不影响逻辑，但配置会越存越脏。
   // ⚠️ 用 hasOwn 而不是 `in`：`in` 会顺着原型链找，`constructor` / `toString`
   //    这类内置名都能混过去，一旦落盘，下次 `key in current` 又让它永远留着。
-  const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
   const clean = {};
   for (const [key, value] of Object.entries(patch && typeof patch === 'object' ? patch : {})) {
-    if (has(DEFAULT_SETTINGS, key) || has(current, key)) clean[key] = value;
+    if (hasOwn(DEFAULT_SETTINGS, key) || hasOwn(current, key)) clean[key] = value;
     else console.warn(`保存设置时忽略了未知字段「${key}」`);
   }
 
@@ -584,9 +572,9 @@ function saveSettingsPatch(patch) {
     }))
   };
 
-  // ⚠️ 返回**写盘的 Promise**（理由同 store.js 的 saveCharacters）：以前这里发起
-  //    writeJson 就直接 return merged —— 写失败没人接（unhandled rejection），
-  //    界面照样弹「设置已保存」，重启后刚填的 Key / 服务商全没了。
+  // ⚠️ 返回**写盘的 Promise**（理由同 store.js 的 saveCharacters）：
+  //    写失败必须让调用方接住，否则界面照样弹「设置已保存」，
+  //    重启后刚填的 Key / 服务商全没了。
   //    渲染层 settings.js / theme.js 都有 catch，失败会正常提示。
   return writeJson(dataFile('config.json'), toSave).then(() => merged); // 明文版本供界面使用
 }

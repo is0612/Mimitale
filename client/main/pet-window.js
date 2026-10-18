@@ -219,7 +219,7 @@ function ensureSize() {
  *    拖久了就越来越大。
  *    每一步都把「位置 + 正确尺寸」一起写下去，系统**连漂移的机会都没有** ——
  *    也就不需要事后纠；不用「先挪再纠」，窗口就不会在两个值之间每帧振荡
- *    （2026-10-10 第四轮：先 setPosition 再 ensureSize 纠回去 = 宠物抖个不停）。
+ *    （先 setPosition 再 ensureSize 纠回去 = 宠物抖个不停）。
  *
  * 为什么尺寸取的是 currentScale 而不是读回来的：读回来的那个可能刚被系统改过，
  * 写回去等于把脏值固化；写「应该的值」才是把窗口当**我们**的。
@@ -236,7 +236,7 @@ function movePetWindow(x, y) {
  *
  * ⚠️ 这里用防抖会饿死：拖动 / 散步时系统连着重算尺寸、resize 事件源源不断，
  *    「停下 60ms 才执行」等于永远不执行 —— 表现就是「长按拖动时一直变大、
- *    松手才变回去」（2026-10-10 实际踩过这个坑）。节流保证持续事件里也至少
+ *    松手才变回去」。节流保证持续事件里也至少
  *    每 SIZE_FIX_MS 纠一次。
  */
 const SIZE_FIX_MS = 80;
@@ -267,11 +267,15 @@ function scheduleSaveBounds() {
     const bounds = contentBoundsOf(win);
     const display = screen.getDisplayMatching(bounds);
     // 位置只有主进程知道，所以这里直接写配置（渲染层那份是同一份文件的读者）
-    require('./pet-ipc.js').rememberBounds({
+    const saved = require('./pet-ipc.js').rememberBounds({
       x: bounds.x,
       y: bounds.y,
       displayId: display.id
     });
+    // patchPet 返回写盘 Promise；失败了只影响「下次从哪出现」，别变成 unhandled rejection
+    if (saved && typeof saved.catch === 'function') {
+      saved.catch((err) => console.warn('[pet] 保存窗口位置失败:', err.message));
+    }
   }, 500);
 }
 
@@ -382,9 +386,9 @@ function createPetWindow() {
       preload: petPreloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
-      // 设计记录 + CHANGELOG 写的就是「contextIsolation:true + sandbox:true 全开」，
-      // 而主窗口 main/window.js 没写这行（= Electron 默认 true）。宠物窗口拿到的
-      // 权限本来就比主界面窄，别让它反而比主窗口宽松。
+      // contextIsolation + sandbox 应该全开：主窗口 main/window.js 没写 sandbox
+      // （= Electron 默认 true）。宠物窗口的权限本来就比主界面窄，
+      // 别让它反而比主窗口宽松。
       sandbox: true,
       spellcheck: false,
       backgroundThrottling: false
@@ -396,7 +400,9 @@ function createPetWindow() {
   petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   petWindow.setIgnoreMouseEvents(true, { forward: true });
 
-  petWindow.loadFile(petPagePath());
+  petWindow.loadFile(petPagePath()).catch((err) => {
+    console.warn('[pet] 宠物页面加载失败（窗口会停在空白）:', err.message);
+  });
 
   // 跟主窗口同一套守卫：宠物窗口也**绝不能**导航到别的文档 ——
   // preload 是每个文档都会注入的，拖一个 html 进去就等于把接口递出去了。

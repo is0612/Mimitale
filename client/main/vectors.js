@@ -69,8 +69,8 @@ function rankBySimilarity(queryVector, candidates, options) {
   const minScore = Number.isFinite(Number(opts.minScore)) ? Number(opts.minScore) : 0.3;
   const exclude = opts.exclude instanceof Set ? opts.exclude : new Set(opts.exclude || []);
 
-  // Keep only the current top K while scanning. RAG candidate lists can grow with
-  // long conversations, but K is normally small, so sorting every match wastes work.
+  // 只维护当前 top K。长会话里候选会越来越多，而 K 通常很小 ——
+  // 每命中一个就全量排序是浪费。
   const heap = [];
   const isWorse = (a, b) => a.score < b.score || (a.score === b.score && a.index > b.index);
   const swap = (a, b) => {
@@ -150,7 +150,12 @@ function collectCandidates(options) {
     out.push({ kind: 'message', key: `m:${hashText(text)}`, text, role: m.role });
   }
 
-  const wanted = new Set(Array.isArray(opts.worldbookIds) ? opts.worldbookIds : []);
+  const wanted = new Set(
+    (Array.isArray(opts.worldbookIds) ? opts.worldbookIds : [])
+      .filter((id) => typeof id === 'string')
+      .map((id) => id.trim())
+      .filter(Boolean)
+  );
   const books = Array.isArray(opts.books) ? opts.books : [];
   for (const book of books) {
     if (!book || !wanted.has(book.id)) continue;

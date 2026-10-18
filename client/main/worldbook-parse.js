@@ -3,10 +3,10 @@
 // ============================================================================
 //  main/worldbook-parse.js —— 世界书的归一化与「形状识别」
 //
-//  从 main.js 抽出来的，原因和 main/characters.js 一样：
-//  导入角色卡的逻辑要能单独测。以前这段夹在 registerIpc() 的闭包里，
-//  只有走真实的文件对话框才能跑到 —— 结果是「卡里内嵌的世界书被丢掉」
-//  和「导出时 character_book 写死 null」这两个 bug 长期没人发现。
+//  导入角色卡的逻辑要能单独测，所以从 Electron 入口抽出来：
+//  这段如果夹在 registerIpc() 的闭包里，只有走真实的文件对话框才能跑到 ——
+//  「卡里内嵌的世界书被丢掉」和「导出时 character_book 写死 null」这类问题
+//  就没法自动化覆盖。
 //
 //  这里只做纯解析：给一块数据，返回内部格式。不碰磁盘、不生成 id
 //  （id 由调用方给，因为主进程和导入链路生成方式不同）。
@@ -89,9 +89,9 @@ function normalizeWorldbookEntry(raw) {
   //
   // 代价控制在**全局那道闸**上：递归深度（见 main/providers.js 的
   // DEFAULT_SETTINGS.worldbookRecursiveDepth，默认 1 = 只带一层）。
-  // ⚠️ 别再改回「条目级默认关」来省 token —— 那等于把 ST 的语义改掉，
+  // ⚠️ 条目级默认必须是「可递归」：改成默认关等于把 ST 的语义改掉，
   //    「导出再导回来」和「导入别人的书」两个方向都会和酒馆对不上。
-  const preventRecursion = r.preventRecursion ?? r.prevent_recursion ?? ext.prevent_recursion;
+  const preventRecursion = r.preventRecursion ?? r.prevent_recursion ?? ext.preventRecursion ?? ext.prevent_recursion;
   const recursive = typeof r.recursive === 'boolean'
     ? r.recursive
     : typeof own.recursive === 'boolean'
@@ -115,10 +115,17 @@ function normalizeWorldbookEntry(raw) {
     // ST 的 excludeRecursion 只禁止条目作为递归目标，不能反向替代 recursive。
     excludeRecursion: r.excludeRecursion === true
       || r.exclude_recursion === true
+      || ext.excludeRecursion === true
       || ext.exclude_recursion === true,
     // 全词匹配对无空格分词的中日文不适用，只有显式启用才生效。
-    matchWholeWords: bool(r.matchWholeWords ?? r.match_whole_words ?? ext.match_whole_words, false),
-    caseSensitive: bool(r.caseSensitive ?? r.case_sensitive ?? ext.case_sensitive, false),
+    matchWholeWords: bool(
+      r.matchWholeWords ?? r.match_whole_words ?? ext.matchWholeWords ?? ext.match_whole_words,
+      false
+    ),
+    caseSensitive: bool(
+      r.caseSensitive ?? r.case_sensitive ?? ext.caseSensitive ?? ext.case_sensitive,
+      false
+    ),
     probability,
     enabled
   };
@@ -154,6 +161,7 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
   const r = raw && typeof raw === 'object' ? raw : {};
   const own = r.extensions && r.extensions.mimitale || {};
   const rawEntries = Array.isArray(raw) ? raw : worldbookEntryList(r.entries);
+  const id = typeof r.id === 'string' ? r.id.trim() : '';
   const name =
     String(r.name || r.title || (typeof fallbackName === 'string' ? fallbackName : '') || '').trim() || '未命名世界书';
 
@@ -167,9 +175,9 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
   // 书里的角色是「独立副本」：从角色库加进来时复制一份，之后两边各改各的，
   // 单独跟角色库里的那个角色聊天不会影响这里。
   //
-  // 外面导进来的世界书（比如「樱川大学」那份带 5 个 NPC 的）走的就是这里。
-  // 以前导入链路没注入 normalizeCharacters，这些副本会被**静默丢掉** ——
-  // 书导进来了、条目都在，就是 NPC 一个都不在场。见 main/import-files.js。
+  // 导入外部世界书（比如带 5 个 NPC 的那种）时，导入链路**必须**注入
+  // normalizeCharacters，否则这些副本会被静默丢掉 —— 书导进来了、条目都在，
+  // 就是 NPC 一个都不在场。见 main/import-files.js。
   const characters = [];
   if (typeof normalizeCharacters === 'function') {
     const rawChars = Array.isArray(r.characters) ? r.characters : Array.isArray(own.characters) ? own.characters : [];
@@ -177,7 +185,9 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
       ? Math.floor(maxCharacters)
       : MAX_WORLDBOOK_CHARACTERS;
     for (const item of rawChars) {
-      characters.push(normalizeCharacters(item));
+      const character = normalizeCharacters(item);
+      if (!character) continue;
+      characters.push(character);
       if (characters.length >= limit) break;
     }
   }
@@ -193,7 +203,7 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
     : '';
   const genId = typeof makeId === 'function' ? makeId : () => `w${Date.now().toString(36)}`;
   return {
-    id: typeof r.id === 'string' && r.id ? r.id : genId(),
+    id: id || genId(),
     name: name.slice(0, 120),
     // 进这个世界时自动作为第一条消息；留空则由界面那边让模型现生成一段开局
     opening: typeof opening === 'string' ? opening.slice(0, MAX_WORLDBOOK_OPENING) : '',

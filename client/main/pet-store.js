@@ -3,28 +3,26 @@
 // ============================================================================
 //  main/pet-store.js —— 桌宠的数据层：设置 / 长期记忆 / 人格
 //
-//  桌宠的数据**分两半**，这条边界不能糊（星宝 2026-10-08 的需求第三条）：
+//  桌宠的数据**分两半**，这条边界不能糊：
 //
 //    assets/pet/         随软件分发的**只读**资源（rig 形象包）
-//      cat/              蓝白猫：model.json + tex/ 部件贴图
-//      <name>/           以后：更多 rig 形象包（目录里有 model.json 即被认作形象）
+//      <name>/           model.json + tex/ 部件贴图（目录里有 model.json 即被认作形象）
 //
 //    <数据目录>/pet/      用户数据，**可写**
 //      config.json       桌宠设置（形状见下面的 DEFAULT_PET_CONFIG）
-//      persona/<id>.md   人格设定（**唯一真源**，用 md 是为了方便直接用编辑器改 / 分享）
+//      persona/<source>-<skin>.md   人格设定（按形象分仓；唯一真源，md 方便手改 / 分享）
 //      memory/long_term.json   长期记忆条目，按 petId 分开存
 //      memory/summaries.json   记忆被挤出上限后折叠成的摘要
-//      skins/            以后：用户自己导入的 rig 形象包
+//      skins/            用户自己导入的 rig 形象包
 //      cache/  logs/     缓存与日志
 //
-//  ⚠️ 形象**只有 rig 一种**。「一张静态立绘 PNG」那套（第一版，还没有 2D 形象时
-//     的临时方案）已经整个移除，别再把 png 分支加回来。
+//  ⚠️ 形象**只有 rig 一种**，不要另加「一张静态立绘 PNG」的分支。
 //
-//  分开的好处就是星宝列的那三条：软件更新不会覆盖用户记忆和设置；
-//  换形象 / 加皮肤不用动代码；桌宠将来要成为软件整体形象时资源可以直接复用。
+//  分开的好处：软件更新不会覆盖用户记忆和设置；换形象 / 加皮肤不用动代码；
+//  桌宠将来要成为软件整体形象时资源可以直接复用。
 //
 //  ⚠️ 数据目录不是 %APPDATA%（见 main/data-dir.js，默认是程序旁边的 data\），
-//     所以配置落在 `data/pet/config.json`。别照着老印象去 %APPDATA% 找。
+//     所以配置落在 `data/pet/config.json`。
 // ============================================================================
 
 const path = require('node:path');
@@ -74,7 +72,7 @@ function petPersonaDir() {
 }
 
 /**
- * 人格文件按**形象**分仓，不按 petId（2026-10-10 星宝要求）。
+ * 人格文件按**形象**分仓，不按 petId。
  *
  * 理由：人格 = 这只小家伙的「性格」，而性格是**跟着形象走**的 ——
  * 切到另一张形象包（比如从大肥鱼切到别的小动物）时，人格理应跟着换；
@@ -172,9 +170,7 @@ const KNOWN_GESTURES = ['nod', 'shake', 'wave'];
 /**
  * 默认 / 兜底形象（assets/pet/<名字>/）。
  *
- * 2026-10-10：从 'cat'（蓝白猫娘）换成 'whale'（大肥鱼）—— 星宝把蓝白猫的形象包
- * 从 assets/pet/ 移出去了（要换新设计），但**引擎没动**（renderer/pet/cat*.js）。
- * 以后新形象做好放进 assets/pet/<新名字>/，想让它当默认就把这里改过去。
+ * 换成新形象：放好目录，把这里改成新名字即可；渲染引擎（renderer/pet/cat*.js）不跟着换。
  */
 const DEFAULT_SKIN = 'whale';
 
@@ -202,15 +198,11 @@ const DEFAULT_PERSONA = `你是「蓝自」，一只住在人家桌面上的小�
 /**
  * 一只桌宠的默认形状。
  * 形象只有一种：**rig 动态形象**（部件贴图 + model.json，由 renderer/pet 的
- * rig.js + cat.js + cat-figure.js 渲染）。默认是内置的大肥鱼（assets/pet/whale）。
+ * rig.js + cat.js + cat-figure.js 渲染）。默认是内置形象（assets/pet/<DEFAULT_SKIN>）。
  *
  * ⚠️ 文件名里的 cat 是**引擎**的名字（这套状态机最初为蓝白猫写），不是形象。
- *    蓝白猫那个形象包 2026-10-10 已经从 assets/pet/ 移出（星宝要换新设计），
- *    引擎留着 —— 它同时服务 whale 和以后的新形象。
  *
- * ⚠️ 第一版那种「一张静态立绘 PNG」的形象已经**整个移除** —— 当初只是还没有
- *    2D 形象时的临时方案。rig 资产缺失时宠物页面显示「形象没加载出来」占位，
- *    不再回退任何静态图。
+ * ⚠️ rig 资产缺失时宠物页面显示「形象没加载出来」占位，不回退静态图。
  */
 function defaultPet(id) {
   return {
@@ -249,9 +241,9 @@ function defaultPet(id) {
     temperature: null, // null = 跟随全局设置的温度
     style: '', // 回复风格补充（拼进 prompt 的最后一层）
     // --- 记忆 ---
-    memoryMaxItems: 50, // 长期记忆保留多少条（2026-10-10 从 30 提到 50）
-    // ⚠️ 改这个默认值**不会**动老用户已存的 30 —— 那是「改默认」，不是「改现状」。
-    //    用户可能自己调过，硬盖会覆盖他的选择。想统一只能另写一次迁移。
+    memoryMaxItems: 50, // 长期记忆保留多少条
+    // ⚠️ 改这个默认值**不会**动老用户已存的值 —— 用户可能自己调过，
+    //    硬盖会覆盖他的选择。想统一只能另写一次迁移。
     // --- 多只（现在只有一只，但结构不写死）---
     createdAt: Date.now()
   };
@@ -300,12 +292,11 @@ function safeSkinName(name) {
 
 function normalizeLook(raw) {
   const look = raw && typeof raw === 'object' ? raw : {};
-  // 只认 rig —— 第一版的 'png'（单张静态图）已经移除。
-  // 老配置里存的 png 形象会被**迁移**成默认那套 rig（skin: DEFAULT_SKIN）：
-  // 直接留一个指向不存在目录的 skin，宠物会只剩一个「形象没加载出来」占位框。
+  // 只认 rig。老配置里的 'png' 形象会被迁移成默认 rig（skin: DEFAULT_SKIN）：
+  // 留一个指向不存在目录的 skin，宠物只会剩下「形象没加载出来」占位框。
   //
-  // ⚠️ 还有一类要迁移：**老的 'cat'**。2026-10-10 蓝白猫形象包从 assets/pet/ 移出，
-  //    继续留着它的话，所有升级上来的用户都会看到占位框 —— 见到 cat 就换成默认形象。
+  // ⚠️ 老配置里的 'cat' 也要迁移：这个形象包已经不在 assets/pet/ 里了，
+  //    见到 cat 就换成默认形象，否则升级用户会看到占位框。
   const known = ['rig', 'sprite', 'live2d'].includes(look.kind);
   const rawSkin = known ? safeSkinName(look.skin || DEFAULT_SKIN) : DEFAULT_SKIN;
   return {
@@ -569,7 +560,8 @@ function listRigSkins() {
 }
 
 /** rig 皮肤目录；look 不是 rig 或目录不存在返回 '' */
-function rigSkinDir(look) {  const shape = normalizeLook(look);
+function rigSkinDir(look) {
+  const shape = normalizeLook(look);
   if (shape.kind !== 'rig') return '';
   const dir = shape.source === 'user'
     ? path.join(petUserSkinDir(), shape.skin)
@@ -665,9 +657,7 @@ function petRigPack(look) {
   return pack;
 }
 
-// 形象只有 rig 一种：**没有**「从文件选一张静态图当形象」这条路了 ——
-// 原来的 importPetSkin / listPetSkins（都是围着静态 PNG 转的）已随之移除。
-// 但「换形象」本身还在：往 assets/pet/<名字>/ 或 <数据目录>/pet/skins/<名字>/
+// 换形象：往 assets/pet/<名字>/ 或 <数据目录>/pet/skins/<名字>/
 // 放一个带 model.json 的目录，就会被上面的 listRigSkins() 扫到并出现在下拉里。
 
 // ---------------------------------------------------------------------------
@@ -692,7 +682,9 @@ function readPersona(petId) {
   } catch (err) {
     existing = null; // 该形象还没有自己的文件
   }
-  if (existing != null) return existing;
+  // 空文件当「没有」处理：空的 persona 会让宠物变成没有性格的文字生成器。
+  // 读到空 / 纯空白就重新种一份默认，而不是把空串交给提示词。
+  if (existing != null && existing.trim()) return existing;
 
   // ② 迁移老文件：只在「内容确实是用户自己写的」时才迁。
   //    判断口径是「非空 且 不等于内置默认」—— 老文件若就是当初自动写出去的默认文本，

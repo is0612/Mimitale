@@ -3,7 +3,7 @@
 // ============================================================================
 //  main/panel-fields.js —— 状态面板字段的「类型 / 范围 / 变化规则」
 //
-//  以前一个字段就是 {name, value} 两个字符串。问题是模型看不到任何约束：
+//  字段默认只有 {name, value} 两个字符串，模型看不到任何约束：
 //  卡里写着「好感度 0~100」，注入过去的也只有「好感度：50」——
 //  模型写个 150 也没人拦，写个负数也没人拦。
 //
@@ -37,9 +37,16 @@ const FIELD_TYPES = ['text', 'meter', 'list'];
 // 字段的「更新频率」标记：决定它要不要每轮都出现在状态栏里。
 //   · 'dynamic' 每轮维护 —— 随剧情变的状态，默认值。
 //   · 'static'  变了才说 —— 几乎不变的设定，没变化就不输出。
-// 老数据没有这个键，一律按 dynamic 处理（向后兼容，行为与以前完全一致）。
+// 老数据没有这个键，一律按 dynamic 处理（向后兼容）。
 const FIELD_MODES = ['dynamic', 'static'];
 const DEFAULT_FIELD_MODE = 'dynamic';
+
+/** 把「可能是数字」的值转成有限数字；null / 空串 / 非数字都返回 null */
+function toFiniteNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
 
 /** 一个字段值是不是「数字」或「数字/数字」这种分数写法 */
 function parseNumericValue(value) {
@@ -49,7 +56,7 @@ function parseNumericValue(value) {
   // 50、50.5、-3
   if (/^[-+]?\d+(?:\.\d+)?$/.test(text)) {
     const n = Number(text);
-    return isFinite(n) ? { n, total: null, raw: text } : null;
+    return Number.isFinite(n) ? { n, total: null } : null;
   }
 
   // 50/100 —— 面板里最常见的写法，斜杠两边都是数字才算
@@ -57,7 +64,7 @@ function parseNumericValue(value) {
   if (m) {
     const n = Number(m[1]);
     const total = Number(m[2]);
-    if (isFinite(n) && isFinite(total)) return { n, total, raw: text };
+    if (Number.isFinite(n) && Number.isFinite(total)) return { n, total };
   }
 
   return null;
@@ -71,8 +78,8 @@ function trimNumber(n) {
 
 function clampNumber(n, min, max) {
   let out = n;
-  if (typeof min === 'number' && isFinite(min)) out = Math.max(min, out);
-  if (typeof max === 'number' && isFinite(max)) out = Math.min(max, out);
+  if (Number.isFinite(min)) out = Math.max(min, out);
+  if (Number.isFinite(max)) out = Math.min(max, out);
   return out;
 }
 
@@ -122,12 +129,12 @@ function normalizePanelField(raw) {
   };
 
   if (type === 'meter') {
-    // 只认真正的数字；给不出范围就当它是个普通数值字段（仍会被夹吗？不会）——
+    // 只认真正的数字；null / 空串 / 非数字都不算范围。
     // 没有范围时 min/max 都不写，clampFieldValue 自然什么都不做。
-    const min = Number(raw.min);
-    const max = Number(raw.max);
-    const hasMin = isFinite(min);
-    const hasMax = isFinite(max);
+    const min = toFiniteNumber(raw.min);
+    const max = toFiniteNumber(raw.max);
+    const hasMin = min !== null;
+    const hasMax = max !== null;
     if (hasMin) field.min = min;
     if (hasMax) field.max = max;
     // 两个都有但写反了：换过来，别让范围变成空集
@@ -145,12 +152,12 @@ function normalizePanelField(raw) {
   const mode = FIELD_MODES.includes(raw.mode) ? raw.mode : DEFAULT_FIELD_MODE;
   if (mode !== DEFAULT_FIELD_MODE) field.mode = mode;
 
-  // 分组：字段属于哪个命名面板。空 = 不分组（就是以前那种扁平清单）。
+  // 分组：字段属于哪个命名面板。空 = 不分组（扁平清单）。
   const group = String(raw.group == null ? '' : raw.group).trim().slice(0, MAX_GROUP_TITLE);
   if (group) field.group = group;
 
   // 归属：这个字段属于谁。'player' = 玩家自己；某个角色卡 id = 那个角色；
-  // 空 = 场景/不归属（默认，就是以前那种全归角色卡的状态栏）。
+  // 空 = 场景 / 不归属（默认全归角色卡的状态栏）。
   // 用它把「我的状态」从面板里拆出去单独看（见 views/stateCard.js）。
   const owner = String(raw.owner == null ? '' : raw.owner).trim().slice(0, 40);
   if (owner) field.owner = owner;
@@ -177,13 +184,13 @@ function fieldProgress(value, field) {
 
   // 分母优先用值里写的（60/100 就是 100），没有就用字段的 max ——
   // 这样面板里存的是裸数字 60 时也能画出条来。
-  const total = parsed.total !== null ? parsed.total : typeof f.max === 'number' ? f.max : null;
+  const total = parsed.total !== null ? parsed.total : Number.isFinite(f.max) ? f.max : null;
   if (total === null) return null;
 
-  const base = typeof f.min === 'number' ? f.min : 0;
+  const base = Number.isFinite(f.min) ? f.min : 0;
   const span = total - base;
   // 满值 == 下限（范围是个点）时没有「进度」可言，直接给 0 而不是除零
-  if (!isFinite(span) || span === 0) return { n: parsed.n, total, percent: 0 };
+  if (!Number.isFinite(span) || span === 0) return { n: parsed.n, total, percent: 0 };
 
   const percent = Math.max(0, Math.min(100, Math.round(((parsed.n - base) / span) * 100)));
   return { n: parsed.n, total, percent };
@@ -253,37 +260,27 @@ function describePanelField(field) {
 
   if (f.hint) parts.push(f.hint);
 
-  // ⚠️ 这里**不要**给静态字段补「只在变化时输出」这类说明（2026-09-30 删掉的）。
-  // 两个原因，第二个是真坑：
+  // ⚠️ 这里**不要**给静态字段补「只在变化时输出」这类说明：
   //   · 语义上重复 —— formatPanelForPrompt 的静态规则段已经统一交代过
   //     「只要剧情里发生了变化就必须输出那行新值」，逐字段再说一遍纯属啰嗦；
-  //   · **措辞打架** ——「只在变化时输出 / 没变化就省略」正是 panel.js 里明令要
-  //     避开的写法：它把「变没变」的判断权交给模型，模型自判「没变」就整行省掉，
-  //     而那正是「状态卡不更新」的成因之一。留着它等于在提示词里同时给两条
+  //   · **措辞打架** ——「没变化就省略」把判断权交给模型，模型自判「没变」就
+  //     整行省掉，正是「状态卡不更新」的成因之一。留着它等于同时给两条
   //     互相拆台的指令（上面刚说「必须输出」，下面就说「可以省略」）。
   // 动态字段同理不额外说 —— 保持默认的「每轮照抄」，别把提示词撑长。
 
   return parts.join('；');
 }
 
+// 只导出调用方真正用得到的接口；范围解析 / 夹取是内部实现，
+// 渲染层通过 core/panel-fields.js 按需取用。
 const PanelFields = {
-  FIELD_TYPES,
-  FIELD_MODES,
-  DEFAULT_FIELD_MODE,
-  MAX_FIELD_NAME,
-  MAX_FIELD_VALUE,
-  MAX_FIELD_HINT,
-  MAX_FIELDS,
-  MAX_GROUP_TITLE,
-  parseNumericValue,
-  clampNumber,
-  trimNumber,
   clampFieldValue,
   normalizePanelField,
   normalizePanelFields,
   groupPanelFields,
   fieldProgress,
-  describePanelField
+  describePanelField,
+  trimNumber
 };
 
 // 主进程：标准 CommonJS 导出

@@ -83,6 +83,16 @@ function bridgeHealthUrl(baseUrl) {
   return `${normalizeBaseUrl(baseUrl)}/health`;
 }
 
+/** 目标协议对应的 Node transport */
+function transportOf(target) {
+  return target.protocol === 'http:' ? http : https;
+}
+
+/** 目标端口：URL 没写时按协议补默认端口 */
+function portOf(target) {
+  return target.port || (target.protocol === 'http:' ? 80 : 443);
+}
+
 /** 下载图片的体积上限 —— 远超任何正常生图结果，只拦「对面给了个巨型文件」 */
 const MAX_DOWNLOAD_BYTES = 40 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
@@ -91,7 +101,7 @@ const MAX_REDIRECTS = 5;
  * 下一个二进制文件（生图接口有时直接给链接）。
  * 和 requestJson 一个路子，只是把响应体当 Buffer 收着，不当 JSON 解析。
  *
- * 三道闸（以前都没有）：重定向最多跟 5 跳（防环）；Location 可以是相对地址；
+ * 三道闸：重定向最多跟 5 跳（防环）；Location 可以是相对地址；
  * 响应体超过上限就掐断（防一个超大响应把主进程内存吃光）。
  */
 function downloadBinary(url, timeoutMs = 120000, redirectsLeft = MAX_REDIRECTS) {
@@ -108,12 +118,12 @@ function downloadBinary(url, timeoutMs = 120000, redirectsLeft = MAX_REDIRECTS) 
       return;
     }
 
-    const transport = target.protocol === 'http:' ? http : https;
+    const transport = transportOf(target);
     const req = transport.request(
       {
         protocol: target.protocol,
         hostname: target.hostname,
-        port: target.port || (target.protocol === 'http:' ? 80 : 443),
+        port: portOf(target),
         path: `${target.pathname}${target.search}`,
         method: 'GET'
       },
@@ -187,14 +197,14 @@ function requestJson({ url, method = 'GET', headers = {}, body = null, timeoutMs
       return;
     }
 
-    const transport = target.protocol === 'http:' ? http : https;
+    const transport = transportOf(target);
     const payload = body ? Buffer.from(JSON.stringify(body), 'utf8') : null;
 
     const req = transport.request(
       {
         protocol: target.protocol,
         hostname: target.hostname,
-        port: target.port || (target.protocol === 'http:' ? 80 : 443),
+        port: portOf(target),
         path: `${target.pathname}${target.search}`,
         method,
         headers: {
@@ -337,7 +347,7 @@ function streamChat({ settings, messages, onDelta, onReasoning, signal, onReques
       return;
     }
 
-    const transport = target.protocol === 'http:' ? http : https;
+    const transport = transportOf(target);
     const body = {
       model: settings.model || DEFAULT_MODEL,
       messages,
@@ -349,7 +359,7 @@ function streamChat({ settings, messages, onDelta, onReasoning, signal, onReques
     const useJsonReply = settings.stream === false && !isDeepSeekThinkingModel;
     // DeepSeek flash/pro uses SSE in the tavern so generated text appears progressively.
     if (useJsonReply) body.stream = false;
-    if (target.hostname === 'api.deepseek.com' && /^(deepseek-flash|deepseek-v4-pro)$/i.test(body.model)) {
+    if (isDeepSeekThinkingModel) {
       body.thinking = { type: settings.thinking === false ? 'disabled' : 'enabled' };
     }
     if (settings.topP !== undefined && settings.topP !== null && settings.topP !== '') body.top_p = Number(settings.topP);
@@ -381,7 +391,7 @@ function streamChat({ settings, messages, onDelta, onReasoning, signal, onReques
     req = transport.request({
       protocol: target.protocol,
       hostname: target.hostname,
-      port: target.port || (target.protocol === 'http:' ? 80 : 443),
+      port: portOf(target),
       path: `${target.pathname}${target.search}`,
       method: 'POST',
       headers: { ...buildHeaders(settings), 'Content-Length': payload.length }
@@ -518,7 +528,7 @@ function bridgeChat({ settings, messages, characterContext, noImage, signal, tim
       return;
     }
 
-    const transport = target.protocol === 'http:' ? http : https;
+    const transport = transportOf(target);
 
     const body = {
       messages,
@@ -545,7 +555,7 @@ function bridgeChat({ settings, messages, characterContext, noImage, signal, tim
       {
         protocol: target.protocol,
         hostname: target.hostname,
-        port: target.port || (target.protocol === 'http:' ? 80 : 443),
+        port: portOf(target),
         path: `${target.pathname}${target.search}`,
         method: 'POST',
         headers: {
@@ -629,7 +639,7 @@ function bridgeDraw({ baseUrl, text, characterContext, preset, timeoutMs = 30000
       return;
     }
 
-    const transport = target.protocol === 'http:' ? http : https;
+    const transport = transportOf(target);
 
     const body = { text: String(text || '') };
     if (String(characterContext || '').trim()) {
@@ -645,7 +655,7 @@ function bridgeDraw({ baseUrl, text, characterContext, preset, timeoutMs = 30000
       {
         protocol: target.protocol,
         hostname: target.hostname,
-        port: target.port || (target.protocol === 'http:' ? 80 : 443),
+        port: portOf(target),
         path: `${target.pathname}${target.search}`,
         method: 'POST',
         headers: {

@@ -28,12 +28,9 @@ const { DEFAULT_SETTINGS, loadSettings, ACCENTS } = require('./providers.js');
 let mainWindow = null;
 
 // 窗口底色跟着主题 + 配色方案走，启动时就不会先闪一下别的颜色。
-// 这两个值必须和 style.css 里 --bg 保持一致（改配色时两边一起改）——
-// 之前是 #1a1d23，但 style.css 的夜间 --bg 是 #17161b，启动会闪一下，这里对齐掉。
-// ⚠️ 2026-10-12：夜间 --bg 从紫调 #17161b 换成了**中性灰 #101113**，
-//    三套配色的 dark 值跟着一起改 —— 不改就等于每次启动先闪一下旧紫底。
-//    同一天加了第 4 套配色 amber（默认），这里必须一起补，否则
-//    `WINDOW_BG['amber']` 是 undefined，会兜回 pink 的粉色底。
+// 这两个值必须和 style.css 里各配色的 --bg 保持一致（改配色时两边一起改）。
+// ⚠️ 第一项是默认配色（见 providers.js 的 ACCENTS）；加新配色时这里要一起补，
+//    否则 `WINDOW_BG[accent]` 是 undefined，会兜回默认配色。
 const WINDOW_BG = {
   amber: { light: '#f4f5f7', dark: '#101113' }
 };
@@ -42,8 +39,7 @@ const WINDOW_BG = {
 //
 // 用 useContentSize，所以这几个数就是「画布」的尺寸，和设计稿的 frame 一一对应。
 // 冒烟测试的截图窗口也从这里读（tools/smoke-test.js）——
-// 那边原来自己写死 1180×800，改完窗口之后就一直照着旧尺寸出图，
-// 结果「设计稿 1440、真机截图 1164」两张图对不上，白白照着挤压的顶栏调了半天。
+// 别再另写一份尺寸，否则「设计稿 / 真机 / 出图」会各用各的。
 const WINDOW_SIZE = {
   width: 1440,
   height: 900,
@@ -141,13 +137,21 @@ function stopDevWatcher() {
 }
 
 function createWindow() {
+  // 已经有一个活窗口就别再建第二个：只会多出一个渲染进程和一套 preload 特权接口。
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    return mainWindow;
+  }
+
   let theme = DEFAULT_SETTINGS.theme;
   let accent = DEFAULT_SETTINGS.accent;
   try {
     const saved = loadSettings();
     theme = saved.theme === 'dark' ? 'dark' : 'light';
     // 兜底要和 providers.js 的 normalizeSettings / preload.js / ui/theme.js 三处一致，
-    // 别在这儿写死一个旧配色名（以前写的是 'pink'）。
+    // 别在这儿写死一个具体配色名。
     accent = ACCENTS.includes(saved.accent) ? saved.accent : ACCENTS[0];
   } catch (err) {
     // 读不到设置就用默认主题，不影响启动

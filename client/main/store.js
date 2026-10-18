@@ -21,8 +21,8 @@ const { normalizePreset, MAX_PRESETS } = require('./presets.js');
 /**
  * 数据目录里某个文件的全路径。
  *
- * ⚠️ 名字里以前叫 userDataFile —— 现在数据**未必**在 Electron 的 userData 里了
- *    （见 main/data-dir.js），所以改名，免得下一个人照着名字去 %APPDATA% 找。
+ * ⚠️ 数据**未必**在 Electron 的 userData 里（默认是程序旁边的 data\，
+ *    见 main/data-dir.js），所以别照名字去 %APPDATA% 找。
  */
 function dataFile(name) {
   return path.join(dataDir(), name);
@@ -31,21 +31,15 @@ function dataFile(name) {
 let writeQueue = Promise.resolve();
 
 // ---------------------------------------------------------------------------
-//  写入失败的重试（写给「真的瞬时占用」，不是写给杀软的）
+//  写入失败的重试
 //
-//  Windows 上**真的会有**短暂占用：索引服务、同步盘、杀软扫描、另一个实例刚好在写
-//  同一个文件 —— 这时 copy / rename 会吃到 EPERM / EBUSY / EACCES，而文件权限完全
-//  正常、过一会儿再试就过。不重试的话，表现就是「偶尔一次保存失败」，用户看到的是
-//  随机弹框 + 随机丢数据，而代码看起来毫无问题。
+//  Windows 上真的会有短暂占用（索引服务、同步盘、杀软扫描、另一个实例刚好在写
+//  同一个文件）—— 这时 copy / rename 会吃到 EPERM / EBUSY / EACCES，过一会儿再试
+//  就好。不重试的话，表现是「偶尔一次保存失败」：随机弹框 + 随机丢数据。
 //
-//  ⚠️ 2026-10-10 定论：2026-10-08 把当时那一串 EPERM 归到「杀软在几十毫秒里独占
-//     刚写过的文件」是**误诊**（实测连打 300 次全过、最慢 5ms）。那批失败的真正来源
-//     见下面那段更正 —— 属于**权限判定**，重试再久也写不进去。这张表留着是为了上面
-//     那种真·瞬时占用，不是为了救「写不进去」。
-//
-//  退避表：30 / 70 / 150 / 250 ms，合计约 0.5 秒。也不能无限拉长：`immediate` 那条路
-//  （关窗口时的最后一次保存）是同步的，主进程会一直卡在这里等，退避太久用户会觉得
-//  点了关闭没反应 —— 所以那条路另有一张更短的（见下）。
+//  退避表：30 / 70 / 150 / 250 ms，合计约 0.5 秒。不能无限拉长：immediate 那条路
+//  （关窗口时的最后一次保存）是同步的，主进程会一直卡在这里等 —— 所以那条路另有
+//  一张更短的（见下）。
 // ---------------------------------------------------------------------------
 
 const TRANSIENT_LOCK_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
@@ -54,35 +48,14 @@ const TRANSIENT_LOCK_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
 const RETRY_BACKOFF_MS = [30, 70, 150, 250];
 
 // ---------------------------------------------------------------------------
-//  ⚠️ 2026-10-08 起、2026-10-10 定论：这一串 EPERM 和杀软无关
+//  ⚠️ 「每次」都失败的 EPERM 不是瞬时占用，而是**权限判定**
 //
-//  实测 1：用 node.exe 按「写 .tmp → rename」往同一台机器的数据目录连打 300 次，
-//          **300/300 全过，最慢 5ms** —— 不存在什么几十毫秒的瞬时锁。
-//  实测 2：真失败长这样，而且**每次**都失败、不是偶尔：
-//            EPERM: operation not permitted, open '...\characters.json.tmp'
-//          注意是 **open `.tmp`**：连新建文件都不让，不是 rename 撞锁。
-//  实测 3：失败范围只跟**可执行文件放在哪**有关（同一份二进制、只换位置）：
-//            C:\Program Files\nodejs\node.exe                     → 能写 %TEMP% / %APPDATA%
-//            %TEMP%\nametest-out\other.exe                        → 能写
-//            E:\工作\Mimitale\tools\...\other.exe                  → EPERM
-//            E:\工作\Mimitale\node_modules\electron\dist\electron.exe → EPERM
-//
-//  机制（2026-10-10 查到底）：**进程的完整性级别被降到 Low**。
-//    · 规则：低完整性进程写不了**中完整性**的对象 —— Downloads / %TEMP% / %APPDATA%
-//      这些没打标签的位置都是中完整性，于是被内核直接拒，**和 ACL / 只读属性无关**，
-//      所以才会出现「权限全对，但一个文件都建不出来」。
-//    · 进程完整性 = min(启动它的令牌, **exe 文件自己的标签**)。工作区
-//      `E:\工作\Mimitale` 被会话沙箱整棵打了 Low 标签，electron.exe 创建时就继承了它，
-//      于是从哪启动、用什么身份启动都一样是 Low。
-//      （工作区上另有沙箱的 ACL 痕迹：`S-1-4-*` 写授权、`Everyone` 的
-//      `DeleteSubdirectoriesAndFiles` 拒绝项 —— 那是沙箱的正常产物，不用动。）
-//    · 修法：清掉 exe / 目录上的低完整性标签（SetNamedSecurityInfo +
-//      LABEL_SECURITY_INFORMATION），清完进程恢复 High，写哪都行。
-//
-//  结论：这类失败是**权限判定**，不是时序窗口 —— 重试再久也救不回来，只会把「关闭卡」
-//  从 0 秒拖成两秒多。那句「文件可能被杀软临时占用或带了只读属性」两条都不成立。
-//  再遇到这个症状走两步：① 跑 probeDirWritable() 看进程能不能在数据目录里建出文件；
-//  ② 还不能写就查 **exe 所在目录的完整性标签**（是 Low 就又是它）。
+//  实测形态：错误发生在 open `.tmp`（连新建文件都不让），同一份程序换个目录就恢复；
+//  机制是**进程完整性级别被降到 Low**（工作区/沙箱给 exe 目录打了 Low 标签），
+//  低完整性进程写不了中完整性对象，和 ACL / 只读属性无关。
+//  这类失败重试再久也没用，只会把「关闭卡」拖长。再遇到先做两步：
+//    ① 跑 probeDirWritable()，看进程能不能在数据目录里建出文件；
+//    ② 不能写就查 **exe 所在目录的完整性标签**（是 Low 就又是它）。
 // ---------------------------------------------------------------------------
 
 /**
@@ -128,9 +101,7 @@ function withRetry(fn, delays = RETRY_BACKOFF_MS) {
  *
  * ⚠️ 备份失败绝不能拖垮主写入。备份只是「主文件坏了时的兜底」，为了它让本次保存
  *    整个失败，等于拿「旧数据 + 没备份」换「新数据根本没落盘」—— 明显更亏。
- *    2026-10-08 就是这里爆的：进程写不出 `.backup.tmp`（EPERM —— 当时是低完整性，
- *    见本文件开头那段），异常一路冒到 writeJsonNow 外面，整个保存作废，
- *    还弹了个主进程崩溃框。
+ *    异常一旦冒到 writeJsonNow 外面，整个保存作废，还可能在主进程弹崩溃框。
  *
  * 备份也走「先 copy 到 .tmp 再 rename 顶掉」，跟主文件同一个道理：
  * 直接 copyFileSync 覆盖 .backup，写到一半失败会留下半个 JSON —— 兜底就废了，
@@ -166,13 +137,11 @@ function tryBackup(file, delays) {
  * 否则程序可能在微任务执行前就退出了。
  *
  * ⚠️ 失败时**必须抛**，不能只 return false：
- *   以前这里 return false，writeJson 把 false 当结果 resolve，
- *   而 save* 那几个函数返回的是自己那份 payload、根本不看写没写成功 ——
- *   于是一路成功到界面，用户看到「已保存」，磁盘上却还是旧文件
- *   （renderer/js/data/persist.js 里那几个「保存失败，请检查磁盘空间」的
- *   提示因此全是死代码）。下次启动读回旧数据，中间改的全没了。
+ *   save* 那几个函数返回的是自己那份 payload、根本不看写没写成功 ——
+ *   只 return false 会一路成功到界面，用户看到「已保存」，磁盘上却还是旧文件，
+ *   下次启动读回旧数据，中间改的全没了。
  *   最常见的触发条件不是「磁盘满」，而是进程根本不被允许在数据目录里建文件
- *   （低完整性 / 沙箱，见本文件开头那段）—— main.js 开头记着的那种机器就是这个状态。
+ *   （低完整性 / 沙箱，见本文件开头）。
  */
 function writeJsonNow(file, data, delays) {
   try {
@@ -211,7 +180,7 @@ function writeJsonNow(file, data, delays) {
  * ⚠️ 队尾必须自己把异常吃掉（写成 .then(ok, err) 的**两个**处理函数），
  *    否则一次失败会把 writeQueue 永久钉在 rejected 状态：之后每次
  *    writeQueue.then(...) 都直接跳过成功回调、原样继续拒绝 ——
- *    等于「写坏一次，从此以后所有保存都静默不写」，比原来的吞异常还糟。
+ *    等于「写坏一次，从此以后所有保存都静默不写」，而且界面上完全看不出来。
  *    这里把错误「复制」一份给调用方，队尾本身恢复成正常状态。
  */
 function writeJson(file, data) {
@@ -238,10 +207,8 @@ function loadJsonWithFallback(file) {
         const raw = fs.readFileSync(backupFile, 'utf8');
         const data = JSON.parse(raw);
         // 顺手把备份回填成主文件，下次就不用再走这条兜底路了。
-        // ⚠️ 回填失败**不能**连累已经读到手里的数据 —— 跟 tryBackup 一个道理：
-        //    辅助动作失败不该把主流程一起带走。之前这个 copyFileSync 一抛，
-        //    外层 catch 就把 data 扔了、返回 null，于是「备份明明读得出来」
-        //    却还是被判成「读失败」，接着就是界面报「上次没能读出来，先别改它」。
+        // ⚠️ 回填失败**不能**连累已经读到手里的数据：辅助动作失败不该把主流程带走。
+        //    否则「备份明明读得出来」也会被判成读失败，界面就会报「上次没能读出来，先别改它」。
         try {
           withRetry(() => fs.copyFileSync(backupFile, file));
         } catch (restoreErr) {
@@ -289,10 +256,10 @@ function decryptApiKey(encrypted) {
   } catch (err) {
     // 解不开。短的当「看着像 base64 的老明文 Key」照旧用；长的才是真密文。
     //
-    // ⚠️ 真密文必须返回空，**不能把密文当 Key 交出去**：以前这么干，界面上是一串
-    //    乱码、请求报「401 Key 不对」，用户完全看不出是「这把 Key 本机读不出来了」。
-    //    钥匙由 Windows 绑在本机本账号上（DPAPI），换电脑 / 换 Windows 账号就会这样 ——
-    //    这时候唯一正确的做法是让他重填一次。返回空之后，发请求时会明确提示
+    // ⚠️ 真密文必须返回空，**不能把密文当 Key 交出去**：否则界面是一串乱码、
+    //    请求报「401 Key 不对」，用户完全看不出是「这把 Key 本机读不出来了」。
+    //    DPAPI 把钥匙绑在本机本账号上，换电脑 / 换 Windows 账号就会这样 ——
+    //    唯一正确的做法是让他重填一次。返回空之后，发请求时会明确提示
     //    「还没有填写「X」的 API Key」，而且下次保存不会把这个密文再加密一遍。
     if (encrypted.length < CIPHERTEXT_MIN_CHARS) return encrypted;
     console.warn(
@@ -307,47 +274,54 @@ function decryptApiKey(encrypted) {
 //  会话
 // ---------------------------------------------------------------------------
 
+// 会话数量上限：防止 conversations.json 无限增长。超出时保留最近更新的。
+const MAX_CONVERSATIONS = 100;
+
+// 世界书数量上限：防止角色卡反复导入把 worldbooks.json 撑到几十 MB。
+const MAX_WORLDBOOKS = 200;
+
+/** 各数据文件共用的 id 生成：前缀 + 时间戳 + 三位随机数 */
+function newId(prefix) {
+  return `${prefix}${Date.now().toString(36)}${Math.floor(Math.random() * 9000 + 1000)}`;
+}
+
+/** 截到上限；不修改传入数组（sort 会就地排序，这里先复制一份） */
+function limitConversations(list) {
+  const all = Array.isArray(list) ? list : [];
+  if (all.length <= MAX_CONVERSATIONS) return all;
+  return [...all]
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, MAX_CONVERSATIONS);
+}
+
 function loadConversations() {
   const data = loadJsonWithFallback(dataFile('conversations.json'));
   if (!data || !Array.isArray(data.conversations)) {
     return { conversations: [], activeId: null };
   }
 
-  // 限制会话数量，防止无限增长
-  const MAX_CONVERSATIONS = 100;
-  let conversations = data.conversations;
-  if (conversations.length > MAX_CONVERSATIONS) {
-    // 保留最近更新的会话
-    conversations = conversations
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-      .slice(0, MAX_CONVERSATIONS);
-  }
+  const conversations = limitConversations(data.conversations);
 
-  // ⚠️ 这里**不能**截断单个会话的消息（以前每次读都只留最后 200 条）：
+  // ⚠️ 这里**不能**截断单个会话的消息：
   //   ① 截掉的消息下次保存就从磁盘上永久消失，用户毫不知情；
   //   ② 摘要的 start/end 是按消息数组下标记的（见 renderer/js/data/memory.js），
   //      从头部砍掉 N 条后覆盖点整体错位 —— 一批**从没压缩过**的消息被当成
   //      「已被摘要覆盖」，从上下文里静默消失。
   //   发给模型的长度由 maxTurns + 摘要控制，不靠这里砍。
 
-  return {
-    conversations,
-    activeId: data.activeId || (conversations[0] && conversations[0].id) || null
-  };
+  // 截断后 activeId 可能指向被丢掉的旧会话 —— 退到最近一条，别把界面指到不存在的会话。
+  const activeId = conversations.some((c) => c.id === data.activeId)
+    ? data.activeId
+    : (conversations[0] && conversations[0].id) || null;
+
+  return { conversations, activeId };
 }
 
 function saveConversations(payload, options) {
-  const conversations = Array.isArray(payload && payload.conversations) ? payload.conversations : [];
-  const activeId = (payload && payload.activeId) || null;
-
-  // 限制会话数量
-  const MAX_CONVERSATIONS = 100;
-  let limited = conversations;
-  if (limited.length > MAX_CONVERSATIONS) {
-    limited = limited
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-      .slice(0, MAX_CONVERSATIONS);
-  }
+  const limited = limitConversations(payload && payload.conversations);
+  const requestedActiveId = payload && payload.activeId;
+  // 只写真实存在的 activeId；传空就保持空（loadConversations 会回落到第一条）。
+  const activeId = limited.some((c) => c.id === requestedActiveId) ? requestedActiveId : null;
 
   const file = dataFile('conversations.json');
   const data = { conversations: limited, activeId };
@@ -357,7 +331,7 @@ function saveConversations(payload, options) {
     writeJsonNow(file, data, CLOSE_RETRY_BACKOFF_MS);
     return Promise.resolve(data);
   }
-  // ⚠️ 返回的是**写盘的 Promise**，不是 data —— 见 saveCharacters 上面那段长注释。
+  // ⚠️ 返回的是**写盘的 Promise**，不是 data —— 见 saveCharacters 那段注释。
   return writeJson(file, data).then(() => data);
 }
 
@@ -366,7 +340,7 @@ function saveConversations(payload, options) {
 //  一个角色 = 一张角色卡。支持两种来源：
 //    · 酒馆（SillyTavern）的 PNG 角色卡：元数据以 base64 JSON 藏在 PNG 的 tEXt 块里
 //    · 普通 JSON 角色卡
-//  也可以完全手写。数据存在 userData\characters.json。
+//  也可以完全手写。数据存在数据目录里的 characters.json。
 // ---------------------------------------------------------------------------
 
 function charactersFile() {
@@ -384,15 +358,10 @@ function loadCharacters() {
  *
  * ⚠️ 返回值是**写盘的 Promise**，不是那份 data —— 这一条是必须的，别改回去。
  *
- * 以前这里是「发起 writeJson(...) 之后立刻 return data」：写盘是异步排队的，
- * 它失败时那个 Promise 没有任何人接管（unhandled rejection），而 ipcMain.handle
- * 已经拿着 data 成功返回了 —— 于是 `ipcRenderer.invoke` 正常 resolve，
- * 渲染层那些 `.catch(() => showToast('没能保存到磁盘'))` **全是死代码**：
- * 磁盘一个字节没动，界面照样弹「已删除 / 已保存」。
- *
- * 2026-10-08 星宝报的「角色卡和世界书删掉之后，重开软件还是会有」就是这个：
- * characters.json 被拒写（EPERM —— 当时是进程低完整性，见本文件开头）→ 保存作废，
- * 界面报「已删除」，磁盘上那张卡还在，重启自然又回来了。
+ * 如果发起 writeJson 就立刻 return data，写盘失败时那个 Promise 没有接管方
+ * （unhandled rejection），而 ipcMain.handle 已经拿着 data 成功返回了 ——
+ * ipcRenderer.invoke 正常 resolve，渲染层那些 `.catch(() => showToast('没能保存到磁盘'))`
+ * 全成了死代码：磁盘一个字节没动，界面照样弹「已删除 / 已保存」。
  * 端到端复现见 tools/mp-e2e-delete.js 的 E 段。
  */
 function saveCharacters(payload, options) {
@@ -418,19 +387,16 @@ function saveCharacters(payload, options) {
 
 // ---------------------------------------------------------------------------
 //  世界书 / World Info（Lorebook）
-//  数据存在 userData\worldbooks.json。词条生效范围只由「会话绑定了哪本书」决定；
+//  数据存在数据目录里的 worldbooks.json。词条生效范围只由「会话绑定了哪本书」决定；
 //  每本书还能装若干「角色副本」，这些副本与角色库里的角色互相独立、互不影响。
 // ---------------------------------------------------------------------------
-
-// 世界书数量上限。和会话一样给个上限，免得角色卡反复导入把文件撑到几十 MB。
-const MAX_WORLDBOOKS = 200;
 
 function worldbooksFile() {
   return dataFile('worldbooks.json');
 }
 
 function newWorldbookId() {
-  return `w${Date.now().toString(36)}${Math.floor(Math.random() * 9000 + 1000)}`;
+  return newId('w');
 }
 
 /**
@@ -467,7 +433,14 @@ function saveWorldbooks(payload, options) {
 
 /** 一组世界书 id 对应的全部条目（去重，同一个 id 只取一次） */
 function worldbookEntriesByIds(ids) {
-  const wanted = [...new Set((Array.isArray(ids) ? ids : []).filter((id) => typeof id === 'string' && id.trim()))];
+  const wanted = [
+    ...new Set(
+      (Array.isArray(ids) ? ids : [])
+        .filter((id) => typeof id === 'string')
+        .map((id) => id.trim())
+        .filter(Boolean)
+    )
+  ];
   if (!wanted.length) return [];
 
   const { worldbooks } = loadWorldbooks();
@@ -486,7 +459,7 @@ function worldbookEntriesByIds(ids) {
 
 // ---------------------------------------------------------------------------
 //  预设（Preset）
-//  数据存在 userData\presets.json。预设是「叠在对话上的一层指令」——
+//  数据存在数据目录里的 presets.json。预设是「叠在对话上的一层指令」——
 //  只由「会话绑定了哪一个」决定生效，和角色卡、世界书互不影响。
 // ---------------------------------------------------------------------------
 
@@ -496,7 +469,7 @@ function presetsFile() {
 
 /** 给一个没有 id 的预设补 id（界面新建时不一定带） */
 function newPresetId() {
-  return `pr${Date.now().toString(36)}${Math.floor(Math.random() * 9000 + 1000)}`;
+  return newId('pr');
 }
 
 function loadPresets() {
@@ -531,7 +504,7 @@ function savePresets(payload, options) {
 // ---------------------------------------------------------------------------
 //  语义检索（RAG）的向量仓库
 //
-//  存在 userData\vectors.json：{ version, items: { "<model>::<key>": "<base64 float32>" } }
+//  存在数据目录的 vectors.json：{ version, items: { "<model>::<key>": "<base64 float32>" } }
 //  键里带上**模型名**，所以换 embedding 模型不会污染 —— 不同模型的向量空间根本不可比，
 //  带上模型名之后老向量自然用不上，也就不会算出一堆假相似度。
 // ---------------------------------------------------------------------------

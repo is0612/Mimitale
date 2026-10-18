@@ -24,9 +24,6 @@ const MAX_OPTIONS = 6;
 // 想彻底关掉这张卡的选项，得在角色编辑器里把开关取消（那时存的是 `false`）。
 const DEFAULT_OPTIONS = 4;
 
-// 角色「属性」的条数上限，和渲染层状态面板的 MAX_PANEL_FIELDS 保持一致
-const MAX_ATTRIBUTES = 120;
-
 // 一张卡最多带几张「表情图」。每张都是 base64，所以要有上限。
 // 一套完整的情绪差分动辄二三十张，所以给得比一般列表宽。
 const MAX_EXPRESSIONS = 60;
@@ -99,15 +96,13 @@ function newCharacterId() {
 /**
  * 剧情选项的配置归一化。
  *
- * 三种情况分得清清楚楚：
- *   · `false`（角色编辑器里明确把开关关掉）→ 原样返回 `false` —— 它是「这张卡不要
- *     剧情选项」的唯一记号，必须活过归一化，否则关掉的角色一存盘就又变成默认开了；
- *   · 没有这个字段 / 形状不对（老卡、手改过的 JSON）→ 给**默认配置**（4 条）。
- *     以前这里返回 null = 不注入，导致「新卡、世界书里自己写的角色、导入的卡」
- *     全都不带剧情选项；现在一律默认开；
+ * 三种情况：
+ *   · `false`（角色编辑器里明确把开关关掉）→ 原样返回 —— 它是「这张卡不要
+ *     剧情选项」的唯一记号，必须活过归一化，否则关掉的角色一存盘又变成默认开；
+ *   · 没有这个字段 / 形状不对（老卡、手改过的 JSON）→ 默认配置（4 条）；
  *   · 对象 → 按里面的 count / hint 整理。
  *
- * 调用方只要判空即可（`false` 在 JS 里就是 falsy，和以前的 null 一样落到「不注入」）。
+ * 调用方只要判空即可（`false` 是 falsy，落到「不注入」）。
  */
 function normalizeOptionsSpec(value) {
   if (value === false) return false;
@@ -115,8 +110,15 @@ function normalizeOptionsSpec(value) {
     return { count: DEFAULT_OPTIONS, hint: '' };
   }
 
-  const raw = Number(value.count);
-  const count = isFinite(raw) ? Math.max(MIN_OPTIONS, Math.min(MAX_OPTIONS, Math.round(raw))) : DEFAULT_OPTIONS;
+  // count 缺失 / null / 空串都算「没配过」，用默认条数；
+  // 不能直接 Number() —— Number(null) 和 Number('') 都是 0，会被夹成 1 条。
+  const rawCount =
+    value.count === null || value.count === undefined || value.count === ''
+      ? NaN
+      : Number(value.count);
+  const count = Number.isFinite(rawCount)
+    ? Math.max(MIN_OPTIONS, Math.min(MAX_OPTIONS, Math.round(rawCount)))
+    : DEFAULT_OPTIONS;
   const hint = typeof value.hint === 'string' ? value.hint.trim().slice(0, 200) : '';
 
   return { count, hint };
@@ -126,11 +128,10 @@ function normalizeOptionsSpec(value) {
  * 角色「属性」：一串 { name, type, value, min?, max?, hint? }，名字去重，顺序保留。
  *
  * 归一化本身交给 main/panel-fields.js —— 那个模块主进程、渲染层、冒烟测试
- * 三方共用一份。属性以前是「只有名字和值」，现在还能带类型、范围、变化规则，
- * 分开写两份归一化迟早会漂。
+ * 三方共用一份，分开写两份迟早会漂。条数上限也在那边（MAX_FIELDS）。
  */
 function normalizeAttributes(value) {
-  return normalizePanelFields(value).slice(0, MAX_ATTRIBUTES);
+  return normalizePanelFields(value);
 }
 
 /**
@@ -173,14 +174,14 @@ function normalizeExpressions(value) {
     const isDefault = r.default === true && !hasDefault;
     if (isDefault) hasDefault = true;
 
-    const raw = typeof r.image === 'string' && r.image.startsWith('data:image/') ? r.image : '';
+    const image = typeof r.image === 'string' && r.image.startsWith('data:image/') ? r.image : '';
 
     out.push({
       name,
       keywords,
       ...(key ? { key } : {}),
       ...(isDefault ? { default: true } : {}),
-      image: raw.length <= MAX_AVATAR_CHARS ? raw : ''
+      image: image.length <= MAX_AVATAR_CHARS ? image : ''
     });
     if (out.length >= MAX_EXPRESSIONS) break;
   }
@@ -191,6 +192,7 @@ function normalizeExpressions(value) {
 function normalizeCharacter(raw, source) {
   const r = raw && typeof raw === 'object' ? raw : {};
   const str = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');
+  const id = typeof r.id === 'string' ? r.id.trim() : '';
 
   const avatar = typeof r.avatar === 'string' && r.avatar.startsWith('data:image/') ? r.avatar : '';
   // 角色形象（2:3 立绘），和头像分开存：头像是消息气泡 / 状态卡上那个小圆图，
@@ -200,12 +202,14 @@ function normalizeCharacter(raw, source) {
   const expressions = normalizeExpressions(r.expressions);
   // 备选开场白（同一张卡的不同入场剧本）
   const alternateGreetings = normalizeAlternateGreetings(r.alternateGreetings);
+  // `source` 参数来自调用方；脏值别原样写进数据里
+  const fallbackSource = ['png', 'json', 'manual'].includes(source) ? source : 'manual';
 
   return {
-    id: typeof r.id === 'string' && r.id ? r.id : newCharacterId(),
+    id: id || newCharacterId(),
     name: str(r.name, 120).trim() || '未命名角色',
     avatar: avatar.length <= MAX_AVATAR_CHARS ? avatar : '',
-    // ⚠️ 只在原来就有这个键时才写出来（哪怕是空串）。
+    // ⚠️ 只在输入里本来就有这个键时才写出来（哪怕是空串）。
     //    「没有这个键」= 老卡，只有一张图，读的时候用头像顶上（见 library.js 的
     //    characterPortrait）；「键在、值是空串」= 用户明确不要形象。
     //    写成 portrait: '' 会把老卡全变成「没有形象」，列表就只剩首字色块了。
@@ -243,7 +247,7 @@ function normalizeCharacter(raw, source) {
     // 「在状态栏显示」：只对世界书副本有意义，勾了才让这个 NPC 的状态进入口条。
     // ⚠️ 白名单式，必须显式保留，否则一存盘就丢。只在显式 true 时写出来。
     ...(r.showInPanel === true ? { showInPanel: true } : {}),
-    source: ['png', 'json', 'manual'].includes(r.source) ? r.source : source || 'manual',
+    source: ['png', 'json', 'manual'].includes(r.source) ? r.source : fallbackSource,
     createdAt: Number(r.createdAt) || Date.now(),
     updatedAt: Number(r.updatedAt) || Date.now()
   };

@@ -68,7 +68,7 @@ const {
 // ---------------------------------------------------------------------------
 //  宠物自己的「正在生成」控制器
 //
-//  ⚠️ 它和 main/ipc.js 的 activeController 是**两个独立的东西**，别合并。
+//  ⚠️ 它和 main/ipc.js 的 activeControllers 是**两套独立控制器**，别合并。
 //     合并之后，宠物一开口就会 abort 掉正在流的角色回复（见 pet-brain.js 顶部）。
 // ---------------------------------------------------------------------------
 
@@ -227,17 +227,22 @@ async function speakOnce(payload) {
 
     if (reason !== 'preview') {
       const convoTitle = String((request.context && request.context.convoTitle) || '').slice(0, 60);
-      await appendPetMemory(
-        pet.id,
-        { kind: 'say', text: result.text.slice(0, 300), convoTitle },
-        pet.memoryMaxItems
-      );
-      if (result.memory) {
+      try {
         await appendPetMemory(
           pet.id,
-          { kind: 'event', text: result.memory, convoTitle },
+          { kind: 'say', text: result.text.slice(0, 300), convoTitle },
           pet.memoryMaxItems
         );
+        if (result.memory) {
+          await appendPetMemory(
+            pet.id,
+            { kind: 'event', text: result.memory, convoTitle },
+            pet.memoryMaxItems
+          );
+        }
+      } catch (err) {
+        // 记忆写失败不该把「已经说出口的话」变成一次失败
+        petLog(`记忆写入失败：${(err && err.message) || '未知错误'}`);
       }
     }
 
@@ -481,9 +486,8 @@ function setVisibleAndRemember(pet, visible) {
   });
 }
 
-// 「从文件选一张静态图当形象」已移除（第一版的 PNG 路径）。
-// ⚠️ 但「换形象」功能还在：设置页那个下拉走 pet:skins / listRigSkins，
-//    列出 assets/pet/ 和 data/pet/skins/ 下所有带 model.json 的目录。
+// 换形象：设置页那个下拉走 pet:skins / listRigSkins，
+// 列出 assets/pet/ 和 data/pet/skins/ 下所有带 model.json 的目录。
 
 // ---------------------------------------------------------------------------
 //  窗口位置记忆（pet-window.js 里是懒 require 调过来的）
@@ -524,7 +528,7 @@ function registerPetIpc() {
     if (data.petId) {
       await patchPet(data.petId, patch);
     } else {
-      // 走队列内的读改写：这里以前是「先读再写」，和并发的字段修改会互相覆盖
+      // 走队列内的读改写：先读再写会让并发的字段修改互相覆盖。
       await patchPetConfig(patch);
     }
 

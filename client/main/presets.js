@@ -4,7 +4,7 @@
 //  main/presets.js —— 预设（对话层面叠上去的一层指令）的归一化
 //
 //  一个预设 = 一段会拼进系统提示词的文本 + 可选的几条采样参数。
-//  数据存在 userData\presets.json，只由「会话绑定了哪一个」决定生效。
+//  数据存在数据目录里的 presets.json，只由「会话绑定了哪一个」决定生效。
 //
 //  ⚠️ 白名单式：没列在这里的字段会被静默丢掉。加字段时这里要同步。
 //
@@ -24,6 +24,12 @@ function optNumber(value, min, max) {
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
   return Math.max(min, Math.min(max, n));
+}
+
+/** 整数版 optNumber：maxTokens 这类只认整数 */
+function optInteger(value, min, max) {
+  const n = optNumber(value, min, max);
+  return n === null ? null : Math.round(n);
 }
 
 /** 预设里可选挂的条目：正文 + 可选的关键词（有关键词就只在命中时带上） */
@@ -60,6 +66,7 @@ function normalizePresetEntry(raw) {
 function normalizePreset(raw) {
   const r = raw && typeof raw === 'object' ? raw : {};
   const meta = r.metadata && typeof r.metadata === 'object' ? r.metadata : {};
+  const id = typeof r.id === 'string' ? r.id.trim() : '';
 
   // 正文来源依次：顶层 content → metadata.systemPromptContent（酒馆那类导出）
   const direct = typeof r.content === 'string' ? r.content : '';
@@ -89,7 +96,7 @@ function normalizePreset(raw) {
     .slice(0, 10);
 
   return {
-    id: typeof r.id === 'string' && r.id ? r.id : undefined,
+    id: id || undefined,
     name: (typeof r.name === 'string' ? r.name : '').slice(0, 120).trim() || '未命名预设',
     note: (typeof r.note === 'string'
       ? r.note
@@ -104,10 +111,7 @@ function normalizePreset(raw) {
     entries,
     // 采样参数：null = 用设置里的全局值。只在明确填过的时候才覆盖。
     temperature: optNumber(r.temperature, 0, 2),
-    maxTokens: (() => {
-      const n = optNumber(r.maxTokens, 64, 32000);
-      return n === null ? null : Math.round(n);
-    })(),
+    maxTokens: optInteger(r.maxTokens, 64, 32000),
     topP: optNumber(r.topP, 0, 1),
     // 界面上的「启用」开关。关掉的预设不出现在绑定列表里，但数据保留。
     enabled: r.enabled !== false,

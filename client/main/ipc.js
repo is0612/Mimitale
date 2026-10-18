@@ -10,7 +10,6 @@
 //    main/window.js     窗口
 // ============================================================================
 
-// ⚠️ 这里不再需要 app：数据目录已经不走 app.getPath('userData') 了（见 main/data-dir.js）。
 const { ipcMain, shell, clipboard, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -81,10 +80,10 @@ const { recordRequest, listRequests, clearRequests, MAX_ENTRIES: MAX_LOGGED_REQU
 const { registerPetIpc } = require('./pet-ipc.js');
 
 // 「停止生成」：按 requestId 各管各的。
-// ⚠️ 以前是单个 activeController，每次 chat:send 都先 abort 上一个 ——
-//    于是后台摘要、剧情选项、AI 生成角色、世界开局、聊天流**互相掐**：
-//    回复刚完就发下一句会掐掉后台摘要（还记一次失败），聊天流式期间点「AI 生成」
-//    或它的「中止」会把聊天回复掐掉删掉。桌宠那边早就因为同一个坑另起了一套（pet-brain.js）。
+// ⚠️ 不要退回单个 activeController：后台摘要、剧情选项、AI 生成角色、世界开局、
+//    聊天流会互相掐 —— 回复刚完就发下一句会掐掉后台摘要（还记一次失败），
+//    聊天流式期间点「AI 生成」或它的「中止」会把聊天回复掐掉删掉。
+//    桌宠那边同理（pet-brain.js）。
 const activeControllers = new Map(); // requestId → AbortController
 
 // 允许当头像的图片格式（扩展名 → MIME）
@@ -108,7 +107,7 @@ const MAX_EMBED_INPUTS = 64;
 //
 //  系统弹框不带 defaultPath 时，每次都会回到默认目录，用户得反复点进文件夹。
 //  这里把上一次选中的目录记下来，下次弹框作为 defaultPath 传进去。目录存在
-//  userData\dialog-state.json，重开 App 也还在。
+//  数据目录里的 dialog-state.json，重开 App 也还在。
 //  导入 / 选图 / 保存共用同一份记忆 —— 「上次在哪，这次就从哪开」最符合直觉。
 // ---------------------------------------------------------------------------
 
@@ -149,11 +148,11 @@ function rememberDialogDir(chosenPath) {
   if (!dir || dir === lastDialogDir || !isUsableDir(dir)) return;
   lastDialogDir = dir;
   lastDialogDirLoaded = true;
-  try {
-    writeJson(dialogStateFile(), { lastDir: dir });
-  } catch (err) {
-    // 落盘失败只影响「下次记不住」，不影响本次结果
-  }
+  // 落盘失败只影响「下次记不住」，不影响本次结果 —— 但 Promise 必须接住，
+  // 否则会变成 unhandled rejection。
+  writeJson(dialogStateFile(), { lastDir: dir }).catch((err) => {
+    console.warn('[ipc] 记录文件对话框位置失败（不影响本次操作）:', err.message);
+  });
 }
 
 /** 弹框的默认目录（没记录过就返回 undefined，交给系统默认） */
@@ -167,6 +166,22 @@ function dialogDefaultSavePath(fileName) {
   if (path.isAbsolute(base)) return base;
   const dir = dialogDefaultDir();
   return dir ? path.join(dir, base) : base;
+}
+
+/** 读一张本地图片并转成 dataURL；过大/读失败返回 { dataUrl:'', error } */
+function readImageAsDataUrl(file, mime) {
+  try {
+    const buffer = fs.readFileSync(file);
+    if (buffer.length > MAX_IMPORT_BYTES) {
+      return {
+        dataUrl: '',
+        error: `图片太大（${(buffer.length / 1048576).toFixed(1)}MB，上限 ${MAX_IMPORT_BYTES / 1048576}MB）`
+      };
+    }
+    return { dataUrl: `data:${mime};base64,${buffer.toString('base64')}`, error: '' };
+  } catch (err) {
+    return { dataUrl: '', error: `读取失败：${(err && err.message) || '未知错误'}` };
+  }
 }
 
 /** 调一次 /embeddings，返回向量数组（顺序和输入一一对应） */
@@ -298,22 +313,16 @@ function registerIpc() {
     return resolveProvider(loadSettings(), p.providerId);
   }
 
-  ipcMain.handle('settings:test', async (_event, payload) => {
-    const provider = providerFromPayload(payload);
-    if (!provider) throw new Error('还没有配置任何模型提供商。');
-
-    // 本机桥接走 /health，不要求 API Key
+  /**
+   * 拉取某个服务商可用的模型名。
+   * 桥接没有 /models，改从 /health 取当前文字模型；其余走 OpenAI 兼容的 /models。
+   * 返回 { models, health }（health 只有桥接有，用来显示两个引擎的状态）。
+   */
+  async function fetchProviderModels(provider) {
     if (isBridgeProvider(provider)) {
       const health = await bridgeHealth(provider.baseUrl);
-      const textOk = health.text_engine === true;
-      const imageOk = health.image_engine === true;
-      const model = String(health.text_model || '');
-      return {
-        ok: true,
-        count: model ? 1 : 0,
-        models: model ? [model] : [],
-        message: `桥接服务在线（文字引擎${textOk ? '在线' : '离线'}、图像引擎${imageOk ? '在线' : '离线'}${model ? `，模型 ${model}` : ''}）。`
-      };
+      const model = String(health.text_model || '').trim();
+      return { models: model ? [model] : [], health };
     }
 
     if (!provider.apiKey) throw new Error(`请先填写「${provider.name}」的 API Key。`);
@@ -324,6 +333,27 @@ function registerIpc() {
       timeoutMs: 20000
     });
     const models = Array.isArray(data && data.data) ? data.data.map((m) => m.id).filter(Boolean) : [];
+    return { models, health: null };
+  }
+
+  ipcMain.handle('settings:test', async (_event, payload) => {
+    const provider = providerFromPayload(payload);
+    if (!provider) throw new Error('还没有配置任何模型提供商。');
+
+    const { models, health } = await fetchProviderModels(provider);
+
+    // 本机桥接：顺带把两个引擎的在线状态一起报出来
+    if (health) {
+      const textOk = health.text_engine === true;
+      const imageOk = health.image_engine === true;
+      const model = models[0] || '';
+      return {
+        ok: true,
+        count: models.length,
+        models,
+        message: `桥接服务在线（文字引擎${textOk ? '在线' : '离线'}、图像引擎${imageOk ? '在线' : '离线'}${model ? `，模型 ${model}` : ''}）。`
+      };
+    }
 
     return {
       ok: true,
@@ -339,26 +369,14 @@ function registerIpc() {
     const provider = providerFromPayload(payload);
     if (!provider) throw new Error('还没有配置任何模型提供商。');
 
-    // 本机桥接没有 /models 接口，从 /health 拿当前文字模型名
-    if (isBridgeProvider(provider)) {
-      try {
-        const health = await bridgeHealth(provider.baseUrl);
-        const model = String(health.text_model || '').trim();
-        return model ? [model] : [];
-      } catch (err) {
-        throw new Error((err && err.message) || '桥接服务未启动');
-      }
+    try {
+      const { models } = await fetchProviderModels(provider);
+      return models.sort((a, b) => a.localeCompare(b));
+    } catch (err) {
+      // 桥接服务没起来时给一句人话；其它服务商的错误原样抛（里面有具体 HTTP 信息）
+      if (isBridgeProvider(provider)) throw new Error((err && err.message) || '桥接服务未启动');
+      throw err;
     }
-
-    if (!provider.apiKey) throw new Error(`请先填写「${provider.name}」的 API Key。`);
-
-    const data = await requestJson({
-      url: modelsUrl(provider.baseUrl),
-      headers: buildHeaders(provider),
-      timeoutMs: 20000
-    });
-    const models = Array.isArray(data && data.data) ? data.data.map((m) => m.id).filter(Boolean) : [];
-    return models.sort((a, b) => a.localeCompare(b));
   });
 
   ipcMain.handle('conversations:get', () => loadConversations());
@@ -479,7 +497,7 @@ function registerIpc() {
 
     // 只取 role/content 参与匹配，和真实请求时的扫描范围保持一致
     let scanDepth = Number(request.scanDepth);
-    if (!isFinite(scanDepth) || scanDepth <= 0) scanDepth = 6;
+    if (!Number.isFinite(scanDepth) || scanDepth <= 0) scanDepth = 6;
     scanDepth = Math.min(50, Math.floor(scanDepth));
 
     const usable = messages.filter(
@@ -494,8 +512,7 @@ function registerIpc() {
     // 渲染层的 effectiveWorldbookIds 负责算出这批 id：
     //   · 会话绑了世界书（含「进入世界」）→ 只用会话的
     //   · 会话没绑 → 才用角色自带的那几本（前提是那张卡的开关是开的）
-    // 换句话说，角色库里的角色单独聊天**是会**注入设定的；
-    // 早前那句「不会注入任何世界书」是旧设计，已经不成立。
+    // 也就是说，角色库里的角色单独聊天**是会**注入设定的。
     const convoIds = Array.isArray(request.worldbookIds) ? request.worldbookIds : [];
     const entries = worldbookEntriesByIds(convoIds);
 
@@ -528,8 +545,8 @@ function registerIpc() {
    * 这里只解析不落盘 —— 由界面决定要不要收下，用户取消时什么都不会变。
    *
    * 「一个文件是什么」的判断和归一化都在 main/card-import.js 里，
-   * 抽出去是为了能单独测（这段以前夹在闭包和文件对话框之间，测不到，
-   * 导致「卡里内嵌的世界书被丢掉」长期没被发现）。
+   * 抽出去是为了能单独测 —— 这段如果埋在闭包和文件对话框之间，
+   * 「卡里内嵌的世界书被丢掉」这类问题就没法自动化覆盖。
    */
   ipcMain.handle('characters:import', async () => {
     const result = await dialog.showOpenDialog(getMainWindow(), {
@@ -594,19 +611,7 @@ function registerIpc() {
       return { canceled: false, dataUrl: '', error: `不支持的图片格式：${ext || '未知'}` };
     }
 
-    try {
-      const buffer = fs.readFileSync(file);
-      if (buffer.length > MAX_IMPORT_BYTES) {
-        return {
-          canceled: false,
-          dataUrl: '',
-          error: `图片太大（${(buffer.length / 1048576).toFixed(1)}MB，上限 ${MAX_IMPORT_BYTES / 1048576}MB）`
-        };
-      }
-      return { canceled: false, dataUrl: `data:${mime};base64,${buffer.toString('base64')}`, error: '' };
-    } catch (err) {
-      return { canceled: false, dataUrl: '', error: `读取失败：${(err && err.message) || '未知错误'}` };
-    }
+    return { canceled: false, ...readImageAsDataUrl(file, mime) };
   });
 
   /**
@@ -676,22 +681,11 @@ function registerIpc() {
     const mime = IMAGE_MIME[ext];
     if (!mime) return { dataUrl: '', error: `不支持的图片格式：${ext || '未知'}` };
 
-    try {
-      const buffer = fs.readFileSync(target);
-      if (buffer.length > MAX_IMPORT_BYTES) {
-        return {
-          dataUrl: '',
-          error: `图片太大（${(buffer.length / 1048576).toFixed(1)}MB，上限 ${MAX_IMPORT_BYTES / 1048576}MB）`
-        };
-      }
-      return { dataUrl: `data:${mime};base64,${buffer.toString('base64')}`, error: '' };
-    } catch (err) {
-      return { dataUrl: '', error: `读取失败：${(err && err.message) || '未知错误'}` };
-    }
+    return readImageAsDataUrl(target, mime);
   });
 
   ipcMain.handle('chat:stop', (_event, requestId) => {
-    // 带 id：只停那一个请求。不带（老调用方）：全停，跟以前的语义一致。
+    // 带 id：只停那一个请求。不带：全停（兼容不传 id 的调用方）。
     const ids = requestId ? [String(requestId)] : [...activeControllers.keys()];
     let stopped = false;
     for (const id of ids) {
@@ -1087,7 +1081,7 @@ function registerIpc() {
 
     // 先探这个进程能不能往数据目录里写字。
     //
-    // ⚠️ 「explorer.exe 起来了」**不等于**「文件夹真的打开了」：2026-10-08 实测，
+    // ⚠️ 「explorer.exe 起来了」**不等于**「文件夹真的打开了」：
     //    被沙箱 / 权限限制住的进程照样能 spawn 出 explorer.exe（'spawn' 事件照常触发），
     //    但那个 explorer 继承的是同一个受限令牌，请求递不到已经开着的资源管理器，
     //    用户看到的就是「点了没反应」，而这边一路返回 ok —— 界面连句话都不会说。
@@ -1095,8 +1089,8 @@ function registerIpc() {
     const writable = probeDirWritable(dir);
     const info = dataDirInfo();
 
-    // 返回值带上成败：以前只把路径递回去、也不看 openPath 的结果，
-    // 于是失败时用户只看到 Windows 自己弹的框，应用这边一句解释都没有。
+    // 返回值带上成败：失败时要把「打不开」和原因一起交回界面，
+    // 不能只递回一个路径、让用户对着 Windows 的弹框猜。
     if (process.platform === 'win32') {
       const error = await openFolderInExplorer(dir);
       if (error) {
