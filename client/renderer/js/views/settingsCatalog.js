@@ -134,6 +134,7 @@ export function looksLikeUnsupportedModelList(message) {
  * ⚠️ glm-image 的自定义下限是 **512**，不是推荐尺寸里最小的 1024：
  *    512x512、800x800 这类合法尺寸不能被自家校验判成非法而悄悄换掉；
  *    1024x1024 本来就在 512-2048 内、也是 32 的倍数，不需要被「纠正」。
+ */
 const MAX_CUSTOM_PIXELS = 2 ** 21; // CogView 的硬上限：总像素不超过 2^21
 
 const IMAGE_SIZE_RULES = [
