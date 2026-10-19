@@ -8,9 +8,9 @@
      · 「十、覆盖层」永远压在其余所有规则之上，别往上挪
      · 弹窗的基础规则（.modal / .modal-card / .modal-head / .modal-body /
        .modal-foot）留在「三、外壳」，别跟着哪个具体弹窗挪进「九」。它们和
-       .expr-body / .wb-picker-body 这类专属覆盖同为 (0,1,0)，靠先后分胜负：
-       基础规则一旦排到后面就会反压专属覆盖（表情弹窗会高 4px、世界书选择器
-       的内边距会被顶回默认）—— 2026-10-17 分区重排时真踩过。
+       .wb-picker-body 这类专属覆盖同为 (0,1,0)，靠先后分胜负：
+       基础规则一旦排到后面就会反压专属覆盖（世界书选择器的内边距会被顶回
+       默认）—— 2026-10-17 分区重排时真踩过。
    放错区不会报错，只会被别的规则盖掉 —— 加规则前先想清楚它属于哪个区。
    ========================================================================== */
 
@@ -1210,6 +1210,21 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   text-overflow: ellipsis;
 }
 
+/* 入口右边的数量（角色库 / 世界书）。跟名字同一行、靠右、灰一档 ——
+   数字是拿来扫一眼的，不该跟入口名抢注意力。等宽数字，两位数以上不会左右跳。 */
+.foot-count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.foot-count:empty {
+  display: none;
+}
+
 /* ---- 侧栏品牌行的版本号 ---- */
 .brand-version {
   flex: 0 0 auto;
@@ -1395,6 +1410,11 @@ body.pad-dragging {
 }
 
 .sidebar.collapsed .foot-label {
+  display: none;
+}
+
+/* 收成图标轨之后没有字的位置了，数字也跟着藏 —— 留着会压在图标上 */
+.sidebar.collapsed .foot-count {
   display: none;
 }
 
@@ -1866,13 +1886,6 @@ body.pad-dragging {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   animation: modal-fade 0.16s ease-out;
-}
-
-/* 表情图弹窗是从角色编辑器里点出来的，跟 AI 生成同一档：
-   压在角色编辑页之上、确认框（70）之下。缺了这条会退回 .modal 的 50，
-   弹窗就被页面内容整个盖住。 */
-#expr-modal {
-  z-index: 65;
 }
 
 #confirm-modal {
@@ -4947,36 +4960,16 @@ m-button.btn-new > .mi-btn__control:hover {
   flex-direction: column;
 }
 
-/* 头像 / 形象下面那行「表情图 · 已设 N 条 · 管理」 */
+/* 「表情图」分区的那张卡：头一行（计数 + 一句说明 + 两颗按钮），下面整片列表。
+   ⚙ 2026-10-19 从「一行摘要 + 管理按钮 + 预览格」改成直接编辑 —— 弹窗那一层去掉了。 */
 .char-expr-entry {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 12px;
   padding: 22px;
   border: 1px solid var(--ce-line);
   background: var(--ce-surface);
   border-radius: var(--radius);
-}
-
-.char-expr-entry .field-label {
-  flex: 0 0 auto;
-  padding-top: 0;
-}
-
-.char-expr-entry .field-help {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* 管理表情图那颗：flex 基准挂宿主（它是 .char-expr-entry 这行 flex 的 item），
-   内边距挂里层（观感）。font-size 不用再写 —— size="sm" 的皮肤本来就有 var(--fs-xs)。 */
-.char-expr-entry m-button {
-  flex: 0 0 auto;
-}
-
-.char-expr-entry m-button > .mi-btn__control {
-  padding: 4px 10px;
 }
 
 /* 文字区：角色名 / 标签 / 长文本 / 属性，纯文本，不需要额外框线 */
@@ -5159,26 +5152,22 @@ m-button.btn-new > .mi-btn__control:hover {
   padding: 4px 10px;
 }
 
-/* ------------------------------ 表情图弹窗 ------------------------------ */
-.expr-card {
-  max-width: 640px;
-}
+/* ------------------------------ 表情图（角色编辑页里那一屏） ------------------------------ */
 
-/* 头一行（计数 + 批量导入 + 添加）的间距比默认紧一点；滚动交给 .modal-body */
-.expr-body {
-  gap: 10px;
-}
-
+/* 头一行：计数 + 一句说明 + 批量导入 / 添加。窄窗口时允许折行，别把按钮挤没 */
 .char-expr-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 8px;
 }
 
-.char-expr-head .field-label {
+/* 「3 / 40」：等宽数字，改一条不会左右跳 */
+.char-expr-count {
   flex: 0 0 auto;
-  padding-top: 0;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .char-expr-head .field-help {
@@ -8653,56 +8642,74 @@ m-button.btn-new > .mi-btn__control:hover {
   max-width: 760px;
 }
 
+/* 开关打开后露出来的两行：每轮给几个 / 额外要求。
+   ⚠️ 以前是 `140px minmax(0,1fr)` 两栏并排，而里面每个 .field 自己又是
+   「152px 标签 + 控件」的两栏 —— 两层两栏套在一起，「每轮给几个」的标签
+   被挤在 140px 里溢出、「额外要求」只剩两百来像素。现在一行一项。 */
 #view-char-editor .c-options-config {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border-soft);
 }
 
-/* ------------------------------ 编辑角色 · 表情图预览 ------------------------------ */
-
-#view-char-editor .char-expr-preview {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-  gap: 10px;
-  width: 100%;
+/* 每轮给几个：四个固定档做成单选按钮组 */
+#view-char-editor .c-options-config > .field {
+  /* 这两行是「左边一行标签 + 右边一个矮控件」。.field 默认 align-items:start，
+     标签会贴着控件顶边 —— 32px 的药丸、44px 的输入框上看着就是浮在上面。
+     编辑页其余字段都是 .field-stack（标签在上），只有这里需要中线对齐。 */
+  align-items: center;
 }
 
-#view-char-editor .char-expr-preview-cell {
-  position: relative;
-  aspect-ratio: 1;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-input);
-  overflow: hidden;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-
-#view-char-editor .char-expr-preview-cell img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-#view-char-editor .char-expr-preview-cell:hover {
-  border-color: var(--accent-border);
-}
-
-#view-char-editor .char-expr-preview-more {
+#view-char-editor .opt-choices {
   display: flex;
+  gap: 8px;
+}
+
+#view-char-editor .opt-choice {
+  position: relative;
+  display: inline-flex;
+}
+
+/* 原生 radio 铺满整块但透明 —— 点击、聚焦、键盘选择都还是它自己；
+   ⚠️ 别用 display:none / visibility:hidden：那样 Tab 和方向键都跳不到。 */
+#view-char-editor .opt-choice > input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+#view-char-editor .opt-choice > span {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-style: dashed;
-  background: transparent;
+  width: 40px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+#view-char-editor .opt-choice:hover > span {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+#view-char-editor .opt-choice > input:checked + span {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+#view-char-editor .opt-choice > input:focus-visible + span {
+  box-shadow: var(--focus-ring);
 }
 
 /* ------------------------------ 编辑世界书 · A 稿「条目工作台」 ------------------------------ */

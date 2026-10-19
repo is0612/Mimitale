@@ -57,10 +57,7 @@ import { renderCharAttrs, initCharAttrsUi } from './charAttributes.js';
 import {
   renderCharExpressions,
   draftExpressionsOf,
-  initCharExpressionsUi,
-  openCharExpressionsEditor,
-  closeCharExpressionsEditor,
-  expressionsSummaryText
+  initCharExpressionsUi
 } from './charExpressions.js';
 import { openAiGenModal } from './aiGen.js';
 import { attachAutoGrow, syncAutoGrowAll } from '../ui/auto-grow.js';
@@ -300,9 +297,6 @@ function updateCharEditorScopeUi() {
  * 保存、删除、导出之后也调它。
  */
 export async function leaveCharacterEditor() {
-  // 表情弹窗挂在 body 上、盖着编辑页，编辑页走了不能留着
-  closeCharExpressionsEditor();
-
   // 新建的角色还没保存：离开就等于放弃，先问一句，免得辛苦填的设定白写
   if (isCharDraft()) {
     const typed = el.c.name.value.trim();
@@ -470,59 +464,16 @@ function clearPortrait() {
 // ---------------------------------------------------------------------------
 //  表情图
 //
-//  一张卡可以带几十条表情图（名称 + 触发词 + 一张图），编辑在**独立弹窗**里
-//  （views/charExpressions.js）—— 几十行塞进这张表单会把文字字段挤没。
-//  这里只持有草稿（charExpressions）+ 维护入口那行摘要；点「保存角色」时
-//  由 stashCharForm 一起写回卡上。弹窗里改了草稿会经 onChange 回调过来。
+//  一张卡可以带几十条表情图（名称 + 触发词 + 一张图）。⚙ 2026-10-19 起编辑界面
+//  直接摊在「表情图」分区里（views/charExpressions.js），原来那个弹窗和这里的
+//  入口摘要 / 预览格子一起删了 —— 同一份列表在一屏里只该出现一次。
+//  这里只持有草稿（charExpressions），点「保存」时由 stashCharForm 写回卡上。
 // ---------------------------------------------------------------------------
 
-const EXPR_PREVIEW_MAX = 8;
-
-/** 刷新编辑器入口那行「表情图 · 已设 N 条」，同步分区计数，并铺前几张预览 */
+/** 表情草稿变了：只刷分区导航上的条目数（列表由 charExpressions.js 自己重铺） */
 function updateExprSummary() {
-  if (el.charExprSummary) el.charExprSummary.textContent = expressionsSummaryText(charExpressions);
   // 0 也照显示 —— 藏起来会让人以为「这角色没有表情图这个功能」
   setCharSectionCount('expressions', String(charExpressions.length));
-  renderExprPreview();
-}
-
-/**
- * 前几张表情的预览网格：点任意一张进管理弹窗（增删改 / 设默认脸都在那边）。
- * 缩略图只读 —— 不想在这里长出第二套编辑交互。
- */
-function renderExprPreview() {
-  const host = el.charExprPreview;
-  if (!host) return;
-  clear(host);
-  const items = Array.isArray(charExpressions) ? charExpressions : [];
-  host.hidden = items.length === 0;
-  if (!items.length) return;
-  for (const expr of items.slice(0, EXPR_PREVIEW_MAX)) {
-    const cell = document.createElement('button');
-    cell.type = 'button';
-    cell.className = 'char-expr-preview-cell art-edge';
-    cell.title = `管理表情图（${expr.name || '未命名'}）`;
-    cell.setAttribute('aria-label', `管理表情图（${expr.name || '未命名'}）`);
-    if (expr.image) {
-      const img = document.createElement('img');
-      img.src = expr.image;
-      img.alt = '';
-      cell.appendChild(img);
-    } else {
-      cell.textContent = expr.name || '?';
-    }
-    cell.addEventListener('click', openCharExpressionsEditor);
-    host.appendChild(cell);
-  }
-  if (items.length > EXPR_PREVIEW_MAX) {
-    const more = document.createElement('button');
-    more.type = 'button';
-    more.className = 'char-expr-preview-cell char-expr-preview-more';
-    more.textContent = `+${items.length - EXPR_PREVIEW_MAX}`;
-    more.title = `还有 ${items.length - EXPR_PREVIEW_MAX} 张，打开管理`;
-    more.addEventListener('click', openCharExpressionsEditor);
-    host.appendChild(more);
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -592,7 +543,7 @@ function fillCharForm(character) {
   // 只有卡上明确写了 `false` 才是关。见 data/suggestions.js 的 optionsSpecFromCharacter。
   const optSpec = optionsSpecFromCharacter(character);
   el.c.optionsOn.checked = !!optSpec;
-  el.c.optionsCount.value = String((optSpec && optSpec.count) || DEFAULT_OPTIONS_COUNT);
+  setOptionsCount((optSpec && optSpec.count) || DEFAULT_OPTIONS_COUNT);
   el.c.optionsHint.value = optSpec ? optSpec.hint || '' : '';
   renderOptionsConfig();
 
@@ -621,6 +572,36 @@ function fillCharForm(character) {
 function renderOptionsConfig() {
   if (!el.c.optionsConfig) return;
   el.c.optionsConfig.classList.toggle('hidden', !el.c.optionsOn.checked);
+}
+
+/** 「每轮给几个」可选的档位。1 条等于没得选、6 条会把输入框那一行顶掉，只留 2~5 */
+const OPTION_COUNT_CHOICES = [2, 3, 4, 5];
+
+/**
+ * 把「每轮给几个」落到四个单选项上。
+ *
+ * 老卡里可能存着 1 或 6（上一版是 1~6 的数字输入框）—— 夹到**最近的档**，
+ * 而不是一律重置成默认 4：填过 6 的人再打开该看到 5，不是莫名其妙变回 4。
+ */
+function setOptionsCount(value) {
+  const wanted = Number(value);
+  const target = OPTION_COUNT_CHOICES.reduce(
+    (best, n) => (Math.abs(n - wanted) < Math.abs(best - wanted) ? n : best),
+    OPTION_COUNT_CHOICES[0]
+  );
+  const radios = el.c.optionsCount
+    ? el.c.optionsCount.querySelectorAll('input[type="radio"]')
+    : [];
+  for (const radio of radios) radio.checked = Number(radio.value) === target;
+}
+
+/** 读当前选中的档位；一个都没选中（标记被别处改坏）时兜回默认值 */
+function optionsCountValue() {
+  const checked = el.c.optionsCount
+    ? el.c.optionsCount.querySelector('input[type="radio"]:checked')
+    : null;
+  const value = Number(checked && checked.value);
+  return OPTION_COUNT_CHOICES.includes(value) ? value : DEFAULT_OPTIONS_COUNT;
 }
 
 /**
@@ -971,15 +952,10 @@ function stashCharForm() {
   else delete character.expressions;
   // 剧情选项：**关掉要写成 `false`**（不是 null）—— 主进程归一化把「没有这个字段」
   // 当成「默认开 4 条」，只有明确的 false 才活得过存盘，否则关掉的角色一重启又开了。
-  // 数量夹在 1~6，和注入时用的上限保持一致。
+  // 数量是四个单选项之一（2~5），不会再有 0 / 12 这种值要夹。
   if (el.c.optionsOn.checked) {
-    const rawText = String(el.c.optionsCount.value || '').trim();
-    const raw = Number(rawText);
-    // 空输入框的 Number('') 是 0，不能让它悄悄变成 1 条；空 = 用默认 4 条
-    const count = rawText && Number.isFinite(raw)
-      ? Math.max(1, Math.min(6, Math.round(raw)))
-      : DEFAULT_OPTIONS_COUNT;
-    character.optionsSpec = { count, hint: el.c.optionsHint.value.trim().slice(0, 200) };
+    // 四档单选框只有一个能被选中，读出来就是 2~5，不用再夹范围
+    character.optionsSpec = { count: optionsCountValue(), hint: el.c.optionsHint.value.trim().slice(0, 200) };
   } else {
     character.optionsSpec = false;
   }
@@ -1013,7 +989,8 @@ function newCharacter() {
  * 保存之前它不进角色库 / 世界书，也不写磁盘；关掉编辑器就当没建过。
  *
  * @param {object} [preset] AI 生成的角色字段（name / description / personality /
- *                 tags / attributes）。填进来之后和用户手填的草稿没有区别 ——
+ *                 scenario / firstMes / mesExample / tags / attributes）。
+ *                 填进来之后和用户手填的草稿没有区别 ——
  *                 一样要点「保存角色」才会真正创建。
  */
 function startCharDraft(preset) {
@@ -1034,9 +1011,10 @@ function startCharDraft(preset) {
     avatar: '',
     description: p.description || '',
     personality: p.personality || '',
-    scenario: '',
-    firstMes: '',
-    mesExample: '',
+    // AI 生成时连场景 / 开场白 / 示例对话一起带进来；手建角色这三项仍是空的
+    scenario: p.scenario || '',
+    firstMes: p.firstMes || '',
+    mesExample: p.mesExample || '',
     systemPrompt: '',
     postHistoryInstructions: '',
     creatorNotes: '',
@@ -1512,9 +1490,8 @@ export function initCharacterEditor(injected) {
   el.charPortrait.addEventListener('click', pickPortrait);
   el.btnClearPortrait.addEventListener('click', clearPortrait);
 
-  // 表情图：编辑都在独立弹窗里（加/删/批量导入的按钮接线在 charExpressions 模块内），
-  // 这里只接「管理表情图」这个入口。
-  if (el.btnManageExpr) el.btnManageExpr.addEventListener('click', openCharExpressionsEditor);
+  // 表情图：加 / 批量导入两颗按钮的接线在 charExpressions 模块里（initCharExpressionsUi），
+  // 已经不弹窗了，这里没有别的入口要接。
 
   // 自带世界书的开关：先更新草稿，再按草稿刷新说明文字。
   // 注意不能直接读 editorCharacterById —— 那时角色卡上还是旧值（还没保存），

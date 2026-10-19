@@ -1,16 +1,19 @@
 'use strict';
 
 // ============================================================================
-//  views/charExpressions.js —— 表情图编辑器（独立弹窗）
+//  views/charExpressions.js —— 表情图编辑器（角色编辑页的「表情图」分区）
 //
 //  一张卡可以带几十张表情图，按回复正文里的名称 / 触发词 / <emo>键</emo> 自动切
-//  （匹配规则在 data/expressions.js）。几十行塞进角色编辑表单会把下面的文字字段
-//  整个挤没，所以单独开一个弹窗 —— 角色编辑器里只留一行「表情图 · 已设 N 条 · 管理」。
+//  （匹配规则在 data/expressions.js）。
+//
+//  ⚙ 2026-10-19：**不再开弹窗**，整块直接摊在「表情图」分区里。这一屏本来
+//    就只有这一件事，多一层弹窗等于多点两下；而且弹窗开着时看不到分区标题，
+//    也不知道自己在哪一屏。
 //
 //  ★ 和其他视图模块一样：它**不持有**草稿，而是接收一份（`getList()` 拿）。
 //    那份草稿的所有者是角色编辑器（保存时要跟表单一起写回角色卡），
 //    让它自己存一份就得来回同步 —— 传引用、就地改，两边看到的永远是同一份。
-//    草稿一变就调 `onChange`，由角色编辑器刷新入口那行摘要。
+//    草稿一变就调 `onChange`，由角色编辑器刷新分区计数。
 // ============================================================================
 
 import { el } from '../core/dom.js';
@@ -306,13 +309,6 @@ const draft = () => {
   return Array.isArray(list) ? list : [];
 };
 
-/** 角色编辑器入口那行的摘要文案 */
-export function expressionsSummaryText(list) {
-  const items = Array.isArray(list) ? list : [];
-  if (!items.length) return '还没有表情图';
-  return `已设 ${items.length} 条`;
-}
-
 /** 一条表情 = 缩略图（点击换图）+ 名称 + 触发词 + 删除 */
 function buildExpressionRow(expr, index) {
   const thumb = h('button', {
@@ -569,40 +565,12 @@ async function pickExpressionImage(index) {
 }
 
 // ---------------------------------------------------------------------------
-//  弹窗开关
+//  接线
 // ---------------------------------------------------------------------------
 
-// Esc 监听只在弹窗开着时挂着；用捕获阶段 + stopPropagation，
-// 免得入口层那条 Esc 链顺手把底下的角色编辑器也一起关了。
-let escHandler = null;
-
-export function openCharExpressionsEditor() {
-  if (!el.exprModal) return;
-  renderCharExpressions(draft());
-  el.exprModal.classList.remove('hidden');
-
-  // 重复打开（双击按钮、或别处再调一次）时先摘掉旧监听，否则 Esc 会叠加多层，
-  // 而且 escHandler 被覆盖后旧监听再也摘不掉。
-  if (escHandler) document.removeEventListener('keydown', escHandler, true);
-  escHandler = (event) => {
-    if (event.key !== 'Escape') return;
-    event.stopPropagation();
-    closeCharExpressionsEditor();
-  };
-  document.addEventListener('keydown', escHandler, true);
-}
-
-export function closeCharExpressionsEditor() {
-  if (el.exprModal) el.exprModal.classList.add('hidden');
-  if (escHandler) {
-    document.removeEventListener('keydown', escHandler, true);
-    escHandler = null;
-  }
-}
-
 /**
- * 绑弹窗上的按钮。草稿是角色编辑器的，所以通过 getList 拿；
- * 草稿一变就调 onChange，让编辑器刷新入口那行摘要。
+ * 表情分区常显在页面上，所以没有「打开 / 关闭」两件事了 ——
+ * 只需要把「添加 / 批量导入」两颗按钮接上，列表由角色编辑器填表时铺。
  */
 export function initCharExpressionsUi({ getList, onChange } = {}) {
   if (typeof getList === 'function') getDraft = getList;
@@ -610,11 +578,4 @@ export function initCharExpressionsUi({ getList, onChange } = {}) {
 
   if (el.btnAddExpr) el.btnAddExpr.addEventListener('click', addExpression);
   if (el.btnBatchExpr) el.btnBatchExpr.addEventListener('click', batchImportExpressions);
-  if (el.btnCloseExpr) el.btnCloseExpr.addEventListener('click', closeCharExpressionsEditor);
-  if (el.btnExprDone) el.btnExprDone.addEventListener('click', closeCharExpressionsEditor);
-  if (el.exprModal) {
-    el.exprModal.addEventListener('click', (event) => {
-      if (event.target === el.exprModal) closeCharExpressionsEditor();
-    });
-  }
 }

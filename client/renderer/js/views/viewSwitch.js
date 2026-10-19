@@ -21,6 +21,7 @@
 // ============================================================================
 
 import { el } from '../core/dom.js';
+import { characters, worldbooks, dialoguePresets } from '../data/library.js';
 import { renderCharacterPage } from './characterList.js';
 import { renderWorldbookPage } from './worldbookList.js';
 import { renderPresetPage } from './presetList.js';
@@ -50,6 +51,24 @@ export function currentViewName() {
   return currentView;
 }
 
+/**
+ * 侧栏三颗入口右边的数量。
+ *
+ * 数字就是各自列表的长度（角色卡 / 世界书 / 对话预设）——
+ * ⚠️ 预设用 dialoguePresets()，别拿 state.presets（那是服务商的内置模板，另一回事）。
+ * 收起态（56px 图标轨）整条藏掉，见 CSS 的 .sidebar.collapsed .foot-count。
+ */
+function renderFootCounts() {
+  const parts = [
+    [el.footCharsCount, characters().length],
+    [el.footWorldbooksCount, worldbooks().length],
+    [el.footPresetsCount, dialoguePresets().length]
+  ];
+  for (const [node, count] of parts) {
+    if (node) node.textContent = String(count);
+  }
+}
+
 export function showView(name) {
   if (!VIEWS.includes(name)) return;
   currentView = name;
@@ -69,6 +88,7 @@ export function showView(name) {
   else if (name === 'presets') renderPresetPage();
   // help 是静态页，切过去不用做任何事；只有回到聊天才把光标放回输入框
   else if (name === 'chat') el.input.focus();
+  renderFootCounts();
 }
 
 /** 停在图书区那几个列表页时也要跟着刷新（改名、删除、导入都会走到这里） */
@@ -76,6 +96,8 @@ export function refreshLibraryPage() {
   if (currentView === 'chars') renderCharacterPage();
   else if (currentView === 'worldbooks') renderWorldbookPage();
   else if (currentView === 'presets') renderPresetPage();
+  // 删 / 导入 / 新建都会改变数量，而这时可能根本没切屏
+  renderFootCounts();
 }
 
 /** 侧边栏那几个入口（切屏属于本模块自己的事，自己绑） */

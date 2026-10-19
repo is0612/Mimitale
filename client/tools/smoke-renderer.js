@@ -876,9 +876,9 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   //      justify-content 挂里层，写反了不报错、只是按钮缩成一行文字那么宽；
   //   ② 三颗「清除」带着 hidden 类 —— 宿主上 `.hidden` 的 display:none !important
   //      必须照样压过 m-button 自己的 display（不然按钮删不掉地常驻）。
-  const CHAR_BTN_IDS = ['btn-close-chars','btn-save-char','btn-clear-avatar','btn-clear-portrait','btn-manage-expr','btn-first-template','btn-alt-add','btn-attr-template','btn-add-attr','btn-attr-paste','btn-attr-paste-apply','c-wb-add-btn','btn-export-char','btn-del-char'];
+  const CHAR_BTN_IDS = ['btn-close-chars','btn-save-char','btn-clear-avatar','btn-clear-portrait','btn-first-template','btn-alt-add','btn-attr-template','btn-add-attr','btn-attr-paste','btn-attr-paste-apply','c-wb-add-btn','btn-export-char','btn-del-char'];
   const bad = CHAR_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
-  check('角色编辑器 14 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
+  check('角色编辑器 13 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
   // ⚠️ 这里**仍不能**断言「页面里没有 .btn」：属性面板那几颗**图标按钮**
   //    （attr-tab / attr-tab-edit / attr-more-btn / panel-del 等）是 JS 用
   //    `button({ class: ... })` 现渲染的（不带 variant 就不生成 .btn 底座，见
@@ -5667,10 +5667,21 @@ await scenario('剧情选项', async () => {
   // 剧情选项现在**默认就是开的**（4 条）—— 所有角色（角色卡 / 世界书副本 /
   // 进世界时自己写的主角）一律如此，只有明确取消勾选才没有。
   check('默认就开着剧情选项', byId('c-options-on').checked === true, String(byId('c-options-on').checked));
-  check('默认每轮给 4 条', byId('c-options-count').value === '4', byId('c-options-count').value);
+  // 2026-10-19：数量从数字输入框改成四颗单选框（2/3/4/5）—— 读 .value 那套不再成立
+  const optionRadios = () => Array.from(byId('c-options-count').querySelectorAll('input[type="radio"]'));
+  check(
+    '只有 2 / 3 / 4 / 5 四档',
+    optionRadios().map((r) => r.value).join(',') === '2,3,4,5',
+    optionRadios().map((r) => r.value).join(',')
+  );
+  check(
+    '默认每轮给 4 条',
+    byId('c-options-count').querySelector('input[value="4"]').checked === true,
+    optionRadios().map((r) => `${r.value}:${r.checked}`).join(' ')
+  );
   check('开着时配置区是展开的', shown('#c-options-config'));
 
-  setValue('#c-options-count', '3');
+  click('#c-options-count input[value="3"]');
   setValue('#c-options-hint', '语气轻松些，总有一条冒险的选择');
 
   click('#btn-save-char');
@@ -5909,7 +5920,11 @@ await scenario('剧情选项：默认开、关掉要写 false', async () => {
   await sleep(80);
 
   check('新建的卡默认开着剧情选项', byId('c-options-on').checked === true, String(byId('c-options-on').checked));
-  check('默认每轮 4 条', byId('c-options-count').value === '4', byId('c-options-count').value);
+  check(
+    '默认每轮 4 条',
+    byId('c-options-count').querySelector('input[value="4"]').checked === true,
+    Array.from(byId('c-options-count').querySelectorAll('input')).map((r) => `${r.value}:${r.checked}`).join(' ')
+  );
 
   click('#c-options-on'); // 取消勾选 = 这张卡不要剧情选项
   await sleep(80);
@@ -8777,28 +8792,22 @@ await scenario('角色：表情图按回复关键词切换', async () => {
     return !!i && i.naturalWidth === 1024;
   });
 
-  // --- 表情图编辑挪进了独立弹窗：从编辑器入口打开 ---
-  check('编辑器里有「管理表情图」入口', !!byId('btn-manage-expr'));
-  click('#btn-manage-expr');
-  await waitFor('表情弹窗打开了', () => shown('#expr-modal'));
-  // 它是从角色编辑**页**里点开的：必须是一层浮在页面之上的遮罩，否则整块被盖住，
-  // 看着像没反应。⚠️ 2026-10-13 起「角色编辑器」不再是定位元素（它成了页面、
-  // 没有 z-index），所以这条断言从「比大小」换成了「表情弹窗是 fixed 遮罩 +
-  // 编辑页在文档流里」—— 比的还是同一件事：谁在上面。
+  // --- 表情图：直接在「表情图」分区里编辑（2026-10-19 起不再弹窗） ---
+  check('页面上没有表情弹窗了（编辑挪进分区）', !byId('expr-modal'));
+  click('#char-section-tab-expressions');
+  await waitFor('切到表情图分区', () => shown('#char-section-expressions'));
+  check('分区里有「添加表情」按钮', !!byId('btn-add-expr'));
   check(
-    '表情弹窗是浮在编辑页之上的遮罩',
-    getComputedStyle(byId('expr-modal')).position === 'fixed'
-      && getComputedStyle(byId('view-char-editor')).position !== 'fixed',
-    `expr=${getComputedStyle(byId('expr-modal')).position} 编辑页=${getComputedStyle(byId('view-char-editor')).position}`
+    '表情列表就在分区里，不在遮罩后面',
+    !!byId('char-expr-list') && !!byId('char-expr-list').closest('#char-section-expressions')
   );
-  check('弹窗里有「添加表情」按钮', !!byId('btn-add-expr'));
   check('还没加表情时有一句提示', /还没有表情图/.test(byId('char-expr-list').textContent));
   click('#btn-add-expr');
   await waitFor('多了一行表情', () => $$('#char-expr-list .char-expr-row').length === 1);
   check(
-    '编辑器入口跟着显示已设条数',
-    /已设 1 条/.test(byId('char-expr-summary').textContent),
-    byId('char-expr-summary').textContent
+    '左栏分区导航的「表情图」跟着显示 1',
+    byId('char-section-tab-expressions').querySelector('.char-section-count').textContent === '1',
+    byId('char-section-tab-expressions').textContent
   );
 
   // 名都没起就传图要拦住 —— 没名字的条目匹配不上任何东西，存下去等于白存
@@ -8824,10 +8833,7 @@ await scenario('角色：表情图按回复关键词切换', async () => {
     exThumb ? `${exThumb.naturalWidth}×${exThumb.naturalHeight}` : '缩略图里没图'
   );
 
-  // 关掉表情弹窗再回编辑器保存
-  click('#btn-expr-done');
-  await waitFor('表情弹窗关掉了', () => !shown('#expr-modal'));
-
+  // 表情是分区里的常显内容，没有再要关的弹窗，直接保存
   click('#btn-save-char');
   await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(200);
@@ -8950,9 +8956,9 @@ await scenario('角色：表情图批量导入、默认脸与 emo 标签', async
   await waitFor('模板字段种进来了', () => $$('#c-attr-list .attr-row').length >= 3);
 
   // --- 批量导入：假后端给六个文件，前三个文件名是英文、后三个是中文 ---
-  click('#btn-manage-expr');
-  await waitFor('表情弹窗打开了', () => shown('#expr-modal'));
-  check('弹窗里有「批量导入」按钮', !!byId('btn-batch-expr'));
+  click('#char-section-tab-expressions');
+  await waitFor('切到表情图分区', () => shown('#char-section-expressions'));
+  check('分区里有「批量导入」按钮', !!byId('btn-batch-expr'));
   click('#btn-batch-expr');
   await waitFor(
     '六张里导进五张（末张「羞怯」和英文的 shy 撞同一个情绪键，被跳过）',
@@ -9003,10 +9009,7 @@ await scenario('角色：表情图批量导入、默认脸与 emo 标签', async
   await sleep(30);
   check('重新点上', star(1).classList.contains('is-on'));
 
-  // 关掉表情弹窗再保存
-  click('#btn-expr-done');
-  await waitFor('表情弹窗关掉了', () => !shown('#expr-modal'));
-
+  // 表情是分区里的常显内容，没有再要关的弹窗，直接保存
   click('#btn-save-char');
   await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
   await sleep(200);

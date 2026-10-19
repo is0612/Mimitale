@@ -1,5 +1,7 @@
 'use strict';
 
+import { iconHtml } from '../ui/icons.js';
+
 // ============================================================================
 //  角色编辑页的骨架：左栏（资料 + 分区导航）／内容列／右侧字段目录
 //
@@ -12,13 +14,17 @@
 
 let layout = null;
 
-// 分区导航的图标（内联 SVG，描边 24×24）。改动只影响这里和 CSS，不碰控件 ID。
+// 分区导航的图标：**只留名字**，形状在 ui/icons.js 的注册表里。
+// ⚙ 2026-10-19：原来是五段内联 SVG 抄在这里，和 index.html 里那些一样，
+// 同一套图标在别处再画一遍就没人维护了。现在统一走 iconHtml()。
+// 挑的都是注册表里语义最近的那颗（表情图 = smile、世界书 = book-open、
+// 高级设置 = settings），所以这三颗的样子和以前略有差别 —— 换来的是全站一套线宽。
 const SECTION_ICONS = {
-  writing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
-  state: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/></svg>',
-  expressions: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 9.6h.01M15 9.6h.01" stroke-width="2.4"/></svg>',
-  worldbook: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5C10.5 5 8.5 4.5 4 4.5v13c4.5 0 6.5.5 8 2 1.5-1.5 3.5-2 8-2v-13c-4.5 0-6.5.5-8 2Z"/><path d="M12 6.5v13"/></svg>',
-  advanced: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 0-14.14 0M4.93 19.07a10 10 0 0 0 14.14 0M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>'
+  writing: 'file-text',
+  state: 'sliders-horizontal',
+  expressions: 'smile',
+  worldbook: 'book-open',
+  advanced: 'settings'
 };
 
 /**
@@ -108,7 +114,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
     button.setAttribute('role', 'tab');
     button.setAttribute('aria-controls', `char-section-${key}`);
     const icon = node('span', 'char-section-icon');
-    icon.innerHTML = SECTION_ICONS[key] || '';
+    icon.innerHTML = iconHtml(SECTION_ICONS[key]);
     const count = node('span', 'char-section-count');
     button.append(icon, node('span', 'char-section-label', title), count);
     sectionCounts[key] = count;
@@ -118,7 +124,10 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
     panel.dataset.section = key;
     panel.setAttribute('role', 'tabpanel');
     panel.setAttribute('aria-labelledby', button.id);
-    const heading = node('header', key === 'writing' ? 'char-panel-heading is-work' : 'char-panel-heading');
+    // is-work 给**五个分区都挂上**：标题一行、说明挪到右边同一行、底下一道细线。
+    // 只给「角色设定」挂过一次，切到属性/表情/世界书/高级时标题会突然变成两行 ——
+    // 同一页里换分区标题就换长相，看着像换了个页面。
+    const heading = node('header', 'char-panel-heading is-work');
     heading.append(node('h2', '', title), node('p', '', description));
     panel.append(heading);
 

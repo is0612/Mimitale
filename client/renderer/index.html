@@ -20,7 +20,7 @@
         <button id="btn-sidebar-toggle" class="sidebar-toggle" data-icon="panel-left" type="button" title="收起侧栏" aria-label="收起侧栏" aria-controls="sidebar" aria-expanded="true"></button>
       </div>
 
-      <m-button id="btn-new" variant="primary" block class="btn-new" data-icon="plus" aria-label="创建新对话">开启新篇章</m-button>
+      <m-button id="btn-new" variant="primary" block class="btn-new" data-icon="plus" aria-label="创建新对话">新对话</m-button>
 
       <div id="convo-cap" class="sidebar-label">最近会话</div>
       <div id="convo-list" class="convo-list" role="list"></div>
@@ -30,9 +30,9 @@
            文字直接裸在 button 里就没法单独隐藏，只能整颗 display:none。 -->
       <div class="sidebar-foot">
         <div class="sidebar-section-title">创作空间</div>
-        <m-button id="btn-chars" variant="ghost" block data-icon="users" aria-label="打开角色库"><span class="foot-label">角色库</span></m-button>
-        <m-button id="btn-worldbooks" variant="ghost" block data-icon="book-open" aria-label="打开世界书"><span class="foot-label">世界书</span></m-button>
-        <m-button id="btn-presets" variant="ghost" block data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span></m-button>
+        <m-button id="btn-chars" variant="ghost" block data-icon="users" aria-label="打开角色库"><span class="foot-label">角色库</span><span id="foot-chars-count" class="foot-count"></span></m-button>
+        <m-button id="btn-worldbooks" variant="ghost" block data-icon="book-open" aria-label="打开世界书"><span class="foot-label">世界书</span><span id="foot-worldbooks-count" class="foot-count"></span></m-button>
+        <m-button id="btn-presets" variant="ghost" block data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span><span id="foot-presets-count" class="foot-count"></span></m-button>
         <m-button id="btn-settings" variant="ghost" block data-icon="settings" aria-label="打开设置"><span class="foot-label">设置</span></m-button>
       </div>
 
@@ -248,14 +248,18 @@
                 </div>
               </div>
 
-              <!-- 表情图：一张卡动辄几十张，编辑挪到独立弹窗（views/charExpressions.js）。
-                   这里只留摘要 + 管理入口 + 前几张的预览网格。 -->
+              <!-- 表情图：直接在「表情图」分区里管理，不再开弹窗 ——
+                   这一屏本来就只有这一件事，弹一层窗反而多一次开关。
+                   草稿仍是角色编辑器那一份，点页头「保存」才写回卡。 -->
               <div class="char-expr-entry">
-                <span class="field-label" data-icon="smile">表情图</span>
-                <span id="char-expr-summary" class="field-help">还没有表情图</span>
-                <m-button id="btn-manage-expr" variant="ghost" size="sm"
-                        title="打开表情图管理（加 / 删 / 批量导入 / 设默认脸）">管理表情图</m-button>
-                <div id="char-expr-preview" class="char-expr-preview" hidden></div>
+                <div class="char-expr-head">
+                  <span id="expr-count" class="char-expr-count"></span>
+                  <span class="field-help">回复写到名称、触发词或 <code>&lt;emo&gt;键&lt;/emo&gt;</code> 时换成那张；都没写就用标了 ★ 的默认脸</span>
+                  <m-button id="btn-batch-expr" variant="ghost" size="sm"
+                            title="选一个文件夹，按文件名里的情绪词自动命名（shy 和 害羞 都认），从顶部对齐裁成正方形">批量导入</m-button>
+                  <m-button id="btn-add-expr" variant="ghost" size="sm">＋ 添加表情</m-button>
+                </div>
+                <div id="char-expr-list" class="char-expr-list"></div>
               </div>
             </div>
 
@@ -494,16 +498,22 @@
                   <span>剧情选项（每轮给几个可点选项，点一下就当你说这句话发出去）</span>
                 </label>
                 <div id="c-options-config" class="c-options-config hidden">
-                  <label class="field">
+                  <div class="field">
                     <span class="field-label">每轮给几个</span>
-                    <!-- value 属性就是初始值（和原生 <input> 同义，见 components/base.js） -->
-                    <m-input id="c-options-count" type="number" min="1" max="6" step="1" value="4"></m-input>
-                  </label>
-                  <label class="field field-stack">
+                    <!-- 固定四档单选：1 条等于没得选，6 条会把输入框那一行顶掉，
+                         实际会用的就 2~5。别改回数字输入框 —— 那样 0 / 12 都得再兜一次底。 -->
+                    <div id="c-options-count" class="opt-choices" role="radiogroup" aria-label="每轮给几个剧情选项">
+                      <label class="opt-choice"><input type="radio" name="c-options-count" value="2" /><span>2</span></label>
+                      <label class="opt-choice"><input type="radio" name="c-options-count" value="3" /><span>3</span></label>
+                      <label class="opt-choice"><input type="radio" name="c-options-count" value="4" /><span>4</span></label>
+                      <label class="opt-choice"><input type="radio" name="c-options-count" value="5" /><span>5</span></label>
+                    </div>
+                  </div>
+                  <div class="field">
                     <span class="field-label">额外要求（可选）</span>
                     <m-input id="c-options-hint"
                              placeholder="比如：语气轻松些、总有一条冒险的选择"></m-input>
-                  </label>
+                  </div>
                 </div>
               </div>
 
@@ -649,8 +659,8 @@
           </div>
 
           <nav class="wb-tabs" id="wb-tabs" aria-label="世界书分区">
-            <button type="button" class="wb-tab" id="wb-tab-entries" aria-controls="wb-panel-entries">条目 <span class="wb-tab-n" id="wb-tab-entries-n"></span></button>
             <button type="button" class="wb-tab" id="wb-tab-settings" aria-controls="wb-panel-settings">书籍设置</button>
+            <button type="button" class="wb-tab" id="wb-tab-entries" aria-controls="wb-panel-entries">条目 <span class="wb-tab-n" id="wb-tab-entries-n"></span></button>
             <button type="button" class="wb-tab" id="wb-tab-characters" aria-controls="wb-panel-characters">本书角色 <span class="wb-tab-n" id="wb-tab-characters-n"></span></button>
           </nav>
 
@@ -943,12 +953,7 @@
         <div class="settings-shell">
           <nav class="settings-nav" aria-label="设置分组">
             <button class="settings-nav-item active" type="button" data-target="sec-models">
-              <span class="settings-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
-                  <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
-                </svg>
-              </span>
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="link"></span>
               <span class="settings-nav-text">
                 <span class="settings-nav-title">模型服务</span>
                 <span class="settings-nav-desc">接口地址与 API Key</span>
@@ -956,11 +961,7 @@
             </button>
 
             <button class="settings-nav-item" type="button" data-target="sec-params">
-              <span class="settings-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
-                </svg>
-              </span>
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="params"></span>
               <span class="settings-nav-text">
                 <span class="settings-nav-title">生成参数</span>
                 <span class="settings-nav-desc">随机程度与长度</span>
@@ -968,12 +969,7 @@
             </button>
 
             <button class="settings-nav-item" type="button" data-target="sec-behavior">
-              <span class="settings-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="1" y="6" width="22" height="12" rx="6" />
-                  <circle cx="16" cy="12" r="3" />
-                </svg>
-              </span>
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="toggle"></span>
               <span class="settings-nav-text">
                 <span class="settings-nav-title">行为</span>
                 <span class="settings-nav-desc">键盘习惯与上下文</span>
@@ -981,13 +977,7 @@
             </button>
 
             <button class="settings-nav-item" type="button" data-target="sec-image">
-              <span class="settings-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="9" cy="9" r="2" />
-                  <path d="m21 15-4.5-4.5L3 21" />
-                </svg>
-              </span>
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="image"></span>
               <span class="settings-nav-text">
                 <span class="settings-nav-title">生图</span>
                 <span class="settings-nav-desc">给剧情配插画</span>
@@ -995,12 +985,7 @@
             </button>
 
             <button class="settings-nav-item" type="button" data-target="sec-rag">
-              <span class="settings-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-              </span>
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="search"></span>
               <span class="settings-nav-text">
                 <span class="settings-nav-title">语义检索</span>
                 <span class="settings-nav-desc">按意思捞回旧内容</span>
@@ -1008,15 +993,7 @@
             </button>
 
             <button class="settings-nav-item" type="button" data-target="sec-appearance">
-              <span class="settings-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="13.5" cy="6.5" r=".5" />
-                  <circle cx="17.5" cy="10.5" r=".5" />
-                  <circle cx="8.5" cy="7.5" r=".5" />
-                  <circle cx="6.5" cy="12.5" r=".5" />
-                  <path d="M12 2a10 10 0 0 0 0 20 2.5 2.5 0 0 0 2.5-2.5c0-.7-.3-1.3-.7-1.8-.4-.4-.7-1-.7-1.7a2.5 2.5 0 0 1 2.5-2.5H17a5 5 0 0 0 5-5c0-3.6-4.5-6-10-6Z" />
-                </svg>
-              </span>
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="palette"></span>
               <span class="settings-nav-text">
                 <span class="settings-nav-title">外观</span>
                 <span class="settings-nav-desc">配色、明暗与字号</span>
@@ -1024,14 +1001,7 @@
             </button>
 
             <button class="settings-nav-item" type="button" data-target="pet-section">
-              <span class="settings-nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="7" cy="8" r="2.2" />
-                  <circle cx="12" cy="6" r="2.2" />
-                  <circle cx="17" cy="8" r="2.2" />
-                  <path d="M12 10c-3.2 0-5.5 2.4-5.5 4.6 0 1.6 1.3 2.4 2.7 2.4 1 0 1.9-.5 2.8-.5s1.8.5 2.8.5c1.4 0 2.7-.8 2.7-2.4C17.5 12.4 15.2 10 12 10Z" />
-                </svg>
-              </span>
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="mask"></span>
               <span class="settings-nav-text">
                 <span class="settings-nav-title">桌宠</span>
                 <span class="settings-nav-desc">桌面上的小家伙</span>
@@ -1053,12 +1023,7 @@
              不用再包一层容器。 -->
         <section class="panel-section" id="sec-models">
           <div class="section-head">
-            <span class="section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
-                <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
-              </svg>
-            </span>
+            <span class="section-icon" aria-hidden="true" data-icon="link"></span>
             <span class="section-heading">
               <span class="section-title">模型服务</span>
               <span class="section-desc">可以添加多个模型提供商，随时切换</span>
@@ -1117,11 +1082,7 @@
 
         <section class="panel-section" id="sec-params">
           <div class="section-head">
-            <span class="section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
-              </svg>
-            </span>
+            <span class="section-icon" aria-hidden="true" data-icon="params"></span>
             <span class="section-heading">
               <span class="section-title">生成参数</span>
               <span class="section-desc">与右侧生成参数同步，统一控制思考、随机程度和长度</span>
@@ -1151,12 +1112,7 @@
 
         <section class="panel-section" id="sec-behavior">
           <div class="section-head">
-            <span class="section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="1" y="6" width="22" height="12" rx="6" />
-                <circle cx="16" cy="12" r="3" />
-              </svg>
-            </span>
+            <span class="section-icon" aria-hidden="true" data-icon="toggle"></span>
             <span class="section-heading">
               <span class="section-title">行为</span>
               <span class="section-desc">键盘习惯与上下文补充</span>
@@ -1225,13 +1181,7 @@
         <!-- 生图：和聊天是两套配置，默认留空 = 不启用 -->
         <section class="panel-section" id="sec-image">
           <div class="section-head">
-            <span class="section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="9" cy="9" r="2" />
-                <path d="m21 15-4.5-4.5L3 21" />
-              </svg>
-            </span>
+            <span class="section-icon" aria-hidden="true" data-icon="image"></span>
             <span class="section-heading">
               <span class="section-title">生图</span>
               <span class="section-desc">给剧情配插画。留空就是不启用</span>
@@ -1274,12 +1224,7 @@
         <!-- 语义检索：又是一组独立配置，走 /embeddings -->
         <section class="panel-section" id="sec-rag">
           <div class="section-head">
-            <span class="section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-            </span>
+            <span class="section-icon" aria-hidden="true" data-icon="search"></span>
             <span class="section-heading">
               <span class="section-title">语义检索</span>
               <span class="section-desc">按「意思」把相关的旧内容和设定捞回来，而不是靠关键词</span>
@@ -1323,15 +1268,7 @@
 
         <section class="panel-section" id="sec-appearance">
           <div class="section-head">
-            <span class="section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="13.5" cy="6.5" r=".5" />
-                <circle cx="17.5" cy="10.5" r=".5" />
-                <circle cx="8.5" cy="7.5" r=".5" />
-                <circle cx="6.5" cy="12.5" r=".5" />
-                <path d="M12 2a10 10 0 0 0 0 20 2.5 2.5 0 0 0 2.5-2.5c0-.7-.3-1.3-.7-1.8-.4-.4-.7-1-.7-1.7a2.5 2.5 0 0 1 2.5-2.5H17a5 5 0 0 0 5-5c0-3.6-4.5-6-10-6Z" />
-              </svg>
-            </span>
+            <span class="section-icon" aria-hidden="true" data-icon="palette"></span>
             <span class="section-heading">
               <span class="section-title">外观</span>
               <span class="section-desc">主题和明暗管整个界面，下面几样只管聊天区</span>
@@ -1359,8 +1296,6 @@
               <span class="field-help">和配色是两回事，各挑各的。</span>
             </div>
           </div>
-
-          <hr class="appearance-divider" />
 
           <div class="field field-stack">
             <span class="field-label">界面字号</span>
@@ -1440,14 +1375,7 @@
              因为宠物活在另一个进程里，等「保存」再同步会让右键菜单和这边对不上。 -->
         <section class="panel-section" id="pet-section">
           <div class="section-head">
-            <span class="section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="7" cy="8" r="2.2" />
-                <circle cx="12" cy="6" r="2.2" />
-                <circle cx="17" cy="8" r="2.2" />
-                <path d="M12 10c-3.2 0-5.5 2.4-5.5 4.6 0 1.6 1.3 2.4 2.7 2.4 1 0 1.9-.5 2.8-.5s1.8.5 2.8.5c1.4 0 2.7-.8 2.7-2.4C17.5 12.4 15.2 10 12 10Z" />
-              </svg>
-            </span>
+            <span class="section-icon" aria-hidden="true" data-icon="mask"></span>
             <span class="section-heading">
               <span class="section-title">桌宠</span>
               <span class="section-desc">
@@ -1621,7 +1549,7 @@
       <!-- 右侧面板：角色状态与场景。生成参数在设置中统一调整。 -->
       <aside id="cast-panel" class="inspector cast-panel hidden" aria-label="在场角色面板">
         <div class="cast-head">
-          <div class="cast-tabs"><span id="cast-panel-title" class="cast-tab active">在场角色 <b id="cast-panel-count" class="cast-head-count">0</b></span></div>
+          <span id="cast-panel-title" class="cast-title">在场角色 <b id="cast-panel-count" class="cast-head-count">0</b></span>
           <button id="btn-cast-collapse" class="cast-collapse" data-icon="panel-right" type="button" title="收起这一栏" aria-label="收起在场角色面板" aria-controls="cast-panel" aria-expanded="true"></button>
         </div>
         <section id="panel-box" class="cast-avatar-section hidden" aria-label="在场角色（状态卡入口）">
@@ -1633,42 +1561,6 @@
         <div id="cast-panel-body" class="cast-body" aria-labelledby="cast-panel-title"></div>
         <div id="cast-foot" class="cast-foot"><span id="cast-foot-book" class="cast-foot-text"></span><span id="cast-foot-hit" class="cast-foot-hit"></span></div>
       </aside>
-  </div>
-
-  <!-- ================= 表情图弹窗 =================
-       挂在角色编辑弹窗之上。一张卡的表情动辄几十条，单独开一个窗口编，
-       免得把角色表单挤长。草稿仍是角色编辑器那一份 —— 点「保存角色」才写回卡。 -->
-  <div id="expr-modal" class="modal hidden">
-    <div class="modal-card expr-card" role="dialog" aria-modal="true" aria-labelledby="expr-title">
-      <header class="modal-head">
-        <div class="modal-heading">
-          <h2 id="expr-title">表情图</h2>
-          <p class="modal-sub">回复写到名称、触发词或 &lt;emo&gt;键&lt;/emo&gt; 时换成这张；都没写就用标了 ★ 的默认脸</p>
-        </div>
-        <button id="btn-close-expr" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
-      </header>
-
-      <div class="modal-body expr-body">
-        <div class="char-expr-head">
-          <span id="expr-count" class="field-help"></span>
-          <m-button id="btn-batch-expr" variant="ghost" size="sm"
-            title="选一个文件夹，按文件名里的情绪词自动命名（shy 和 害羞 都认），从顶部对齐裁成正方形">批量导入</m-button>
-          <m-button id="btn-add-expr" variant="ghost" size="sm">＋ 添加表情</m-button>
-        </div>
-        <div id="char-expr-list" class="char-expr-list"></div>
-      </div>
-
-      <footer class="modal-foot">
-        <span class="foot-hint">改完回角色编辑器点「保存角色」才会写回这张卡</span>
-        <div class="foot-actions">
-          <m-button id="btn-expr-done" variant="primary">完成</m-button>
-        </div>
-      </footer>
-    </div>
   </div>
 
   <!-- ================= 预设编辑器 =================
@@ -1689,11 +1581,7 @@
             <path d="M3 8h3a2 2 0 0 0 2-2V3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M21 16h-3a2 2 0 0 0-2 2v3" />
           </svg>
         </button>
-        <button id="btn-close-preset" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭预设编辑器">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
+        <button id="btn-close-preset" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭预设编辑器" data-icon="close"></button>
       </header>
 
       <div class="modal-body">
@@ -1788,11 +1676,7 @@
             实际发出去的原文 · 只留最近 <b id="requests-max">20</b> 次，<b>关掉应用就没了</b>
           </p>
         </div>
-        <button id="btn-close-requests" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭请求记录">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
+        <button id="btn-close-requests" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭请求记录" data-icon="close"></button>
       </header>
 
       <div class="modal-body requests-body">
@@ -1822,11 +1706,7 @@
           <h2 id="perspective-title">视角设置</h2>
           <p class="modal-sub">决定 AI 用什么角度看这个世界；设置跟着会话走</p>
         </div>
-        <button id="btn-close-perspective" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭视角设置">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
+        <button id="btn-close-perspective" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭视角设置" data-icon="close"></button>
       </header>
 
       <div class="modal-body">
@@ -1899,11 +1779,7 @@
           <h2 id="memory-title">记忆</h2>
           <p class="modal-sub">较早的对话会压成摘要常驻上下文，这样聊多久都不会忘了开局</p>
         </div>
-        <button id="btn-close-memory" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭记忆管理">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
+        <button id="btn-close-memory" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭记忆管理" data-icon="close"></button>
       </header>
 
       <div class="modal-body">
@@ -1927,12 +1803,7 @@
         <!-- 存档点：把当前这一整段对话存一份，走岔了能整个退回来 -->
         <section class="panel-section checkpoint-section">
           <div class="section-head">
-            <span class="section-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
-                <path d="M17 21v-8H7v8M7 3v5h8" />
-              </svg>
-            </span>
+            <span class="section-icon" aria-hidden="true" data-icon="save"></span>
             <div>
               <div class="section-title">存档点</div>
               <div class="section-desc">把当前这段对话整个存一份，以后随时退回来</div>
@@ -1970,11 +1841,7 @@
           <h2 id="player-title">创建你的角色</h2>
           <p id="player-sub" class="modal-sub"></p>
         </div>
-        <button id="btn-close-player" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
+        <button id="btn-close-player" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭" data-icon="close"></button>
       </header>
 
       <div class="modal-body player-body">
@@ -2024,11 +1891,7 @@
           <h2 id="wb-char-picker-title">从角色库加入</h2>
           <p class="modal-sub">加入的是副本，之后两边各改各的，互不影响</p>
         </div>
-        <button id="btn-close-wb-char-picker" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
+        <button id="btn-close-wb-char-picker" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭" data-icon="close"></button>
       </header>
       <div class="modal-body wb-picker-body">
         <div id="wb-char-picker-list" class="wb-picker-list"></div>
@@ -2052,11 +1915,7 @@
           <h2 id="persona-title">默认人设</h2>
           <p class="modal-sub">没选角色卡的对话里，跟你说话的是谁 · 每个模型各存一份</p>
         </div>
-        <button id="btn-close-persona" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭默认人设">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
+        <button id="btn-close-persona" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭默认人设" data-icon="close"></button>
       </header>
 
       <div class="modal-body">

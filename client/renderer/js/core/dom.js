@@ -38,6 +38,10 @@ export const el = {
   btnChars: $('btn-chars'),
   btnWorldbooks: $('btn-worldbooks'),
   btnPresets: $('btn-presets'),
+  // 侧栏入口右边的数量（角色库 / 世界书 / 预设）。数字由 views/viewSwitch.js 铺
+  footCharsCount: $('foot-chars-count'),
+  footWorldbooksCount: $('foot-worldbooks-count'),
+  footPresetsCount: $('foot-presets-count'),
   // 设置页：内容和显隐都由 views/settings.js 管
   viewSettings: $('view-settings'),
   btnBackSettings: $('btn-back-settings'),
@@ -217,15 +221,8 @@ export const el = {
   charExprList: $('char-expr-list'),
   btnAddExpr: $('btn-add-expr'),
   btnBatchExpr: $('btn-batch-expr'),
-  // 表情图弹窗（挂在角色编辑器之上）
-  exprModal: $('expr-modal'),
+  // 表情图现在是「表情图」分区里的常显内容，没有弹窗、没有入口摘要
   exprCount: $('expr-count'),
-  btnCloseExpr: $('btn-close-expr'),
-  btnExprDone: $('btn-expr-done'),
-  // 角色编辑器里那行「表情图 · 已设 N 条 · 管理」
-  btnManageExpr: $('btn-manage-expr'),
-  charExprSummary: $('char-expr-summary'),
-  charExprPreview: $('char-expr-preview'),
   charFootHint: $('char-foot-hint'),
   c: {
     name: $('c-name'),
