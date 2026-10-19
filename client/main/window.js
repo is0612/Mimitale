@@ -190,15 +190,30 @@ function createWindow() {
     watchRendererForDev();
   }
 
-  // F12 开/关 DevTools。
-  // Electron 默认只绑了 Ctrl+Shift+I，从浏览器过来的人会习惯性按 F12，
-  // 那一下在 Electron 里是没反应的，所以这里补上。
+  // F12 开/关 DevTools、F5 / Ctrl+R 刷新页面。
+  // Electron 默认只绑了 Ctrl+Shift+I 和 Ctrl+R，从浏览器过来的人会习惯性按 F12 / F5，
+  // 那两下在 Electron 里是没反应的，所以这里补上。
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
+    // 长按会自动连发，刷一次就够了
+    if (input.isAutoRepeat) return;
 
     if (input.key === 'F12') {
       event.preventDefault();
       mainWindow.webContents.toggleDevTools();
+      return;
+    }
+
+    // F5 和 Ctrl+R 都给刷新。用 reloadIgnoringCache 而不是 reload：
+    // file:// 下的脚本/样式会被 Chromium 缓存，普通 reload 偶尔仍吃旧代码 ——
+    // 按刷新就是为了「看新的」，宁可多读一次盘。
+    const isReload =
+      input.key === 'F5' ||
+      (input.control && !input.shift && !input.alt && (input.key === 'r' || input.key === 'R'));
+
+    if (isReload) {
+      event.preventDefault();
+      mainWindow.webContents.reloadIgnoringCache();
     }
   });
 
