@@ -328,7 +328,7 @@ body {
   background: var(--accent-pressed);
 }
 
-/* 「开启新篇章」：一颗**特殊形态**的主按钮 —— 不是 primary 的实底，而是柔和底
+/* 「新对话」：一颗**特殊形态**的主按钮 —— 不是 primary 的实底，而是柔和底
    （accent-soft-strong）+ 描边。它迁成 m-button 后 `btn-new` 这个专属类留在宿主上，
    所以尺寸归宿主、观感归里层，分两条写（原来全压在同一条 `.btn-new` 上）。 */
 m-button.btn-new {
@@ -389,7 +389,6 @@ m-button.btn-new > .mi-btn__control {
 .panel-all:focus-visible,
 .accent-swatch:focus-visible,
 .seg-btn:focus-visible,
-.cast-tab:focus-visible,
 .topbar-icon:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -539,16 +538,10 @@ m-textarea > .mi-textarea__control {
   align-content: start;
   column-gap: 16px;
   row-gap: 6px;
-  margin-bottom: 20px;
-}
-
-.field:last-child {
-  margin-bottom: 0;
 }
 
 /* 标签顶部留白，让它和输入框里的文字在同一水平线上 */
 .field-label {
-  padding-top: 12px;
   font-size: var(--fs-sm);
   color: var(--text);
 }
@@ -599,18 +592,11 @@ m-textarea > .mi-textarea__control {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 18px;
   row-gap: 18px;
-  margin-bottom: 20px;
 }
 
 .field-grid .field {
   grid-template-columns: minmax(0, 1fr);
   row-gap: 8px;
-  margin-bottom: 0;
-}
-
-/* 作为分组最后一个元素时不带尾距，和上面的 .field:last-child 语义一致 */
-.field-grid:last-child {
-  margin-bottom: 0;
 }
 
 /* 「高级选项」里字段间距是 12px，这里跟着走 */
@@ -855,17 +841,12 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   justify-content: space-between;
   gap: 14px;
   padding: 14px 16px;
-  margin-bottom: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
   font-size: var(--fs-sm);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
-}
-
-.check:last-child {
-  margin-bottom: 0;
 }
 
 .check:hover {
@@ -1325,7 +1306,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   padding: 14px 4px;
 }
 
-.cast-panel.collapsed .cast-tabs {
+.cast-panel.collapsed .cast-title {
   display: none;
 }
 
@@ -1488,11 +1469,9 @@ body.pad-dragging {
   justify-content: space-between;
   position: relative;
   z-index: 45;
-  padding: 20px 30px;
+  padding: 0px 30px;
   gap: 14px;
   min-height: 98px;
-  background: transparent;
-  border: 0;
 }
 
 .topbar-avatar {
@@ -2512,6 +2491,7 @@ body.pad-dragging {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   user-select: none;
   margin: 4px 0 2px;
@@ -3128,45 +3108,28 @@ m-button.btn-send > .mi-btn__control {
   min-height: 65px;
 }
 
-.cast-tabs {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  background: transparent;
-  padding: 0;
-  gap: 18px;
-  border-radius: 0;
-}
-
-.cast-tab {
-  min-width: 0;
-  border: 0;
-  background: none;
-  color: var(--text-faint);
-  font-family: inherit;
+/* 面板标题「在场角色 + 计数」。它**只是个标签，不是能点的标签页** ——
+   这一栏从头到尾只有一个标题，DOM 里也没有第二个 tab。
+   以前这里散着 .cast-tabs / .cast-tab / .cast-tab:hover / .cast-tab.active /
+   .cast-head .cast-tab 等七条规则，其中真正生效的只有 height / font-size / 颜色：
+     · `border-bottom: 2px solid var(--accent)` 从来没画出来过 ——
+       后面同特异性的 `.cast-head .cast-tab { border: 0 }` 靠「后写优先」把它吃掉了；
+     · `:hover` 改的颜色和 `.active` 一样，永远看不出区别；
+     · 48px 那条高度被 36px 覆盖。
+   现在合成一条：高度 36px 是**有用的**（它决定文字垂直停在偏上的位置），别当成冗余删。
+   margin-right:auto 把收起按钮顶到最右，等价于原来那层 flex:1 的空容器。 */
+.cast-title {
+  flex: 0 0 auto;
+  margin-right: auto;
+  height: 36px;
   font-size: var(--fs-xs);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-  height: 48px;
-  padding: 0;
-  border-radius: 0;
-  flex: 0 1 auto;
-}
-
-.cast-tab:hover {
   color: var(--text);
+  white-space: nowrap;
 }
 
-
+/* 计数跟在标题后面，主色；`<b>` 自带加粗，这里压回去 */
 .cast-head-count {
-  font-size: var(--fs-xs);
   font-weight: 400;
-  color: var(--text-faint);
-}
-
-.cast-tab.active .cast-head-count {
   color: var(--accent);
 }
 
@@ -3443,12 +3406,6 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 宽度拖拽与浮动卡继续使用原定位和指针逻辑。 */
-.cast-tab.active {
-  color: var(--text);
-  background: transparent;
-  border-bottom: 2px solid var(--accent);
-}
-
 .cast-card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
@@ -3804,7 +3761,7 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* ⚙ 收起态只留 + 图标：font-size:0 / padding:0 / gap:0 是**观感**，必须落里层 ——
-   压在宿主上会被里层共用皮肤的 font-size: var(--fs-sm) 拦住（文字「开启新篇章」
+   压在宿主上会被里层共用皮肤的 font-size: var(--fs-sm) 拦住（文字「新对话」
    整个漏出来，rail 场景像素比对抓到）。 */
 .sidebar.collapsed #btn-new > .mi-btn__control {
   padding: 0;
@@ -3888,15 +3845,6 @@ m-button.btn-new > .mi-btn__control:hover {
 .cast-collapse svg {
   width: 19px;
   height: 19px;
-}
-
-.cast-head .cast-tabs {
-  flex: 1;
-}
-
-.cast-head .cast-tab {
-  height: 36px;
-  border: 0;
 }
 
 .cast-avatar-section {
@@ -5563,7 +5511,7 @@ m-button.btn-new > .mi-btn__control:hover {
 #view-char-editor .char-editor-content {
   min-width: 0;
   overflow-y: auto;
-  padding: 22px 24px 28px;
+  padding: 22px 30px 32px;
   container-type: inline-size;
 }
 
@@ -5573,14 +5521,11 @@ m-button.btn-new > .mi-btn__control:hover {
    1440 下不触发这条；属性 / 表情 / 世界书 / 高级设置同宽居中，切分区时左缘不会跳。 */
 #view-char-editor .char-editor-panel {
   width: 100%;
-  max-width: 760px;
-  min-width: 0;
   margin: 0 auto;
+  display: grid;
+  gap: 16px;
 }
 
-#view-char-editor .char-panel-heading {
-  margin-bottom: 26px;
-}
 
 #view-char-editor .char-panel-heading h2 {
   margin: 0;
@@ -5598,10 +5543,9 @@ m-button.btn-new > .mi-btn__control:hover {
 /* 「角色设定」那行标题：说明挪到右边同一行 —— 五栏连成长稿，标题不该占掉一整行高度 */
 #view-char-editor .char-panel-heading.is-work {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--ce-line);
 }
@@ -6511,12 +6455,7 @@ m-button.btn-new > .mi-btn__control:hover {
   gap: 14px;
 }
 
-.settings-content > .panel-section > .check {
-  margin-bottom: 10px;
-}
-
 .settings-content > .panel-section > .field {
-  margin-bottom: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -6526,51 +6465,20 @@ m-button.btn-new > .mi-btn__control:hover {
   background: var(--bg-card);
 }
 
-.settings-content > .panel-section > .field-grid {
-  margin-bottom: 10px;
-}
-
-.settings-content > .panel-section > .field-stack {
-  margin-bottom: 10px;
-}
-
-.settings-content > .panel-section > .persona-row {
-  margin-bottom: 10px;
-}
-
-.settings-content > .panel-section > .check:last-child {
-  margin-bottom: 0;
-}
-
-.settings-content > .panel-section > .field:last-child {
-  margin-bottom: 0;
-}
-
-.settings-content > .panel-section > .field-grid:last-child {
-  margin-bottom: 0;
-}
-
-.settings-content > .panel-section > .field-stack:last-child {
-  margin-bottom: 0;
-}
-
-.settings-content > .panel-section > .persona-row:last-child {
-  margin-bottom: 0;
-}
-
 .settings-content > .panel-section {
   width: 100%;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
+  display: grid;
+  gap:16px
 }
 
 /* 没有卡片壳之后，分组头部就代表「右边这一页」——把它做成一条页内标题：
    稍大一档的字 + 底下一道通栏分隔线，和下面内容拉开。
    （只在设置这一屏生效，基础 .section-head 不动。） */
 .settings-content > .panel-section > .section-head {
-  margin-bottom: 18px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--border);
 }
@@ -6659,12 +6567,6 @@ m-button.btn-new > .mi-btn__control:hover {
   border-color: var(--accent-border);
 }
 
-/* 「标签 + 右侧按钮」那一行（拉取可用模型 / 生成一句 / 刷新…）：
-   放进卡片后要跟标签同一行，filed-row 本来就是干这个的，这里只补一点底距。 */
-.settings-content > .panel-section .field > .field-row {
-  margin-bottom: 2px;
-}
-
 /* 服务商卡片：设计稿里把一排胶囊标签换成了「带徽标 + 状态 + 选中圈」的卡片。
    为什么换：胶囊上只塞得下一个名字，而用户挑服务商时真正要判断的是
    「这家填没填 Key / 是不是本地桥接 / 现在选的是哪家」——
@@ -6672,8 +6574,7 @@ m-button.btn-new > .mi-btn__control:hover {
 .provider-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
 }
 
 .provider-card {
@@ -6764,7 +6665,6 @@ m-button.btn-new > .mi-btn__control:hover {
 .provider-add {
   display: flex;
   gap: 8px;
-  margin-bottom: 10px;
 }
 
 /* 分组头部补一句统计（设计稿里是「已连接 4 家」这种），交给 JS 填。
@@ -7098,7 +6998,6 @@ m-button.btn-new > .mi-btn__control:hover {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 14px;
 }
 
 .section-icon {
@@ -7128,7 +7027,6 @@ m-button.btn-new > .mi-btn__control:hover {
 .section-desc {
   font-size: var(--fs-xs);
   color: var(--text-faint);
-  margin-top: 2px;
 }
 
 .section-heading {
@@ -7153,7 +7051,6 @@ m-button.btn-new > .mi-btn__control:hover {
   flex-wrap: wrap;
   gap: 6px;
   padding: 10px;
-  margin-bottom: 14px;
   border: 1px dashed var(--border-hover);
   border-radius: var(--radius);
   background: var(--bg-side);
@@ -7185,7 +7082,6 @@ m-button.btn-new > .mi-btn__control:hover {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--border-soft);
 }
@@ -7198,7 +7094,6 @@ m-button.btn-new > .mi-btn__control:hover {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--border-soft);
 }
@@ -7624,13 +7519,6 @@ m-button.btn-new > .mi-btn__control:hover {
   background: var(--accent);
   color: var(--on-accent);
   font-weight: 600;
-}
-
-/* 外观弹窗里「管整个界面」和「只管聊天区」之间那道分界线 */
-.appearance-divider {
-  margin: 2px 0 14px;
-  border: 0;
-  border-top: 1px solid var(--border-soft);
 }
 
 .fs-btn .icon-restore {
@@ -8341,7 +8229,7 @@ m-button.btn-new > .mi-btn__control:hover {
 
 /* 记忆列表 */
 .pet-memory {
-  margin-top: 8px;
+  width:96%;
   max-height: 220px;
   overflow-y: auto;
   display: flex;
@@ -8579,7 +8467,6 @@ m-button.btn-new > .mi-btn__control:hover {
 
 /* margin-bottom 是字段之间唯一的间距 —— 每张稿纸自带描边，再画分隔线就重了 */
 #view-char-editor .char-sheet {
-  margin-bottom: 16px;
   background: var(--bg-card);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
@@ -8951,7 +8838,6 @@ m-button.btn-new > .mi-btn__control:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 2px;
   font-family: inherit;
   font-size: var(--fs-sm);
   color: var(--text-dim);
@@ -9216,7 +9102,6 @@ m-button.btn-new > .mi-btn__control:hover {
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  max-width: 640px;
   margin: 0 auto;
 }
 
