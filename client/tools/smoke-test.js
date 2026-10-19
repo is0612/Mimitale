@@ -3010,17 +3010,41 @@ async function probeAiGenParse(win, result) {
         name: '守夜人',
         description: '一个总在深夜值班的人。',
         personality: '话少。',
+        scenario: '图书馆的深夜，只有值班灯亮着。',
+        firstMes: '{{char}} 抬头看了你一眼：\\n\\n还不走？',
+        mesExample: '{{user}}: 还不睡？\\n{{char}}: 还没。',
         tags: ['冒烟'],
         attributes: [{ name: '好感度', type: 'number', value: 5, mode: 'dynamic' }]
       });
       const fenced = '好的，我按你说的写了一个：\\n\\n\\\`\\\`\\\`json\\n' + clean + '\\n\\\`\\\`\\\`\\n\\n需要我再调整吗？';
+      // 下划线写法（酒馆卡常见）：场景给了，开场白/示例对话用 snake_case
+      const snake = JSON.stringify({
+        name: '守夜人',
+        description: '一个总在深夜值班的人。',
+        personality: '话少。',
+        scenario: '图书馆的深夜。',
+        first_mes: '{{char}} 抬头。',
+        mes_example: '{{user}}: 早。\\n{{char}}: 早。',
+        attributes: [{ name: '好感度', type: 'number', value: 5, mode: 'dynamic' }]
+      });
 
       const a = mod.parseGeneratedCharacter(clean);
       const b = mod.parseGeneratedCharacter(fenced);
+      const c = mod.parseGeneratedCharacter(snake);
+      const f = (r) => r.fields || {};
       return {
         exported: true,
-        clean: { ok: a.ok, name: a.fields && a.fields.name, attrs: (a.fields && a.fields.attributes || []).length, err: a.error },
-        fenced: { ok: b.ok, name: b.fields && b.fields.name, attrs: (b.fields && b.fields.attributes || []).length, err: b.error }
+        clean: {
+          ok: a.ok,
+          name: f(a).name,
+          attrs: (f(a).attributes || []).length,
+          scenario: !!f(a).scenario,
+          firstMes: !!f(a).firstMes,
+          mesExample: !!f(a).mesExample,
+          err: a.error
+        },
+        fenced: { ok: b.ok, name: f(b).name, attrs: (f(b).attributes || []).length, err: b.error },
+        snake: { ok: c.ok, scenario: !!f(c).scenario, firstMes: !!f(c).firstMes, mesExample: !!f(c).mesExample, err: c.error }
       };
     })()`);
 
@@ -3034,9 +3058,19 @@ async function probeAiGenParse(win, result) {
       JSON.stringify(out.clean)
     );
     push(
+      'AI 生成：场景 / 开场白 / 示例对话都能解析出来',
+      out.clean.scenario && out.clean.firstMes && out.clean.mesExample,
+      JSON.stringify(out.clean)
+    );
+    push(
       'AI 生成：带围栏和废话的输出也能解析出角色',
       out.fenced.ok && out.fenced.name === '守夜人' && out.fenced.attrs === 1,
       JSON.stringify(out.fenced)
+    );
+    push(
+      'AI 生成：下划线写法（first_mes / mes_example）也认',
+      out.snake.ok && out.snake.firstMes && out.snake.mesExample,
+      JSON.stringify(out.snake)
     );
   } catch (err) {
     push('AI 生成：解析体检能跑起来', false, (err && err.message) || String(err));
@@ -4738,7 +4772,7 @@ app.whenReady().then(async () => {
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 表情图弹窗：一张卡几十条表情，现在单独一个弹窗编
         //（缩略图 + 名称 + 触发词 + 默认脸 + 删除）
-        charExprModal: `
+        charExprSection: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
@@ -4752,8 +4786,9 @@ app.whenReady().then(async () => {
           const edit = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (edit) { edit.click(); await nap(700); }
 
-          $('#btn-manage-expr')?.click();
-          await nap(400);
+          // 表情图现在是分区里的常显内容，切过去就行 —— 没有弹窗要点
+          $('#char-section-tab-expressions')?.click();
+          await nap(300);
 
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 状态卡入口条：一行头像（我 / 各角色）。旧面板的收起态已经没有了，
@@ -4822,6 +4857,24 @@ app.whenReady().then(async () => {
             accent: document.documentElement.getAttribute('data-accent') || '(没设)',
             // 出图场景自己量的东西（目前是 selectPop 的下拉几何）
             selProbe: window.__selProbe || null,
+            // ⚙ 2026-10-19 内联 svg 收进 ui/icons.js 的注册表之后留下这张网：
+            // 「宿主写了 data-icon / 调了 iconHtml，最后却没插进 svg」这类事故肉眼扫不出来
+            // （页面不报错、位置也不塌），所以每次出图都数一遍。
+            // 「裸svg」是有意为之的 13 个 —— 它们是 JS 里 iconHtml() 的产物，
+            // 宿主本身没挂 data-icon（.field-icon / .model-menu-check / .char-section-icon 等），
+            // 数目突然变了才需要回头看。
+            iconProbe: (() => {
+              const list = (s) => Array.from(document.querySelectorAll(s));
+              const hosts = list('[data-icon]');
+              return {
+                带dataIcon: hosts.length,
+                没插进svg: hosts.filter((n) => !n.querySelector('svg')).map((n) => n.id || n.getAttribute('data-icon')),
+                裸svg: list('svg').filter(
+                  (s) => !s.closest('[data-icon]') && !s.classList.contains('icon-expand') && !s.classList.contains('icon-restore')
+                ).length,
+                svg总数: list('svg').length
+              };
+            })(),
             // 状态卡 / 世界书工具条那几个控件的实测尺寸（迁移前后对照用）
             cardProbe: (() => {
               const innerOf = (n) =>
@@ -4911,6 +4964,22 @@ app.whenReady().then(async () => {
             scenario: pair('#c-scenario'),
             first: pair('#c-first'),
             example: pair('#c-example'),
+            // 剧情选项的四颗单选（2026-10-19 起是单选框，不再是数字输入框）：
+            // 档位对不对、和下面「额外要求」的输入框左缘对不对齐 —— 差了 10px
+            // 在缩略图上几乎看不出来，所以给数字。
+            optProbe: (() => {
+              const group = document.querySelector('#c-options-count');
+              if (!group) return '(无)';
+              const pills = Array.from(group.querySelectorAll('.opt-choice > span'));
+              const hint = document.querySelector('#c-options-hint');
+              if (!pills.length) return '(没有单选项)';
+              return {
+                pills: pills.map((n) => n.textContent.trim()).join(','),
+                pillLeft: Math.round(pills[0].getBoundingClientRect().left),
+                hintLeft: hint ? Math.round(hint.getBoundingClientRect().left) : null,
+                pillH: Math.round(pills[0].getBoundingClientRect().height)
+              };
+            })(),
             // 左栏「有没有长出栏内滚动条」：这是 V2 布局的一条硬要求
             // （左栏固定、右列独立滚动），光看截图那根细细的滚动条很容易看漏。
             // scrollHeight > clientHeight 就是长了，给数字比看图可靠。
@@ -4940,6 +5009,8 @@ app.whenReady().then(async () => {
         console.log(`  弹窗卡片=${probe.modal}`);
         if (probe.selProbe) console.log(`  下拉几何=${JSON.stringify(probe.selProbe)}`);
         if (probe.attrProbe) console.log(`  属性行控件=${JSON.stringify(probe.attrProbe)}`);
+        if (probe.optProbe) console.log(`  剧情选项单选=${JSON.stringify(probe.optProbe)}`);
+        if (probe.iconProbe) console.log(`  图标注入=${JSON.stringify(probe.iconProbe)}`);
         if (probe.cardProbe) console.log(`  卡片/工具条控件=${JSON.stringify(probe.cardProbe)}`);
         if (shotArg === 'charTextareas') {
           console.log(`  长文本框实高(px) 宿主/里层 描述=${probe.desc} 性格=${probe.personality} 场景=${probe.scenario} 开场白=${probe.first} 示例对话=${probe.example}`);

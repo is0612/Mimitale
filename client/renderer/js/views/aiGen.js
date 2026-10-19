@@ -27,6 +27,7 @@ import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { uid } from '../core/util.js';
 import { h } from '../ui/build.js';
+import { iconHtml } from '../ui/icons.js';
 // 字段（标签 + 控件 + 说明）的规范件，见 ui/controls.js
 import { field } from '../ui/controls.js';
 // 组件库：生成弹窗里的两个多行框（见 components/index.js）
@@ -49,12 +50,22 @@ const MODE_RULE = 'mode 用 static 表示平时几乎不动的（身高、体重
 // 生成结果的字段契约。字段名必须和 main/characters.js 的 normalizeCharacter
 // 白名单对得上 —— 多写的字段存盘时会被静默丢掉，等于白生成。
 // attributes 里那几个键也和 main/panel-fields.js 的词表对齐（见 parseAttrs）。
+//
+// scenario / firstMes / mesExample 三项是「写一场戏」，和描述/性格那种「写设定」
+// 不是一回事，所以单独列一段写法。三个口径都抄自产品里已有的约定，别自己另发明：
+//   · 场景 = 编辑器里那句提示「你们正在哪里、干什么，一两句就够」（事件交给开场白）
+//   · 开场白 = characterEditor.js 的 FIRST_MES_TEMPLATE（定场 → 登场 → 留个话头）
+//   · 示例对话 = messages.js 的 parseExampleDialogue（`{{user}}:` / `{{char}}:` 开头、
+//     组间用 <START> 分隔）。格式写错不会报错，只会被解析成空数组、静默不生效。
 const FIELDS_SPEC = `严格按照下面的 JSON 结构输出，不要输出任何多余的文字、解释或 Markdown 代码块标记：
 
 {
   "name": "角色名",
   "description": "角色描述，交代身份、外貌、年龄、处境。第三人称",
   "personality": "性格、说话方式、立场、与玩家的关系",
+  "scenario": "你们此刻在哪里、正在做什么，一两句",
+  "firstMes": "开场白，按下面「写法」那一段的要求写",
+  "mesExample": "{{user}}: ……\\n{{char}}: ……\\n\\n<START>\\n\\n{{user}}: ……\\n{{char}}: ……",
   "tags": ["标签", "标签"],
   "attributes": [
     { "name": "字段名", "type": "text", "value": "初始值", "mode": "dynamic" }
@@ -64,7 +75,20 @@ const FIELDS_SPEC = `严格按照下面的 JSON 结构输出，不要输出任�
 attributes 给 3~8 条，每条包含 name / type / value / mode 四个键。
 type 只能是 text（文字）、meter（数值，可另带 min / max）、list（多项用「、」隔开）三种。
 ${MODE_RULE}
-字段名要贴合这个角色的身份，别用泛泛的「属性1」。`;
+字段名要贴合这个角色的身份，别用泛泛的「属性1」。
+
+scenario / firstMes / mesExample 这三项是「写一场戏」，不是写设定。别用 Markdown，别加解释。
+字符串里的换行一律写成 \\n —— 这是 JSON，值里不能直接断行：
+· scenario：只交代「你们现在在哪儿、正在做什么」，一两句话。别写事件经过 —— 那是开场白的活
+· firstMes：一幕登场，分三段、段与段之间空一行：
+  ① 定场 —— 时间 + 地点 + {{user}} 此刻在做的事，一两句就够
+  ② 登场 —— {{char}} 的一个动作或神态，紧接着一句直接对 {{user}} 说出口的话
+  ③ 话头 —— 停在一个需要 {{user}} 回应的地方：一个问题，或一段等着他接的沉默
+  双方一律用 {{char}} 和 {{user}} 这两个占位符，不要写死名字。整段 200~400 字
+· mesExample：2~3 组示范，每组严格两行、以占位符加冒号开头：
+  {{user}}: 玩家说的话
+  {{char}}: 角色的回应（可以带动作）
+  组与组之间用单独一行 <START> 隔开。要能听出这个人的说话习惯，不要写任何旁白说明`;
 
 const LIBRARY_SYSTEM = `你是一位角色设定师，负责把一个简短的描述扩写成一张完整的角色卡。
 
@@ -74,6 +98,8 @@ ${FIELDS_SPEC}
 · 描述和性格要具体、有细节，能让人一眼记住这个角色；不要写空泛的赞美词
 · 先想清楚这个角色**处在什么世界、什么基调里**，再动笔 —— 描写用词要和那个基调一致
   （日常治愈、黑暗奇幻、现代都市的写法完全不同）
+· scenario / firstMes / mesExample 讲的是**同一场戏**：地点、时间、正在发生的事要能对上，
+  开场白停在哪个瞬间，示例对话就该发生在同一个处境里
 · 只输出 JSON 本身`;
 
 /**
@@ -106,6 +132,8 @@ const BOOK_SYSTEM_TAIL = `这是一位要在「世界」里出场的配角（NPC
 · **description 和 personality 加起来的前 160 字必须写全最重要的信息**
   （身份、立场、说话方式、和玩家的关系）—— 超出部分在注入时会被截掉
 · attributes 写这个角色身上会变的东西（好感度、钱、状态这类），3~8 条就够
+· scenario / firstMes / mesExample 按「他第一次和 {{user}} 打交道」的那一刻写，
+  不必照抄这本书的开场白；示例对话要能听出他作为配角的立场
 · 只输出 JSON 本身`;
 
 // 条目总量上限：世界书单本最多 5000 条，全喂进去光输入就爆了。
@@ -229,6 +257,21 @@ function str(value, max) {
   return typeof value === 'string' ? value.slice(0, max) : '';
 }
 
+/**
+ * 按顺序找第一个非空字符串。
+ *
+ * 场景 / 开场白 / 示例对话这三个键，模型经常照着酒馆卡写成下划线版
+ * （first_mes、mes_example、example）—— 提示词里写的是小驼峰，但见过大量卡的
+ * 模型会自己换写法。两种都认，不然生成一次几十秒，结果三项全空。
+ */
+function pickStr(json, keys, max) {
+  for (const key of keys) {
+    const text = str(json[key], max);
+    if (text.trim()) return text;
+  }
+  return '';
+}
+
 /** 标签：字符串数组，逗号串也收（模型偶尔会写成 "治愈, 日常"） */
 function parseTags(value) {
   const list = Array.isArray(value)
@@ -334,6 +377,10 @@ export function parseGeneratedCharacter(raw) {
       name: name || '未命名角色',
       description,
       personality,
+      // 上限和 main/characters.js 的 normalizeCharacter 逐项对齐（超出会被截掉）
+      scenario: pickStr(json, ['scenario'], 10000),
+      firstMes: pickStr(json, ['firstMes', 'first_mes', 'greeting'], 10000),
+      mesExample: pickStr(json, ['mesExample', 'mes_example', 'exampleDialogue', 'example'], 30000),
       tags: parseTags(json.tags),
       attributes: parseAttrs(json.attributes)
     }
@@ -482,14 +529,13 @@ function buildLayer() {
           class: 'modal-sub',
           text:
             scope === 'worldbook'
-              ? '按这本书的设定生成一个配角，生成完还可以自己改'
-              : '描述一下你想要的角色，AI 补全成一张角色卡'
+              ? '按这本书的设定生成一个配角（含描述、性格、场景、开场白、示例对话），生成完还可以自己改'
+              : '描述一下你想要的角色，AI 补全成一张角色卡：描述、性格、场景、开场白、示例对话都有'
         })
       ),
       (() => {
         const btn = h('button', { class: 'icon-btn', type: 'button', title: '关闭（Esc）', 'aria-label': '关闭' });
-        btn.innerHTML =
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>';
+        btn.innerHTML = iconHtml('close');
         btn.addEventListener('click', closeLayer);
         return btn;
       })()
