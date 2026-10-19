@@ -47,22 +47,12 @@ const MODE_RULE = 'mode 用 static 表示平时几乎不动的（身高、体重
   '用 dynamic 表示会随剧情变动的（好感度、金钱、穿着这类）——' +
   'dynamic 的字段一旦这一轮发生了跟它有关的事就必须输出。拿不准就写 dynamic。';
 
-// 生成结果的字段契约。字段名必须和 main/characters.js 的 normalizeCharacter
-// 白名单对得上 —— 多写的字段存盘时会被静默丢掉，等于白生成。
-// attributes 里那几个键也和 main/panel-fields.js 的词表对齐（见 parseAttrs）。
-//
-// scenario / firstMes / mesExample 三项是「写一场戏」，和描述/性格那种「写设定」
-// 不是一回事，所以单独列一段写法。三个口径都抄自产品里已有的约定，别自己另发明：
-//   · 场景 = 编辑器里那句提示「你们正在哪里、干什么，一两句就够」（事件交给开场白）
-//   · 开场白 = characterEditor.js 的 FIRST_MES_TEMPLATE（定场 → 登场 → 留个话头）
-//   · 示例对话 = messages.js 的 parseExampleDialogue（`{{user}}:` / `{{char}}:` 开头、
-//     组间用 <START> 分隔）。格式写错不会报错，只会被解析成空数组、静默不生效。
 const FIELDS_SPEC = `严格按照下面的 JSON 结构输出，不要输出任何多余的文字、解释或 Markdown 代码块标记：
 
 {
   "name": "角色名",
-  "description": "角色描述，交代身份、外貌、年龄、处境。第三人称",
-  "personality": "性格、说话方式、立场、与玩家的关系",
+  "description": "角色描述，交代身份、外貌、年龄、处境。第三人称，具体有画面感",
+  "personality": "性格、说话方式、立场、与玩家的关系。要写出辨识度，避免空泛形容词堆砌",
   "scenario": "你们此刻在哪里、正在做什么，一两句",
   "firstMes": "开场白，按下面「写法」那一段的要求写",
   "mesExample": "{{user}}: ……\\n{{char}}: ……\\n\\n<START>\\n\\n{{user}}: ……\\n{{char}}: ……",
@@ -75,69 +65,86 @@ const FIELDS_SPEC = `严格按照下面的 JSON 结构输出，不要输出任�
 attributes 给 3~8 条，每条包含 name / type / value / mode 四个键。
 type 只能是 text（文字）、meter（数值，可另带 min / max）、list（多项用「、」隔开）三种。
 ${MODE_RULE}
-字段名要贴合这个角色的身份，别用泛泛的「属性1」。
+字段名要贴合这个角色的身份和处境，禁止用「属性1」「好感度」这种泛称（可以是「对你的戒心」「口袋里的铜板」「今日穿着」这类）。
 
-scenario / firstMes / mesExample 这三项是「写一场戏」，不是写设定。别用 Markdown，别加解释。
+【同一场戏硬约束】
+scenario、firstMes、mesExample 必须是**同一时间、同一地点、同一件正在发生的事**。
+禁止三者时间或地点错位，禁止 mesExample 另起一个新场景。
+
 字符串里的换行一律写成 \\n —— 这是 JSON，值里不能直接断行：
-· scenario：只交代「你们现在在哪儿、正在做什么」，一两句话。别写事件经过 —— 那是开场白的活
-· firstMes：一幕登场，分三段、段与段之间空一行：
-  ① 定场 —— 时间 + 地点 + {{user}} 此刻在做的事，一两句就够
-  ② 登场 —— {{char}} 的一个动作或神态，紧接着一句直接对 {{user}} 说出口的话
-  ③ 话头 —— 停在一个需要 {{user}} 回应的地方：一个问题，或一段等着他接的沉默
-  双方一律用 {{char}} 和 {{user}} 这两个占位符，不要写死名字。整段 200~400 字
+
+· description：第三人称。必须有画面感，并包含外貌特征与至少一个动态细节；不要把所有特点一次列成清单。
+  从走路姿态、随身物件、与环境的互动、一个习惯性动作等细节里挑重点，通常选 1~2 个最能体现角色的即可。
+  这些细节用于让读者认识角色，不代表角色之后每轮都必须重复做同一个动作。
+· personality：用具体说话方式、判断习惯、情绪处理方式和关系态度体现性格，禁止堆砌「温柔善良」「认真努力」这类空泛词。
+  必须写清楚：
+  - 她平时怎么说话（口头禅、句式、紧张时语速或措辞会怎样）
+  - 她的一个明显小缺点或执念
+  - 对 {{user}} 的具体态度（她最希望从你这里得到什么反馈/对待方式）
+  - 如有标志性小动作，要写清它通常在什么情境下出现；它是偶尔流露的习惯，不是每次回应都要执行的固定动作。
+  description 与 personality 分工补充信息，不要把同一个小动作在两处重复描述或同时列出一串相似动作。
+· 描写密度与细节去重（重要）：
+  - 角色鲜明不等于每句话都要配动作。动作只在推动情节、表达情绪变化或补充必要信息时使用。
+  - 一次普通回应通常突出 0~1 个有意义的动作/神态即可；确有连续动作或明确因果时才继续写，不要把搓衣角、抿嘴、低头、抬眼、捏物件等小动作串成流水账。
+  - 同一个标志性动作不要连续几轮原样复现。再次使用时必须有当前情境的理由，或让它体现出不同的情绪/含义；没有必要就直接写台词或推进事情。
+  - 不要为了体现性格而每轮强行安排环境描写、心理解释或动作。信息已经由台词表达清楚时，不再用旁白换种说法解释一遍。
+· scenario：只交代「你们现在在哪儿、正在做什么」，一两句话。别写事件经过 —— 那是开场白的活。
+· firstMes：一幕登场，分三段、段与段之间空一行（即用 \\n\\n 分隔）：
+  ① 定场 —— 时间 + 地点 + {{user}} 此刻在做的事，一两句，要有画面，但不必铺满环境细节
+  ② 登场 —— 选择 {{char}} 一个最能表现当下状态的动作或神态，紧接着一句直接对 {{user}} 说出口的话
+  ③ 话头 —— **必须停在一个明确需要 {{user}} 立刻回应的具体请求或问题上**。
+     禁止软绵绵的开放式结尾（例如「你想聊什么都可以」「随便坐坐」「有空再来玩」）。
+     好的话头方向：请对方指出具体问题、帮忙做一件眼前的事、回答她正在纠结的点、对她刚才的行为给出真实评价。
+  双方一律用 {{char}} 和 {{user}} 这两个占位符，不要写死名字。整段 200~400 字；不得为了凑字数重复动作、景物或心理。
+  禁止流水账、禁止大段内心独白、禁止直接总结性格。
 · mesExample：2~3 组示范，每组严格两行、以占位符加冒号开头：
   {{user}}: 玩家说的话
-  {{char}}: 角色的回应（可以带动作）
-  组与组之间用单独一行 <START> 隔开。要能听出这个人的说话习惯，不要写任何旁白说明`;
+  {{char}}: 角色的回应（可以带动作描写，但不要求每条都带）
+  组与组之间用单独一行 <START> 隔开。
+  **所有示例必须发生在 firstMes 停住的那个瞬间之后**，继续同一场景里的互动，禁止跳到别的时间或地点。
+  示例要展示不同的回应节奏：至少一组以自然台词为主，不靠动作撑篇幅；其它组如需动作，也只写与当下反应相关的重点。不要在每组里重复同一个标志性动作。
+  要能听出这个人的说话习惯、口头禅、态度，不要写任何旁白说明。`;
 
-const LIBRARY_SYSTEM = `你是一位角色设定师，负责把一个简短的描述扩写成一张完整的角色卡。
+const LIBRARY_SYSTEM = `你是一位经验丰富的角色设定师，负责把一个简短的描述扩写成一张完整、好用的角色卡。
 
 ${FIELDS_SPEC}
 
-要求：
-· 描述和性格要具体、有细节，能让人一眼记住这个角色；不要写空泛的赞美词
-· 先想清楚这个角色**处在什么世界、什么基调里**，再动笔 —— 描写用词要和那个基调一致
-  （日常治愈、黑暗奇幻、现代都市的写法完全不同）
-· scenario / firstMes / mesExample 讲的是**同一场戏**：地点、时间、正在发生的事要能对上，
-  开场白停在哪个瞬间，示例对话就该发生在同一个处境里
-· 只输出 JSON 本身`;
+质量要求（按优先级）：
+1. 先想清楚这个角色处在什么世界、什么基调里，再动笔 —— 描写用词必须和那个基调一致
+   （日常治愈、黑暗奇幻、现代都市、克苏鲁、赛博朋克的写法完全不同）。
+2. 角色辨识度靠少量准确的细节建立，不靠动作数量堆起来。description 与 personality 各司其职，避免重复罗列同一习惯。
+3. 角色可以有 1~2 个标志性习惯，但必须有触发情境；不要把它写成每轮必做的动作。普通回应可以直接说话、思考或做事，不必强行加动作。
+4. firstMes 和 mesExample 要示范自然的描写密度：避免连续堆叠细小动作；示例之间应有变化，至少一组以台词和信息推进为主。
+5. personality 必须用具体说话方式、判断和情绪处理习惯体现，禁止空泛形容词。必须写出对 {{user}} 的具体态度。
+6. **scenario / firstMes / mesExample 必须是同一场戏**：时间、地点、正在发生的事完全一致。
+   firstMes 的结尾必须是一个具体的、需要立刻回应的请求或问题，不能软着陆。
+7. 角色要有「可互动性」：不是完美无缺的偶像，要有小缺点、小执念、小矛盾，方便后续剧情推进。
+8. 只输出 JSON 本身，不要任何解释或代码块标记。`;
 
 /**
  * 用户手填的「背景 / 基调」（角色库那侧的可选输入）。
- *
- * 为什么给角色库加、不给世界书加：世界书那侧**本身就有大纲** ——
- * 书的条目 + 开场白会一起喂进去（见 buildBookContext），再让用户手写一份
- * 只会和条目内容打架。而角色库那侧没有这层上下文，模型只能靠一句描述
- * 自己脑补世界观，写出来容易飘 —— 这个框补的就是那层缺口。
- *
- * 做成可选：不填就整段不注入，提示词保持最短。
  */
 function briefSection(brief) {
   const text = String(brief || '').trim();
   if (!text) return '';
-  return `\n\n【背景 / 基调】\n${text.slice(0, 1000)}\n\n角色的设定必须贴合上面这个背景，不要另起一套世界观。`;
+  return `\n\n【背景 / 基调】\n${text.slice(0, 1000)}\n\n角色的设定、用词、世界观必须严格贴合上面这个背景，不要另起一套。`;
 }
 
 /**
  * 世界书模式下额外要遵守的规则。
- *
- * 「前 160 字」不是随便定的：副本进 GM 名单时，description + personality
- * 合计只取前 160 字（见 data/cast.js 的 worldbookCast），写满了才不会被截掉。
  */
-const BOOK_SYSTEM_TAIL = `这是一位要在「世界」里出场的配角（NPC），不是主角。
+const BOOK_SYSTEM_TAIL = `这是一位要在「世界」里出场的配角（NPC），不是主角，也不是玩家自己。
 
-要求：
-· 先写**已有的角色名单**和世界设定，新角色要和它们区分开，不要重复或改写已有的人，
-  也不要生成「玩家自己」
-· **description 和 personality 加起来的前 160 字必须写全最重要的信息**
-  （身份、立场、说话方式、和玩家的关系）—— 超出部分在注入时会被截掉
-· attributes 写这个角色身上会变的东西（好感度、钱、状态这类），3~8 条就够
-· scenario / firstMes / mesExample 按「他第一次和 {{user}} 打交道」的那一刻写，
-  不必照抄这本书的开场白；示例对话要能听出他作为配角的立场
-· 只输出 JSON 本身`;
+额外要求：
+· 先读已有的角色名单和世界设定，新角色必须和它们明显区分开，不要重复或改写已有的人。
+· description 和 personality 加起来的前 160 字必须写全最重要的信息
+  （身份、立场、说话方式、和玩家的关系）—— 超出部分在注入时会被截掉，所以前 160 字要精炼。
+· attributes 写这个角色身上会变的东西（好感度、钱、状态、随身物品这类），3~8 条，字段名要贴身份。
+· scenario / firstMes / mesExample 必须是同一场戏，按「他第一次和 {{user}} 打交道」的那一刻写；
+  firstMes 结尾必须是明确需要立刻回应的具体请求或问题，不能软着陆。
+· 只输出 JSON 本身。`;
 
 // 条目总量上限：世界书单本最多 5000 条，全喂进去光输入就爆了。
-// 按用户描述里的字命中哪些条目，命中不了就取排在前面的常驻条。
 const MAX_ENTRY_CHARS = 2400;
 const MAX_ENTRY_COUNT = 12;
 
@@ -152,9 +159,6 @@ function keywordsOf(text) {
 
 /**
  * 挑出跟这段描述相关的条目。
- *
- * 刻意不 import main/worldbook-match.js —— 那是主进程的模块，渲染层读不到。
- * 这里只要「大致相关」，精确度不重要：命不中就退化成取前几条，反正用户还会自己改。
  */
 function pickEntries(book, prompt, budget) {
   const entries = (Array.isArray(book.entries) ? book.entries : []).filter(
@@ -185,7 +189,6 @@ function pickEntries(book, prompt, budget) {
     if (out.length >= MAX_ENTRY_COUNT) break;
   }
 
-  // 按预算截断：从头累积，放不下最后一条就整体不要 —— 半条正文比没有更糟
   const picked = [];
   let used = 0;
   for (const entry of out) {
@@ -207,7 +210,7 @@ function buildBookContext(book, prompt) {
   const copies = worldbookCharacters(book);
   if (copies.length) {
     const names = copies.map((c) => c.name).filter(Boolean).join('、');
-    if (names) parts.push(`【这个世界已有的角色】\n${names}\n请生成一个和上面这些人都不同的新角色。`);
+    if (names) parts.push(`【这个世界已有的角色】\n${names}\n请生成一个和上面这些人都明显不同的新角色，不要重复或改写他们。`);
   }
 
   const entries = pickEntries(book, prompt, MAX_ENTRY_CHARS);
@@ -220,15 +223,6 @@ function buildBookContext(book, prompt) {
 //  取模型返回的正文
 // ---------------------------------------------------------------------------
 
-/**
- * 从响应里取出模型写的正文。
- *
- * ⚠️ 两种形状不一样，不能写成一回事：
- *   · OpenAI 兼容：主进程的 streamChat 已经把 choices[].message.content 收成
- *     平铺的 `content` 了（见 main/http.js 的 resolve）。
- *   · 本机桥接：桥接的 /chat 与 /chat_with_image 都返回 `{ text, image }`，
- *     正文在 `text` 上。
- */
 function responseText(response, bridge) {
   if (!response) return '';
   if (bridge) return String(response.text || '');
@@ -246,6 +240,7 @@ function extractJsonBlock(raw) {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) text = fenced[1].trim();
 
+  // 再尝试去掉可能的前后废话
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start >= 0 && end > start) text = text.slice(start, end + 1);
@@ -259,10 +254,7 @@ function str(value, max) {
 
 /**
  * 按顺序找第一个非空字符串。
- *
- * 场景 / 开场白 / 示例对话这三个键，模型经常照着酒馆卡写成下划线版
- * （first_mes、mes_example、example）—— 提示词里写的是小驼峰，但见过大量卡的
- * 模型会自己换写法。两种都认，不然生成一次几十秒，结果三项全空。
+ * 兼容 first_mes / firstMes / greeting 等常见变体。
  */
 function pickStr(json, keys, max) {
   for (const key of keys) {
@@ -272,7 +264,7 @@ function pickStr(json, keys, max) {
   return '';
 }
 
-/** 标签：字符串数组，逗号串也收（模型偶尔会写成 "治愈, 日常"） */
+/** 标签：字符串数组，逗号串也收 */
 function parseTags(value) {
   const list = Array.isArray(value)
     ? value
@@ -287,14 +279,6 @@ function parseTags(value) {
 
 /**
  * 属性：只留 normalizePanelField 认得的键，形状不对的整条丢掉。
- *
- * ⚠️ 类型和 change 频率的词表**必须**和 main/panel-fields.js 对齐：
- *   · type 只有 text / meter / list —— 没有 'number'。数值字段是 'meter'，
- *     写成 number 会被归一化器退回 'text'，数字就变成字符串了。
- *   · mode 只有 dynamic / static，而且 **dynamic 是默认值** ——
- *     存储时会被省掉那个键（见 normalizePanelField 的 `mode !== DEFAULT`）。
- *     所以这里也不用写出来，让它走默认即可。
- * 模型有时候会把 type 写成 number，所以两种写法都收，统一映射到 meter。
  */
 function parseAttrs(value) {
   if (!Array.isArray(value)) return [];
@@ -312,7 +296,6 @@ function parseAttrs(value) {
     if (type === 'text' && typeof value0 !== 'string') {
       fieldValue = String(value0 == null ? '' : value0);
     } else if (type === 'list' && Array.isArray(value0)) {
-      // 面板里的列表值是「多项用、隔开」的字符串，模型给数组时先拼好
       fieldValue = value0
         .filter((v) => typeof v === 'string' && v.trim())
         .map((v) => v.trim())
@@ -320,8 +303,6 @@ function parseAttrs(value) {
     }
 
     const field = { name, type, value: fieldValue == null ? '' : fieldValue };
-    // 数字字段的范围：模型给了就带上，没给就算了（归一化器两种都收）。
-    // 不能直接 Number(null) / Number('') —— 那会得到 0，凭空多一个范围。
     const finiteNumber = (v) => {
       if (v === null || v === undefined) return null;
       if (typeof v === 'string' && v.trim() === '') return null;
@@ -333,7 +314,6 @@ function parseAttrs(value) {
       if (Number.isFinite(max)) field.max = max;
       if (Number.isFinite(min)) field.min = min;
     }
-    // 「几乎不动」才值得标出来；dynamic 是默认，不写
     if (String(item.mode || '').trim().toLowerCase() === 'static') field.mode = 'static';
 
     out.push(field);
@@ -344,10 +324,6 @@ function parseAttrs(value) {
 
 /**
  * 把模型输出解析成角色字段。
- *
- * @returns {{ok: true, fields: object} | {ok: false, error: string, raw: string}}
- *          解析失败时把原文一起带出去，让调用方决定怎么兜底 ——
- *          生成一次要几十秒，不能因为多了一行解释就整块丢掉。
  */
 export function parseGeneratedCharacter(raw) {
   const text = extractJsonBlock(raw);
@@ -366,7 +342,6 @@ export function parseGeneratedCharacter(raw) {
   const name = str(json.name, 120).trim();
   const description = str(json.description, 20000);
   const personality = str(json.personality, 10000);
-  // 名字和描述都空 = 这次生成没有可用内容，让调用方按失败处理
   if (!name && !description.trim()) {
     return { ok: false, error: '模型没有给出可用的角色内容', raw: String(raw || '') };
   }
@@ -377,7 +352,6 @@ export function parseGeneratedCharacter(raw) {
       name: name || '未命名角色',
       description,
       personality,
-      // 上限和 main/characters.js 的 normalizeCharacter 逐项对齐（超出会被截掉）
       scenario: pickStr(json, ['scenario'], 10000),
       firstMes: pickStr(json, ['firstMes', 'first_mes', 'greeting'], 10000),
       mesExample: pickStr(json, ['mesExample', 'mes_example', 'exampleDialogue', 'example'], 30000),
@@ -391,18 +365,14 @@ export function parseGeneratedCharacter(raw) {
 //  弹窗
 // ---------------------------------------------------------------------------
 
-let layerEl = null;  // 整个浮层
-let nodes = null;    // 里面要反复用到的节点
-let busy = false;    // 正在生成（防重复点、控制按钮状态）
-// 这次生成的 requestId：中止只停它自己，别连带掐掉正在流的聊天回复；
-// 中止 / 关弹窗时清空 —— 回执回来一对不上就丢掉，不再往下开编辑器
+let layerEl = null;
+let nodes = null;
+let busy = false;
 let currentGenId = null;
-let escHandler = null; // 弹窗开着时挂在 document 上的 Esc 监听（捕获阶段）
+let escHandler = null;
 let scope = 'library';
 let targetBook = null;
 
-/** 由 main.js 注入：把生成出来的字段开成一份新草稿。
- *  兜底那版只是防「还没接线就被调用」—— 真走到那里等于白生成，所以会报错提示。 */
 let startDraft = () => {
   console.error('[aiGen] startDraft 还没接线，生成的内容没法交出去');
   return false;
@@ -419,12 +389,8 @@ function bookFor(id) {
 
 /**
  * 打开生成弹窗。
- * @param {object} options
- * @param {'library'|'worldbook'} options.scope
- * @param {string} [options.bookId] 世界书模式下要依据哪本书
  */
 export function openAiGenModal(options = {}) {
-  // 同一时间只允许一层：已经开着就先按「放弃这次」收掉，别叠出第二层
   if (layerEl) closeLayer();
 
   scope = options.scope === 'worldbook' ? 'worldbook' : 'library';
@@ -438,9 +404,6 @@ export function openAiGenModal(options = {}) {
   buildLayer();
   document.body.appendChild(layerEl);
 
-  // Esc 关的是**这一层**：它不在 main.js 的全局 Esc 链上，不拦的话 Esc 会冒到
-  // 底下的世界书编辑器 / 角色库，把那层关掉、留这层浮在空中。
-  // 捕获阶段 + stopPropagation，同 charExpressions.js 的做法。
   if (escHandler) document.removeEventListener('keydown', escHandler, true);
   escHandler = (event) => {
     if (event.key !== 'Escape') return;
@@ -467,12 +430,10 @@ function updateButtons() {
     nodes.go.disabled = busy;
     nodes.go.textContent = busy ? '生成中…' : '开始生成';
   }
-  // 中止按钮只在生成期间出现
   if (nodes.stop) nodes.stop.classList.toggle('hidden', !busy);
 }
 
 function closeLayer() {
-  // 生成期间关掉等于放弃这次结果，先中止请求
   if (busy) stopGen();
   if (escHandler) {
     document.removeEventListener('keydown', escHandler, true);
@@ -486,8 +447,6 @@ function closeLayer() {
 function buildLayer() {
   layerEl = h('div', { class: 'modal ai-gen-modal' });
 
-  // 两个多行框都用组件（工厂形态）。观感走 style.css 的 `.ai-gen-body textarea`
-  // （后代选择器，里层那颗照样命中），宿主管布局。
   const prompt = mTextarea({
     id: 'ai-gen-prompt',
     rows: '5',
@@ -498,7 +457,6 @@ function buildLayer() {
         : '例如：一只在图书馆值夜班的猫，说话爱绕弯子，喜欢用比喻'
   });
 
-  // 「背景 / 基调」：只有角色库那侧才有（世界书那侧已经有条目 + 开场白当大纲了）
   const brief = scope === 'library'
     ? mTextarea({
         id: 'ai-gen-brief',
@@ -530,7 +488,7 @@ function buildLayer() {
           text:
             scope === 'worldbook'
               ? '按这本书的设定生成一个配角（含描述、性格、场景、开场白、示例对话），生成完还可以自己改'
-              : '描述一下你想要的角色，AI 补全成一张角色卡：描述、性格、场景、开场白、示例对话都有'
+              : '描述一下你想做的角色，AI 补全成一张角色卡：描述、性格、场景、开场白、示例对话都有'
         })
       ),
       (() => {
@@ -562,11 +520,9 @@ function buildLayer() {
   nodes = { prompt, brief, status, go: goBtn, stop: stopBtn };
 }
 
-/** 中止这次生成：只停自己这一个请求（按 requestId），不碰聊天 */
 function stopGen() {
   if (!busy) return;
   if (currentGenId) {
-    // invoke 是 Promise；中止失败只记日志，不能让这里冒 unhandled rejection
     api.stopChat(currentGenId).catch((err) => console.warn('[aiGen] 中止请求失败:', err));
   }
   currentGenId = null;
@@ -617,17 +573,13 @@ async function generate() {
         { role: 'system', content: system },
         { role: 'user', content: `角色描述：${prompt}\n\n请直接输出那张角色卡的 JSON。` }
       ],
-      // 本机桥接：只要文字，别让它顺手配一张图（那一趟要几十秒）
       noImage: true
     });
 
-    // 已经中止 / 关掉弹窗（或又开了一轮）：这份回执作废，别再开编辑器。
-    // 本机桥接或中止来得太晚时，请求照样会正常返回，光靠「报错里有 abort」拦不住。
     if (currentGenId !== requestId) return;
 
     if (!response || response.ok !== true) {
       const message = (response && response.error) || '调用失败';
-      // 被中止时不该报错，安静收场
       if (/abort|中止|cancel/i.test(message)) {
         if (nodes && nodes.status) nodes.status.textContent = '已中止';
         return;
@@ -640,7 +592,6 @@ async function generate() {
     const parsed = parseGeneratedCharacter(responseText(response, bridge));
     if (!parsed.ok) {
       showToast(`${parsed.error}，已把原文放进描述里，你自己整理一下`, 'error');
-      // 兜底：原文整段塞进描述，别让这几十秒白等
       acceptDraft({
         name: '未命名角色',
         description: parsed.raw,
@@ -653,7 +604,6 @@ async function generate() {
 
     acceptDraft(parsed.fields);
   } catch (err) {
-    // 弹窗已经关掉 / 又开了一轮：这份失败属于作废的请求，别弹到新弹窗上
     if (currentGenId !== requestId) return;
     const message = (err && err.message) || '生成失败';
     if (/abort|中止|cancel/i.test(message)) {
@@ -662,7 +612,6 @@ async function generate() {
     }
     showToast(message, 'error');
   } finally {
-    // 只收拾自己这一轮：已作废的旧请求别把新一轮的 busy 也复位掉
     if (currentGenId === requestId) {
       currentGenId = null;
       busy = false;
@@ -671,7 +620,6 @@ async function generate() {
   }
 }
 
-/** 把生成结果交给角色编辑器草稿，并收掉浮层 */
 function acceptDraft(fields) {
   const opened = startDraft(fields, scope, targetBook ? targetBook.id : null);
   if (!opened) {
