@@ -4,6 +4,178 @@
 
 ---
 
+## 2026-10-19 AI 生成角色：场景 / 开场白 / 示例对话一起给
+
+以前「AI 生成角色」只产出描述、性格、标签、属性四样，场景、开场白、示例对话得自己补 ——
+而这三样恰好最费时间（尤其开场白里那句「说出口的话」）。
+
+现在一次生成整张卡。这三项不是「顺便多写点」，各有各的口径，都是从产品里已有的约定抄过来的：
+
+| 字段 | 口径 | 出处 |
+| --- | --- | --- |
+| 场景 `scenario` | 只交代「你们现在在哪儿、正在做什么」，一两句；不写事件经过 | 编辑器里那句字段说明 |
+| 开场白 `firstMes` | 定场 → 登场 → 留个话头，三段，双方写 `{{char}}` / `{{user}}` | `characterEditor.js` 的 `FIRST_MES_TEMPLATE` |
+| 示例对话 `mesExample` | 2~3 组，`{{user}}:` / `{{char}}:` 开头，组间 `<START>` 分隔 | `messages.js` 的 `parseExampleDialogue` |
+
+示例对话的格式**写错是不报错的**：解析器只认行首的占位符，格式不对就整段解析成空数组、
+静默不生效。所以提示词里把格式写死，解析侧还兼容了酒馆卡那种下划线写法
+（`first_mes` / `mes_example` / `example`）—— 见过大量卡的模型会自己换写法。
+三项的长度上限和 `main/characters.js` 的 `normalizeCharacter` 逐项对齐（10000 / 10000 / 30000）。
+
+世界书那侧（AI 生成 NPC）也一起生成，口径改成「他第一次和 `{{user}}` 打交道的那一刻」，
+不照抄这本书的开场白。生成结果仍然只进编辑器草稿，点「保存角色」才真正创建。
+
+冒烟 +2 条断言：三项都能解析出来、下划线写法也认。
+
+---
+
+## 2026-10-19 图标收进一张注册表（`ui/icons.js`），不再到处手写 SVG
+
+界面上的图标以前是两拨：一批写在 `ICONS` 表里（占了绝大部分），另一批直接内联在
+`index.html` / 几个 JS 里 —— 22 处内联 `<svg>`，加上 6 处 JS 里的字面量。
+同一个形状在不同文件里各写一遍，改线宽要翻三四个地方，还容易抄歪。
+
+**先说结论：不引图标库。** 三个理由，其中最硬的是第一条：
+
+| 拦路的因素 | 说明 |
+| --- | --- |
+| CSP 是 `default-src 'none'` | 图标字体和外链 SVG sprite 都要改 CSP 才能装，等于为图标开一个外部来源 |
+| 项目是零构建 | 没有打包器做 tree-shaking，图标库整包进来只会白占体积 |
+| 图标库的颜色不听话 | 本项目图标靠 `stroke: currentColor` 跟着主题走，多数库自带配色表 |
+
+库解决的是「没图标可用」，我们的情况恰恰相反 —— 形状够用，缺的是「只有一个地方能改」。
+
+**做法**：22 处内联 `<svg>` 全部删掉，宿主标签上只留 `data-icon="名字"`，
+启动时 `applyFieldIcons` 统一注入；`characterEditorLayout.js` 里五个分区图标改成
+一张 `SECTION_ICONS` 名字表 + `iconHtml()`，`aiGen.js` 那颗叉也走同一条路。
+顺手清掉三个确认没人用的（`hourglass` / `venus` / `braces`）。
+现在**注册表 37 个，界面上用到 37 个**，没有一个闲置。
+
+新收进来的七个形状：`link`（模型服务）·`params`（生成参数）·`toggle`（行为）·
+`mask`（桌宠）·`save`（存档点）·`file-text`（角色设定）·`sliders-horizontal`（属性）。
+注意 `params` / `sliders-horizontal` / `sliders` 三个都是滑块：**横的两根、竖的三根**，
+靠圆钮位置和朝向区分，别合并成一个。
+
+**防止复发**：新增 `tools/check-icons.js`，已串进 `npm run audit`。它守三条 ——
+界面代码里不许有裸 `<svg>`、`data-icon` 的名字必须在注册表里、注册了却没人用的要报出来。
+白名单只有 `icons.js` 自己和窗口右上角那对 `.icon-expand` / `.icon-restore`
+（这俩要靠 CSS 换掉整段 svg 才能在「最大化/还原」之间切换）。
+
+另外冒烟出图时会顺手数一遍（新增 `iconProbe`）：页面上 46 个 `data-icon` 宿主里
+有没有哪一个最后没插进 svg —— 这种错页面不报错、位置也不塌，肉眼扫不出来。
+
+---
+
+## 2026-10-19 侧栏计数 · 分区标题统一 · 剧情选项改单选 · 表情图内联 · 世界书分区换序
+
+**侧栏「角色库 / 世界书 / 预设」显示数量**
+
+三颗入口右边各加一个数字（`.foot-count`，等宽数字、灰一档、靠右），由
+`views/viewSwitch.js` 的 `renderFootCounts()` 铺 —— `showView()` 和 `refreshLibraryPage()`
+都会调，所以新建 / 删除 / 导入之后数字当场就变，不用切屏。收起成 56px 图标轨时整条藏掉
+（那里没有放字的位置）。预设取的是 `dialoguePresets()`（对话预设那份），
+**不是** `state.presets`（服务商的内置模板，另一回事）。
+
+**角色编辑页：五个分区的标题同一副长相**
+
+`is-work`（标题一行、说明挪到右边、底下一道细线）以前只挂在「角色设定」上，
+切到属性 / 表情图 / 世界书 / 高级设置时标题会突然变成两行 —— 同一页里换分区换长相。
+现在五个都挂上（`characterEditorLayout.js`）。
+
+**属性 · 剧情选项：数字输入框 → 四颗单选**
+
+`每轮给几个` 原来是 `1~6` 的数字框，0 和 12 都得再兜一次底。改成 **2 / 3 / 4 / 5** 四颗
+单选框（`.opt-choices`）：1 条等于没得选、6 条会把输入框那一行顶掉，实际会用的就这四档。
+老卡里存着 1 或 6 的，打开时**夹到最近的档**（1→2、6→5），不是一律重置成 4。
+原生 radio 铺满整块但透明 —— 点击 / Tab / 方向键都还是它自己。
+顺带修了配置区布局：原来外层 `140px 1fr` 两栏，里面每个 `.field` 自己又是
+「152px 标签 + 控件」两栏，两层并排套一起，`额外要求` 只剩两百来像素、标签还会溢出。
+现在一行一项，量过单选组和输入框左缘都是 659px，对得齐。
+两行的标签还跟控件**中线对齐**（`.c-options-config > .field { align-items: center }`）——
+`.field` 默认是 `align-items: start`，标签贴着控件顶边，在 32px 的药丸和 44px 的输入框上
+看着就是浮在上面（实测差 7px / 13px）。编辑页其余字段都是 `.field-stack`（标签在上），
+只有这两行需要中线对齐。
+
+**表情图：不再弹窗，直接摊在分区里**
+
+原来「表情图」分区只有一行摘要 + 「管理表情图」，真正的编辑在 `#expr-modal` 里。
+现在整块（计数 / 一句话说明 / 批量导入 / 添加 / 列表）就在分区里，弹窗、入口摘要、
+预览格子三样一起删了 —— 同一份列表在一屏里只该出现一次，多一层弹窗等于多点两下。
+`views/charExpressions.js` 的 `open/closeCharExpressionsEditor` 与那条捕获阶段的 Esc 监听
+一并删掉；dom.js 里 `exprModal / btnCloseExpr / btnExprDone / btnManageExpr /
+charExprSummary / charExprPreview` 六个引用清空。
+
+**世界书编辑页：书籍设置挪到条目之前**
+
+分区标签顺序改成 **书籍设置 / 条目 / 本书角色**；默认仍停在「条目」
+（一天里九成时间在写条目）。
+
+**冒烟**：表情图那两场从「点弹窗」改成「点分区」；剧情选项的断言从 `.value === '4'`
+改成读单选框的 `checked`，并新增「只有 2/3/4/5 四档」；角色编辑器的按钮清单去掉
+`btn-manage-expr`（14→13）。截图探针新增 `optProbe`（档位 / 左缘对齐 / 药丸高度）。
+1561/1561 通过、控制台报错 0 条。
+
+---
+
+## 2026-10-19 「在场角色」标题：七条规则收成一条
+
+那一行 `<span>在场角色 0</span>` 挂着 `cast-tabs` / `cast-tab` / `active` 三个类，
+像一排能点的标签页；实际上**只有一个标题、永远是 active、没有第二个 tab**，
+点击、悬停、键盘焦点全都没有去处。对应的 CSS 却散在文件四处、共 7 条规则：
+
+| 规则 | 真实情况 |
+| --- | --- |
+| `.cast-tabs` | 只有一个子元素，`gap:18px` 永远用不上；`background/padding/border-radius` 全是无作用的复位 |
+| `.cast-tab` | `<span>` 上的 `border/background/padding/font-family` 是无作用复位；`height:48px` 被 36px 覆盖；`cursor:pointer` **是假的**（点了没反应） |
+| `.cast-tab:hover` | 颜色和 `.active` 完全一样，永远看不出变化 |
+| `.cast-tab.active .cast-head-count` | 同理，始终成立 |
+| `.cast-tab.active` | 其中 `border-bottom: 2px solid var(--accent)` **从来没画出来过** |
+| `.cast-head .cast-tabs` | `flex:1` 与上方 `flex:1 1 auto` 重复 |
+| `.cast-head .cast-tab` | 覆盖 48→36 |
+
+那条主色下划线为什么没画出来：`.cast-tab.active` 与 `.cast-head .cast-tab` 特异性相同（都是两个类），
+后者写在后面，一句 `border: 0` 把它吃掉了 —— 靠肉眼和 `audit-css-dead` 都发现不了，得看计算样式。
+
+现在 DOM 去掉外层 `div.cast-tabs`，类名改成 `cast-title`（一个标签就该叫标题，不叫 tab），
+CSS 合成一条：`height:36px` + 字号 + 颜色 + 不换行，`margin-right:auto` 顶住收起按钮。
+`height:36px` 是**有用的**（决定文字停偏上，别当冗余删）。
+顺带去掉 `cursor:pointer` 与焦点环（它不是按钮），以及那条永不生效的下划线。
+
+**核对**：改动前后各跑一次真实窗口（1440×900）量 `getComputedStyle` + 截面板头 ——
+标题/计数的位置、尺寸、颜色、字号、边框全部逐字段一致，面板头截图**字节完全相同**；
+只有 `cursor`、`overflow`、`margin-right` 三处按预期变化。冒烟 1558/1558、控制台报错 0 条。
+
+---
+
+## 2026-10-19 设置页打不开 —— 一段注释少收了尾
+
+现象：点「设置」整页白/无反应，控制台 `settingsCatalog.js:165 Uncaught ReferenceError: imageSizeRule is not defined`。
+
+原因不是逻辑，是注释：`renderer/js/views/settingsCatalog.js` 里「生图尺寸规则」那段 JSDoc 少了收尾的 `*/`，
+于是注释一路吃到下一个 `*/`（`sizesForImageModel` 上面那行单行注释）为止 ——
+`MAX_CUSTOM_PIXELS`、`IMAGE_SIZE_RULES`、`DEFAULT_IMAGE_SIZES`、`imageSizeRule` 四个声明全被并进了注释里，
+`function sizesForImageModel()` 成了那段之后的第一句代码，里面调 `imageSizeRule` 就炸。
+语法检查是过的，所以 `npm run audit` 发现不了。
+
+由 `99e869d`（renderer 整理：清理过时注释）引入 —— 改写那段说明时把 `*/` 一起带走了。
+已补回收尾，并顺手扫了 `client/` 下 113 个 js 文件，其余文件注释与字符串都闭合。
+冒烟 1558/1558、控制台报错 0 条。
+
+---
+
+## 2026-10-19 窗口补上 F5 刷新
+
+F5 之前是彻底没绑的：Electron 默认菜单只给了 `Ctrl+R`，主窗口收到 F5 没有任何处理函数，
+看起来就是「按了没反应」。而 DevTools 是 `mode: 'detach'` 的独立窗口，它自己实现了浏览器快捷键，
+所以只有在 DevTools 窗口有焦点时按 F5 才会刷新页面；页面一 reload，焦点回到主窗口，
+下一次 F5 又落空 —— 这就是「刚打开 F12 时能刷，而且只刷一次」的来源。
+
+`main/window.js` 的 `before-input-event` 里补上 F5 与 `Ctrl+R`，统一走 `reloadIgnoringCache()`
+（`file://` 下的脚本/样式会被 Chromium 记住，普通 reload 偶尔还吃旧代码）。
+长按自动连发直接忽略，不会连续刷。
+
+---
+
 ## 2026-10-18 角色库 / 世界书列表合并 —— **同一副卡片 + 工具条**
 
 两个列表以前各写一套卡片：角色库是「图 + 名字 + 小字 + 按钮」，世界书把书名压在封面上，
@@ -259,7 +431,7 @@ hover 三条）、`.preset-row-actions`（透明底 + 删除键的 text-faint �
    `<span class="mi-btn__label">` 进里层；文字在 `.foot-label` 里的按钮宿主没有裸文本，
    这颗 label 是**空的** —— 宽 0 但仍是一个 flex item，白占一个 gap 槽。
    修：`.mi-btn__label:empty { display: none }`（setLabel 填字后自动回来）。
-3. **收起态「开启新篇章」文字漏出来 / 「⋯」图标变大变深**：
+3. **收起态「新对话」文字漏出来 / 「⋯」图标变大变深**：
    - `font-size: 0` 压在宿主上会被里层共用皮肤的 `font-size: var(--fs-sm)` 拦住
      （裸文本时代直接继承，span 时代被里层的显式字号截胡）→ 拆到里层；
    - btn-more 回退掉 `.btn` 族类名后，`.topbar-actions .btn > svg` 的
@@ -285,7 +457,7 @@ hover 三条）、`.preset-row-actions`（透明底 + 删除键的 text-faint �
 带 `data-icon` / `btn-block` / 特殊类的顶栏 + 侧栏按钮，下一批单独处理），
 页上 `<m-button>` 已有 **81** 颗。
 
-**🔴 修掉一个生产 bug：confirm.js 动态写 `className` 会抹掉组件类名**
+** 修掉一个生产 bug：confirm.js 动态写 `className` 会抹掉组件类名**
 `ui/confirm.js` 的 `confirmDialog()` 原来有这一行：
 ```js
 el.confirmOk.className = `btn ${opts.danger ? 'btn-danger' : 'btn-primary'}`;
@@ -2488,7 +2660,7 @@ PNG 规范给了三种藏文本的块，出图工具各有偏好：
 | AI 回复（悬停） | 复制 编辑 重新生成 继续 配图 帮我想想 分支 删除 | **复制 编辑重新生成 ⋯** |
 | 用户消息 | 复制 编辑 分支 删除 | **复制 编辑 ⋯** |
 
-📌 **实现上有一个刻意的选择**：收起用的是**纯 CSS**（`.mini-extra{display:none}` +
+ **实现上有一个刻意的选择**：收起用的是**纯 CSS**（`.mini-extra{display:none}` +
 `.msg-actions.open .mini-extra{display:inline-block}`），按钮**一直留在 DOM 里**，
 `⋯` 只是给 `.msg-actions` 挂一个 `.open`。理由是冒烟里有 5 处是按
 `.msg-actions .mini-btn` 的**文字**找按钮的（`buttonByText`）—— 换成「展开时才建节点」
@@ -2506,7 +2678,7 @@ PNG 规范给了三种藏文本的块，出图工具各有偏好：
 定死的那条线（「小于 12 号的字体就不应该有」）。五个档位现在都过一遍
 `max(var(--fs-min), calc(基准px * var(--ui-size)))`，任何档位下最小都是 12px。
 
-📌 取舍说明：小档下 `--fs-xs` 被顶回 12、`--fs-sm` 是 12.6，两档贴得很近，
+ 取舍说明：小档下 `--fs-xs` 被顶回 12、`--fs-sm` 是 12.6，两档贴得很近，
 **小档的层次会变薄** —— 这是刻意的（下限优先于层次）。
 
 ### 三、会话条目密度回调：48/60 → **36/48**（`style.css`）
@@ -2523,7 +2695,7 @@ PNG 规范给了三种藏文本的块，出图工具各有偏好：
 36 仍然明显大于稿子的 20，也大过最初那版 38 的圆头像。连带：
 `.convo-item.active::before` 的选中竖线 28 → 22。
 
-📌 顺手把 `.convo-avatar` 的首字从**写死的 20px** 改成 `var(--fs-md)` ——
+ 顺手把 `.convo-avatar` 的首字从**写死的 20px** 改成 `var(--fs-md)` ——
 它不是「绑固定容器所以必须写死」，而是跟着界面字号走更好；这样
 `tools/audit-font.js` 的白名单也从 4 条收回到 **3 条**（少一条永远用不到的豁免）。
 
@@ -2602,7 +2774,7 @@ PNG 规范给了三种藏文本的块，出图工具各有偏好：
 
 冒烟 **1282/1282 全绿**，重出图确认两处都好了（图在 `tools/shots/`）。
 
-📌 **这一批真正值钱的是方法论**：DOM 断言守得住「结构 / 类名 / 计算值」，
+ **这一批真正值钱的是方法论**：DOM 断言守得住「结构 / 类名 / 计算值」，
 **守不住「观感」**。48px 方块里那个「·」就是典型 —— 1282 条断言全绿，
 图上一眼就看出不对。以后再动 UI 尺寸，出图是**必做**的一步：
 
@@ -2655,7 +2827,7 @@ env -u ELECTRON_RUN_AS_NODE node_modules/.bin/electron.cmd --no-sandbox tools/sm
 原来散着 1.4 / 1.45 / 1.5 / 1.55 / 1.6 / 1.65 / 1.7 / 1.75 / 1.85 / 1.9 / 1.95 共十一种。
 现在只剩三种：**1.6（正文与说明，49 处）、1（单行控件，23 处）、1.3（标题，2 处）**。
 
-📌 顺手纠正一个常见误解（星宝原话是「写 1.5 字体就居中了」）：
+ 顺手纠正一个常见误解（星宝原话是「写 1.5 字体就居中了」）：
 **垂直居中不是 line-height 干的活，是 flex 的 `align-items: center`。**
 line-height 只管多行文本的行距；单行控件写 `1` 是为了让它「就是一行的高度」——
 不写反而会从 body 继承 1.6，把按钮、标签、头像框整体撑高。
@@ -3700,7 +3872,7 @@ rebuildMask();      // 紧接着读像素
 - `rebuildMask()` 读到整张全透明画布时**保留旧掩码**兜底；
 - `blur`（拖到窗口外松手）除复位拖动外**也要重算穿透状态**，为此新增 `lastPointer`。
 
-📌 口诀：**「改一下大小/缩放又能点到」⟺ 掩码重建时机的问题。**
+ 口诀：**「改一下大小/缩放又能点到」⟺ 掩码重建时机的问题。**
 
 ### 二、长按拖动会放大 / 松手才缩回 / 再后来是抖
 
@@ -3711,7 +3883,7 @@ rebuildMask();      // 紧接着读像素
 2. `'resize'` 回调里**不能同步**调 `ensureSize`（它自己就 `setContentBounds`，而那个会
    再送一次 `'resize'` = 递归 / 事件风暴）→ 先做成防抖 60ms；但拖动时系统每几毫秒送一次
    resize，**防抖被持续事件饿死 = 永不执行** → 改**节流** 80ms。
-   📌 **事件源源不断的场景一律用节流，别用防抖。**
+    **事件源源不断的场景一律用节流，别用防抖。**
 3. 「每帧 `setPosition` 挪完、每帧再纠尺寸」= 窗口尺寸在两个值之间**每帧振荡** = 抖。
    终解：新增 `movePetWindow(x, y)`，挪窗口一律 `setContentBounds({x, y, width, height})`
    （尺寸带「应该的值」），拖动 / 散步的 16ms 步进全走它 —— 系统每步都拿到
@@ -3948,7 +4120,7 @@ wagAmp * 13 * Math.sin(t * (4 + 5 * wagAmp))
 
 第二轮收得偏狠，星宝反馈「现在尾巴反而不怎么摇了」。这类**观感**参数隔着屏幕
 猜不出他想要的手感，所以不再替他定 —— 把四个参数抽成命名常量、集中放在
-`renderer/pet/cat-figure.js` 的「**🎚️ 尾巴手感调节区**」，改完重启即可：
+`renderer/pet/cat-figure.js` 的「**️ 尾巴手感调节区**」，改完重启即可：
 
 | 常量 | 管什么 | 现值 | 调大的效果 |
 |---|---|---|---|
@@ -6817,7 +6989,7 @@ Error: 写入失败（conversations.json）：EPERM: operation not permitted, co
 世界 NPC 名单（`worldbookCast`）。最刺眼的是不一致：`worldbookSection` 挡住了，
 `worldbookCast` 却没挡。三条已全部补上判断。
 
-> 📌 教训：给 `buildApiMessages` 加「某种会话不要注入」的开关时，别只盯着函数参数，
+>  教训：给 `buildApiMessages` 加「某种会话不要注入」的开关时，别只盯着函数参数，
 > 要把整个 `parts` 数组从头到尾过一遍 —— 注入项分两类，后者没有参数提示，最容易漏。
 
 ### 关键改动清单
