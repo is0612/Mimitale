@@ -13,10 +13,11 @@
 
 import { activeConvo, safeFileName } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
-import { saveExport } from '../data/export.js';
+import { saveExport, saveExportMany } from '../data/export.js';
 import {
   characterAttrs,
   characterForConvo,
+  characters,
   convoWorldbookIds,
   worldbookById,
   characterBookPayload
@@ -48,8 +49,17 @@ function base64Utf8(text) {
  * ⚠️ 导出（export）：`tools/smoke-test.js` 要拿它验「备选开场白 / 作者 / 版本」
  *    这三个字段**能被写回去** —— 角色编辑器里没有它们的输入框，只能从导出这里测。
  *    和 library.js 的 worldbookPayload 是同一个理由（宿主要能直接调到那个纯函数）。
+ *
+ * withImages：把头像 / 形象也塞进 extensions.mimitale。
+ *   · 导出 **PNG** 时不带 —— 头像就是那张图本身，再写一份 base64 等于翻倍。
+ *   · 导出 **JSON** 时（单卡 / 批量）必须带，否则「导出再导入」头像和立绘全丢。
+ *   · portrait 空串也要带：它表示「这张卡明确不要形象」，和「没有这个键」是两回事。
+ *
+ * @param {object} character
+ * @param {{withImages?: boolean}} [options]
  */
-export function characterCardPayload(character) {
+export function characterCardPayload(character, options = {}) {
+  const withImages = options.withImages === true;
   // 只带第一本：v2 规范里 character_book 是单本（酒馆同样只导出主世界书）
   const boundId = Array.isArray(character.worldbookIds) ? character.worldbookIds[0] : null;
   const boundBook = boundId ? worldbookById(boundId) : null;
@@ -79,7 +89,12 @@ export function characterCardPayload(character) {
         mimitale: {
           attributes: characterAttrs(character),
           // 开关也带上：别人导入后拿到的状态跟你这边一致
-          worldbookEnabled: character.worldbookEnabled !== false
+          worldbookEnabled: character.worldbookEnabled !== false,
+          // 只有 JSON 导出才带图（见函数头：PNG 导出时图就是文件本身）
+          ...(withImages && typeof character.avatar === 'string' && character.avatar
+            ? { avatar: character.avatar }
+            : {}),
+          ...(withImages && typeof character.portrait === 'string' ? { portrait: character.portrait } : {})
         }
       }
     }
@@ -190,7 +205,11 @@ export async function exportCharacter() {
   if (!character) return;
 
   const name = safeFileName(character.name);
-  const json = JSON.stringify(characterCardPayload(character), null, 2);
+  // 两份 JSON，用途不同：
+  //   · withImages 这份是「JSON 卡」—— 头像 / 立绘只能靠它带走，否则导入回来就是空白
+  //   · 不带图那份塞进 PNG 的 tEXt 块 —— 图就是头像本身，再写一份 base64 白翻一倍体积
+  const json = JSON.stringify(characterCardPayload(character, { withImages: true }), null, 2);
+  const pngJson = JSON.stringify(characterCardPayload(character), null, 2);
   const png = await avatarPngDataUrl(character);
   // 理论上只有 canvas 拿不到 2d context 才会空；别把空 base64 当 PNG 存出去。
   // 这时仍然可以导出 JSON —— 直接把保存框切成 JSON 那一种，而不是让用户再点一次
@@ -213,9 +232,36 @@ export async function exportCharacter() {
       { name: 'PNG 角色卡（带数据，酒馆可直接导入）', extensions: ['png'] },
       { name: 'JSON 角色卡（纯数据，方便改）', extensions: ['json'] }
     ],
+    // 用户把后缀改回 .json 时走的是这一份 —— 带图，别丢
     text: json,
     base64: String(png).split(',')[1] || '',
-    pngText: { keyword: 'chara', text: base64Utf8(json) }
+    pngText: { keyword: 'chara', text: base64Utf8(pngJson) }
+  });
+}
+
+/**
+ * 批量导出角色卡：每张一个 .json（带头像 / 立绘），选一次文件夹就全写出去。
+ *
+ * 为什么批量走 JSON 而不是 PNG：PNG 得逐张上 canvas 重画头像，慢且没必要 ——
+ * 这两样图已经以 base64 放在 extensions.mimitale 里，导回来一个都不缺。
+ * 想单张发 PNG 卡给别人，去编辑器里点「导出」。
+ *
+ * @param {string[]} ids
+ */
+export async function exportCharactersByIds(ids) {
+  const wanted = new Set(Array.isArray(ids) ? ids : []);
+  const list = characters().filter((c) => wanted.has(c.id));
+  if (!list.length) {
+    showToast('没有选中任何角色', 'error');
+    return null;
+  }
+
+  return saveExportMany({
+    title: `导出 ${list.length} 个角色卡`,
+    files: list.map((character) => ({
+      fileName: `${safeFileName(character.name || '未命名角色')}.json`,
+      text: JSON.stringify(characterCardPayload(character, { withImages: true }), null, 2)
+    }))
   });
 }
 

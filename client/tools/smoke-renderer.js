@@ -586,9 +586,11 @@ await scenario('设置页', async () => {
   //      直接设属性 —— 宿主上写坏了不报错，只是按钮不禁用、文案不变；
   //   ② btn-folder 的 `data-icon`：applyFieldIcons 把 svg 插进来时必须落到**里层**，
   //      否则图标会出现在按钮底色方块的外面。
-  const settingsBtnIds = ['btn-back-settings','btn-save-settings','btn-folder','btn-add-provider','btn-fetch-models','btn-del-provider','btn-test','btn-assistant-persona','btn-boldcolor-reset','btn-pick-bg','btn-default-bg','btn-clear-bg','btn-pet-visible','btn-pet-mute','btn-pet-speak','btn-pet-persona-reset','btn-pet-preview','btn-pet-say','btn-pet-memory-refresh','btn-pet-memory-export','btn-pet-memory-reset','btn-pet-memory-clear'];
+  // ⚠️ btn-back-settings（返回）2026-10-19 挪到页头左上角并改成图标按钮，
+  //    图标按钮按约定不套 m-button，所以从这张表里去掉（剩 21 颗）。
+  const settingsBtnIds = ['btn-save-settings','btn-folder','btn-add-provider','btn-fetch-models','btn-del-provider','btn-test','btn-assistant-persona','btn-boldcolor-reset','btn-pick-bg','btn-default-bg','btn-clear-bg','btn-pet-visible','btn-pet-mute','btn-pet-speak','btn-pet-persona-reset','btn-pet-preview','btn-pet-say','btn-pet-memory-refresh','btn-pet-memory-export','btn-pet-memory-reset','btn-pet-memory-clear'];
   const notMButton = settingsBtnIds.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
-  check('设置域 22 颗按钮都是 m-button 宿主', notMButton.length === 0, notMButton.join(', ') || '全部是');
+  check('设置域 21 颗按钮都是 m-button 宿主', notMButton.length === 0, notMButton.join(', ') || '全部是');
   // ⚠️ #panel-box（各弹窗的容器）嵌在 #view-settings 里、这批还没迁，
   //     所以「没有原生 .btn」要把 panel-box 排除掉再数。
   check('设置域不再有原生 .btn 按钮（弹窗容器 panel-box 除外）',
@@ -876,17 +878,43 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   //      justify-content 挂里层，写反了不报错、只是按钮缩成一行文字那么宽；
   //   ② 三颗「清除」带着 hidden 类 —— 宿主上 `.hidden` 的 display:none !important
   //      必须照样压过 m-button 自己的 display（不然按钮删不掉地常驻）。
-  const CHAR_BTN_IDS = ['btn-close-chars','btn-save-char','btn-clear-avatar','btn-clear-portrait','btn-first-template','btn-alt-add','btn-attr-template','btn-add-attr','btn-attr-paste','btn-attr-paste-apply','c-wb-add-btn','btn-export-char','btn-del-char'];
+  // ⚠️ btn-close-chars（返回）2026-10-19 从右上角挪到了左上角，并改成**图标按钮** ——
+  //    图标按钮按约定不套 m-button（见 components/button.js 文件头），所以从这张表里去掉。
+  const CHAR_BTN_IDS = ['btn-save-char','btn-clear-avatar','btn-clear-portrait','btn-first-template','btn-alt-add','btn-attr-template','btn-add-attr','btn-attr-paste','btn-attr-paste-apply','c-wb-add-btn','btn-export-char','btn-del-char'];
   const bad = CHAR_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
-  check('角色编辑器 13 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
+  check('角色编辑器 12 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
+
+  // 返回按钮应当在**标题那一块**里（左上），而不是右侧的操作簇里 ——
+  // 只要有人把它挪回 .page-actions，这条就红。
+  const backBtn = byId('btn-close-chars');
+  check(
+    '返回按钮在页头左上（贴标题，不在右上操作簇）',
+    !!backBtn && !!backBtn.closest('.page-heading') && !backBtn.closest('.page-actions'),
+    backBtn ? (backBtn.closest('.page-heading') ? '在标题区' : '不在标题区') : '按钮不存在'
+  );
   // ⚠️ 这里**仍不能**断言「页面里没有 .btn」：属性面板那几颗**图标按钮**
   //    （attr-tab / attr-tab-edit / attr-more-btn / panel-del 等）是 JS 用
   //    `button({ class: ... })` 现渲染的（不带 variant 就不生成 .btn 底座，见
   //    ui/build.js 文件头那条「图标按钮不套组件」的边界）。「解散这一组」已迁
   //    m-button —— 它不再带 `.btn-danger`，断言里按 `#c-attr-group-edit m-button` 找。
-  const railBtn = byId('btn-export-char');
-  check('左栏「导出」铺满栏宽', railBtn.getBoundingClientRect().width > 150, Math.round(railBtn.getBoundingClientRect().width));
-  check('左栏「导出」文字靠左（对齐写在里层）', getComputedStyle(railBtn.control).justifyContent === 'flex-start', getComputedStyle(railBtn.control).justifyContent);
+  // 2026-10-19 下半场：导出从「左栏铺满」搬回页头右上；左栏底部换成了「保存 / 返回 / 删除」。
+  // 原来那两条「左栏导出铺满栏宽 / 文字靠左」测的是 rail-foot 的排版规则，现在对象变了。
+  const exportBtn = byId('btn-export-char');
+  check(
+    '「导出」在页头右上（不在左栏底部）',
+    !!exportBtn && !!exportBtn.closest('.page-actions') && !exportBtn.closest('#char-rail-foot'),
+    exportBtn ? (exportBtn.closest('.page-actions') ? '在页头' : '不在页头') : '按钮不存在'
+  );
+  const railSave = byId('btn-save-char');
+  check(
+    '「保存角色」铺满左栏栏宽',
+    !!railSave && railSave.getBoundingClientRect().width > 150,
+    railSave ? String(Math.round(railSave.getBoundingClientRect().width)) : '按钮不存在'
+  );
+  check(
+    '左栏底部有「返回」（和页头那颗同一个动作）',
+    !!byId('btn-back-char') && !!byId('btn-back-char').closest('#char-rail-foot')
+  );
   check('「清除」的 hidden 照样生效', byId('btn-clear-avatar').classList.contains('hidden') && getComputedStyle(byId('btn-clear-avatar')).display === 'none');
 });
 
@@ -3994,9 +4022,11 @@ await scenario('世界书：新建条目', async () => {
 
   // 2026-10-16：这一页 14 颗 .btn 全换 <m-button>。`.wb-entry-actions` 那三颗的
   // 内边距（6px 8px）写在**里层**上 —— 写到宿主上不报错，只是按钮瘦不下来。
-  const WB_BTN_IDS = ['btn-close-worldbooks','btn-save-wb','btn-clear-wb-cover','btn-add-wb-chars','btn-ai-wb-char','btn-new-wb-char','btn-sync-wb-attrs','btn-preview-wb','btn-export-wb','btn-del-worldbook','btn-new-entry','btn-wb-entry-template','btn-wb-add-event','btn-del-entry'];
+  // ⚠️ btn-close-worldbooks（返回）2026-10-19 挪到左上角并改成图标按钮，
+  //    图标按钮按约定不套 m-button，所以从这张表里去掉。
+  const WB_BTN_IDS = ['btn-save-wb','btn-clear-wb-cover','btn-add-wb-chars','btn-ai-wb-char','btn-new-wb-char','btn-sync-wb-attrs','btn-preview-wb','btn-export-wb','btn-del-worldbook','btn-new-entry','btn-wb-entry-template','btn-wb-add-event','btn-del-entry'];
   const wbBad = WB_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
-  check('世界书编辑器 14 颗按钮都是 m-button 宿主', wbBad.length === 0, wbBad.join(', ') || '全部是');
+  check('世界书编辑器 13 颗按钮都是 m-button 宿主', wbBad.length === 0, wbBad.join(', ') || '全部是');
   // ⚠️ 同角色编辑器：JS 渲染的 .btn 还在这页上（NPC 属性面板共用同一套），
   //    「没有原生 .btn」要等 JS 侧调用点迁完才能上。
   check('条目行按钮的内边距落在里层（6px 8px）', getComputedStyle(byId('btn-new-entry').control).paddingLeft === '8px', getComputedStyle(byId('btn-new-entry').control).padding);
@@ -10279,6 +10309,120 @@ await scenario('组件库：自定义元素（m-button / m-input / m-textarea / 
   check('Esc 之后值没被改掉', picker.value === 'a', picker.value);
 
   host.remove();
+});
+
+// ---------------------------------------------------------------------------
+//  场景：列表页批量选择（角色库 / 世界书）
+//
+//  只验「选得对不对、按钮切没切、跨搜索保不保得住」—— 导出会弹系统文件夹框、
+//  删除会真删数据，这两步在冒烟里不点；它们的编排逻辑放在宿主侧静态断言里
+//  （tools/smoke-test.js 的 probeBatchLibrary）。
+// ---------------------------------------------------------------------------
+await scenario('批量：角色库与世界书的选择态', async () => {
+  click('#btn-chars');
+  await waitFor('切到角色库', () => shown('#view-chars'));
+  await sleep(120);
+
+  check('常态只露「批量」一颗', shown('#char-batch-normal') && !shown('#char-batch-active'));
+
+  // 常态下每张卡右上角那颗删除 × 必须在（静止 opacity 0，靠 hover 浮出）——
+  // 2026-10-19 星宝报「删除按钮不见」，先量一遍它到底在不在 DOM 里、是不是被藏了
+  const idleDel = $('#char-page-grid .char-card .char-card-del');
+  check(
+    '常态下卡片有删除按钮（没被藏掉）',
+    !!idleDel && getComputedStyle(idleDel).display !== 'none',
+    idleDel ? `display=${getComputedStyle(idleDel).display} opacity=${getComputedStyle(idleDel).opacity}` : 'DOM 里没有 .char-card-del'
+  );
+
+  click('#btn-char-batch');
+  await sleep(120);
+  check('点「批量」进入选择态', shown('#char-batch-active') && !shown('#char-batch-normal'));
+
+  const cards = $$('#char-page-grid .char-card');
+  check('卡片都成了可点选的格子', cards.length > 0 && cards.every((c) => c.classList.contains('is-selectable')));
+  check('每张卡左上角有勾选圈', cards.length > 0 && cards.every((c) => !!c.querySelector('.char-card-check')));
+
+  // 封面上的放大镜是挂在 img 自己身上的（.wb-card-cover img { cursor: zoom-in }），
+  // 选择态里如果压不住，鼠标移到图上就变成「能放大」，和「点一下选中」打架。
+  // 这条只能量计算样式 —— 光看源码里有没有 pointer 是看不出来的。
+  const coverImgs = $$('#char-page-grid .char-card .wb-card-cover img');
+  check(
+    '选择态下封面光标跟着整卡走（不是放大镜）',
+    coverImgs.every((img) => getComputedStyle(img).cursor === 'pointer'),
+    coverImgs.map((img) => getComputedStyle(img).cursor).join(',') || '（这页没有封面图）'
+  );
+
+  // 选择态里 × 也要留着：一批里发现某张不该留，能直接删掉它，不用先退出再找。
+  // 星宝 2026-10-19 报过「右上角的删除按钮不见」—— 当时是被 display:none 藏了。
+  const selDel = $('#char-page-grid .char-card .char-card-del');
+  check(
+    '选择态里右上角的 × 还在，而且是看得见的（不用悬停）',
+    !!selDel && getComputedStyle(selDel).display !== 'none' && getComputedStyle(selDel).opacity === '1',
+    selDel ? `display=${getComputedStyle(selDel).display} opacity=${getComputedStyle(selDel).opacity}` : 'DOM 里没有 ×'
+  );
+
+  // 点第一张：DOM 会整块重绘，之后一律重新查询，别复用旧节点
+  cards[0].click();
+  await sleep(80);
+  check('点一张 → 计数变成 1', byId('char-batch-count').textContent.includes('1'), byId('char-batch-count').textContent);
+  check(
+    '被点的那张画上了选中态',
+    $$('#char-page-grid .char-card').filter((c) => c.classList.contains('is-selected')).length === 1
+  );
+
+  // 搜索换一批之后，选中集合要保住（批量删最常用的姿势：搜一轮选几张、再搜一轮）
+  const searchHost = byId('char-page-search');
+  const searchInput = searchHost.tagName === 'INPUT' ? searchHost : searchHost.querySelector('input');
+  searchInput.value = 'zzz-不会命中';
+  searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(120);
+  check('搜索换一批之后，选中数没被清掉', byId('char-batch-count').textContent.includes('1'), byId('char-batch-count').textContent);
+  searchInput.value = '';
+  searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(120);
+
+  // 全选：只作用于当前可见的这批
+  const visible = $$('#char-page-grid .char-card').length;
+  click('#btn-char-select-all');
+  await sleep(80);
+  check(
+    '全选把当前可见的都选上',
+    byId('char-batch-count').textContent.includes(String(visible)),
+    `${byId('char-batch-count').textContent} / 可见 ${visible}`
+  );
+  check('全选按钮的文案变成「取消全选」', byId('btn-char-select-all').textContent.includes('取消全选'));
+
+  click('#btn-char-select-all');
+  await sleep(80);
+  check('再点一次全取消', byId('char-batch-count').textContent.includes('0'), byId('char-batch-count').textContent);
+
+  // 取消退出选择态：卡片恢复「编辑 / 聊天」
+  click('#btn-char-batch-exit');
+  await sleep(100);
+  check('取消后退出选择态', shown('#char-batch-normal') && !shown('#char-batch-active'));
+  check(
+    '退出后卡片不再是选择格子',
+    $$('#char-page-grid .char-card').every((c) => !c.classList.contains('is-selectable'))
+  );
+
+  // ---- 世界书 ----
+  click('#btn-worldbooks');
+  await waitFor('切到世界书页', () => shown('#view-worldbooks'));
+  await sleep(120);
+
+  click('#btn-wb-batch');
+  await sleep(100);
+  check('世界书也能进选择态', shown('#wb-batch-active') && !shown('#wb-batch-normal'));
+  const books = $$('#wb-page-grid .char-card');
+  check('世界书卡片也成了可点选的格子', books.length > 0 && books[0].classList.contains('is-selectable'));
+
+  books[0].click();
+  await sleep(80);
+  check('选中一本书之后计数用「本」', byId('wb-batch-count').textContent.includes('本'), byId('wb-batch-count').textContent);
+
+  click('#btn-wb-batch-exit');
+  await sleep(100);
+  check('世界书取消后也退干净', shown('#wb-batch-normal') && !shown('#wb-batch-active'));
 });
 
 return { results, notes, hoverProbe };

@@ -106,6 +106,8 @@ contextBridge.exposeInMainWorld('mimitale', {
   // --- 杂项 ---
   copyText: (text) => ipcRenderer.invoke('util:copy', text),
   saveFile: (payload) => ipcRenderer.invoke('util:saveFile', payload),
+  // 批量导出：只弹一次「选文件夹」，把一组文件写进去（列表页的「导出」用）
+  saveFiles: (payload) => ipcRenderer.invoke('util:saveFiles', payload),
   openDataFolder: (which) => ipcRenderer.invoke('util:openPath', which),
   // 用系统浏览器打开链接（只放行 http/https，判断在主进程）
   openExternal: (url) => ipcRenderer.invoke('util:openExternal', url),

@@ -152,6 +152,10 @@ export function renderListPage({ grid, empty, sub, subText, items, card }) {
  *   · `extra` 塞右上角那颗删除 ×（静止透明、悬停浮出）。
  *   · 书名 / 说明 / 操作行同时带角色卡和世界书卡两套类名：样式只有一份，
  *     旧选择器和冒烟断言（`.char-card-name` / `.wb-card-name` 等）都不用改。
+ *   · 批量选择态（2026-10-19）：`selecting` 时整卡变成一个可点选的格子 ——
+ *     左上角浮出勾选圈、`selected` 画描边、卡片加 `aria-selected`；
+ *     编辑/聊天按钮和删除 × 由 CSS 藏掉（保留占位，卡片高度不抖），
+ *     点击一律交给 `onSelect`。
  */
 export function libraryCard({
   title,
@@ -164,11 +168,16 @@ export function libraryCard({
   actions,
   extra,
   onMediaClick,
-  mediaTitle
+  mediaTitle,
+  selecting = false,
+  selected = false,
+  onSelect
 }) {
   const content = media || mediaText;
   const boxClass = ['char-card-avatar', ...(Array.isArray(mediaClass) ? mediaClass : mediaClass ? [mediaClass] : [])];
-  const mediaBox = onMediaClick
+  // 选择态下封面**不再是按钮**：它的 click 会冒泡到卡片上，一下同时干两件事
+  // （开大图 + 勾选）。想看大图就先退出选择态，这是刻意取舍。
+  const mediaBox = onMediaClick && !selecting
     ? h(
         'button',
         {
@@ -182,13 +191,33 @@ export function libraryCard({
       )
     : h('div', { class: boxClass }, content);
 
-  return h(
+  const card = h(
     'div',
-    { class: 'char-card', role: 'listitem', title },
+    {
+      class: ['char-card', selecting ? 'is-selectable' : '', selected ? 'is-selected' : ''],
+      role: 'listitem',
+      title
+    },
     extra,
     h('div', { class: ['wb-card-cover', coverClass] }, mediaBox),
     h('div', { class: 'char-card-name wb-card-name', text: title }),
     h('div', { class: 'char-card-sub wb-card-meta', text: sub, title: subTitle || sub }),
     h('div', { class: 'char-card-actions wb-card-actions' }, actions)
   );
+
+  if (selecting) {
+    card.insertBefore(h('span', { class: 'char-card-check', 'aria-hidden': 'true' }), card.firstChild);
+    card.setAttribute('aria-selected', selected ? 'true' : 'false');
+    if (typeof onSelect === 'function') {
+      card.tabIndex = 0;
+      card.addEventListener('click', () => onSelect());
+      card.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onSelect();
+      });
+    }
+  }
+
+  return card;
 }

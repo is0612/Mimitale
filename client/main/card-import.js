@@ -208,10 +208,19 @@ function characterFromCard(card, avatar, source, fallbackName, makeWorldbookId, 
       : attributesFromStatusTemplate(d.extensions.status_template);
   const attributes = ownAttrs.length ? ownAttrs : templateAttrs;
 
+  // 头像 / 形象：PNG 卡是图本身带过来的（avatar 参数），JSON 卡没有图文件 ——
+  // 我们自己在导出时把它们放进了扩展位，这里读回来，否则「导出再导入」头像就空了。
+  // 空串要当成「这张卡明确不要形象」原样保留（和 normalizeCharacter 的三态约定一致）；
+  // 既不是空串也不是 data:image/ 的垃圾值直接不认，别把老卡变成「无形象」。
+  const extAvatar = typeof ext.avatar === 'string' && ext.avatar.startsWith('data:image/') ? ext.avatar : '';
+  const extPortraitOk =
+    typeof ext.portrait === 'string' && (ext.portrait === '' || ext.portrait.startsWith('data:image/'));
+
   const character = normalizeCharacter(
     {
       name: d.name || d.char_name || fallbackName,
-      avatar,
+      avatar: avatar || extAvatar,
+      ...(extPortraitOk ? { portrait: ext.portrait } : {}),
       // 老版本 TavernAI 用的是 char_* / world_scenario 这一套字段名，一并兼容
       description: d.description || d.char_persona,
       personality: d.personality,

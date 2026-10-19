@@ -953,7 +953,13 @@ function registerStubs() {
     // ⚠️ 这个桩**必须能返回真东西**，否则「界面没反应」这类问题会伪装成别处失败，
     //    而且返回空和返回垃圾都表现为「生成后字段是空的」，很难分辨。
     const allText = allMsgs.map((m) => String((m && m.content) || '')).join('\n');
-    if (allText.includes('你是一位角色设定师')) {
+    // ⚠️ 认的**不能是一整句措辞**：原来盯「你是一位角色设定师」，2026-10-19 那句改成
+    //    「你是一位经验丰富的角色设定师」之后桩就认不出来了 —— 生成请求被当成普通聊天，
+    //    返回一段「冒烟测试回复」，下游十几条断言（名字没回填、落盘没属性……）连带全红，
+    //    而真正的原因跟它们一点关系都没有。
+    //    现在同时要两样：人设里的「角色设定师」+ 字段契约里的 "firstMes"（字段名是契约，
+    //    改措辞不会动它）。两个都在才算，误判成聊天的可能性很低。
+    if (/角色设定师/.test(allText) && allText.includes('"firstMes"')) {
       // 认出来的 AI 生成请求数 —— 只在诊断时打出来（见下面的 TMP 输出），
       // 用来区分「请求没发出来」和「发出来了但没认出来」。
       aiGenSeen += 1;
@@ -1331,6 +1337,28 @@ async function probeHover(win, result) {
 
     // 复原，别影响后续（虽然之后也没别的断言了）
     await run("document.querySelector('#char-page-grid .char-card .char-card-del').style.transition = ''");
+    // elementFromPoint 要有**真实布局**：探针跑到这里时页面早就不在角色库了
+    //（前面几十个场景切来切去），隐藏视图里的卡片 rect 全是 0 —— 直接点会点到侧栏。
+    // 先切回角色库再量。
+    await run("document.querySelector('#btn-chars').click()");
+    await sleep(350);
+
+    // 窗口是隐藏的，但布局照算 —— 顺便确认它**没被封面盖住**：
+    // opacity 变成 1 不等于看得见，绝对定位的 × 如果被后面的封面压住，
+    // elementFromPoint 会返回 img 而不是按钮（2026-10-19 查「× 不见了」时加）。
+    const hit = await run(`(() => {
+      const btn = document.querySelector('#char-page-grid .char-card .char-card-del');
+      if (!btn) return 'no-btn';
+      const r = btn.getBoundingClientRect();
+      const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return el ? (el.closest('.char-card-del') ? 'self' : el.tagName + '.' + (el.className || '')) : 'none';
+    })()`);
+
+    result.results.push({
+      name: '角色库：卡片上删除 · 悬停时真的浮在最上层（没被封面盖住）',
+      pass: hit === 'self',
+      detail: `命中元素：${hit}${note}`
+    });
   } catch (err) {
     note = '（CDP 出错：' + ((err && err.message) || err) + '）';
     try { if (dbg.isAttached()) dbg.detach(); } catch (e) { /* 忽略 */ }
@@ -2992,6 +3020,59 @@ function probeRag(result) {
 }
 
 /**
+ * 批量导出 / 批量删除的静态体检。
+ *
+ * 为什么不在真窗口里点这两颗按钮：导出会弹系统「选文件夹」框（自动化点不了），
+ * 删除会真删数据（冒烟跑完还要留一套干净样本）。这两条链路的要害是「接线有没有断」——
+ * 主进程有没有选目录的通道、preload 有没有暴露、JSON 导出有没有把头像带上、
+ * 导入读不读得回来、批量删除有没有做回滚。这些全是源码里的事实，直接读文件断言最划算。
+ */
+function probeBatchLibrary(result) {
+  const push = (name, pass, detail) => result.results.push({ name, pass: !!pass, detail: detail || '' });
+  const read = (rel) => {
+    try {
+      return fs.readFileSync(path.join(APP_DIR, rel), 'utf8');
+    } catch (err) {
+      return '';
+    }
+  };
+
+  const ipc = read('main/ipc.js');
+  const preload = read('preload.js');
+  const chatExport = read('renderer/js/views/chatExport.js');
+  const cardImport = read('main/card-import.js');
+  const editor = read('renderer/js/views/characterEditor.js');
+  const worldbook = read('renderer/js/views/worldbook.js');
+  const charList = read('renderer/js/views/characterList.js');
+  const page = read('renderer/index.html');
+
+  push('批量导出：主进程有「选文件夹 + 逐个写」的通道', /ipcMain\.handle\('util:saveFiles'/.test(ipc), ipc ? '' : '读不到 main/ipc.js');
+  push('批量导出：preload 暴露了 saveFiles', /saveFiles:\s*\(payload\)/.test(preload));
+  push('批量导出：同目录重名会自动加序号（不覆盖已有文件）', /while \(taken\.has/.test(ipc));
+  push(
+    '批量导出：角色卡 JSON 带头像 / 立绘（withImages → extensions.mimitale）',
+    chatExport.includes('withImages') && chatExport.includes('portrait')
+  );
+  push('导入侧：能读回扩展位里的头像 / 立绘', cardImport.includes('ext.avatar') && cardImport.includes('ext.portrait'));
+  push(
+    '角色库：批量按钮接了三件事（进入 / 导出 / 删除）',
+    /btnCharBatch/.test(charList) && /exportMany/.test(charList) && /removeMany/.test(charList)
+  );
+  push(
+    '批量删除角色：一次写盘 + 失败按原绑定回滚',
+    /export async function deleteCharactersByIds/.test(editor) && /unbound\.push\(\[convo, convo\.characterId\]\)/.test(editor)
+  );
+  push(
+    '批量删除世界书：一次写盘 + 编辑器切走不留在被删的书上',
+    /export async function deleteWorldbooksByIds/.test(worldbook) && /editingTarget/.test(worldbook)
+  );
+  push(
+    '两页工具条都写了批量按钮组',
+    /id="char-batch-active"/.test(page) && /id="wb-batch-active"/.test(page)
+  );
+}
+
+/**
  * AI 生成的解析体检：把「模型返回的原文」直接喂给 aiGen 的解析函数，
  * 看它到底能不能解析出字段。这条链路（原文 → 剥围栏 → JSON.parse → 字段）
  * 跑在渲染层里、又是纯函数，最适合直接 import 进来单测 ——
@@ -3685,6 +3766,7 @@ app.whenReady().then(async () => {
       probeSettingsWhitelist(result);
       await probeStoreWriteFailure(result);
       await probeAiGenParse(win, result);
+      probeBatchLibrary(result);
       await probeWorldbookExportRoundTrip(win, result);
       probeWorldbookDeepSplit(result);
       await probeHover(win, result);

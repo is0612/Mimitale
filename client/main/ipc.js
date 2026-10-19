@@ -144,7 +144,16 @@ function lastDirForDialog() {
 
 /** 记住这次选中的路径所在目录（给下一次弹框用） */
 function rememberDialogDir(chosenPath) {
-  const dir = chosenPath ? path.dirname(chosenPath) : '';
+  rememberChosenDir(chosenPath ? path.dirname(chosenPath) : '');
+}
+
+/**
+ * 记住「选中的目录本身」。
+ *
+ * saveFile 那条拿到的是一整条文件路径，取它的 dirname；批量导出拿到的是目录 ——
+ * 两种入口共用同一份记忆，所以拆出这一层，别在调用处 `path.join(dir, '_')` 地绕。
+ */
+function rememberChosenDir(dir) {
   if (!dir || dir === lastDialogDir || !isUsableDir(dir)) return;
   lastDialogDir = dir;
   lastDialogDirLoaded = true;
@@ -848,6 +857,70 @@ function registerIpc() {
     }
 
     return { canceled: false, filePath: result.filePath };
+  });
+
+  /**
+   * 批量导出：选一个目录，把一组文件逐个写进去。
+   *
+   * 和 util:saveFile 的差别是**只弹一次框** —— 二三十张卡一张一个保存框没法用。
+   * 同一个目录里重名的（两个都叫「女仆」）自动加序号，既不覆盖已有的，也不静默丢。
+   *
+   * 只支持文本（角色卡 / 世界书都是 JSON）；留着 base64 分支是为了以后能批量导 PNG。
+   * 部分失败**不整体回滚**：写出去的文件留在盘上，界面按 written / failed 报数。
+   */
+  ipcMain.handle('util:saveFiles', async (_event, payload) => {
+    const request = payload || {};
+    const files = Array.isArray(request.files) ? request.files : [];
+    if (!files.length) return { canceled: true };
+
+    const result = await dialog.showOpenDialog(getMainWindow(), {
+      title: request.title || '选择导出到哪个文件夹',
+      defaultPath: dialogDefaultDir(),
+      properties: ['openDirectory', 'createDirectory']
+    });
+    if (result.canceled || !Array.isArray(result.filePaths) || !result.filePaths.length) {
+      return { canceled: true };
+    }
+
+    const dir = result.filePaths[0];
+    rememberChosenDir(dir);
+
+    // Windows 的文件名不区分大小写，去重集合也按小写比
+    const taken = new Set();
+    const uniqueName = (raw) => {
+      const fixed = String(raw || '未命名.json').replace(/[\\/:*?"<>|]/g, '_').trim() || '未命名.json';
+      const ext = path.extname(fixed);
+      const stem = ext ? path.basename(fixed, ext) : fixed;
+      let name = ext ? fixed : `${fixed}.json`;
+      let n = 2;
+      while (taken.has(name.toLowerCase())) {
+        name = ext ? `${stem} (${n++})${ext}` : `${stem} (${n++}).json`;
+      }
+      taken.add(name.toLowerCase());
+      return name;
+    };
+
+    const written = [];
+    const failed = [];
+    for (const file of files) {
+      const name = uniqueName(file && file.fileName);
+      try {
+        if (file && file.base64) {
+          let buffer = Buffer.from(String(file.base64), 'base64');
+          if (file.pngText && file.pngText.keyword) {
+            buffer = pngWithTextChunk(buffer, file.pngText.keyword, file.pngText.text || '');
+          }
+          fs.writeFileSync(path.join(dir, name), buffer);
+        } else {
+          fs.writeFileSync(path.join(dir, name), String((file && file.text) == null ? '' : file.text), 'utf8');
+        }
+        written.push(name);
+      } catch (err) {
+        failed.push({ fileName: name, error: (err && err.message) || '写文件失败' });
+      }
+    }
+
+    return { canceled: false, dir, written, failed };
   });
 
   /**

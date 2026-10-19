@@ -5411,25 +5411,30 @@ m-button.btn-new > .mi-btn__control:hover {
   margin-bottom: 0;
 }
 
-/* 左栏底部：来源提示 + 导出 + 删除角色（V2 从底部通栏搬进来的）。
-   margin-top:auto 把它钉在栏底，那块空白也就有了归属。 */
+/* 左栏底部：保存角色 + 返回 + 删除角色（V2 从底部通栏搬进来的）。
+   margin-top:auto 把它钉在栏底，那块空白也就有了归属。
+
+   ⚠️ 这一块的高度是**紧的**：1440×900 下左栏原来刚好装得下（见上面 char-media-top
+   那条注释，「多 18px 就出滚动条」）。2026-10-19 往这里加「保存角色」、又加「返回」，
+   同时拿掉了原来那行来源提示（.foot-hint）才重新装回来 ——
+   以后还想往左栏底部塞东西，先看这一栏还剩多少余量。
+   吸底（sticky）留着当保险：真溢出时它钉在栏底不动，字段在它下面滚，
+   主操作不会跟着滚出去。 */
 #view-char-editor .char-rail-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   margin-top: auto;
-  padding-top: 8px;
+  padding: 8px 0 2px;
   border-top: 1px solid var(--ce-line);
+  background: var(--ce-sidebar);
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
 }
 
-#view-char-editor .char-rail-foot .foot-hint {
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  margin-bottom: 2px;
-}
-
-/* 「导出 / 删除角色」铺满栏宽（宿主），文字靠左是里层的对齐 —— 写在宿主上没效果。 */
+/* 保存 / 返回 / 删除角色都铺满栏宽（宿主），文字靠左是里层的对齐 —— 写在宿主上没效果。 */
 #view-char-editor .char-rail-foot m-button {
   width: 100%;
 }
@@ -6742,6 +6747,22 @@ m-button.btn-new > .mi-btn__control:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* 批量：工具条右侧那一组。计数（.lib-count）的 margin-left:auto 仍在，所以它贴着右边缘。
+   常态只有一颗「批量」，选择态换成「已选 N · 全选 · 导出 · 删除 · 取消」——
+   两组节点都在 HTML 里写死，靠 .hidden 切换，省得每次现造按钮。 */
+.lib-batch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lib-batch-count {
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* 卡片网格：列宽自适应，窗口变窄自动减列。
    ⚠️ 角色库和世界书**必须同一组数** —— 以前一个是 198、一个是 240，
    切换页面时卡片宽度和每行列数都会变，像两个产品。改一处就得改另一处；
@@ -6790,6 +6811,11 @@ m-button.btn-new > .mi-btn__control:hover {
   right: 10px;
   width: 24px;
   height: 24px;
+  /* ⚠️ 这个 z-index 是**必需**的，不是凑数：封面 `.wb-card-cover` 是 `position: relative`
+     的定位元素，而且在 DOM 里排在 × 后面 —— 同为 z-index:auto 时按 DOM 顺序绘制，
+     封面会把 × 整颗盖住。表现是「悬停后 opacity 已经是 1，但眼睛看不到」，
+     读样式读不出来（2026-10-19 星宝报「右上角的删除按钮不见」，就是这条）。 */
+  z-index: 2;
   opacity: 0;
   display: inline-flex;
   align-items: center;
@@ -6811,6 +6837,76 @@ m-button.btn-new > .mi-btn__control:hover {
 
 .char-card-del:focus-visible {
   opacity: 1;
+}
+
+/* ---- 批量选择态（2026-10-19）----
+   整张卡就是一颗勾选框：点哪儿都算选中，所以「编辑 / 聊天」和右上角的 × 都收起来。
+   用 visibility 而不是 display:none —— 后者会让卡片矮一截，网格随勾选跳动。
+   取消悬停的 -1px 浮起：选择态下「浮起」会被误读成「点下去了」。 */
+.char-card.is-selectable {
+  cursor: pointer;
+}
+
+.char-card.is-selectable:is(:hover, :focus-within) {
+  transform: none;
+}
+
+.char-card.is-selectable .char-card-actions {
+  visibility: hidden;
+}
+
+/* ⚠️ 选择态里右上角的删除 × **保留**（2026-10-19 星宝：「批量删除的时候右上角的删除
+   按钮不见」）。原来的想法是「选择态只做批量」，但实际用起来是：在一批里发现某一张
+   不该留，还是想直接删掉它 —— 藏起来就得先退出选择态、找到那张、再删，多两步。
+   点它不会顺带勾选（列表页那边已经 stopPropagation）。
+   这里直接置 1，不靠 hover：整卡 hover 的反馈是「将要选中」，× 跟着 hover 才出现
+   反而更晚一步、更不好找。 */
+.char-card.is-selectable .char-card-del {
+  opacity: 1;
+}
+
+.char-card.is-selectable.is-selected {
+  box-shadow: 0 0 0 2px var(--accent), var(--shadow-lg);
+}
+
+/* ⚠️ 封面上那颗「放大镜」是挂在 **img 自己**上的（见 .wb-card-cover img 的 cursor: zoom-in），
+   和 `.char-card-avatar.clickable` 没关系 —— 选择态里去掉了 clickable 也不管用，
+   鼠标压到图上照样是放大镜，整卡点击的手感被它顶掉。
+   这里用更高的特异性把它压回 pointer（0,3,1 > 0,1,1）。 */
+.char-card.is-selectable .wb-card-cover,
+.char-card.is-selectable .wb-card-cover img,
+.char-card.is-selectable .char-card-avatar {
+  cursor: pointer;
+}
+
+/* 左上角勾选圈：空圈 → 选中后填主色 + 白勾。
+   自带一层深色底，压在亮图上也看得见。 */
+.char-card-check {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.char-card.is-selected .char-card-check {
+  background: var(--accent);
+}
+
+.char-card.is-selected .char-card-check::after {
+  content: '✓';
 }
 
 
@@ -8327,12 +8423,6 @@ m-button.btn-new > .mi-btn__control:hover {
   min-width: 0;
 }
 
-#view-char-editor .editor-head-left .page-crumb {
-  flex: 0 0 auto;
-  margin: 0;
-  white-space: nowrap;
-}
-
 #view-char-editor .editor-head-left .page-title {
   flex: 0 0 auto;
 }
@@ -8354,6 +8444,74 @@ m-button.btn-new > .mi-btn__control:hover {
 
 .page-crumb + .page-title {
   margin-top: 0;
+}
+
+/* 页头左上角的返回（编辑页 / 设置页共用）。
+   2026-10-19 从右上角挪过来：那儿和「保存」挤在一簇，1440 窗口下离阅读起点一千多像素。
+   返回属于导航、不属于「对当前对象做什么」，放在读到的第一个位置更顺，
+   右上也就只剩一颗主操作（保存）。
+
+   观感：做成一颗**很轻的小按钮**（箭头 + 「返回」，12px 字、28px 高、无边框），
+   静止时几乎只是页头文字的一部分，悬停才浮出一层淡底 —— 纯图标那颗试过，
+   在深色页头上像个孤立的小符号，认不出是按钮。
+   ⚠️ 不能用 .icon-btn 那套 hover 底色：它的 `background: var(--bg-side)` 和页头背景
+   同色，悬停等于没反应。这里用 --bg-card。 */
+.page-back {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px 0 6px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.page-back svg {
+  width: 14px;
+  height: 14px;
+  /* 默认 stroke 是 2，14px 下偏粗；1.9 更接近旁边文字的笔画 */
+  stroke-width: 1.9;
+}
+
+.page-back:hover {
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+.page-back:active {
+  background: var(--bg-input);
+}
+
+.page-back:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* 编辑页页头是 baseline 对齐（面包屑 / 标题 / 说明字号不同，靠基线拉平），
+   按钮跟着 baseline 会往上飘，单独居中。
+   右边收 4px：它和面包屑读作一条（「← 返回  角色库 / 艾琳」），比挨着标题更近。 */
+.editor-head-left .page-back {
+  align-self: center;
+  margin-right: -4px;
+}
+
+/* 设置页页头是「标题 + 说明」两行块：返回贴在整块左边、垂直居中 */
+.settings-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-heading-text {
+  min-width: 0;
 }
 
 /* 保存状态小胶囊：绿点 = 已保存，琥珀点 = 有未保存的改动（和 .wb-dirty 一个语义） */

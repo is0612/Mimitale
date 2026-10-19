@@ -279,14 +279,8 @@ function updateCharEditorScopeUi() {
       // 用户看不出来的事：这几栏写下去会去哪儿。
       el.charsSub.textContent = inBook
         ? `这本书里的独立副本，改它不影响角色库${book ? ` · ${book.name}` : ''}`
-        : '描述与性格每轮都会注入给 AI，改完在右上角保存';
+        : '描述与性格每轮都会注入给 AI，改完点左栏底部的「保存角色」';
     }
-  }
-  if (el.charCrumb) {
-    // 面包屑：角色库 / 名字（世界书作用域标出来处）。textContent，不吃 HTML。
-    const character = editorCharacterById(editingCharacterId);
-    const name = character ? character.name : el.c.name.value.trim() || '新角色';
-    el.charCrumb.textContent = `${inBook ? '世界书' : '角色库'} / ${name}`;
   }
 }
 
@@ -318,18 +312,7 @@ export async function leaveCharacterEditor() {
   showView(editorReturnView === 'charEditor' ? 'chars' : editorReturnView);
 }
 
-/** 底部提示：跟着编辑器作用域变，免得不知道改的是哪一份 */
-function charFootHintText(character) {
-  // 还没保存的新角色没什么来源好说的，先提醒它还不存在
-  if (isCharDraft()) return '还没保存 · 点右上角「保存角色」才会创建这个角色';
-  if (charEditorScope === 'worldbook') return '改的是世界书里的副本，角色库里的那个角色不受影响';
-  if (!character) return '角色卡只保存在你自己电脑上';
-  if (character.source === 'png') return '来自酒馆 PNG 角色卡';
-  if (character.source === 'json') return '来自 JSON 角色卡';
-  return '这是你自己写的角色';
-}
-
-/** 左栏来源胶囊的短文案（foot 那条是长文案，管两件事） */
+/** 左栏来源胶囊的短文案（原 foot 那条长提示 2026-10-19 已删，见 index.html 的说明） */
 function charSourceChipText(character) {
   if (isCharDraft()) return '还没保存的新角色';
   if (charEditorScope === 'worldbook') return '本书角色副本';
@@ -345,9 +328,7 @@ function showCharForm(show) {
   // 新建的新角色还没保存，没有可删的东西
   el.btnDelChar.disabled = !show || isCharDraft();
   el.btnSaveChar.disabled = !show;
-  if (el.charCrumb) el.charCrumb.hidden = !show;
   if (el.charSaveState) el.charSaveState.hidden = !show;
-  if (!show) el.charFootHint.textContent = charFootHintText(null);
 }
 
 // ---------------------------------------------------------------------------
@@ -552,8 +533,6 @@ function fillCharForm(character) {
   // 那个开关对它们没意义，整块收起来，免得以为「不勾就没状态」。
   el.c.showInPanel.checked = character.showInPanel === true;
   renderShowInPanelBox();
-
-  el.charFootHint.textContent = charFootHintText(character);
 
   // 左栏来源胶囊 + 页头保存状态（刚填好的表 = 已保存）
   setCharSourceChip(charSourceChipText(character));
@@ -1243,6 +1222,68 @@ async function deleteCharacter() {
   await deleteCharacterById(character.id, charEditorScope);
 }
 
+/**
+ * 批量删除角色卡（列表页选中几张之后一次删掉）。
+ *
+ * 和单张删除一样要处理同一批牵连：会话解绑、编辑器收尾、写盘失败回滚。
+ * 差别只在**确认框只弹一次**、**写盘也只写一次** —— 删一半留一半再回滚，
+ * 比删不掉更糟。
+ *
+ * @param {string[]} ids
+ * @returns {Promise<boolean>} 真的删掉了没有
+ */
+export async function deleteCharactersByIds(ids) {
+  const wanted = new Set(Array.isArray(ids) ? ids : []);
+  const targets = characters().filter((character) => wanted.has(character.id));
+  if (!targets.length) return false;
+
+  const usedByConvo = state.conversations.filter((convo) => wanted.has(convo.characterId)).length;
+  const names = targets.slice(0, 3).map((character) => `「${character.name}」`).join('、');
+  const more = targets.length > 3 ? ` 等 ${targets.length} 个角色` : '';
+  const tail = usedByConvo ? `用到它们的 ${usedByConvo} 个会话会变回通用助手。` : '';
+
+  const ok = await confirmDialog({
+    title: '批量删除角色',
+    message: `删除 ${names}${more}？${tail}`,
+    confirmText: '删除',
+    danger: true
+  });
+  if (!ok) return false;
+
+  const beforeChars = characters();
+  const unbound = [];
+
+  state.characters = beforeChars.filter((character) => !wanted.has(character.id));
+
+  for (const convo of state.conversations) {
+    if (wanted.has(convo.characterId)) {
+      // 记下原来绑的是哪一张，写盘失败时按它退回去
+      unbound.push([convo, convo.characterId]);
+      convo.characterId = null;
+    }
+  }
+
+  actions.rerender();
+
+  if (!(await persistCharacters())) {
+    // 写盘失败 → 内存也退回去：卡还在列表里、会话绑定也恢复，界面和磁盘一致
+    state.characters = beforeChars;
+    for (const [convo, id0] of unbound) convo.characterId = id0;
+    actions.rerender();
+    return false;
+  }
+
+  // 编辑器正开在被删的某一张上：没有可编辑的对象了，离开它
+  if (editingCharacterId && wanted.has(editingCharacterId)) {
+    editingCharacterId = null;
+    if (currentViewName() === 'charEditor') await leaveCharacterEditor();
+  }
+
+  persistConversations(0);
+  showToast(`已删除 ${targets.length} 个角色`);
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 //  给入口层 / 别的视图用的口子
 // ---------------------------------------------------------------------------
@@ -1483,6 +1524,8 @@ export function initCharacterEditor(injected) {
   }
   el.btnSaveChar.addEventListener('click', saveCharacter);
   el.btnDelChar.addEventListener('click', deleteCharacter);
+  // 左栏底部那颗「返回」：和页头左上那颗、Esc 是同一条路（leaveCharacterEditor）
+  if (el.btnBackChar) el.btnBackChar.addEventListener('click', leaveCharacterEditor);
 
   // 点头像/形象换图，或者清除
   el.charAvatar.addEventListener('click', pickAvatar);

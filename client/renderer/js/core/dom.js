@@ -163,7 +163,6 @@ export const el = {
   // 角色编辑器（从弹窗改成了页面，占满主区域的一屏）
   charsTitle: $('chars-title'),
   charsSub: $('chars-sub'),
-  charCrumb: $('char-crumb'),
   charTotalWords: $('char-total-words'),
   charSaveState: $('char-save-state'),
   // 主区域的七个视图：聊天 / 角色列表页 / 角色编辑页 / 世界书列表页 / 世界书编辑页
@@ -179,11 +178,29 @@ export const el = {
   charPageCount: $('char-page-count'),
   charPageGrid: $('char-page-grid'),
   charPageEmpty: $('char-page-empty'),
+  // 批量选择（角色库工具条）：常态只露「批量」，进入选择态后换成另一组
+  charBatchNormal: $('char-batch-normal'),
+  charBatchActive: $('char-batch-active'),
+  charBatchCount: $('char-batch-count'),
+  btnCharBatch: $('btn-char-batch'),
+  btnCharSelectAll: $('btn-char-select-all'),
+  btnCharBatchExport: $('btn-char-batch-export'),
+  btnCharBatchDelete: $('btn-char-batch-delete'),
+  btnCharBatchExit: $('btn-char-batch-exit'),
   wbPageSub: $('wb-page-sub'),
   wbPageSearch: $('wb-page-search'),
   wbPageCount: $('wb-page-count'),
   wbPageGrid: $('wb-page-grid'),
   wbPageEmpty: $('wb-page-empty'),
+  // 批量选择（世界书工具条），和角色库那一组一一对应
+  wbBatchNormal: $('wb-batch-normal'),
+  wbBatchActive: $('wb-batch-active'),
+  wbBatchCount: $('wb-batch-count'),
+  btnWbBatch: $('btn-wb-batch'),
+  btnWbSelectAll: $('btn-wb-select-all'),
+  btnWbBatchExport: $('btn-wb-batch-export'),
+  btnWbBatchDelete: $('btn-wb-batch-delete'),
+  btnWbBatchExit: $('btn-wb-batch-exit'),
   presetPageSub: $('preset-page-sub'),
   presetPageGrid: $('preset-page-grid'),
   presetPageEmpty: $('preset-page-empty'),
@@ -210,6 +227,8 @@ export const el = {
   btnDelChar: $('btn-del-char'),
   btnSaveChar: $('btn-save-char'),
   btnExportChar: $('btn-export-char'),
+  // 左栏底部的「返回」（和页头左上那颗同一个动作，2026-10-19 星宝要的）
+  btnBackChar: $('btn-back-char'),
   btnExportConvo: $('btn-export-convo'),
   btnAddAttr: $('btn-add-attr'),
   charEmpty: $('char-empty'),
@@ -223,7 +242,6 @@ export const el = {
   btnBatchExpr: $('btn-batch-expr'),
   // 表情图现在是「表情图」分区里的常显内容，没有弹窗、没有入口摘要
   exprCount: $('expr-count'),
-  charFootHint: $('char-foot-hint'),
   c: {
     name: $('c-name'),
     tags: $('c-tags'),

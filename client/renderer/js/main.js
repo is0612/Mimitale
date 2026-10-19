@@ -77,6 +77,8 @@ import {
   initWorldbook,
   editWorldbookFromPage,
   deleteWorldbookById,
+  deleteWorldbooksByIds,
+  exportWorldbooksByIds,
   openWorldbookEditor,
   renderWorldbookChars,
   closeWorldbookCharPicker,
@@ -93,7 +95,8 @@ import {
   startCharacterDraftFromAi,
   releaseEditorScope,
   stashCharacterForm,
-  deleteCharacterById
+  deleteCharacterById,
+  deleteCharactersByIds
 } from './views/characterEditor.js';
 import { initCharacterImport, pickImportFiles, warnImportErrors } from './views/characterImport.js';
 import { initAiGen, openAiGenModal } from './views/aiGen.js';
@@ -109,7 +112,7 @@ import {
 } from './views/composer.js';
 import { clearConvo } from './views/convoActions.js';
 import { summarizeNow } from './views/summarize.js';
-import { exportCharacter, exportConversation } from './views/chatExport.js';
+import { exportCharacter, exportConversation, exportCharactersByIds } from './views/chatExport.js';
 import { startPlayerFlow, chatWithCharacter } from './views/worldPlay.js';
 
 // 「设置页里当前正在编辑的服务商」的初始值随设置页状态走（views/settings.js），
@@ -150,7 +153,12 @@ function registerRefreshListeners() {
   // （要设 editingWorldbookId，那是编辑器弹窗的状态）。所以注入进去。
   // 卡片右上角那个删除 × 同理：它要一起解绑会话、收掉编辑器里的草稿。
   // 它自己不登记重绘 —— 列表页的重绘由上面的 refreshLibraryPage 按当前视图分发。
-  initWorldbookList({ openEditor: editWorldbookFromPage, remove: deleteWorldbookById });
+  initWorldbookList({
+    openEditor: editWorldbookFromPage,
+    remove: deleteWorldbookById,
+    removeMany: deleteWorldbooksByIds,
+    exportMany: exportWorldbooksByIds
+  });
   // 预设列表页同理：「编辑」要打开预设编辑器（编辑器状态住在 views/preset.js），
   // 「删除」要收掉那份没保存的草稿，「导出」是另一条通道。都是跨模块编排，由入口层注入。
   initPresetList({ openEditor: openPresetEditor, remove: deletePresetById, exportOne: exportPreset });
@@ -625,7 +633,10 @@ async function init() {
   initCharacterList({
     edit: (id) => openCharacterEditor(id, 'library'),
     chat: chatWithCharacter,
-    remove: deleteCharacterById
+    remove: deleteCharacterById,
+    // 批量：导出每张一个 JSON、删除一次确认一次写盘（都跨模块，见各自模块的文件头）
+    removeMany: deleteCharactersByIds,
+    exportMany: exportCharactersByIds
   });
   // 角色编辑器自己绑弹窗里的按钮；它保存 / 删除之后要全量重绘，那是入口层的编排。
   initCharacterEditor({ rerender: () => renderAll() });

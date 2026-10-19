@@ -193,6 +193,18 @@
               <m-input id="char-page-search" type="search" placeholder="搜索角色名、标签或描述" aria-label="搜索角色"></m-input>
             </label>
             <span id="char-page-count" class="lib-count"></span>
+            <!-- 批量：常态只露一颗「批量」，进入选择态换成「已选 N · 全选 · 导出 · 删除 · 取消」。
+                 世界书页那一组是同一套结构（id 前缀 char- / wb-）。 -->
+            <div id="char-batch-normal" class="lib-batch">
+              <m-button id="btn-char-batch" variant="ghost" size="sm">批量</m-button>
+            </div>
+            <div id="char-batch-active" class="lib-batch hidden">
+              <span id="char-batch-count" class="lib-batch-count">已选 0 个</span>
+              <m-button id="btn-char-select-all" variant="ghost" size="sm">全选</m-button>
+              <m-button id="btn-char-batch-export" variant="ghost" size="sm" title="每张卡一个 .json（含头像与立绘），选一个文件夹存进去">导出</m-button>
+              <m-button id="btn-char-batch-delete" variant="danger" size="sm">删除</m-button>
+              <m-button id="btn-char-batch-exit" variant="ghost" size="sm">取消</m-button>
+            </div>
           </div>
           <div id="char-page-grid" class="char-grid" role="list"></div>
           <div id="char-page-empty" class="page-empty hidden">
@@ -207,18 +219,20 @@
 
       <section id="view-char-editor" class="view hidden" aria-label="编辑角色">
         <header class="page-head">
-          <!-- 面包屑 + 标题 + 一句说明并到一行：和世界书编辑页的页头同高（56px），
-               切换两个编辑器时上方不会一高一低。窄窗放不下时说明省略，标题不受影响。 -->
           <div class="page-heading editor-head-left">
-            <p class="page-crumb" id="char-crumb" hidden></p>
+            <!-- 2026-10-19：返回挪到左上角；面包屑（角色库 / 名字）去掉 —— 新建时它和标题
+                 「新建角色」说的是同一件事；「保存角色」挪去了左栏底部的 char-rail-foot，
+                 页头只剩标题和一句说明。 -->
+            <button id="btn-close-chars" class="page-back" type="button" title="返回上一屏（Esc）" aria-label="返回" data-icon="chevron-left"><span>返回</span></button>
             <h1 id="chars-title" class="page-title">编辑角色</h1>
             <p id="chars-sub" class="page-sub"></p>
           </div>
           <div class="page-actions">
             <span id="char-total-words" class="editor-total"></span>
             <span id="char-save-state" class="save-pill" data-state="saved" hidden>所有更改已保存</span>
-            <m-button id="btn-close-chars" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
-            <m-button id="btn-save-char" variant="primary" size="sm">保存角色</m-button>
+            <!-- 导出回到页头右上（2026-10-19 下半场）：它是一次性的「拿走一张卡」，不属于
+                 填表流程，和「字数 / 保存状态」这些页面级信息待在一起更合适。 -->
+            <m-button id="btn-export-char" variant="ghost" size="sm" title="存成 PNG 卡（酒馆可直接导入）或 JSON">导出</m-button>
           </div>
         </header>
 
@@ -581,8 +595,15 @@
              ⚠️ 这三个节点由 characterEditorLayout.js 搬进 .char-identity-pane，
                 id 一个都不能改（characterEditor.js 直接按 id 取用）。 -->
         <div id="char-rail-foot" class="char-rail-foot">
-          <span id="char-foot-hint" class="foot-hint">角色卡只保存在你自己电脑上</span>
-          <m-button id="btn-export-char" variant="ghost" size="sm" title="存成 PNG 卡（酒馆可直接导入）或 JSON">导出</m-button>
+          <!-- 左栏底部这一串是「填完之后干什么」：保存 / 返回 / 删除角色。
+               保存是主操作放第一颗（2026-10-19 从页头右上挪下来）——左栏是「从上往下填完就存」的终点；
+               导出同日搬回页头右上，那不是填表流程的一部分。
+               ⚠️ 这里原来还有一行来源提示（.foot-hint，如「来自酒馆 PNG 卡」），
+                  加上「返回」之后左栏在 1440×900 下装不下、底部按钮被裁，所以拿掉了 ——
+                  它说的三件事别处都有：未保存看页头那颗胶囊、来源看角色库卡片上的小字、
+                  世界书副本看页头说明。左栏只剩「操作」这一件事。 -->
+          <m-button id="btn-save-char" variant="primary" size="sm">保存角色</m-button>
+          <m-button id="btn-back-char" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
           <m-button id="btn-del-char" variant="danger" size="sm">删除角色</m-button>
         </div>
       </section>
@@ -608,6 +629,17 @@
               <m-input id="wb-page-search" type="search" placeholder="搜索书名、条目或关键词" aria-label="搜索世界书"></m-input>
             </label>
             <span id="wb-page-count" class="lib-count"></span>
+            <!-- 和角色库那一组是同一套（见上方 char-batch-* 的注释） -->
+            <div id="wb-batch-normal" class="lib-batch">
+              <m-button id="btn-wb-batch" variant="ghost" size="sm">批量</m-button>
+            </div>
+            <div id="wb-batch-active" class="lib-batch hidden">
+              <span id="wb-batch-count" class="lib-batch-count">已选 0 本</span>
+              <m-button id="btn-wb-select-all" variant="ghost" size="sm">全选</m-button>
+              <m-button id="btn-wb-batch-export" variant="ghost" size="sm" title="每本一个 .json（酒馆 lorebook），选一个文件夹存进去">导出</m-button>
+              <m-button id="btn-wb-batch-delete" variant="danger" size="sm">删除</m-button>
+              <m-button id="btn-wb-batch-exit" variant="ghost" size="sm">取消</m-button>
+            </div>
           </div>
           <div id="wb-page-grid" class="wb-grid" role="list"></div>
           <div id="wb-page-empty" class="page-empty hidden">
@@ -628,13 +660,13 @@
       <section id="view-wb-editor" class="view hidden" aria-label="编辑世界书">
         <header class="page-head wb-head">
           <div class="wb-head-left editor-head-left">
+            <button id="btn-close-worldbooks" class="page-back" type="button" title="返回上一屏（Esc）" aria-label="返回" data-icon="chevron-left"><span>返回</span></button>
             <p class="page-crumb" id="wb-crumb" hidden></p>
             <h1 id="worldbooks-title" class="page-title">编辑世界书</h1>
           </div>
           <div class="page-actions">
             <span id="wb-total-words" class="editor-total"></span>
             <span id="wb-save-state" class="save-pill" data-state="saved">所有更改已保存</span>
-            <m-button id="btn-close-worldbooks" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
             <m-button id="btn-save-wb" variant="primary" size="sm" title="把这本书的书名 / 开场白 / 条目写进磁盘">保存</m-button>
           </div>
         </header>
@@ -939,13 +971,15 @@
 
       <section id="view-settings" class="view hidden" aria-label="设置">
         <header class="page-head">
-          <div class="page-heading">
-            <h1 class="page-title">设置</h1>
-            <p class="page-sub">配置模型接口与对话行为 · 只保存在本机，改完记得点保存</p>
+          <div class="page-heading settings-heading">
+            <button id="btn-back-settings" class="page-back" type="button" title="返回上一屏（Esc）" aria-label="返回" data-icon="chevron-left"><span>返回</span></button>
+            <div class="settings-heading-text">
+              <h1 class="page-title">设置</h1>
+              <p class="page-sub">配置模型接口与对话行为 · 只保存在本机，改完记得点保存</p>
+            </div>
           </div>
           <div class="page-actions">
 
-            <m-button id="btn-back-settings" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
             <m-button id="btn-save-settings" variant="primary" size="sm" aria-label="保存设置">保存</m-button>
           </div>
         </header>

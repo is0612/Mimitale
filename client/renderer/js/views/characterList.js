@@ -11,6 +11,11 @@
 //    · chat   —— 新建会话并绑上这个角色，然后切回聊天屏
 //    · remove —— 删角色（会牵连到会话解绑，属于入口层的编排）
 //
+//  批量（2026-10-19）：工具条上的「批量」进入选择态，选中若干张之后导出 / 删除。
+//  导出是每张一个 JSON（见 chatExport 的 exportCharactersByIds），删除要一次确认、
+//  一次写盘 —— 所以这两个动作同样由入口层注入（removeMany / exportMany），
+//  本模块只管选择和按钮，不碰数据。
+//
 //  重绘入口是 renderCharacterPage()，由 views/viewSwitch.js 在
 //  「当前正停在角色页」时调用（那个分发要读 currentView）。
 //
@@ -25,9 +30,12 @@ import { mButton } from '../components/index.js';
 import { entityTone } from '../ui/avatarTone.js';
 import { openLightbox } from '../ui/lightbox.js';
 import { characters, characterPortrait } from '../data/library.js';
+import { createBatchSelect } from './batchSelect.js';
 
-let actions = { edit: () => {}, chat: () => {}, remove: () => {} };
+let actions = { edit: () => {}, chat: () => {}, remove: () => {}, removeMany: null, exportMany: null };
 let query = '';
+/** 批量选择状态机（initCharacterList 里建，render 时读它的选择态） */
+let batch = null;
 
 const EMPTY_TITLE = '还没有角色';
 const EMPTY_HINT = '点右上角「导入角色卡」选一张酒馆的 PNG / JSON 卡，或者点「＋ 新建角色」自己写一个。';
@@ -58,12 +66,33 @@ export function initCharacterList(injected) {
       renderCharacterPage();
     });
   }
+
+  batch = createBatchSelect({
+    nodes: {
+      enter: el.btnCharBatch,
+      normal: el.charBatchNormal,
+      active: el.charBatchActive,
+      count: el.charBatchCount,
+      selectAll: el.btnCharSelectAll,
+      exportBtn: el.btnCharBatchExport,
+      deleteBtn: el.btnCharBatchDelete,
+      exit: el.btnCharBatchExit
+    },
+    unit: '个',
+    onRender: renderCharacterPage,
+    // 这两个动作由入口层注入（角色库的导出 / 删除都要跨模块编排）
+    onExport: (ids) => (actions.exportMany ? actions.exportMany(ids) : null),
+    onDelete: (ids) => (actions.removeMany ? actions.removeMany(ids) : false)
+  });
 }
 
 export function renderCharacterPage() {
   const all = characters();
   const needle = query.trim().toLocaleLowerCase();
   const list = all.filter((character) => matchesQuery(character, needle));
+
+  // 告诉选择态「现在屏幕上看得见哪些」—— 全选只作用于这一批
+  if (batch) batch.setVisible(list.map((character) => character.id));
 
   renderListPage({
     grid: el.charPageGrid,
@@ -111,8 +140,7 @@ function characterCard(c) {
     mediaClass: ['art-edge', entityTone(c.id, c.name)],
     // 点形象看大图。没有图时那块是首字色块，点了也没东西可看，索性不接。
     mediaTitle: `${c.name} · 点开看大图`,
-    onMediaClick: portrait ? () => openLightbox(portrait, { title: c.name }) : null,
-    // 删除：静止时是透明的，鼠标移上来才浮出来 —— 跟左侧会话列表的 × 同一套。
+    onMediaClick: portrait ? () => openLightbox(portrait, { title: c.name }) : null,    // 删除：静止时是透明的，鼠标移上来才浮出来 —— 跟左侧会话列表的 × 同一套。
     // 这样卡片平时还是干净的「编辑 / 聊天」两个按钮，不至于误点。
     // ⚠️ 它是**图标按钮**（靠 .char-card-del 自己定义外形），不走 m-button：
     //    套上组件宿主会多一层壳，而 .char-card-del 的内边距/圆角是直接落在
@@ -131,6 +159,10 @@ function characterCard(c) {
     actions: [
       mButton({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => actions.edit(c.id) }),
       mButton({ variant: 'primary', size: 'sm', text: '聊天', onClick: () => actions.chat(c.id) })
-    ]
+    ],
+    // 批量选择态：整卡可点、左侧勾选圈；「编辑 / 聊天」和删除 × 由 CSS 藏起来
+    selecting: !!(batch && batch.isActive()),
+    selected: !!(batch && batch.has(c.id)),
+    onSelect: () => batch && batch.toggle(c.id)
   });
 }

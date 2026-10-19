@@ -30,11 +30,17 @@ import { mButton } from '../components/index.js';
 import { openLightbox } from '../ui/lightbox.js';
 import { worldbooks, worldbookCharacters, worldbookCover } from '../data/library.js';
 import { openPlayerModal } from './player.js';
+import { createBatchSelect } from './batchSelect.js';
 
 /** 打开世界书编辑器（入口层注入，见文件头说明） */
 let openEditor = () => {};
 /** 删掉一本书（入口层注入，和角色卡右上角那个 × 同一套路） */
 let removeBook = () => {};
+/** 批量：删几本 / 导出几本。同样跨模块（要切走编辑器、解绑会话），由入口层注入 */
+let removeBooks = null;
+let exportBooks = null;
+/** 批量选择状态机（initWorldbookList 里建） */
+let batch = null;
 let query = '';
 
 const EMPTY_TITLE = '还没有世界书';
@@ -50,21 +56,43 @@ function matchesQuery(book, needle) {
   ].join(' ').toLocaleLowerCase().includes(needle);
 }
 
-export function initWorldbookList({ openEditor: fn, remove: removeFn } = {}) {
+export function initWorldbookList({ openEditor: fn, remove: removeFn, removeMany, exportMany } = {}) {
   if (typeof fn === 'function') openEditor = fn;
   if (typeof removeFn === 'function') removeBook = removeFn;
+  if (typeof removeMany === 'function') removeBooks = removeMany;
+  if (typeof exportMany === 'function') exportBooks = exportMany;
   if (el.wbPageSearch) {
     el.wbPageSearch.addEventListener('input', (event) => {
       query = event.target.value;
       renderWorldbookPage();
     });
   }
+
+  batch = createBatchSelect({
+    nodes: {
+      enter: el.btnWbBatch,
+      normal: el.wbBatchNormal,
+      active: el.wbBatchActive,
+      count: el.wbBatchCount,
+      selectAll: el.btnWbSelectAll,
+      exportBtn: el.btnWbBatchExport,
+      deleteBtn: el.btnWbBatchDelete,
+      exit: el.btnWbBatchExit
+    },
+    unit: '本',
+    onRender: renderWorldbookPage,
+    onExport: (ids) => (exportBooks ? exportBooks(ids) : null),
+    onDelete: (ids) => (removeBooks ? removeBooks(ids) : false)
+  });
 }
 
 export function renderWorldbookPage() {
   const all = worldbooks();
   const needle = query.trim().toLocaleLowerCase();
   const list = all.filter((book) => matchesQuery(book, needle));
+
+  // 全选只作用于当前筛选结果
+  if (batch) batch.setVisible(list.map((book) => book.id));
 
   renderListPage({
     grid: el.wbPageGrid,
@@ -131,6 +159,10 @@ function worldbookCard(book) {
     actions: [
       mButton({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => openEditor(book.id) }),
       mButton({ variant: 'primary', size: 'sm', text: '游玩', onClick: () => openPlayerModal(book.id) })
-    ]
+    ],
+    // 批量选择态（同角色卡）：整卡可点、左侧勾选圈
+    selecting: !!(batch && batch.isActive()),
+    selected: !!(batch && batch.has(book.id)),
+    onSelect: () => batch && batch.toggle(book.id)
   });
 }

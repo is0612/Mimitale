@@ -41,7 +41,7 @@ import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear } from '../ui/build.js';
 import { pickAndCrop } from '../ui/imageCrop.js';
 import { showView, currentViewName } from './viewSwitch.js';
-import { saveExport } from '../data/export.js';
+import { saveExport, saveExportMany } from '../data/export.js';
 import { persistLibrary, persistConversations } from '../data/persist.js';
 import { seedWorldbookCharactersIntoConvos, syncCopyAttrsFromSource } from '../data/panel.js';
 import {
@@ -1574,6 +1574,118 @@ export async function deleteWorldbookById(id) {
 /** 编辑器底部那个「删除本书」：删的就是当前正在编辑的这本 */
 async function deleteWorldbook() {
   await deleteWorldbookById(editingWorldbookId);
+}
+
+/**
+ * 批量导出世界书：每本一个 .json（酒馆 lorebook 规范），选一次文件夹全写出去。
+ *
+ * 导的是**盘上那份**，不是编辑器里的草稿 —— 列表页看不见草稿，拿草稿导反而会
+ * 把「你正在改但还没保存的东西」偷偷带出去。要导草稿就进编辑器点「导出本书」。
+ *
+ * @param {string[]} ids
+ */
+export async function exportWorldbooksByIds(ids) {
+  const wanted = new Set(Array.isArray(ids) ? ids : []);
+  const list = worldbooks().filter((book) => wanted.has(book.id));
+  if (!list.length) {
+    showToast('没有选中任何世界书', 'error');
+    return null;
+  }
+
+  return saveExportMany({
+    title: `导出 ${list.length} 本世界书`,
+    files: list.map((book) => ({
+      fileName: `${safeFileName(book.name || '未命名世界书')}.json`,
+      text: JSON.stringify(worldbookPayload(book), null, 2)
+    }))
+  });
+}
+
+/**
+ * 批量删除世界书：列表页选中几本之后一次删掉。
+ *
+ * 不复用上面的单本删除：那条每本都要弹一次确认框，选五本就弹五次。
+ * 这里**一次确认**把总量摆清楚（条目 / 角色副本 / 还在哪些会话里生效），
+ * 然后一次性改内存、一次写盘 —— 失败时整批回滚，不会删一半留一半。
+ *
+ * @param {string[]} ids
+ * @returns {Promise<boolean>} 真的删掉了没有
+ */
+export async function deleteWorldbooksByIds(ids) {
+  const wanted = new Set(Array.isArray(ids) ? ids : []);
+  const targets = worldbooks().filter((book) => wanted.has(book.id));
+  if (!targets.length) return false;
+
+  const wasEditing = targets.some((book) => book.id === editingWorldbookId);
+  // 记下「原来正在编辑的是哪本」：下面 selectWorldbook 会改写 editingWorldbookId，
+  // 写盘失败回滚时就没法再从它反推了
+  const editingTarget = wasEditing ? targets.find((book) => book.id === editingWorldbookId) : null;
+  // 表单里正在填的先收进草稿：确认后整本没了，草稿跟着清掉；取消时它还在原处
+  if (wasEditing) {
+    stashWorldbookName();
+    stashEntryForm();
+  }
+
+  const entryCount = targets.reduce((n, book) => n + (Array.isArray(book.entries) ? book.entries.length : 0), 0);
+  const charCount = targets.reduce((n, book) => n + worldbookCharacters(book).length, 0);
+  const usedByConvo = state.conversations.filter((convo) =>
+    convoWorldbookIds(convo).some((id) => wanted.has(id))
+  ).length;
+
+  const names = targets.slice(0, 3).map((book) => `「${book.name}」`).join('、');
+  const more = targets.length > 3 ? ` 等 ${targets.length} 本书` : '';
+  const bits = [`${entryCount} 条条目`];
+  if (charCount) bits.push(`${charCount} 个角色副本`);
+  const tail = usedByConvo ? `；其中还有 ${usedByConvo} 个会话在用到它们，删掉后那些会话会失去这些设定` : '';
+
+  const ok = await confirmDialog({
+    title: '批量删除世界书',
+    message: `删除 ${names}${more}？这些书里的 ${bits.join('、')}会一起删掉${tail}。`,
+    confirmText: '删除',
+    danger: true
+  });
+  if (!ok) return false;
+
+  const beforeBooks = worldbooks();
+  const unbound = [];
+
+  state.worldbooks = beforeBooks.filter((book) => !wanted.has(book.id));
+
+  for (const convo of state.conversations) {
+    const ids0 = convoWorldbookIds(convo);
+    if (ids0.some((id) => wanted.has(id))) {
+      convo.worldbookIds = ids0.filter((id) => !wanted.has(id));
+      convo.updatedAt = now();
+      unbound.push([convo, ids0]);
+    }
+  }
+
+  // 角色编辑器可能正开在这几本书的副本上，退回角色库
+  releaseScope();
+
+  // 编辑器里正显示着被删的书：必须走 selectWorldbook 真正切走。
+  // 只改 editingWorldbookId 再重画，编辑区里还留着刚删那本的字段（见单本删除里那段说明）。
+  if (wasEditing) {
+    selectWorldbook(worldbooks().length ? worldbooks()[0].id : null);
+  }
+
+  renderWorldbookPage();
+  renderDirtyHint();
+
+  if (!(await persistLibrary())) {
+    state.worldbooks = beforeBooks;
+    for (const [convo, ids0] of unbound) convo.worldbookIds = ids0;
+    if (wasEditing && editingTarget && worldbookById(editingTarget.id)) selectWorldbook(editingTarget.id);
+    renderWorldbookPage();
+    renderDirtyHint();
+    return false;
+  }
+
+  for (const book of targets) wbDrafts.delete(book.id);
+
+  persistConversations(0);
+  showToast(`已删除 ${targets.length} 本世界书`);
+  return true;
 }
 
 /**
