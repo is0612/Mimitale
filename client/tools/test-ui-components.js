@@ -1,30 +1,15 @@
 'use strict';
 
-// ============================================================================
-//  tools/test-ui-components.js —— 组件库（renderer/js/components/）的纯逻辑
-//
-//  跑法： node --test tools/test-ui-components.js
-//
-//  这一份管的是「不碰真界面也能钉死」的那部分：
-//    · 类名怎么拼（variant / size / block / 认不出来的取值要报错而不是静默丢）
-//    · applyOptions 的口径（ariaLabel → aria-label、value 走 property、
-//      onXxx → 事件、class 数组里的假值不能变成名叫 "false" 的类）
-//    · 注册表的幂等（重复 defineComponents 不能抛 NotSupportedError）
-//    · 每个组件的元信息（baseClass / 类名表 / 要转发的属性）自洽
-//
-//  真 DOM 那一半（升级、属性转发、.value 代理、和自研下拉列表的组合）在
-//  tools/smoke-renderer.js 的场景里跑 —— 那边才有真实的浏览器。
-//
-//  ⚠️ components/ 里是 `class X extends HTMLElement`，纯 node 下没有这两个全局，
-//     所以先塞壳子。**不实例化**（super() 会炸），只读静态元信息和纯函数。
-// ============================================================================
+// tools/test-ui-components.js —— 组件库（renderer/js/components/）的纯逻辑；跑法：node --test tools/test-ui-components.js
+// 只钉「类名怎么拼 / applyOptions 口径 / 注册表幂等 / 组件元信息」；真 DOM 那一半在 tools/smoke-renderer.js 跑
+// ⚠️ 纯 node 下没有 HTMLElement / customElements，先塞壳子；不实例化（super() 会炸），只读静态元信息和纯函数
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-// ---- 假 HTMLElement / customElements / document（够 import 和纯函数用） ----
+// 假 HTMLElement / customElements / document：够 import 和纯函数用
 globalThis.HTMLElement = class {};
 
 const registry = new Map();
@@ -45,9 +30,7 @@ globalThis.document = {
   createTextNode(text) {
     return { nodeType: 3, textContent: String(text) };
   },
-  // 组件运行时会在 document 上挂一条捕获段监听（label[for] 的焦点转发，见
-  // components/index.js 的 wireLabelForwarding）。纯 node 下没有真 document，
-  // 这里记下来即可 —— 那条行为本身由冒烟里的真浏览器钉（「点标签聚焦里层控件」）。
+  // 组件运行时会在 document 上挂一条捕获段监听（label[for] 的焦点转发），纯 node 下记下来即可
   labelClickHandlers: [],
   addEventListener(type, fn, capture) {
     this.labelClickHandlers.push({ type, fn, capture });
@@ -115,9 +98,6 @@ test.before(async () => {
   M = await import(COMPONENTS_URL);
 });
 
-// ---------------------------------------------------------------------------
-//  类名怎么拼
-// ---------------------------------------------------------------------------
 
 const BTN_LIKE = {
   primary: 'mi-btn--primary',
@@ -179,7 +159,6 @@ test('每个组件的类名表：键必须落在统一词表里（variant / size
       assert.ok(allowed.has(key), `${tag} 的 classTable 里有词表外的键：${key}（可用：${[...allowed].join(' / ')}）`);
     }
   }
-  // 词表本身也要能被外面看见（docs / 新组件照着写）
   assert.deepEqual(M.VARIANTS, ['base', 'primary', 'ghost', 'danger']);
   assert.deepEqual(M.SIZES, ['md', 'sm', 'xs']);
 });
@@ -193,13 +172,10 @@ test('size=xs：属性行那种最紧凑档（select / input / textarea 都得�
     assert.ok(ctor.classTable.xs, `${tag} 没有 xs 档的类名（属性行要用）`);
     assert.equal(M.componentClass(ctor.baseClass, ctor.classTable, { size: 'xs' }), `${ctor.baseClass} ${ctor.classTable.xs}`);
   }
-  // 按钮**没有** xs：词表里有不等于每个组件都实现了 —— 要的时候会当场报错，不是静默
+  // 按钮没有 xs：词表里有 ≠ 每个组件都实现了，要的时候会当场报错而不是静默
   assert.equal(M.MiButton.classTable.xs, undefined);
 });
 
-// ---------------------------------------------------------------------------
-//  applyOptions 的口径
-// ---------------------------------------------------------------------------
 
 test('applyOptions：ariaLabel 写成 aria-label（不是那个无效的 arialabel）', () => {
   const node = M.applyOptions(fakeNode('m-input'), { ariaLabel: '角色名' });
@@ -257,9 +233,7 @@ test('applyOptions：class 支持数组和空格串，假值不会变成名叫 "
 });
 
 test('applyOptions：dataset 走 dataset，不是 dataset="[object Object]"', () => {
-  // 2026-10-16 迁备选开场白那几行时发现的：h() 一直支持 dataset，工厂没跟上 ——
-  // 走 setAttribute 会写成一个真实属性（不报错），而 `node.dataset.index` 永远是 undefined，
-  // 事件委托里按行号回写草稿的那条链路就会静默失效。
+  // dataset 走 setAttribute 会写成真实属性（不报错），但 node.dataset.index 永远 undefined，事件委托静默失效
   const node = M.applyOptions(fakeNode('m-textarea'), { dataset: { index: 3 }, 'aria-label': '第 4 条' });
   assert.deepEqual(node.dataset, { index: 3 });
   assert.equal(node.getAttribute('dataset'), null);
@@ -299,7 +273,6 @@ test('setAttr / toggleAttr：null、false 删掉，true 是空属性', () => {
 });
 
 test('reflectProperties：直接设 property 也落到 attribute 上（视图里到处这么写）', () => {
-  // 用一个最小的假基类：只实现 setAttribute / getAttribute / removeAttribute
   class Base {
     constructor() {
       this.attrs = {};
@@ -349,13 +322,9 @@ test('reflectProperties：已有的访问器（value / disabled）绝不能被�
   assert.equal(new WithValue().value, '自己的');
 });
 
-// ---------------------------------------------------------------------------
-//  事件里的 target 还原 + 文本方法转发
-// ---------------------------------------------------------------------------
 
 test('hostOf：里层那颗原生控件还原成宿主，别的原样返回', () => {
-  // 为什么要有它：input / change 从里层冒上来，event.target 是**原生**控件 ——
-  // 而 id / class / dataset 全挂在宿主上（角标靠 id 约定、备选开场白靠 class 认行）。
+  // 事件从里层冒上来时 target 是原生控件，而 id / class / dataset 全挂在宿主上
   const control = { tagName: 'TEXTAREA' };
   const host = { tagName: 'M-TEXTAREA', control };
   control.parentElement = host;
@@ -369,8 +338,7 @@ test('hostOf：里层那颗原生控件还原成宿主，别的原样返回', ()
 });
 
 test('文本方法转发：select / setSelectionRange / setRangeText 落到里层那颗原生控件上', () => {
-  // 只借原型方法用（node 里没有 HTMLElement，实例化会炸）。
-  // 先挂自己的 `control` 再设原型 —— 反过来的话会被原型上那个同名 getter 挡住。
+  // 先挂自己的 `control` 再设原型 —— 反过来的话会被原型上那个同名 getter 挡住
   const calls = [];
   const control = {
     select: () => calls.push(['select']),
@@ -384,8 +352,7 @@ test('文本方法转发：select / setSelectionRange / setRangeText 落到里�
   host.setRangeText('雨停了。', 0, 2, 'end');
   assert.deepEqual(calls, [
     ['select'],
-    // 第三个参数是原生的可选 direction：不传时**照样透传 undefined**
-    //（口径是「原样转发」，不替调用方编一个默认值）
+    // 第三个参数是原生的可选 direction：不传时照样透传 undefined（原样转发，不替调用方编默认值）
     ['setSelectionRange', 3, 3, undefined],
     ['setRangeText', '雨停了。', 0, 2, 'end']
   ]);
@@ -408,9 +375,6 @@ test('文本方法转发：里层没有这个方法时**当场报错**，不静�
   assert.ok(seen[0].includes('setRangeText'), seen[0]);
 });
 
-// ---------------------------------------------------------------------------
-//  注册表
-// ---------------------------------------------------------------------------
 
 test('defineComponents：注册四个基础件，重复调用安全且返回 0', () => {
   assert.equal(M.defineComponents(), 4);

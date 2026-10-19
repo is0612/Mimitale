@@ -1,66 +1,34 @@
 'use strict';
 
-// ============================================================================
-//  renderer/pet/cat.js —— rig 形象驱动层（「迷你 kit」）
-//
-//  ⚠️ 文件名里的 cat 是**历史遗留**：这套状态机最初为内置的蓝白猫写，
-//     2026-10-10 蓝白猫形象包移出之后它照样服务大肥鱼（whale）和以后任何
-//     rig 形象包 —— 换形象的接口是 assets/pet/<名字>/，跟这个文件名无关。
-//
-//  figure（cat-figure.js）吃的是 Coopanion kit 的身体参数口径：
-//    o = { t, mode, face, facing, look, swing, sit, low, legs, gesture, modeT }
-//  但 Mimitale 没有「世界引擎」—— 没人告诉它这一刻在走路还是被拎着。
-//  这个模块就是那个缺的引擎：
-//
-//    · 步态生成：两腿相位差 π 的正弦摆动 + 抬脚 → legs 线段数组
-//    · 状态机：idle / walk / sleep / drag + face + 偶发小手势
-//    · 事件翻译：pet:busy→想事情、pet:say→开心、点它→点头/摇头、
-//      拖拽→被拎扑腾、pet:walk→散步步态
-//    · 视线跟鼠标（穿透转发过来的 mousemove 让这成为白捡的）
-//
-//  它不碰任何 IPC —— 事件由 pet.js 转发进来，保持「宠物页面越笨越不容易出事」。
-// ============================================================================
+// rig 形象驱动层（迷你 kit）：步态生成、状态机、事件翻译、视线跟踪。
+// 吃 cat-figure.js 的身体参数口径，不碰 IPC —— 事件由 pet.js 转发进来。
 
 import { createCatFigure } from './cat-figure.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, k) => a + (b - a) * k;
 
-// 步态参数（rig 单位）：腿长 29 是 figure 里 lift 公式的基准，别单独改
+// ⚠️ 腿长 29 是 figure 里 lift 公式的基准，别单独改
 const LEG_LEN = 29;
-const WALK_CAD = 2.0;        // 步频（Hz）：桌面上 40px/s 的溜达配这个节奏
+const WALK_CAD = 2.0;        // 步频（Hz）
 const WALK_SWING = 26;       // 腿摆幅度（度）
 const WALK_LIFT = 6;         // 抬脚高度（rig 单位）
 const SLEEP_AFTER_MS = 90000; // 闲置多久睡着
 const IDLE_TRICK_MS = [14000, 34000]; // 偶发小手势的间隔区间
 
-// 手势时长（秒）
-// ⚠️ 删掉一个手势时**记得同步删掉这一项**：`gesture.k += dt / (GESTURE_DUR[kind] || 1)`
-//    里 `|| 1` 是兜底，漏删不会报错，只会让那个手势默默变成 1 秒。
-// ⚠️ shake（摇头）的时长还要和 cat-figure.js 里的 `Math.sin(gk * Math.PI * 4)` 对得上：
-//    那条公式的周期数是按「这个时长里甩 2 个来回」定的。只改一边就会变成
-//    「甩到一半被切断」或「甩完了还在原地空转」。
+// 手势时长（秒）。
+// ⚠️ 删手势时同步删这里（`|| 1` 是兜底，漏删只会默默变成 1 秒）；shake 的时长要和 cat-figure 的 sin(gk*π*4) 对上。
 const GESTURE_DUR = { nod: .9, shake: .8, wave: 1.4 };
 
-// 空闲时会随机做的小手势 —— 这是**全集**，用户能在设置里关掉其中几个。
-// 真正挑的时候走 enabledGestures（下面那个），不要直接读这里。
-// 曾经有过 `bow`（鞠躬/磕头），2026-10-10 去掉了：那不是这只宠物的性格，
-// 而且它一低头整只都塌下去，在小窗口里看着像"卡住了"。
+// 空闲小手势的全集（用户可在设置里关掉其中几个）；挑选走 enabledGestures，别直接读这里。
 const IDLE_GESTURES = ['nod', 'shake', 'wave'];
 
 /**
- * 当前允许出现的空闲手势 = IDLE_GESTURES ∩ 用户在设置里勾上的那几个。
- *
- * ⚠️ 空数组是**合法且有意义的**：用户在设置里把三个勾全取消 = 「让它安静待着」。
- *    挑手势的地方必须能处理「集合为空」—— 处理方式是**根本不挑**，而不是随便挑一个。
- *    （如果在这里写成 `enabledGestures = list.length ? list : IDLE_GESTURES`，
- *     用户取消全部勾选之后会发现它照样在动，等于设置没生效。）
- */
+ * 当前允许的空闲手势 = IDLE_GESTURES ∩ 用户勾选的。
+ * ⚠️ 空数组合法：全取消就根本不挑，别写兜底把 IDLE_GESTURES 塞回去。 */
 let enabledGestures = [...IDLE_GESTURES];
 
-// ---------------------------------------------------------------------------
-//  状态
-// ---------------------------------------------------------------------------
+// ── 状态 ──
 
 let figure = null;
 let texMap = null;
@@ -84,9 +52,7 @@ let busy = false;
 let rafId = 0;
 let lastFrameT = null;
 
-// ---------------------------------------------------------------------------
-//  资源
-// ---------------------------------------------------------------------------
+// ── 资源 ──
 
 function loadImage(src) {
   return new Promise((ok, bad) => {
@@ -98,11 +64,7 @@ function loadImage(src) {
 }
 
 let applySeq = 0;
-/**
- * 喂主进程推来的 rig 数据（pet.rig = { key, model, tex }）。
- * key 不变就什么都不做 —— pet:state 每次设置变化都会推一遍，
- * 不能每次都重建 figure（GL 上下文重建是有代价的）。
- */
+/** 喂主进程推来的 rig 数据（{ key, model, tex }）：key 不变就跳过，GL 上下文重建有代价。 */
 async function applyState(rigData) {
   if (!rigData || !rigData.model || !rigData.tex) return;
   if (rigData.key && rigData.key === modelKey && figure) {
@@ -117,9 +79,7 @@ async function applyState(rigData) {
   try {
     images = await Promise.all(entries.map(([, url]) => loadImage(url)));
   } catch (err) {
-    // 贴图解码失败。但如果这次**已经被更新的一次换肤顶掉**，就不能把错误抛出去 ——
-    // 调用方（pet.js）的 catch 会 dispose 掉整个形象，而它拆的其实是刚成功挂上的新形象。
-    // 只有「我还是当前这一次」时才算真失败。
+    // 贴图解码失败；但若这次已被更新的一次换肤顶掉，就不能抛 —— 调用方会 dispose 掉刚挂上的新形象。
     if (seq !== applySeq) return;
     throw err;
   }
@@ -135,9 +95,7 @@ async function applyState(rigData) {
   startLoop();
 }
 
-// ---------------------------------------------------------------------------
-//  帧循环
-// ---------------------------------------------------------------------------
+// ── 帧循环 ──
 
 function startLoop() {
   if (rafId) return;
@@ -173,11 +131,7 @@ function startLoop() {
       const due = lerp(IDLE_TRICK_MS[0], IDLE_TRICK_MS[1], Math.random());
       if (since > due) {
         lastTrickAt = Date.now();
-        // 从**允许的**手势里随机挑一个（用户在设置里关掉的就不出现）。
-        // ⚠️ 一个都没开（用户在设置里全取消）时 `enabledGestures` 是空数组 ——
-        //    这时**什么都不做**。别写 `[...][0]` 之类的兜底：那会给空集合塞回
-        //    一个手势，用户取消全部勾选就白取消了。
-        // ⚠️ 也**别在这里写死数组** —— 手势列表只在 IDLE_GESTURES 一处维护。
+        // ⚠️ enabledGestures 为空就什么都不做，别写 `[...][0]` 之类兜底，否则用户全取消也照样动。
         if (enabledGestures.length) {
           gesture = {
             kind: enabledGestures[Math.floor(Math.random() * enabledGestures.length)],
@@ -187,8 +141,7 @@ function startLoop() {
       }
     }
 
-    /* --- 视线：跟鼠标；没人动 / 睡着时慢慢回中。
-       注意鼠标移动**不**刷新 lastInteraction —— 不然鼠标划过窗口猫就永远睡不着。 --- */
+    /* --- 视线：跟鼠标；没人动 / 睡着时回中。鼠标移动不算互动，否则猫永远睡不着。 --- */
     const mouseFresh = mode !== 'sleep' && Date.now() - mouse.at < 5000;
     const target = mouseFresh ? [mouse.x, mouse.y] : [0, 0];
     look[0] = lerp(look[0], clamp(target[0], -5, 5), 1 - Math.exp(-6 * dt));
@@ -234,9 +187,7 @@ function startLoop() {
 
     figure.draw(fc, o);
 
-    // 窗口尺寸刚变过（refit 传了回调）→ 等**这一帧画完**再回调。
-    // 时机就是关键：fitCanvas 给 canvas 改像素尺寸会清空绘制缓冲，refit 当帧的
-    // 画布是空的，那时去读像素只会拿到一张全透明掩码 → 宠物点不动。
+    // ⚠️ 等这一帧画完再回调：fitCanvas 改像素尺寸会清空缓冲，当帧读像素只能拿到全透明掩码。
     if (afterDrawOnce) {
       const run = afterDrawOnce;
       afterDrawOnce = null;
@@ -262,9 +213,7 @@ function stopLoop() {
   rafId = 0;
 }
 
-// ---------------------------------------------------------------------------
-//  事件翻译（pet.js 转发）
-// ---------------------------------------------------------------------------
+// ── 事件翻译（pet.js 转发） ──
 
 /** 生成中（pet:busy）→ 想事情 */
 function setBusy(b) {
@@ -277,15 +226,12 @@ function setBusy(b) {
 /** 话说出来了（pet:say）→ 开心一小会儿 */
 function said() {
   wake('happy');
-  // ⚠️ happy 的尾巴摇幅是满值（MOOD.happy = [.8, 1]），这个时长直接决定
-  //    「说完一句话之后尾巴还要摇多久」。原来 3500ms 偏久 —— 话本身通常 1~2 秒就播完，
-  //    尾巴却还在摇，观感是「它已经说完了怎么还在抖」。2200ms 和一句话的节奏对齐。
+  // ⚠️ happy 的尾巴摇幅是满值（MOOD.happy = [.8, 1]），这个时长决定说完话后尾巴还摇多久。
   setTimeout(() => { if (face === 'happy') face = 'neutral'; }, 2200);
 }
 
-/** 流式增量（pet:chunk）：第一个字冒出来 = 从「想事情」转「开口说」。
- *  静态脸没有口型，用偶尔的点头示意「在说」。
- *  chunk 每个 token 来一次 —— 必须节流，不然手势被反复重播成抽搐。 */
+/** 流式增量（pet:chunk）：第一个字冒出 = 从「想事情」转「开口说」。
+ *  ⚠️ chunk 每个 token 来一次，必须节流，否则手势被反复重播成抽搐。 */
 let lastChunkNodAt = 0;
 function chunk() {
   if (!busy) return;
@@ -299,20 +245,13 @@ function chunk() {
 /** 被点了一下（poke 应答之后） */
 function poked() {
   wake(Math.random() < 0.5 ? 'surprised' : 'shy');
-  // ⚠️ 这里**不看** enabledGestures：点它一下是**交互反馈**，不是「自己待着时的小动作」。
-  //    用户在设置里关掉「点头/摇头」的意思是"我希望它安静待着"，不是"我点它它也该没反应"。
+  // ⚠️ 这里不看 enabledGestures：点它是交互反馈，不是「自己待着时的小动作」。
   gesture = { kind: Math.random() < 0.5 ? 'nod' : 'shake', k: 0 };
-  // ⚠️ 2200ms 是「惊讶/害羞」的表情维持时长，**不是**尾巴的摇动时长 ——
-  //    但两者会叠在一起看：惊讶的 MOOD 摇幅是 .2、害羞是 .3，都不算大。
-  //    真正的尾巴问题在 cat-figure.js 的 wagAmp 频率，别在这里调。
+  // ⚠️ 这里的时长只影响表情维持，别拿来调尾巴（尾巴看 cat-figure.js 的 wagAmp）。
   setTimeout(() => { if (face === 'surprised' || face === 'shy') face = 'neutral'; }, 1800);
 }
 
-/**
- * 接收「允许哪些空闲手势」（设置页那三个勾）。
- * 只在 IDLE_GESTURES 的范围里收 —— 主进程那份数据里要是混进了渲染层不认识的名字，
- * 挑到它就会是个静止的手势（不报错，只是呆呆站着几秒）。
- */
+/** 接收「允许哪些空闲手势」；只在 IDLE_GESTURES 范围内收，混进未知名字会挑到静止手势。 */
 function setGestures(list) {
   if (!Array.isArray(list)) return; // 字段缺失：保持当前值，别把它清空
   enabledGestures = IDLE_GESTURES.filter((k) => list.includes(k));
@@ -333,8 +272,7 @@ function walkEvent(payload) {
   if (walking) lastInteraction = Date.now();
 }
 
-/** 鼠标移动（穿透过来的）—— 视线跟踪的原料。坐标是相对窗口中心的偏移。
- *  只更新视线原料，不算「互动」（划过鼠标不该惊醒午睡）。 */
+/** 鼠标移动（穿透过来的）：只更新视线原料，不算「互动」（划过不该惊醒午睡）。 */
 function mouseMove(x, y) {
   mouse = { x, y, at: Date.now() };
 }
@@ -346,9 +284,7 @@ function wake(nextFace) {
   if (mode === 'sleep') legPhase = 0;
 }
 
-// ---------------------------------------------------------------------------
-//  对外（pet.js 用）
-// ---------------------------------------------------------------------------
+// ── 对外（pet.js 用） ──
 
 export const catRig = {
   get active() { return !!figure; },
@@ -364,16 +300,11 @@ export const catRig = {
   applyState,
 
   /**
-   * 窗口尺寸变了：立刻按新尺寸重建位图（理由见 cat-figure.js 的 refit 注释）。
-   *
-   * ⚠️ 传了 onDrawn 就**不是在当帧回调**，而是挂到「下一帧画完之后」（帧循环里触发）。
-   *    调用方要用它重建不透明掩码时必须走这条路：fitCanvas 一改 canvas 的像素尺寸
-   *    就清空了绘制缓冲，当帧读像素只能拿到一张空白画布 —— 算出来的掩码整张透明，
-   *    命中判断全部落空，表现是「宠物看得见但点不动」（2026-10-10 修的就是这个）。
-   */
+   * 窗口尺寸变了：立刻重建位图。⚠️ 传了 onDrawn 就挂到「下一帧画完之后」——
+   * 改 canvas 像素尺寸会清空缓冲，当帧读像素只有全透明掩码，宠物会点不动。 */
   refit(onDrawn) {
     if (!figure) {
-      // 没有形象（占位框那条）时掩码本来就该是空的，直接回调让调用方收尾
+      // 没有形象时掩码本来就该是空的，直接回调让调用方收尾
       if (onDrawn) onDrawn();
       return;
     }
@@ -389,8 +320,7 @@ export const catRig = {
 
   dispose() {
     stopLoop();
-    // 让还在解码贴图的 applyState 作废：否则它回来时照旧 createCatFigure + mount，
-    // 在我们已经「销毁」之后又凭空挂出一只猫（切到空形象包 / 关桌宠时能看到）。
+    // 让还在解码贴图的 applyState 作废，否则它回来会在「销毁」之后又挂出一只猫。
     applySeq += 1;
     figure?.dispose();
     figure = null; texMap = null; modelKey = '';

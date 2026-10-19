@@ -1,35 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  views/characterEditor.js —— 角色编辑器（视图七的本体）
-//
-//  一屏编辑「一张角色卡」，两处复用：
-//    · 作用域 'library'    改的是角色库里的角色
-//    · 作用域 'worldbook'  改的是当前世界书里的那个独立副本（不动角色库）
-//  所以这里所有读写都走 editorCharacterById() —— 同一套表单才能编辑两份数据。
-//
-//  「新建角色」是个**草稿**：它先只活在编辑器里，不进任何列表、也不写磁盘，
-//  点了「保存角色」才真正被创建（commitCharDraft）。离开编辑器就等于放弃。
-//
-//  角色编辑器是主区域里的一屏，走 viewSwitch 的 showView('charEditor')；
-//  离开时回到进来之前那一屏（角色库，或从世界书编辑器点进来时的那一屏）。
-//  页头的「返回」和 Esc 管离开。
-//
-//  表单里的改动是「读的时候填进去、保存/切走的时候收回来」（fillCharForm /
-//  stashCharForm）—— 中途不写回角色卡，所以填到一半离开不会留下半个改动。
-//
-//  属性区（字段类型 / 范围 / 分组 / 批量粘贴）搬去了 views/charAttributes.js，
-//  它接收本模块的草稿数组（传引用），保存时由本模块一起写回角色卡。
-//
-//  表情图（几十条的大列表）也搬出去、并单独做了个弹窗：views/charExpressions.js。
-//  它同样接收本模块的草稿数组（charExpressions），角色编辑器里只留一行入口 + 已设条数。
-//  （那个弹窗是**真的**弹窗 —— 它盖在编辑页上，不改。）
-//
-//  入口层只从这儿取六样东西：
-//    openCharacterEditor / startCharacterDraftInBook / releaseEditorScope /
-//    stashCharacterForm / currentEditorCharacter / deleteCharacterById
-//  动作注入：rerender（保存和删除之后要全量重绘，那属于入口层的编排）。
-// ============================================================================
+// views/characterEditor.js —— 角色编辑器（角色库与世界书副本共用一套表单）
+// 新建角色只是草稿，保存才落库；属性/表情图草稿归本模块，拆出去的两个模块拿同一份数组引用。
 
 import { state } from '../core/state.js';
 import { el } from '../core/dom.js';
@@ -61,24 +33,14 @@ import {
 } from './charExpressions.js';
 import { openAiGenModal } from './aiGen.js';
 import { attachAutoGrow, syncAutoGrowAll } from '../ui/auto-grow.js';
-// 组件库：备选开场白那几行是动态铺的，用工厂建多行框（见 components/index.js）
 import { mTextarea, hostOf } from '../components/index.js';
 import { pickAndCrop } from '../ui/imageCrop.js';
 import { initCharacterEditorLayout, showCharacterField, setCharSectionCount, setCharSourceChip, refreshCharSectionCounts } from './characterEditorLayout.js';
 export { showCharacterField } from './characterEditorLayout.js';
 
-// ---------------------------------------------------------------------------
-//  长文本框：自动增高 + 拖拽高度记忆
-//
-//  这五个框（描述 / 性格 / 场景 / 开场白 / 示例对话）有时会填很多，
-//  固定 rows 的框看不全内容。行为细节都在 ui/auto-grow.js 里，
-//  这里只负责「哪些框」和「什么时候重算」。
-//
-//  key 用**字段名**而不是角色 id：拖高是「我习惯把示例对话拖这么高」，
-//  换个角色也该沿用 —— 按角色记的话，每换一张卡都要重拖一遍。
-// ---------------------------------------------------------------------------
+// 长文本框（描述/性格/场景/开场白/示例对话）：自动增高与拖拽记忆在 ui/auto-grow.js；
+// 记忆 key 用字段名而不是角色 id —— 换角色也该沿用一个高度。
 
-/** 五个长文本框 + 各自的记忆 key */
 function longTextAreas() {
   const c = el.c || {};
   return [
@@ -104,21 +66,10 @@ function wireAutoGrow() {
   }
 }
 
-// ---------------------------------------------------------------------------
-//  长文本字段：字数角标
-//
-//  五个框的高度上限压到 160px 之后（auto-grow 的 GROW_MAX），框矮了，
-//  「里面到底写了多少」得有个一眼能看到的信号 —— 角标干这个。
-// ---------------------------------------------------------------------------
+// 长文本字段的字数角标（宿主 id + '-count'）
 
-/**
- * 一个长文本框的字数角标节点（id 约定：宿主 id + `-count`）。
- *
- * ⚙ 组件化之后这个函数会被两种东西叫到：`longTextAreas()` 给的是**宿主**，
- * 而 input 事件委托递过来的是**里层那颗原生框**（id 挂在宿主上，里层那颗没有 id）。
- * 不还原成宿主就会去查 `.getElementById('-count')` —— 查不到，而这里写的是
- * 「找不到角标就静默跳过」，于是角标**再也不刷新**（不报错、没人发现）。
- */
+// ⚙ 组件化后要先用 hostOf 还原成宿主：input 委托递来的是里层原生框，直接查 '-count' 查不到，
+// 而「找不到角标就静默跳过」会让角标再也不刷新（不报错、没人发现）。
 function charCountNode(textarea) {
   const node = hostOf(textarea);
   return node && node.id ? document.getElementById(`${node.id}-count`) : null;
@@ -152,51 +103,35 @@ function syncAllCharCounts() {
   refreshCharSectionCounts();
 }
 
-// ---------------------------------------------------------------------------
-//  编辑器的状态
-// ---------------------------------------------------------------------------
+// 编辑器的状态
 
 let editingCharacterId = null; // 角色库里当前正在编辑的角色
-// 角色编辑器的作用域：'library' = 角色库；'worldbook' = 当前世界书里的角色副本。
-// 同一个编辑器两处复用 —— 从世界书里点「编辑」改的是书里那份副本，不动角色库。
+// 作用域：'library' 角色库；'worldbook' 当前世界书里的副本（不动角色库）
 let charEditorScope = 'library';
-// 正在编辑的角色头像（dataURL，正方形）。用在消息气泡和状态卡上。
+// 正在编辑的角色头像（dataURL，正方形），用在消息气泡和状态卡上
 let charDraftAvatar = '';
-// 正在编辑的角色形象（dataURL，2:3 竖版）。角色库列表上铺的就是它。
-// 三态，保存时必须照原样区分开：
-//   · undefined —— 这张卡没单独设过形象。老卡只有一张图（在 avatar 里），
-//     界面上先拿头像顶上，保存时**别写这个键**，省得白白多存一份几 MB 的图。
-//   · ''        —— 用户明确清掉了形象（列表上就显示首字色块）。
-//   · dataURL   —— 有独立形象。
+// 形象（dataURL，2:3 竖版）三态，保存时必须照原样区分：
+// undefined = 没设过（界面用头像顶上，别写这个键，省几 MB）；'' = 明确清掉；dataURL = 有独立形象。
 let charDraftPortrait;
-// 正在编辑的表情图草稿：[{ name, keywords, image }]。和形象一样是深拷贝 ——
-// 编辑期间改了不算数，点「保存角色」才写回卡上（见 draftExpressionsOf）。
+// 表情图草稿（深拷贝），保存角色时才写回卡上
 let charExpressions = [];
-// 正在编辑的「备选开场白」草稿：同一张卡的多个入场剧本（导入卡常带，单卡最多见过 29 条）。
-// 和表情图一个套路 —— 编辑期改动只留在数组里，点「保存角色」才写回卡上。
-// 上面这些行是动态铺的（条数不定），渲染见 renderAltGreetings。
+// 备选开场白草稿（导入卡常带，单卡见过 29 条）；行是动态铺的，见 renderAltGreetings
 let charAltGreetings = [];
-// 条数上限。和主进程那份（main/characters.js 的 MAX_ALTERNATE_GREETINGS）对齐 ——
-// 两边不一致的话，UI 里能加、保存时会被悄悄砍掉，用户会以为丢数据了。
+// 与主进程 main/characters.js 的 MAX_ALTERNATE_GREETINGS 对齐，否则 UI 能加、保存时被悄悄砍掉
 const MAX_ALT_GREETINGS = 50;
-// 正在编辑的角色「自带世界书」开关。跟头像一样是草稿：改动先留在这里，
-// 保存时才写回角色卡 —— 这样切换开关能立刻反映到界面上。
+// 自带世界书开关的草稿，保存时才写回角色卡
 let charDraftWbEnabled = true;
-// 「新建角色」做出来的草稿：它先只活在编辑器里，不进任何列表、也不写磁盘，
-// 点了「保存角色」才真正被创建。关掉编辑器就等于放弃这次新建。
+// 「新建角色」的草稿：先只活在编辑器里，不进列表、不写磁盘
 let charDraft = null; // { character, scope, bookId }
-// 编辑器打开期间的属性草稿，点「保存角色」才写回角色卡（和 charDraftAvatar 一个套路）
+// 属性草稿，保存角色时才写回
 let charAttrs = [];
-// 角色编辑器里「给角色绑世界书」那个浮层（自己起一个，不复用世界书页的选择器）
+// 给角色绑世界书的浮层（自己起一个，不复用世界书页的选择器）
 let worldbookPickerEl = null;
 
 // 入口层注入的动作
 let actions = { rerender: () => {} };
 
-/**
- * 角色编辑器当前能看到的角色列表：角色库，或者某本世界书里的角色副本。
- * 编辑器里所有读写都走这两个函数，副本才能被同一套表单编辑。
- */
+/** 当前作用域下的角色列表（角色库或世界书副本）；编辑器所有读写都走它 */
 function editorCharacterList() {
   if (charEditorScope === 'worldbook') return worldbookCharacters(currentWorldbook());
   return characters();
@@ -214,19 +149,14 @@ function isCharDraft() {
   return !!charDraft && editingCharacterId === charDraft.character.id;
 }
 
-// ---------------------------------------------------------------------------
-//  打开 / 离开
-// ---------------------------------------------------------------------------
+// 打开 / 离开
 
-/**
- * 进来之前停在哪一屏。离开时（返回 / Esc / 保存完自动走）都回到它。
- */
+/** 进来之前停在哪一屏，离开时回到它 */
 let editorReturnView = 'chars';
 
 function openCharsModal() {
-  // 编辑器现在只是「编辑某一个角色」的表单，没有列表了。
-  // 谁打开它谁负责先设好 editingCharacterId / charEditorScope。
-  // 编辑器的入口指向了别的角色，说明「新建」那个草稿已经被放弃了，顺手清掉。
+  // 谁打开它谁先设好 editingCharacterId / charEditorScope；
+  // 若编辑器已指向别的角色，说明「新建」草稿被放弃了，顺手清掉。
   if (charDraft && editingCharacterId !== charDraft.character.id) discardCharDraft();
 
   // 长文本框的接线在 fillCharForm() 里（新建和编辑两条路都经过那儿）
@@ -240,13 +170,11 @@ function openCharsModal() {
     current = editorCharacterById(editingCharacterId);
   }
 
-  // 记下来处。已经在编辑页里就别覆盖 —— 那样「返回」会原地打转，
-  // 而这时真正的来处（角色库 / 世界书编辑器）正是该回去的地方。
+  // 记下来处；已经在编辑页里就别覆盖，否则「返回」会原地打转
   const from = currentViewName();
   if (from !== 'charEditor') editorReturnView = from;
 
-  // 先让这一屏可见再填表：fillCharForm 最后会量文本框高度，
-  // 而隐藏状态下（display:none）量什么都是 0。
+  // 先让这一屏可见再填表：fillCharForm 会量文本框高度，display:none 下量什么都是 0
   showView('charEditor');
 
   if (current) {
@@ -272,24 +200,18 @@ function updateCharEditorScopeUi() {
     if (creating) {
       // 说清楚「现在还没这个东西」，免得用户以为点一下就已经建好了
       el.charsSub.textContent = inBook
-        ? `填好内容点「保存角色」才会加进这本书${book ? ` · ${book.name}` : ''}`
-        : '填好内容点「保存角色」，保存后才会出现在角色库里';
+        ? `填好内容点「保存」才会加进这本书${book ? ` · ${book.name}` : ''}`
+        : '填好内容点「保存」，保存后才会出现在角色库里';
     } else {
-      // 保存状态胶囊（.save-pill）已经会说「有未保存的改动」，这里改成说一件
-      // 用户看不出来的事：这几栏写下去会去哪儿。
+      // 保存状态胶囊（.save-pill）已提示未保存，这里说明这几栏写下去会去哪儿
       el.charsSub.textContent = inBook
         ? `这本书里的独立副本，改它不影响角色库${book ? ` · ${book.name}` : ''}`
-        : '描述与性格每轮都会注入给 AI，改完点左栏底部的「保存角色」';
+        : '描述与性格每轮都会注入给 AI，改完点左栏底部的「保存」';
     }
   }
 }
 
-/**
- * 离开编辑器：回到进来之前那一屏。
- *
- * 页头的「返回」、Esc、保存完自动走，三条路都走它。
- * 保存、删除、导出之后也调它。
- */
+/** 离开编辑器回到来处；页头「返回」、Esc、保存完自动走、删除/导出后都走它 */
 export async function leaveCharacterEditor() {
   // 新建的角色还没保存：离开就等于放弃，先问一句，免得辛苦填的设定白写
   if (isCharDraft()) {
@@ -303,16 +225,14 @@ export async function leaveCharacterEditor() {
     if (!ok) return;
   }
 
-  // 草稿从没进过任何列表，丢掉它不用刷新界面
-  // 选书浮层也要一起收掉：它挂在 body 上、z-index 还比编辑页高，
-  // 不收就成了悬在屏幕上的孤儿。
+  // 选书浮层挂在 body 上、z-index 比编辑页高，不收就成了悬在屏幕上的孤儿
   closeWorldbookPicker();
   discardCharDraft();
   // 回到来处；来处是聊天就回聊天（那种情况只可能从别处被程序调起来）
   showView(editorReturnView === 'charEditor' ? 'chars' : editorReturnView);
 }
 
-/** 左栏来源胶囊的短文案（原 foot 那条长提示 2026-10-19 已删，见 index.html 的说明） */
+/** 左栏来源胶囊的短文案 */
 function charSourceChipText(character) {
   if (isCharDraft()) return '还没保存的新角色';
   if (charEditorScope === 'worldbook') return '本书角色副本';
@@ -331,25 +251,13 @@ function showCharForm(show) {
   if (el.charSaveState) el.charSaveState.hidden = !show;
 }
 
-// ---------------------------------------------------------------------------
-//  头像 / 形象
-//
-//  两张图，各管一处：
-//    · 头像（1:1）—— 消息气泡、状态卡、在场角色栏上那个小圆图
-//    · 形象（2:3）—— 角色库列表上铺的那张竖版图，点开还能看大图
-//  两个上传框都走 ui/imageCrop.js：选完图先框一块，框出来的那块直接就是存下来
-//  的图（裁剪组件按目标尺寸输出，这里不再二次缩放）。
-// ---------------------------------------------------------------------------
+// 头像（1:1，消息气泡/状态卡）与形象（2:3 竖版，角色库列表）；上传都走 ui/imageCrop.js，
+// 裁剪组件按目标尺寸输出，这里不再二次缩放。
 
-// 头像输出 384×384。小圆图最大也就显示 ~48px（2 倍屏 ≈ 96px），384 已经绰绰有余 ——
-// 头像没有「点开放大」的入口，再往上加只是白占体积。
+// 头像输出 384×384（小圆图最大 ~48px，2 倍屏也够）
 const AVATAR_SIZE = 384;
-// 形象输出 1024×1536（2:3 竖版）。列表卡上只有 ~180px 宽，但**点开看大图会铺满窗口**，
-// 再小就看出糊了。存的时候按 1.0 的 webp 压（肉眼看不出区别，体积只有 PNG 的 1/3）——
-// 这个文件每存一次角色就要整个重写一遍，体积是实打实的成本。
-// ⚠️ 2:3 才对应 1024×1536。3:4 在 1024 宽下是 1365 —— 除不尽，存出来永远差那一截。
-//    改比例要三处一起改：这里、.char-card-avatar、.char-portrait 的 CSS。
-// 另外裁剪组件会按原图实际像素封顶：原图不够大就不硬撑，不会凭空放大出一份糊图。
+// 形象输出 1024×1536（2:3），列表只显示 ~180px 宽，但点开看大图会铺满窗口。
+// ⚠️ 改比例要三处一起改：这里、.char-card-avatar、.char-portrait 的 CSS。
 const PORTRAIT_WIDTH = 1024;
 const PORTRAIT_RATIO = 2 / 3;
 
@@ -378,15 +286,13 @@ function renderCharMedia() {
   renderMediaBox(el.charAvatar, charDraftAvatar, '点击上传');
   renderMediaBox(el.charPortrait, draftPortraitImage(), '点击上传');
 
-  // 没有图就没有可清除的东西
   el.btnClearAvatar.classList.toggle('hidden', !charDraftAvatar);
   el.btnClearPortrait.classList.toggle('hidden', !draftPortraitImage());
   // 形象还是「沿用的头像」时标记一下 —— 否则用户会以为这张卡本来就有独立形象
   el.charPortrait.classList.toggle('is-inherited', charDraftPortrait === undefined && !!charDraftAvatar);
 }
 
-/** 选一张本地图 → 裁剪 → 返回最终 dataURL；取消或出错返回 null（实现在 ui/imageCrop.js） */
-
+/** 选一张本地图 → 裁剪 → dataURL；取消或出错返回 null（实现在 ui/imageCrop.js） */
 async function pickAvatar() {
   // 用编辑器那套查找：正在新建的草稿不在角色库里，但一样要能传头像
   if (!editorCharacterById(editingCharacterId)) return;
@@ -400,13 +306,12 @@ async function pickAvatar() {
   });
   if (!cropped) return;
 
-  // 老卡只有一张图。换头像之前先把旧的留作形象 —— 不留的话，那张立绘就被新头像
-  // 顶掉了，形象那一栏从此变成一个 1:1 的小方图，在列表上被拉成竖版。
+  // 老卡只有一张图：换头像前先把旧的留作形象，否则立绘会被顶掉、形象变成 1:1 方图
   if (charDraftPortrait === undefined && charDraftAvatar) charDraftPortrait = charDraftAvatar;
 
   charDraftAvatar = cropped;
   renderCharMedia();
-  showToast('头像已更换，记得点「保存角色」', 'ok');
+  showToast('头像已更换，记得点「保存」', 'ok');
 }
 
 async function pickPortrait() {
@@ -423,43 +328,33 @@ async function pickPortrait() {
 
   charDraftPortrait = cropped;
   renderCharMedia();
-  showToast('形象已更换，记得点「保存角色」', 'ok');
+  showToast('形象已更换，记得点「保存」', 'ok');
 }
 
 function clearAvatar() {
   if (!charDraftAvatar) return;
   charDraftAvatar = '';
   renderCharMedia();
-  showToast('头像已清除，记得点「保存角色」');
+  showToast('头像已清除，记得点「保存」');
 }
 
 function clearPortrait() {
   if (!draftPortraitImage()) return;
-  // 显式写成空串（而不是退回 undefined）：用户点了清除就是不要形象，
-  // 不能因为「头像还在」又把头像当成形象显示回来。
+  // 必须写空串（不是退回 undefined）：用户点了清除就是不要形象，不能又拿头像顶上
   charDraftPortrait = '';
   renderCharMedia();
-  showToast('形象已清除，记得点「保存角色」');
+  showToast('形象已清除，记得点「保存」');
 }
 
-// ---------------------------------------------------------------------------
-//  表情图
-//
-//  一张卡可以带几十条表情图（名称 + 触发词 + 一张图）。⚙ 2026-10-19 起编辑界面
-//  直接摊在「表情图」分区里（views/charExpressions.js），原来那个弹窗和这里的
-//  入口摘要 / 预览格子一起删了 —— 同一份列表在一屏里只该出现一次。
-//  这里只持有草稿（charExpressions），点「保存」时由 stashCharForm 写回卡上。
-// ---------------------------------------------------------------------------
+// 表情图：编辑界面在 views/charExpressions.js，这里只持有草稿，保存时由 stashCharForm 写回卡上
 
 /** 表情草稿变了：只刷分区导航上的条目数（列表由 charExpressions.js 自己重铺） */
 function updateExprSummary() {
-  // 0 也照显示 —— 藏起来会让人以为「这角色没有表情图这个功能」
+  // 0 也照显示，藏起来会以为没这个功能
   setCharSectionCount('expressions', String(charExpressions.length));
 }
 
-// ---------------------------------------------------------------------------
-//  表单：填进去 / 收回来
-// ---------------------------------------------------------------------------
+// 表单：填进去 / 收回来
 
 function fillCharForm(character) {
   if (!character) {
@@ -467,8 +362,7 @@ function fillCharForm(character) {
     return;
   }
 
-  // 进编辑器先清一次草稿残留：形象是「undefined = 沿用头像」的三态，
-  // 不清的话上一张卡的草稿会跟着漏进来。
+  // 进编辑器先清草稿残留：portrait 的 undefined 三态不清，会把上一张卡带进来
   charDraftAvatar = character.avatar || '';
   charDraftPortrait = typeof character.portrait === 'string' ? character.portrait : undefined;
   charExpressions = draftExpressionsOf(character);
@@ -489,23 +383,11 @@ function fillCharForm(character) {
 
   // 年龄/性别/种族不在这张表单里，归入描述文字；这里不回填这三个输入框。
 
-  // 长文本框：值刚被程序塞进去，不走 input 事件 —— 所以这里显式重算一次高度。
-  // 漏了这一步的表现是「框里明明写着两千字，高度还是两行」，得手动敲一下才展开。
-  //
-  // ⚠️ 接线必须**在这里**、而不是只在 openCharsModal 里：
-  //    新建角色的路径（startCharDraft）是自己调 fillCharForm 的，
-  //    不经过 openCharsModal —— 少接一次线的表现是「新建角色时框不会长高」。
-  //    attachAutoGrow 自带幂等（认 dataset.autoGrow），重复调用没有代价。
-  //
-  // ⚠️ 但**量高度不能在这一刻做**：调用方（openCharsModal / startCharDraft）
-  //    都还没把弹窗的 .hidden 摘掉，而 display:none 的元素 scrollHeight 是 0 ——
-  //    量出来永远是下限 84px。所以这里只接线，真正的重算放在
-  //    showCharForm(true) 之后（那时弹窗已经可见）。
+  // 长文本：值由程序塞入不走 input，故显式重算高度。
+  // ⚠️ 接线必须在这里（startCharDraft 不经过 openCharsModal），但不能此刻量：调用方还没摘 .hidden，display:none 下 scrollHeight 恒为 0。
   wireAutoGrow();
 
-  // 两张图的草稿在 fillCharForm 里跟着一起重置了，这里只负责画出来
   renderCharMedia();
-  // 表情图同理：上面刚深拷贝出新草稿（弹窗里铺），入口那行摘要跟着刷一下
   renderCharExpressions(charExpressions);
   updateExprSummary();
 
@@ -519,18 +401,15 @@ function fillCharForm(character) {
   charAttrs = characterAttrs(character);
   renderCharAttrs(charAttrs);
 
-  // 剧情选项：这张卡开没开、给几个、有什么额外要求。
-  // ⚠️ 没配过的卡（老卡、导入的卡、新建的草稿）也算**开**，默认 4 条 ——
-  // 只有卡上明确写了 `false` 才是关。见 data/suggestions.js 的 optionsSpecFromCharacter。
+  // 剧情选项：没配过的卡（老卡/导入/新建）也算开、默认 4 条，只有卡上明确 `false` 才是关。
+  // 见 data/suggestions.js 的 optionsSpecFromCharacter。
   const optSpec = optionsSpecFromCharacter(character);
   el.c.optionsOn.checked = !!optSpec;
   setOptionsCount((optSpec && optSpec.count) || DEFAULT_OPTIONS_COUNT);
   el.c.optionsHint.value = optSpec ? optSpec.hint || '' : '';
   renderOptionsConfig();
 
-  // 在状态栏显示（`showInPanel`）：只有**世界书副本**用得上。
-  // 角色库的卡是「你自己建来玩的」，绑进单角色会话时永远显示状态 ——
-  // 那个开关对它们没意义，整块收起来，免得以为「不勾就没状态」。
+  // 「在状态栏显示」只有世界书副本用得上；角色库的卡绑进单角色会话时永远显示状态，整块收起来
   el.c.showInPanel.checked = character.showInPanel === true;
   renderShowInPanelBox();
 
@@ -540,10 +419,8 @@ function fillCharForm(character) {
 
   showCharForm(true);
 
-  // 长文本框的最后一步：到这儿弹窗才是可见的（上面那些调用方刚摘掉 .hidden），
-  // 这时候量高度才量得准。见上面那段注释 —— 在隐藏状态下量会永远得到 84px。
+  // 到这儿弹窗才可见，量高度才准（隐藏状态下量会永远得到 84px）
   syncAutoGrowAll(longTextAreas().map((pair) => pair[0]).concat(altGreetTextAreas()));
-  // 角标也一样：值是程序塞进去的，得显式刷一次
   syncAllCharCounts();
 }
 
@@ -553,14 +430,11 @@ function renderOptionsConfig() {
   el.c.optionsConfig.classList.toggle('hidden', !el.c.optionsOn.checked);
 }
 
-/** 「每轮给几个」可选的档位。1 条等于没得选、6 条会把输入框那一行顶掉，只留 2~5 */
+/** 「每轮给几个」的档位；1 条没得选、6 条会把输入框那一行顶掉，只留 2~5 */
 const OPTION_COUNT_CHOICES = [2, 3, 4, 5];
 
 /**
- * 把「每轮给几个」落到四个单选项上。
- *
- * 老卡里可能存着 1 或 6（上一版是 1~6 的数字输入框）—— 夹到**最近的档**，
- * 而不是一律重置成默认 4：填过 6 的人再打开该看到 5，不是莫名其妙变回 4。
+ * 老卡可能存着 1 或 6（旧版是 1~6 数字输入），夹到最近的档而不是一律重置成 4。
  */
 function setOptionsCount(value) {
   const wanted = Number(value);
@@ -583,28 +457,15 @@ function optionsCountValue() {
   return OPTION_COUNT_CHOICES.includes(value) ? value : DEFAULT_OPTIONS_COUNT;
 }
 
-/**
- * 「在状态栏显示」这个开关：只给**世界书作用域**用。
- *
- * 角色库的卡绑进单角色会话时，TA 就是这局的主角，状态栏必须显示 ——
- * 那种场景下这个开关没意义，整块收起来（省得用户以为不勾就看不到状态）。
- * 这里按当前编辑作用域（`charEditorScope`）决定显示与否。
- */
+/** 「在状态栏显示」只给世界书作用域用；角色库的卡永远显示状态，整块收起 */
 function renderShowInPanelBox() {
   if (!el.c.showInPanelBox) return;
   el.c.showInPanelBox.classList.toggle('hidden', charEditorScope !== 'worldbook');
 }
 
-// ---------------------------------------------------------------------------
-//  角色自带的世界书
-// ---------------------------------------------------------------------------
+// 角色自带的世界书
 
-/**
- * 角色自带世界书那一块。
- *
- * 这块**始终显示**：没绑定过的角色也要有入口加书。
- * 没绑定时列出空状态提示，开关和说明照常给（开关此时是隐藏的）。
- */
+/** 角色自带世界书：清单 + 绑定按钮 + 开关；没绑定也始终显示（入口要一直在） */
 function renderCharWorldbookBox(character) {
   if (!character) return;
 
@@ -708,9 +569,7 @@ async function bindWorldbookToCharacter(bookId) {
 
   ids.push(bookId);
   character.worldbookIds = ids;
-  // 刚绑上就默认启用 —— 绑了却因为开关关着不生效，会让人以为是 bug。
-  // 草稿开关也要一起改，否则 renderCharWorldbookBox / stashCharForm 还会按旧值
-  // 把刚打开的开关写回 false。
+  // 刚绑上就默认启用；草稿开关要一起改，否则保存时会按旧值写回 false
   if (character.worldbookEnabled === false && ids.length === 1) {
     character.worldbookEnabled = true;
     charDraftWbEnabled = true;
@@ -719,7 +578,7 @@ async function bindWorldbookToCharacter(bookId) {
   renderCharWorldbookBox(character);
 
   if (isCharDraft()) {
-    showToast('已绑定世界书，保存角色后生效');
+    showToast('已绑定世界书，保存后生效');
     return;
   }
 
@@ -762,13 +621,7 @@ async function unbindWorldbookFromCharacter(bookId) {
   showToast(book ? `已解绑「${book.name}」（世界书还在库里）` : '已解绑');
 }
 
-/**
- * 点「＋ 绑定」：列出还没绑的世界书让用户挑。
- *
- * 自己起一个轻量浮层，而不是复用世界书页那个角色选择器 ——
- * 那个是「角色 → 加进世界书」，方向相反，而且绑了一堆模块级状态，
- * 硬套进来会互相干扰。
- */
+/** 点「＋ 绑定」列出还没绑的世界书；自起浮层，不复用世界书页那个方向相反、绑了模块级状态的选择器 */
 function openWorldbookPicker() {
   const character = editorCharacterById(editingCharacterId);
   if (!character) return;
@@ -846,11 +699,7 @@ function openWorldbookPicker() {
   worldbookPickerEl = overlay;
 }
 
-/**
- * 选书浮层开着没有。
- * Esc 链要用：这个浮层**挂在 document.body 上**，而且 z-index(60) 比角色编辑器(50) 还高，
- * 所以按 Esc 时它是「最上面那一层」，该先关它，而不是把整个编辑器一起关掉。
- */
+// Esc 链用：浮层挂在 body 上、z-index(60) 高于编辑器(50)，按 Esc 应先关它
 export function isWorldbookPickerOpen() {
   return !!worldbookPickerEl;
 }
@@ -862,11 +711,9 @@ export function closeWorldbookPicker() {
   }
 }
 
-// ---------------------------------------------------------------------------
-//  草稿 / 保存 / 删除
-// ---------------------------------------------------------------------------
+// 草稿 / 保存 / 删除
 
-/** 把表单里的内容写回内存里的角色对象（切走或保存前调用） */
+/** 把表单内容写回内存里的角色对象（切走或保存前调用） */
 function stashCharForm() {
   const character = editorCharacterById(editingCharacterId);
   if (!character || el.charForm.classList.contains('hidden')) return;
@@ -881,9 +728,7 @@ function stashCharForm() {
   character.personality = el.c.personality.value;
   character.scenario = el.c.scenario.value;
   character.firstMes = el.c.first.value;
-  // 备选开场白：空行直接丢掉（多半是「点了添加又没写」）。
-  // 去两端空白 + 去重 + 限条数，口径和主进程的 normalizeAlternateGreetings 一致，
-  // 免得 UI 里存的形状和导入卡不一样。
+  // 空行丢掉、去重、限条数，口径与主进程 normalizeAlternateGreetings 一致
   const altGreetings = charAltGreetings
     .map((s) => String(s == null ? '' : s).trim())
     .filter((s, i, arr) => s && arr.indexOf(s) === i)
@@ -894,10 +739,8 @@ function stashCharForm() {
   character.systemPrompt = el.c.system.value;
   character.postHistoryInstructions = el.c.post.value;
   character.creatorNotes = el.c.notes.value;
-  // 年龄/性别/种族不从输入框写回；老卡上已有的字段保留不动
-  //（messages.js / cast.js 仍会读）。
-  // 属性是编辑期间的草稿（charAttrs），保存时才写回角色卡。
-  // 只摘掉界面自己的临时状态（_moreOpen），其余字段原样带走。
+  // 年龄/性别/种族不从输入框写回，老卡的字段保留（messages.js / cast.js 仍会读）。
+  // 只摘掉界面临时状态（_moreOpen），其余字段原样带走。
   character.attributes = charAttrs
     .filter((a) => a && typeof a.name === 'string' && a.name.trim())
     .map((a) => {
@@ -907,14 +750,10 @@ function stashCharForm() {
     })
     .slice(0, MAX_PANEL_FIELDS);
   character.avatar = charDraftAvatar;
-  // 形象是三态，必须原样区分（见 charDraftPortrait 的声明）：
-  //   undefined —— 老卡，从头到尾没碰过形象那一栏，别写这个键（写了就白存一份图）。
-  //   其余（空串 / dataURL）—— 用户的选择，照写。
+  // 形象三态：undefined 就别写这个键（否则白存一份图）；空串 / dataURL 照写。
   if (charDraftPortrait === undefined) delete character.portrait;
   else character.portrait = charDraftPortrait;
-  // 表情图：没名字的条目存下去也匹配不上，直接丢掉；一条不剩就不留这个键
-  // （和 portrait 一个思路：空表留在数据里只是噪音）。
-  // key / default 只写有值的 —— 落盘归一化本来也会把空的丢掉，这里少写一份更干净。
+  // 表情图：没名字的条目丢掉；一条不剩就不留这个键（空表只是噪音），key / default 只写有值的。
   const expressions = charExpressions
     .filter((item) => item && String(item.name || '').trim())
     .map((item) => ({
@@ -929,23 +768,17 @@ function stashCharForm() {
     .slice(0, MAX_EXPRESSIONS);
   if (expressions.length) character.expressions = expressions;
   else delete character.expressions;
-  // 剧情选项：**关掉要写成 `false`**（不是 null）—— 主进程归一化把「没有这个字段」
-  // 当成「默认开 4 条」，只有明确的 false 才活得过存盘，否则关掉的角色一重启又开了。
-  // 数量是四个单选项之一（2~5），不会再有 0 / 12 这种值要夹。
+  // 剧情选项关掉要写 `false`（不是 null）：主进程把「没这个字段」当成默认开 4 条
   if (el.c.optionsOn.checked) {
-    // 四档单选框只有一个能被选中，读出来就是 2~5，不用再夹范围
     character.optionsSpec = { count: optionsCountValue(), hint: el.c.optionsHint.value.trim().slice(0, 200) };
   } else {
     character.optionsSpec = false;
   }
-  // 角色自带世界书的开关（草稿）。没有绑书时不写这个字段，
-  // 免得给没有书的角色平白加一个属性。
+  // 没绑书就不写 worldbookEnabled，别给没书的角色平白加属性
   if (Array.isArray(character.worldbookIds) && character.worldbookIds.length) {
     character.worldbookEnabled = charDraftWbEnabled;
   }
-  // 在状态栏显示：**只对世界书副本写**。角色库的卡写了也没用（单角色会话
-  // 永远显示状态，见 cast.js 的 panelEntities），索性不落这个字段，
-  // 免得数据里一片 showInPanel:false 看着像「关了」。
+  // showInPanel 只对世界书副本写；角色库的卡写了也没用（单角色会话永远显示状态，见 cast.js）
   if (charEditorScope === 'worldbook') {
     character.showInPanel = el.c.showInPanel.checked === true;
   } else {
@@ -954,27 +787,16 @@ function stashCharForm() {
   character.updatedAt = now();
 }
 
-/**
- * 角色列表页的「＋ 新建角色」。
- * 先把作用域钉死在角色库 —— 上一次可能是在世界书里编辑副本，作用域还留着。
- */
+/** 角色列表页的「＋ 新建角色」：作用域钉死在角色库（上次可能停在世界书） */
 function newCharacter() {
   charEditorScope = 'library';
   startCharDraft();
 }
 
-/**
- * 新建角色：只做一个「草稿」塞进编辑器给用户填。
- * 保存之前它不进角色库 / 世界书，也不写磁盘；关掉编辑器就当没建过。
- *
- * @param {object} [preset] AI 生成的角色字段（name / description / personality /
- *                 scenario / firstMes / mesExample / tags / attributes）。
- *                 填进来之后和用户手填的草稿没有区别 ——
- *                 一样要点「保存角色」才会真正创建。
- */
+// 新建角色：只做草稿塞进编辑器；保存前不进列表、不写磁盘，关掉就当没建过。
+// preset 是 AI 生成的字段，填进来后与手填草稿没有区别，一样要点「保存角色」。
 function startCharDraft(preset) {
-  // 上一个角色的表单里可能还有没保存的改动，先收进内存，
-  // 再把上一份没保存完的草稿丢掉，免得留下一个永远不会被创建的幽灵角色。
+  // 先把上一个角色的改动收进内存，再丢掉没保存完的草稿（否则留下永不创建的幽灵角色）
   stashCharForm();
   discardCharDraft();
 
@@ -999,7 +821,7 @@ function startCharDraft(preset) {
     creatorNotes: '',
     tags: Array.isArray(p.tags) ? p.tags : [],
     attributes: Array.isArray(p.attributes) ? p.attributes : [],
-    // 年龄/性别/种族不再单独建字段：写进描述文字即可，这里不再预设默认值。
+    // 年龄/性别/种族不作为字段，写进描述文字
     source: 'manual',
     createdAt: now(),
     updatedAt: now()
@@ -1008,12 +830,11 @@ function startCharDraft(preset) {
   charDraft = { character, scope, bookId: book ? book.id : null };
   editingCharacterId = character.id;
 
-  // 同样要记来处（这条路上「保存角色」是终点，走的时候会回到它）
+  // 记来处（这条路上「保存角色」是终点，走的时候会回到它）
   const from = currentViewName();
   if (from !== 'charEditor') editorReturnView = from;
 
-  // 先让这一屏可见再填表：fillCharForm 最后会量文本框高度，
-  // 而隐藏状态下（display:none）量什么都是 0。
+  // 先让这一屏可见再填表：隐藏状态下量高度都是 0
   showView('charEditor');
   fillCharForm(character);
   updateCharEditorScopeUi();
@@ -1023,10 +844,7 @@ function startCharDraft(preset) {
   el.c.name.select();
 }
 
-/**
- * 把新建的草稿真正写进角色库 / 世界书。
- * 只有点「保存角色」会走到这里 —— 这就是「保存后才生成」那一步。
- */
+/** 把新建的草稿真正写进角色库/世界书；只有点「保存角色」会走到这里 */
 function commitCharDraft() {
   if (!charDraft) return true;
 
@@ -1060,16 +878,14 @@ async function saveCharacter() {
   const character = editorCharacterById(editingCharacterId);
   if (!character) return;
 
-  // 必须先校验再落内存：stashCharForm 会把空名字写成「未命名角色」，
-  // 放在它后面校验就晚了 —— 弹了提示，内存却已经被改名，列表也没重绘。
+  // 必须先校验再落内存：stashCharForm 会把空名字写成「未命名角色」
   if (!el.c.name.value.trim()) {
     showToast('给角色起个名字吧', 'error');
     el.c.name.focus();
     return;
   }
 
-  // 这一下到底是「新建」还是「改已有的」，要在落盘前记下来：
-  // 草稿一提交 charDraft 就清空了，后面就分不出来了。
+  // 「新建」还是「改已有」要在落盘前记下来：草稿一提交 charDraft 就清空
   const creating = isCharDraft();
   const scope = creating ? charDraft.scope : charEditorScope;
 
@@ -1081,8 +897,7 @@ async function saveCharacter() {
     return;
   }
 
-  // 新建的角色：点「保存角色」就是这件事的终点 —— 直接离开编辑页，回到角色列表 /
-  // 世界书编辑器看新卡。改已有的角色则留在这一页里（多半还要接着改别的字段）。
+  // 新建是终点（直接离开）；改已有的留在本页，多半还要接着改
   if (creating) {
     renderCharacterPage();
     actions.rerender();
@@ -1091,12 +906,10 @@ async function saveCharacter() {
       renderWorldbookChars();
       renderWorldbookPage();
     }
-    // 写盘失败就别报「已创建」—— 提示已经由 persistCharacters 弹过了，
-    // 页面也留着，用户能直接再点一次「保存角色」重试。
+    // 写盘失败别报「已创建」：persistCharacters 已弹过提示，页面留着可直接重试
     if (!(await persistCharacters())) return;
     setCharSaveState('saved');
     showToast(`角色「${character.name}」已创建`, 'ok');
-    // 草稿已经提交（charDraft 清空），这里不会再弹「放弃新建？」那个确认框
     await leaveCharacterEditor();
     return;
   }
@@ -1113,25 +926,15 @@ async function saveCharacter() {
     renderWorldbookPage();
   }
 
-  // 失败提示由 persistCharacters 弹（界面上的改动留着，用户能直接再存一次）；
-  // 成功了才报「已保存」—— 两条都弹的话后一条会把前一条盖掉。
+  // 失败提示由 persistCharacters 弹；成功才报「已保存」，否则后一条会盖掉前一条
   if (await persistCharacters()) {
     setCharSaveState('saved');
     showToast(`角色「${character.name}」已保存`, 'ok');
   }
 }
 
-/**
- * 删除一个角色。
- * scope：'library' = 从角色库删掉（默认）；'worldbook' = 只从当前这本书里移除副本。
- *
- * 两个入口共用这一份逻辑：角色卡右上角的 ×，和编辑页底部的「删除角色」。
- *
- * ⚠️ 写盘失败时**要把内存也退回去**，不能只弹个提示就完了。
- *    characters.json 被拒写（EPERM，常见是进程低完整性，见 main/store.js 开头）时，
- *    界面若已经把卡片移掉、还弹了「已删除」，用户会以为删干净了，重启又回来了
- *    （而且中间的会话解绑也白做）。「写不进磁盘 = 没删掉」才和用户看到的一致。
- */
+// 删除角色（'library' 从角色库删 / 'worldbook' 只移除本书副本），两个入口共用。
+// ⚠️ 写盘失败必须把内存也退回去 —— EPERM 时若界面已移除还报「已删除」，重启就回来了。
 export async function deleteCharacterById(id, scope) {
   const inBook = scope === 'worldbook';
 
@@ -1175,8 +978,8 @@ export async function deleteCharacterById(id, scope) {
     }
   }
 
-  // --- 从角色库删 ---------------------------------------------------------
-  // 记住改之前的样子，写盘失败时按这几样退回去
+  // --- 从角色库删 ---
+  // 记住改之前的样子，写盘失败时退回去
   const beforeChars = characters();
   const unbound = [];
 
@@ -1199,9 +1002,7 @@ export async function deleteCharacterById(id, scope) {
     return;
   }
 
-  // 编辑器如果正开在这个角色上，就没有可编辑的对象了 —— 离开它。
-  // 从卡片删的时候编辑器根本没开，这一段会跳过。
-  // 放在写盘成功之后：失败时角色还在，编辑器不该被关掉。
+  // 编辑器正开在这个角色上就离开它；放在写盘成功之后（失败时角色还在，不该关编辑器）
   if (editingCharacterId === character.id) {
     editingCharacterId = null;
     if (currentViewName() === 'charEditor') await leaveCharacterEditor();
@@ -1223,14 +1024,7 @@ async function deleteCharacter() {
 }
 
 /**
- * 批量删除角色卡（列表页选中几张之后一次删掉）。
- *
- * 和单张删除一样要处理同一批牵连：会话解绑、编辑器收尾、写盘失败回滚。
- * 差别只在**确认框只弹一次**、**写盘也只写一次** —— 删一半留一半再回滚，
- * 比删不掉更糟。
- *
- * @param {string[]} ids
- * @returns {Promise<boolean>} 真的删掉了没有
+ * 批量删除角色卡：确认框只弹一次、写盘也只写一次 —— 删一半留一半再回滚比删不掉更糟。
  */
 export async function deleteCharactersByIds(ids) {
   const wanted = new Set(Array.isArray(ids) ? ids : []);
@@ -1284,9 +1078,7 @@ export async function deleteCharactersByIds(ids) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-//  给入口层 / 别的视图用的口子
-// ---------------------------------------------------------------------------
+// 给入口层 / 别的视图用的口子
 
 /** 打开编辑器，编辑指定角色（scope 省略 = 角色库） */
 export function openCharacterEditor(id, scope = 'library') {
@@ -1305,13 +1097,7 @@ export function startCharacterDraftInBook() {
 }
 
 /**
- * 用 AI 生成好的字段起草一个新角色，直接打开编辑器让用户过目。
- *
- * 作用域必须在这里钉死：`startCharDraft` 读的是模块内的 `charEditorScope`，
- * 而世界书那条路还要额外把「哪本书」写进 editingWorldbookId —— 生成期间用户
- * 可能已经切到别的书去了，只传 bookId 进来是不够的。
- *
- * @returns {boolean} 编辑器有没有真的打开（书不在了就是 false）
+ * 用 AI 生成的字段起草新角色；世界书作用域要先把书切回生成时那一本（生成期间用户可能换过书）。
  */
 export function startCharacterDraftFromAi(fields, scope, bookId) {
   charEditorScope = scope === 'worldbook' ? 'worldbook' : 'library';
@@ -1340,16 +1126,8 @@ export function currentEditorCharacter() {
   return editorCharacterById(editingCharacterId);
 }
 
-// ---------------------------------------------------------------------------
-//  开场白模板：一键填进「定场 → 登场 → 留个话头」三段骨架
-//
-//  这套骨架是从社区角色卡里归纳出来的（抽样 150 张开场白，约九成都是这个形状）：
-//  先用一两句把时间、地点、玩家此刻手上在做的事定住；再让角色带着一句**说出口的话**
-//  登场；最后把话头交出去 —— 停在只有玩家能接的地方（一个问题，或一个等着他的沉默）。
-//
-//  它只填空、不做创作：三段用 { } 圈起来当占位，用户一眼看得出哪段还没写。
-//  （注意是单花括号 —— 双花括号 {{user}} / {{char}} 才是会被替换的宏，别写混。）
-// ---------------------------------------------------------------------------
+// 开场白模板：定场 → 登场 → 留个话头（从社区角色卡归纳的三段骨架）。
+// 占位是单花括号；{{user}} / {{char}} 才是会被替换的宏。
 const FIRST_MES_TEMPLATE = [
   '{定场：时间 + 地点 + {{user}} 此刻正在做什么，一两句就够}',
   '',
@@ -1374,26 +1152,16 @@ async function applyFirstMesTemplate() {
   }
 
   box.value = FIRST_MES_TEMPLATE;
-  // 字数角标挂在 charForm 的 input 委托上（见 initCharacterEditor），
-  // 直接赋 value 不触发事件 —— 手动派一个，让角标和自动增高自己刷。
+  // 直接赋 value 不触发 input，手动派一个让角标和自动增高刷新
   box.dispatchEvent(new Event('input', { bubbles: true }));
   box.focus();
   box.setSelectionRange(box.value.length, box.value.length);
 }
 
-// ---------------------------------------------------------------------------
-//  备选开场白：同一张卡的多个入场剧本
-//
-//  数据源是角色卡上的 `alternateGreetings`（导出时写回卡里的 `alternate_greetings`）。
-//  导入侧（main/card-import.js）把 `alternate_greetings` 和 `group_only_greetings`
-//  合并进来；绑定角色时若不止一条，会话页会弹一个选择器让玩家挑。
-//
-//  这里只做纯文本的增删改：条数不定，所以行由 renderAltGreetings 动态铺，
-//  HTML 里只留「列表容器 + 总条数角标 + 添加按钮」三个壳。
-//  行上的字少（序号 / 字数 / ×），正文一律走 textContent —— 卡里的字是不可信内容。
-// ---------------------------------------------------------------------------
+// 备选开场白：同一张卡的多个入场剧本，数据源是角色卡的 alternateGreetings。
+// 行由 renderAltGreetings 动态铺；正文一律走 textContent —— 卡里的字不可信。
 
-/** 从角色卡里取一份备选开场白的**副本**（编辑期改动不碰原数据） */
+/** 从角色卡取一份备选开场白副本（编辑期改动不碰原数据） */
 function draftAltGreetingsOf(character) {
   const list = character && Array.isArray(character.alternateGreetings) ? character.alternateGreetings : [];
   return list
@@ -1406,7 +1174,7 @@ function altGreetTextAreas() {
   return el.c.altList ? Array.from(el.c.altList.querySelectorAll('.alt-greet-text')) : [];
 }
 
-/** 把草稿铺成行。每次增删都整体重铺 —— 条数少，不值得做增量 diff */
+/** 把草稿铺成行；每次增删都整体重铺（条数少，不值得做增量 diff） */
 function renderAltGreetings() {
   const list = el.c.altList;
   if (!list) return;
@@ -1415,10 +1183,8 @@ function renderAltGreetings() {
   charAltGreetings.forEach((text, i) => {
     const ta = mTextarea({
       class: 'alt-greet-text',
-      // id 约定见 charCountNode：`<textarea id>-count` 就是它的字数角标，
-      // 这样 charForm 的 input 委托能顺手把角标刷掉，不用另接一套。
-      // ⚙ 组件化之后 id 挂在**宿主**上，事件里拿到的是里层那颗原生框 ——
-      //   所以下面刷新角标时得先过一道 hostOf()（见 updateCharCount 那里）。
+      // id 约定见 charCountNode：宿主 id + '-count' 就是角标；组件化后 id 挂在宿主上，
+      // 事件里拿到的是里层原生框，刷新角标前要先过 hostOf()。
       id: `c-alt-${i}`,
       rows: 3,
       spellcheck: 'false',
@@ -1426,8 +1192,7 @@ function renderAltGreetings() {
       value: text,
       dataset: { index: i }
     });
-    // 自动增高：不传 key —— 高度记忆是按「字段」记的，而这里行会重排，
-    // 记了反而会错位（删掉第 2 行，第 3 行会继承它的高度）。
+    // 不传 key：行会重排，按字段记的高度会错位
     attachAutoGrow(ta, {});
 
     list.append(
@@ -1495,13 +1260,11 @@ function onAltListClick(event) {
 }
 
 function onAltListInput(event) {
-  // ⚙ 组件化之后 `event.target` 是里层那颗原生框：`.alt-greet-text` 与 `data-index`
-  //   都在**宿主**上 —— 不还原成宿主，这里会直接 return（静默把改动丢了）。
+  // ⚙ 组件化后 target 可能是里层原生框：.alt-greet-text 和 data-index 都在宿主上，必须 hostOf
   const ta = hostOf(event.target);
   if (!ta || !ta.classList || !ta.classList.contains('alt-greet-text')) return;
   const i = Number(ta.dataset.index);
   if (Number.isInteger(i) && i >= 0 && i < charAltGreetings.length) charAltGreetings[i] = ta.value;
-  // 字数角标由 charForm 的 input 委托统一刷（靠 id 约定），自动增高由 attachAutoGrow 管。
 }
 
 /** 绑编辑器自己的所有按钮。rerender 由入口层注入 */
@@ -1513,9 +1276,7 @@ export function initCharacterEditor(injected) {
 
   el.btnCloseChars.addEventListener('click', leaveCharacterEditor);
   el.btnNewChar.addEventListener('click', newCharacter);
-  // 角色列表页的「AI 生成」：作用域同样钉死在角色库，生成结果落到编辑器草稿。
-  // 这里直接调 aiGen 的入口 —— 生成弹窗怎么开是它自己的事，没必要经入口层转一手：
-  // 那种转手一旦漏传就是「点了没反应」，而且只有真点到这个按钮才会发现。
+  // 角色列表页的「AI 生成」：作用域钉死角色库，直接调 aiGen 入口（经入口层转手漏传就是「点了没反应」）
   if (el.btnAiChar) {
     el.btnAiChar.addEventListener('click', () => {
       charEditorScope = 'library';
@@ -1527,18 +1288,14 @@ export function initCharacterEditor(injected) {
   // 左栏底部那颗「返回」：和页头左上那颗、Esc 是同一条路（leaveCharacterEditor）
   if (el.btnBackChar) el.btnBackChar.addEventListener('click', leaveCharacterEditor);
 
-  // 点头像/形象换图，或者清除
   el.charAvatar.addEventListener('click', pickAvatar);
   el.btnClearAvatar.addEventListener('click', clearAvatar);
   el.charPortrait.addEventListener('click', pickPortrait);
   el.btnClearPortrait.addEventListener('click', clearPortrait);
 
-  // 表情图：加 / 批量导入两颗按钮的接线在 charExpressions 模块里（initCharExpressionsUi），
-  // 已经不弹窗了，这里没有别的入口要接。
+  // 表情图：加 / 批量导入的接线在 charExpressions 模块里（initCharExpressionsUi）
 
-  // 自带世界书的开关：先更新草稿，再按草稿刷新说明文字。
-  // 注意不能直接读 editorCharacterById —— 那时角色卡上还是旧值（还没保存），
-  // 结果就是「点了开关但说明没变」。
+  // 自带世界书开关：先更新草稿再刷新说明；不能直接读 editorCharacterById（卡上还是旧值，点了说明不变）
   el.c.wbEnabled.addEventListener('change', () => {
     charDraftWbEnabled = el.c.wbEnabled.checked;
     const character = editorCharacterById(editingCharacterId);
@@ -1547,16 +1304,13 @@ export function initCharacterEditor(injected) {
     }
   });
 
-  // 「＋ 绑定」：挑一本世界书加到这个角色上
   el.c.wbAddBtn.addEventListener('click', openWorldbookPicker);
 
-  // 剧情选项的开关：只切配置区的显示，值在保存时才写回角色卡
   if (el.c.optionsOn) el.c.optionsOn.addEventListener('change', renderOptionsConfig);
 
-  // 「套用开场白模板」：把「定场 → 登场 → 留个话头」三段骨架填进开场白框
   if (el.c.btnFirstTemplate) el.c.btnFirstTemplate.addEventListener('click', applyFirstMesTemplate);
 
-  // 备选开场白：添加按钮 + 列表上的删除/输入（行是动态铺的，所以用委托）
+  // 备选开场白的添加按钮 + 列表删除/输入（行是动态铺的，用委托）
   if (el.c.btnAltAdd) el.c.btnAltAdd.addEventListener('click', addAltGreeting);
   if (el.c.altList) {
     el.c.altList.addEventListener('click', onAltListClick);
@@ -1566,11 +1320,8 @@ export function initCharacterEditor(injected) {
   // 字数角标 + 保存状态：手动输入时刷新（回填路径在 fillCharForm 里统一刷过）
   el.charForm.addEventListener('input', (event) => {
     setCharSaveState('dirty');
-    // ⚙ 多行框组件化之后 input 有两个来源：真人敲字时 target 是**里层那颗原生框**，
-    //    程序派发（比如快捷短语往宿主上 dispatch input）时 target 是**宿主**。
-    //    只认 `instanceof HTMLTextAreaElement` 的话后者会被漏掉，角标就停在旧值 ——
-    //    这种 bug 没人会立刻发现（界面看着一切正常）。判据写成「它自己就是多行框，
-    //    或它的里层控件是多行框」，不写 tagName 字面量。
+    // ⚙ 组件化后 input 的 target 可能是里层原生框，也可能是宿主（程序派发）；
+    // 只认 instanceof HTMLTextAreaElement 会漏掉宿主，角标停在旧值 —— 两种都要认。
     const node = event.target;
     if (node instanceof HTMLTextAreaElement || (node && node.control instanceof HTMLTextAreaElement)) {
       updateCharCount(node);
@@ -1582,10 +1333,9 @@ export function initCharacterEditor(injected) {
   // 勾选框 / 下拉不触发 input，单独挂 change（自带世界书开关、剧情选项、显示状态都走这儿）
   el.charForm.addEventListener('change', () => setCharSaveState('dirty'));
 
-  // 属性区的按钮（分组标签栏是渲染时就带的）
+  // 属性区按钮（分组标签栏是渲染时就带的）
   initCharAttrsUi({ getList: () => charAttrs });
 
-  // 表情弹窗的按钮：草稿仍是本模块的 charExpressions，通过 getList 传过去；
-  // 弹窗里改动后经 onChange 回来刷新入口那行摘要。
+  // 表情图按钮：草稿仍是本模块的 charExpressions，经 getList 传过去，改动后刷新摘要
   initCharExpressionsUi({ getList: () => charExpressions, onChange: updateExprSummary });
 }

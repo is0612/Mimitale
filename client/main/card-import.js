@@ -1,17 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  main/card-import.js —— 导入一个文件时的「形状识别 + 归一化」
-//
-//  抽出来是为了让导入链路能单独测：这段如果夹在 registerIpc() 的
-//  dialog / fs / 闭包中间，只有走真实文件对话框才能跑到，
-//  「卡里内嵌的世界书被静默丢掉」这类问题就没法自动化覆盖。
-//
-//  tools/smoke-test.js 直接 require 这个模块，用真实的 PNG 字节跑完整链路
-//  （而不是自己在测试里糊一套）。
-//
-//  这里不碰磁盘：给 buffer，返回解析结果。
-// ============================================================================
+//  main/card-import.js —— 导入文件的形状识别 + 归一化（纯函数，不碰磁盘）。
+//  单独成模块，是为了让 tools/smoke-test.js 能用真实 PNG 字节跑完整导入链路。
 
 const { parseCharacterCardPng } = require('./png.js');
 const { normalizeCharacter } = require('./characters.js');
@@ -22,10 +12,7 @@ const {
   MAX_IMPORTED_WORLDBOOK_CHARACTERS
 } = require('./worldbook-parse.js');
 
-/**
- * 把角色卡里的头像字段转成可用的 dataURL。
- * 可能是完整的 dataURL、裸 base64，也可能是表示「没有头像」的字符串 'none'。
- */
+/** 头像字段 → dataURL：可能是完整 dataURL、裸 base64，或表示无头像的 'none'。 */
 function cardAvatarToDataUrl(value) {
   if (typeof value !== 'string' || !value) return '';
   if (value.startsWith('data:image/')) return value;
@@ -34,11 +21,7 @@ function cardAvatarToDataUrl(value) {
   return `data:image/png;base64,${value}`;
 }
 
-/**
- * 官方互动模板 → 我们的分组名。
- * 卡片数据里的 `template` 是个机器用的 id（status_bar），界面上该显示中文标题，
- * 所以这里翻译一道；认不出来的 id（比如自定义面板 `panel_1`）走 panels 里的 title。
- */
+/** 互动模板 id → 分组中文名（status_bar → 状态栏）；认不出来的 id 走 panels 里的 title。 */
 const TEMPLATE_GROUP_LABELS = {
   status_bar: '状态栏',
   relationship: '关系',
@@ -46,7 +29,6 @@ const TEMPLATE_GROUP_LABELS = {
   options: '剧情选项'
 };
 
-/** 卡片里 template id → 分组标题 */
 function statusTemplateGroupTitles(tpl) {
   const map = new Map();
   const panels = tpl && Array.isArray(tpl.panels) ? tpl.panels : [];
@@ -62,24 +44,8 @@ function statusTemplateGroupTitles(tpl) {
   return map;
 }
 
-/**
- * 把「互动模板」那种字段定义转成角色属性。
- *
- * 形状对照（左边是某站点导出的卡，右边是我们内部认的）：
- *   { key:'favor', label:'好感度', type:'meter', min:0, max:100,
- *     initial:20, hint:'…', template:'relationship' }
- *     → { name:'好感度', type:'meter', min:0, max:100, value:'20',
- *         hint:'…', group:'关系' }
- *
- * 几处取舍：
- *   · 用 `label` 当字段名（那是给人看的、也是要注入给模型的），
- *     `key` 只是它内部的变量名；
- *   · 重名就加序号跳过 —— 面板字段是按名字认的，两个「自定义面板」
- *     会互相覆盖，不如退成「自定义面板 2」；
- *   · initial 是数组（列表型字段）时用「、」拼起来，因为面板值只能是字符串；
- *   · `template` 翻译成分组标题（status_bar → 状态栏），这样导入后
- *     面板就是分好组的，而不是一长条。
- */
+/** 互动模板的字段定义 → 角色属性：用 label 当字段名（要注入给模型），重名加序号；
+ *  initial 是数组时用「、」拼成字符串（面板值只能是字符串），template 翻成分组标题。 */
 function attributesFromStatusTemplate(tpl) {
   const fields = tpl && Array.isArray(tpl.fields) ? tpl.fields : null;
   if (!fields || !fields.length) return [];
@@ -121,15 +87,8 @@ function attributesFromStatusTemplate(tpl) {
   return out;
 }
 
-/**
- * 卡里的备选开场白（同一个角色的不同入场剧本）。
- *
- * v2 规范里叫 `alternate_greetings`；另有 `group_only_greetings`
- * —— 规范上那是「只在群聊里露出来」的那些，我们不做群聊，但它们和前者是
- * 同一形态的入场剧本，并进来才算不浪费。两处都不是数组时就当没有。
- *
- * 这里只做「取出来」，去重 / 限长 / 限条数在 normalizeCharacter 里统一做。
- */
+/** 备选开场白：alternate_greetings 与 group_only_greetings 并进来（我们不做群聊，
+ *  但同样是入场剧本）；只负责取出，去重 / 限长在 normalizeCharacter 里做。 */
 function alternateGreetingsFromCard(d) {
   const out = [];
   for (const src of [d.alternate_greetings, d.group_only_greetings]) {
@@ -139,13 +98,8 @@ function alternateGreetingsFromCard(d) {
   return out;
 }
 
-/**
- * 从 v3 卡的 `chat_history` 里取开场白。标准 v3 规范没有 chat_history（开场白叫
- * first_mes），但有些站点导出的变体把开场白放在 chat_history[0].messages 里那条
- * assistant 消息。只读第一个 session 的第一条 assistant 消息（纯文本），
- * 不拿第二个 session 填 mesExample（那是作者命名习惯，不是规范），
- * 多模态里的 media 条目不能当文本用。
- */
+/** 从 chat_history[0] 的第一条 assistant 消息取开场白（部分站点导出变体这样存）；
+ *  只认纯文本，media 条目不能当文本用。 */
 function firstMesFromChatHistory(d) {
   const sessions = d && Array.isArray(d.chat_history) ? d.chat_history : null;
   if (!sessions || !sessions.length) return '';
@@ -162,45 +116,29 @@ function firstMesFromChatHistory(d) {
   return '';
 }
 
-/**
- * 把角色卡（v1 扁平 / v2、v3 包一层 data）转成内部格式。
- * 文件名在没写角色名时当兜底。
- * 内嵌世界书（character_book）也必须一起解析出来，否则导入后角色会「失忆」。
- *
- * 注意：内嵌世界书挂在返回值的临时的 `worldbook` 字段上，
- * **由调用方决定怎么落盘和绑定**（导入链路会给它发 id 并绑到这个角色）。
- *
- * normalizeOpts 是内嵌世界书的注入项（{ normalizeCharacters, maxCharacters }），
- * 见 main/worldbook-parse.js —— 不传的话卡里那本书的 `characters` 会被丢掉。
- */
+/** 角色卡（v1 扁平 / v2、v3 包一层 data）→ 内部格式；无角色名时用文件名兜底。
+ *  ⚠️ normalizeOpts 必须传，否则卡里那本书的 characters 会被丢掉。 */
 function characterFromCard(card, avatar, source, fallbackName, makeWorldbookId, normalizeOpts) {
   if (!card || typeof card !== 'object') return null;
 
   // v2 / v3 把真正的数据放在 data 里；v1 是直接铺在顶层
   const d = card.data && typeof card.data === 'object' ? card.data : card;
 
-  // 一个角色卡至少得有点东西。随便选一个普通 JSON 文件时，
-  // 这里会返回 null，界面就能报「解析失败」而不是收下一个空白角色。
+  // 没有任何可识别字段就返回 null，界面才能报「解析失败」而不是收下空白角色
   const recognizable = d.name || d.char_name || d.description || d.first_mes || d.personality;
   if (!recognizable) return null;
 
-  // 自己导出的卡会把年龄/性别/种族/属性放在 extensions.mimitale ——
-  // 这是我们自己的私有扩展位（酒馆规范里 extensions 就是留给各家塞自己东西的，
-  // 别的软件按规范会原样忽略这段）。
+  // 私有扩展位 extensions.mimitale（酒馆规范里 extensions 留给各家，别的软件会原样忽略）
   const ext =
     d.extensions && typeof d.extensions === 'object' && d.extensions.mimitale && typeof d.extensions.mimitale === 'object'
       ? d.extensions.mimitale
       : {};
 
-  // 开场白：先按标准字段取；这一批都没有才去翻 v3 变体的 chat_history。
-  // 顺序不能反 —— 标准字段存在时它才是权威的。
+  // ⚠️ 顺序不能反：标准字段存在时才是权威，全空才去翻 chat_history 变体
   const firstMes =
     d.first_mes || d.first_message || d.greeting || d.char_greeting || firstMesFromChatHistory(d);
 
-  // 属性（状态面板模板）有两个来源，优先级从高到低：
-  //   1. extensions.mimitale.attributes —— 我们自己导出去的卡，是权威形状
-  //   2. extensions.status_template    —— 别的站点的「互动模板」，映射过来
-  // 自己导的卡两者不会同时有；别的站点导的卡只有后者。
+  // 属性优先取 extensions.mimitale.attributes，没有才映射 extensions.status_template
   const ownAttrs = Array.isArray(ext.attributes) ? ext.attributes : [];
   const templateAttrs =
     ownAttrs.length || !d.extensions || typeof d.extensions !== 'object'
@@ -208,10 +146,8 @@ function characterFromCard(card, avatar, source, fallbackName, makeWorldbookId, 
       : attributesFromStatusTemplate(d.extensions.status_template);
   const attributes = ownAttrs.length ? ownAttrs : templateAttrs;
 
-  // 头像 / 形象：PNG 卡是图本身带过来的（avatar 参数），JSON 卡没有图文件 ——
-  // 我们自己在导出时把它们放进了扩展位，这里读回来，否则「导出再导入」头像就空了。
-  // 空串要当成「这张卡明确不要形象」原样保留（和 normalizeCharacter 的三态约定一致）；
-  // 既不是空串也不是 data:image/ 的垃圾值直接不认，别把老卡变成「无形象」。
+  // 空串要原样保留（= 这张卡明确不要形象，normalizeCharacter 的三态约定）；
+  // 不是空串也不是 data:image/ 的垃圾值直接不认，别把老卡变成「无形象」。
   const extAvatar = typeof ext.avatar === 'string' && ext.avatar.startsWith('data:image/') ? ext.avatar : '';
   const extPortraitOk =
     typeof ext.portrait === 'string' && (ext.portrait === '' || ext.portrait.startsWith('data:image/'));
@@ -221,24 +157,23 @@ function characterFromCard(card, avatar, source, fallbackName, makeWorldbookId, 
       name: d.name || d.char_name || fallbackName,
       avatar: avatar || extAvatar,
       ...(extPortraitOk ? { portrait: ext.portrait } : {}),
-      // 老版本 TavernAI 用的是 char_* / world_scenario 这一套字段名，一并兼容
+      // 兼容 TavernAI 的 char_* / world_scenario 字段名
       description: d.description || d.char_persona,
       personality: d.personality,
       scenario: d.scenario || d.world_scenario,
       firstMes,
-      // 备选开场白：绑定角色时给用户挑一条（一张卡带多条时）。
-      // 本批语料 424/1341 张卡带，单卡最多 29 条。
+      // 备选开场白；语料里 424/1341 张卡带，单卡最多 29 条
       alternateGreetings: alternateGreetingsFromCard(d),
       mesExample: d.mes_example || d.example_dialogue || d.char_example_dialogue,
       systemPrompt: d.system_prompt,
       postHistoryInstructions: d.post_history_instructions,
       creatorNotes: d.creator_notes || d.creatorcomment,
-      // 元信息：作者与版本号。转录站会填，用来分辨同一个角色的不同作者 / 版本。
+      // 作者与版本号，用来分辨同一角色的不同作者 / 版本
       creator: d.creator,
       characterVersion: d.character_version,
       tags: d.tags,
       attributes,
-      // 自带世界书的开关也跟着一起回来。缺省 true，所以没这个字段的卡不受影响。
+      // 自带世界书开关；缺省 true，没这个字段的卡不受影响
       worldbookEnabled: typeof ext.worldbookEnabled === 'boolean' ? ext.worldbookEnabled : true
     },
     source
@@ -255,23 +190,11 @@ function characterFromCard(card, avatar, source, fallbackName, makeWorldbookId, 
   return character;
 }
 
-/**
- * 解析一个导入的文件（PNG 或 JSON 文本），返回它到底是什么。
- *
- * 返回值三种情况：
- *   { kind: 'character', character, worldbook }
- *     —— 角色卡；worldbook 是卡里内嵌的那本（可能为 null）
- *   { kind: 'worldbook', worldbook }
- *     —— 独立的世界书文件
- *   { kind: 'error', error }
- *     —— 认不出来 / 解析失败
- *
- * 判断顺序很讲究：**先判世界书**。酒馆导出的世界书同样带 name/description，
- * 先走角色卡那条路会被当成一个空角色收下，整本书的条目全丢。
- */
+/** 解析导入的文件（PNG 或 JSON 文本）：返回 { kind: 'character'|'worldbook'|'error' }。
+ *  ⚠️ 必须先判世界书：酒馆世界书也带 name/description，先走角色卡会被当成空角色、条目全丢。 */
 function parseImportFile({ buffer, ext, fallbackName, makeWorldbookId, normalizeCharacters }) {
   const isPng = ext === '.png';
-  // 书里「角色副本」的归一化器 + 导入时更严的副本数上限（见 worldbook-parse.js）
+  // 书的角色副本归一化器 + 导入时更严的副本数上限
   const bookOpts = { normalizeCharacters, maxCharacters: MAX_IMPORTED_WORLDBOOK_CHARACTERS };
 
   let card = null;
@@ -292,13 +215,12 @@ function parseImportFile({ buffer, ext, fallbackName, makeWorldbookId, normalize
     return { kind: 'error', error: isPng ? '这张 PNG 里没有角色卡数据（没有 chara 信息？）' : '解析失败' };
   }
 
-  // 有些 JSON 卡自带头像：可能在顶层，也可能在 data 里，
-  // 可能是完整 dataURL，也可能是裸 base64（没有头像时是字符串 'none'）
+  // 有些 JSON 卡自带头像：顶层或 data 里，可能是完整 dataURL 或裸 base64（无头像为 'none'）
   if (!avatar) {
     avatar = cardAvatarToDataUrl((card.data && card.data.avatar) || card.avatar);
   }
 
-  // 独立世界书先判（理由见上面）
+  // 独立世界书先判（理由见上）
   if (looksLikeLorebook(card)) {
     const book = worldbookFromLorebook(card, fallbackName, makeWorldbookId, bookOpts);
     if (book) return { kind: 'worldbook', worldbook: book };
@@ -306,7 +228,7 @@ function parseImportFile({ buffer, ext, fallbackName, makeWorldbookId, normalize
 
   const character = characterFromCard(card, avatar, isPng ? 'png' : 'json', fallbackName, makeWorldbookId, bookOpts);
   if (!character) {
-    // 不是角色卡，再试一次世界书（形状松一点的，比如裸数组）
+    // 不是角色卡再试一次世界书（裸数组等更松的形状）
     const book = worldbookFromLorebook(card, fallbackName, makeWorldbookId, bookOpts);
     if (book) return { kind: 'worldbook', worldbook: book };
     return { kind: 'error', error: '既不是角色卡也不是世界书' };

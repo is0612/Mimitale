@@ -1,12 +1,6 @@
-// ---------------------------------------------------------------------------
-//  角色库 / 世界书：只读访问器
-//
-//  这里放「从 state 里把一张卡、一本书捞出来」这类查询。它们被上下两头同时用 ——
-//  界面拿它填列表，组装提示词拿它取设定，所以属于共享数据层，
-//  不能跟着某一个功能模块走（否则谁都 import 谁）。
-//
-//  只读：写入分别走 persist.js（落盘）和各处的编辑逻辑。
-// ---------------------------------------------------------------------------
+// 角色库 / 世界书：只读访问器。
+// 界面和组装提示词两头共用，所以放共享数据层。
+// 只读：写入走 persist.js（落盘）和各处的编辑逻辑。
 
 import { state } from '../core/state.js';
 import { uid, asArray } from '../core/util.js';
@@ -28,35 +22,19 @@ export function characterForConvo(convo) {
   return convo ? characterById(convo.characterId) : null;
 }
 
-/**
- * 读角色卡上的属性（容错老数据 / 导入的角色卡）。
- *
- * 老数据只有 {name, value}，这里走一遍共享归一化，于是 type/min/max/hint
- * 缺省都补成合理的值（type 默认 text）。范围/hint 是可选增强 ——
- * 没有它们的属性就是普通文本字段，行为和纯文本一致。
- */
+/** 容错老数据：老数据只有 {name, value}，归一化补出 type/min/max/hint（type 默认 text） */
 export function characterAttrs(character) {
   if (!character || !Array.isArray(character.attributes)) return [];
   return normalizePanelFields(character.attributes);
 }
 
-/**
- * 这张卡的状态要不要进「在场角色」入口条（showInPanel）。
- * 只对世界书副本有意义：true 才显示，默认 false。单角色聊天绑的卡不受此开关管
- * （那种会话里 TA 就是主角，见 cast.js 的 panelEntities）。
- */
+/** showInPanel 只对世界书副本有意义（true 才显示，默认 false）；单角色会话里 TA 就是主角，不受此开关管（见 cast.js 的 panelEntities） */
 export function showsInPanel(character) {
   return !!(character && character.showInPanel === true);
 }
 
 /**
- * 角色形象：角色库列表上那张 2:3 竖版图（点开能看大图）。
- * 和头像（character.avatar）是两个字段 —— 头像是消息气泡 / 状态卡上的小圆图。
- *
- * 判定看**键在不在**，不是看值真假：
- *   · 有这个键     → 用它（空串 = 用户就是要这块空着，别再拿头像顶上）
- *   · 没有这个键   → 老卡，只有一张图，那张图同时当头像和形象用。
- *     拿头像兜底，老卡进列表才不会变成一个孤零零的首字色块。
+ * 角色形象（列表上那张 2:3 竖版图），和头像 character.avatar 是两个字段。⚠️ 判「键在不在」而非值真假：空串 = 用户要这块空着、别拿头像顶上；缺键才是老卡、用头像兜底。
  */
 export function characterPortrait(character) {
   if (!character) return '';
@@ -74,31 +52,18 @@ export function worldbookById(id) {
   return worldbooks().find((w) => w.id === id) || null;
 }
 
-/**
- * 一本书里的「本书角色」（从角色库复制进来的独立副本）。
- * 和角色库里的那个角色互相独立 —— 改这边不影响那边，反之亦然。
- */
+/** 本书角色 = 从角色库复制来的独立副本：改这边不影响那边 */
 export function worldbookCharacters(book) {
   return asArray(book && book.characters);
 }
 
-/**
- * 世界书封面：一张 2:3 竖版图（dataURL），铺在世界书列表卡片上。
- *
- * 和 `characterPortrait` 的「看键在不在」不同，这里**只看值**：
- * 封面没有「老数据靠别的字段兜底」这件事 —— 没设过就是没有，
- * 卡片退回「世」字占位块。所以空串和缺键是同一种情况，不用分开处理。
- */
+/** 世界书封面（2:3 竖版 dataURL）。⚠️ 和 characterPortrait 不同，这里只看值：没设过就是没有，退回「世」字占位块 */
 export function worldbookCover(book) {
   const cover = book && book.cover;
   return typeof cover === 'string' ? cover : '';
 }
 
-/**
- * 世界书角色副本的 id：单独一个前缀，和角色库、会话的 id 不会看混。
- * 两头都要用 —— 世界书编辑器里「加入副本」发一个，角色编辑器在
- * 「世界书作用域」下起草新角色时也发一个，所以沉在这儿。
- */
+/** 世界书角色副本 id：单独前缀，避免和角色库 / 会话的 id 看混 */
 export function newWorldbookCharId() {
   return `wc${uid()}`;
 }
@@ -110,12 +75,7 @@ export function convoWorldbookIds(convo) {
 
 // --- 预设 ---
 
-/**
- * 用户自建的「预设」：叠在对话上的一层指令。
- *
- * 注意别和 state.presets 搞混 —— 那是「第三方模型提供商」点开时一键填充的内置模板
- * （DeepSeek / 通义 / Kimi…），完全是另一回事。
- */
+/** 用户自建的「预设」。⚠️ 别和 state.presets 搞混 —— 那是第三方模型提供商的内置模板（DeepSeek / 通义 / Kimi…），另一回事 */
 export function dialoguePresets() {
   return asArray(state.dialoguePresets);
 }
@@ -140,13 +100,7 @@ export function convoDialoguePresetIds(convo) {
 }
 
 /**
- * 会话实际生效的预设（**可能有多条**，按列表顺序拼进提示词）。
- *
- * 规则：
- *   · 会话**手动配过**（`dialoguePresetIds` 是数组）→ 就用它配的那几条；
- *     显式配成空数组 = 这一场就是不用，不回落全局。
- *   · 会话**没配过**（null）→ 自动带上所有勾了「可全局」的预设。
- * 被删掉 / 停用的 id 静默跳过 —— 提示词那边当它不存在，不去打扰用户。
+ * 会话实际生效的预设（可能多条，按列表顺序拼进提示词）。⚠️ 手动配过（数组）就用它配的几条，显式 [] = 这一场不用、不回落全局；没配过（null）才自动带所有「可全局」的；被删掉 / 停用的 id 静默跳过。
  */
 export function effectiveDialoguePresets(convo) {
   const picked = convoDialoguePresetIds(convo);
@@ -172,23 +126,13 @@ export function selectableDialoguePresets() {
 /** 扫一遍近期消息拼注入块时，往回看几条消息 */
 export const WORLDBOOK_SCAN_DEPTH = 6;
 
-/**
- * 递归扫描最多连锁几层（设置里调，0 = 关掉递归）。
- *
- * 默认 1（只带一层），和 main/providers.js 的 DEFAULT_SETTINGS 保持一致；
- * 那个值为什么选 1、代价是什么，注释写在那儿。
- */
+/** 递归最多连锁几层（设置里调，0 = 关掉）。⚠️ 默认 1，须与 main/providers.js 的 DEFAULT_SETTINGS 一致 */
 export function recursiveDepthSetting() {
   const value = Number((state.settings || {}).worldbookRecursiveDepth);
   return Number.isFinite(value) && value >= 0 && value <= 5 ? Math.floor(value) : 1;
 }
 
-/**
- * 把书里的「角色副本」转成能导出的形状。
- *
- * 导出设定、属性及已有图片，省去绑定 id、时间戳等运行字段；
- * 导入时重新生成独立副本，图片只在确实存在时写入。
- */
+/** 角色副本的导出形状：只带设定、属性和已有图片，省去绑定 id / 时间戳等运行字段 */
 function worldbookCharacterPayload(character) {
   const c = character && typeof character === 'object' ? character : {};
   const out = {
@@ -211,14 +155,7 @@ function worldbookCharacterPayload(character) {
 }
 
 /**
- * 世界书导出成酒馆 lorebook 的形状（导入那边认的就是这个）。
- *
- * 两头都要用：角色卡导出时把绑定的书塞进 character_book 字段，
- * 世界书编辑器里的「导出本书」直接导出整本 —— 所以沉在这儿。
- *
- * ⚠️ opening 和 characters 也一起导出（酒馆规范里没有这两个字段，多出来的键
- * 别家会忽略）。少了它们，「导出这本书再导回来」就等于**丢掉开场白和全部 NPC** ——
- * 而那正是别人分享一份世界书时最想要的两样东西。cover 同理（连图一起丢就更亏了）。
+ * 世界书导出成酒馆 lorebook 的形状（导入那边认的就是这个）。⚠️ opening / characters / cover 也一起导出（酒馆规范没有这几个键，别家会忽略）：少了它们「导出再导回」会丢开场白和全部 NPC。
  */
 export function worldbookPayload(book) {
   const entries = {};
@@ -259,8 +196,7 @@ export function characterBookPayload(book) {
   return {
     name: lorebook.name,
     description: lorebook.description,
-    // mimitale 私有字段：酒馆不认这三个键，但我们的导入链路认（见 main/worldbook-parse.js）。
-    // 少了 cover，角色卡里的世界书导回来就只剩条目、封面没了。
+    // mimitale 私有字段：酒馆不认，但导入链路认（见 main/worldbook-parse.js）；少了 cover 导回来就没封面
     extensions: {
       mimitale: {
         ...(opening ? { opening } : {}),

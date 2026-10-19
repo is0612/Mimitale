@@ -1,17 +1,9 @@
 'use strict';
 
-// ============================================================================
-//  main/characters.js —— 角色卡的数据整理
-//
-//  独立成模块是为了让 tools/smoke-test.js 能 require 它，跑真正的归一化。
-//
-//  ⚠️ normalizeCharacter 是白名单式的：只保留显式列出的字段，漏一个就静默丢失。
-//  加字段时必须在这里同步加一行。
-// ============================================================================
+// 角色卡的数据整理。独立成模块供 tools/smoke-test.js require 真实现。
+// ⚠️ normalizeCharacter 是白名单式的：只保留显式列出的字段，漏一个就静默丢失；加字段时同步加一行。
 
-// 头像存成 dataURL 直接塞进 JSON，超过这个长度就不带了，免得文件爆掉。
-// 这个上限必须大于「导入上限 × 4/3」（base64 会膨胀约 1.34 倍），
-// 否则合法导入的 PNG 会在保存时被悄悄丢掉头像。
+// ⚠️ 上限必须大于「导入上限 × 4/3」（base64 膨胀约 1.34 倍），否则合法导入的 PNG 会在保存时被丢掉头像。
 const MAX_AVATAR_CHARS = 18000000; // ≈ 13MB 的 PNG，留足余量
 
 // 属性归一化用共享的那一份（主进程 / 渲染层 / 冒烟测试同一份）
@@ -20,39 +12,25 @@ const { normalizePanelFields } = require('./panel-fields.js');
 // 剧情选项：每轮给几个。上下限和渲染层的 MAX_OPTIONS 对齐。
 const MIN_OPTIONS = 1;
 const MAX_OPTIONS = 6;
-// 没在卡上配过的角色，默认就给这么多条 —— 也就是「默认开着」。
-// 想彻底关掉这张卡的选项，得在角色编辑器里把开关取消（那时存的是 `false`）。
+// 默认 4 条；想彻底关掉得在角色编辑器里取消开关（那时存的是 `false`）。
 const DEFAULT_OPTIONS = 4;
 
-// 一张卡最多带几张「表情图」。每张都是 base64，所以要有上限。
-// 一套完整的情绪差分动辄二三十张，所以给得比一般列表宽。
+// 每张表情图都是 base64，所以要有上限。
 const MAX_EXPRESSIONS = 60;
-// 表情名 / 触发词的单个长度上限
 const MAX_EXPRESSION_NAME = 24;
-// 一条表情最多几个额外的触发词
 const MAX_EXPRESSION_KEYWORDS = 8;
-// 表情的「情绪键」（英文短标识）长度上限，给 <emo> 标签用
+// 情绪键（英文短标识），给 <emo> 标签用
 const MAX_EXPRESSION_KEY = 16;
 
-// 一个角色最多绑几本世界书。导入角色卡时内嵌的那本会自动绑上，
-// 之后用户还能手工加，所以给一个够用但不会失控的上限。
 const MAX_CHARACTER_WORLDBOOKS = 50;
 
-// 一张卡最多带几条「备选开场白」（同一个角色的不同入场剧本，比如
-// 「男性开场 / 女性开场 / NTR 开场 1 / NTR 开场 2」）。
-// 语料实测：1341 张卡里 424 张带（31%），共 1916 条，单卡最多 29 条 ——
-// 给 50 足够宽松，又能挡住畸形卡把 characters.json 撑爆。
+// 语料实测单卡最多 29 条，给 50 足够宽松。
 const MAX_ALTERNATE_GREETINGS = 50;
-// 单条备选开场白的长度上限，和 firstMes 对齐（都是「一段正文」）。
+// 和 firstMes 对齐（都是「一段正文」）
 const MAX_GREETING_CHARS = 10000;
-// 作者名 / 版本号这类元信息的长度上限。语料里通常只有二三十字符，
-// 但转录站的作者字段偶尔塞一长串简介，所以留够、但不无限。
 const MAX_META_CHARS = 100;
 
-/**
- * 世界书 id 列表归一化。
- * 去重、去空、限制条数 —— 和渲染层的 normalizeIdList 一个思路。
- */
+/** 世界书 id 列表：去重、去空、限条数。 */
 function normalizeWorldbookIds(value) {
   if (!Array.isArray(value)) return [];
   const out = [];
@@ -66,13 +44,7 @@ function normalizeWorldbookIds(value) {
   return out;
 }
 
-/**
- * 备选开场白归一化：去空、去重、限条数、限长度。
- *
- * 去重是有必要的 —— 同一张卡里 `first_mes` 和 `alternate_greetings[0]`
- * 经常一字不差（作者复制粘贴留下的），摆出两条一模一样的选项只会让人以为点错了。
- * 这里只管数组内部；和 firstMes 的重合由调用方（渲染层的选择器）再滤一道。
- */
+/** 备选开场白：去空、去重、限条数、限长度。数组内去重，和 firstMes 的重合由调用方再滤。 */
 function normalizeAlternateGreetings(value) {
   if (!Array.isArray(value)) return [];
   const out = [];
@@ -93,25 +65,15 @@ function newCharacterId() {
   return `c${Date.now().toString(36)}${Math.floor(Math.random() * 9000 + 1000)}`;
 }
 
-/**
- * 剧情选项的配置归一化。
- *
- * 三种情况：
- *   · `false`（角色编辑器里明确把开关关掉）→ 原样返回 —— 它是「这张卡不要
- *     剧情选项」的唯一记号，必须活过归一化，否则关掉的角色一存盘又变成默认开；
- *   · 没有这个字段 / 形状不对（老卡、手改过的 JSON）→ 默认配置（4 条）；
- *   · 对象 → 按里面的 count / hint 整理。
- *
- * 调用方只要判空即可（`false` 是 falsy，落到「不注入」）。
- */
+/** 剧情选项的配置归一化。
+ * ⚠️ `false` 必须原样返回：它是「这张卡不要选项」的唯一记号，丢了会让关掉的角色存盘后变回默认开。 */
 function normalizeOptionsSpec(value) {
   if (value === false) return false;
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return { count: DEFAULT_OPTIONS, hint: '' };
   }
 
-  // count 缺失 / null / 空串都算「没配过」，用默认条数；
-  // 不能直接 Number() —— Number(null) 和 Number('') 都是 0，会被夹成 1 条。
+  // ⚠️ 不能直接 Number()：Number(null) 和 Number('') 都是 0，会被夹成 1 条。
   const rawCount =
     value.count === null || value.count === undefined || value.count === ''
       ? NaN
@@ -124,26 +86,13 @@ function normalizeOptionsSpec(value) {
   return { count, hint };
 }
 
-/**
- * 角色「属性」：一串 { name, type, value, min?, max?, hint? }，名字去重，顺序保留。
- *
- * 归一化本身交给 main/panel-fields.js —— 那个模块主进程、渲染层、冒烟测试
- * 三方共用一份，分开写两份迟早会漂。条数上限也在那边（MAX_FIELDS）。
- */
+/** 属性归一化交给 main/panel-fields.js（三方共用一份，条数上限也在那边）。 */
 function normalizeAttributes(value) {
   return normalizePanelFields(value);
 }
 
-/**
- * 角色「表情图」：一串 { name, keywords, key, default, image }，名字去重、顺序保留。
- *
- *   · name     —— 表情名，同时是默认的触发词（例如「害羞」）
- *   · keywords —— 额外触发词。回复正文里出现名字或任一触发词，就算命中
- *   · key      —— 英文情绪键（例如 shy）。模型在正文里写 <emo>shy</emo> 时按它对上，
- *                 比中文关键词匹配更准；不填也不影响用
- *   · default  —— 标了这一条的，就是「没命中任何表情时显示的那张」。整张卡只留一条
- *   · image    —— dataURL。允许暂缺（先填名字、图以后再传）
- */
+/** 表情图：{ name, keywords, key, default, image }，名字去重、顺序保留。
+ *  key 是英文情绪键，模型写 <emo>shy</emo> 时按它精确比对；default 整张卡只留一条。 */
 function normalizeExpressions(value) {
   if (!Array.isArray(value)) return [];
   const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -165,12 +114,10 @@ function normalizeExpressions(value) {
           .slice(0, MAX_EXPRESSION_KEYWORDS)
       : [];
 
-    // 情绪键只留字母数字下划线连字符 —— 它是给 <emo> 标签做精确比对的，
-    // 夹进空格或标点只会让比对永远落空。
+    // ⚠️ 情绪键只留字母数字下划线连字符：夹进空格或标点会让 <emo> 比对永远落空。
     const key = str(r.key, MAX_EXPRESSION_KEY).toLowerCase().replace(/[^a-z0-9_-]/g, '');
 
-    // 默认脸只认第一条：后面再有标 true 的，当没标。整张卡只能有一个兜底，
-    // 多留几个的话「没命中时显示哪张」就变成看顺序了。
+    // 默认脸只认第一条：留多个兜底会让「没命中时显示哪张」取决于顺序。
     const isDefault = r.default === true && !hasDefault;
     if (isDefault) hasDefault = true;
 
@@ -195,24 +142,18 @@ function normalizeCharacter(raw, source) {
   const id = typeof r.id === 'string' ? r.id.trim() : '';
 
   const avatar = typeof r.avatar === 'string' && r.avatar.startsWith('data:image/') ? r.avatar : '';
-  // 角色形象（2:3 立绘），和头像分开存：头像是消息气泡 / 状态卡上那个小圆图，
-  // 形象是角色库列表上那张竖版图、点开能看大图。
+  // 形象是 2:3 立绘（角色库那张竖版图），和头像（气泡上的小圆图）分开存。
   const portrait = typeof r.portrait === 'string' && r.portrait.startsWith('data:image/') ? r.portrait : '';
-  // 表情图（多张，按回复正文里的关键词取用）。空数组就不落这个键。
   const expressions = normalizeExpressions(r.expressions);
-  // 备选开场白（同一张卡的不同入场剧本）
   const alternateGreetings = normalizeAlternateGreetings(r.alternateGreetings);
-  // `source` 参数来自调用方；脏值别原样写进数据里
+  // `source` 来自调用方，脏值别原样写进数据里
   const fallbackSource = ['png', 'json', 'manual'].includes(source) ? source : 'manual';
 
   return {
     id: id || newCharacterId(),
     name: str(r.name, 120).trim() || '未命名角色',
     avatar: avatar.length <= MAX_AVATAR_CHARS ? avatar : '',
-    // ⚠️ 只在输入里本来就有这个键时才写出来（哪怕是空串）。
-    //    「没有这个键」= 老卡，只有一张图，读的时候用头像顶上（见 library.js 的
-    //    characterPortrait）；「键在、值是空串」= 用户明确不要形象。
-    //    写成 portrait: '' 会把老卡全变成「没有形象」，列表就只剩首字色块了。
+    // ⚠️ 只在输入里本来就有这个键时才写出来：写成 portrait: '' 会把老卡全变成「没有形象」。
     ...(typeof r.portrait === 'string' ? { portrait: portrait.length <= MAX_AVATAR_CHARS ? portrait : '' } : {}),
     ...(expressions.length ? { expressions } : {}),
     description: str(r.description, 20000),
@@ -223,29 +164,23 @@ function normalizeCharacter(raw, source) {
     systemPrompt: str(r.systemPrompt, 10000),
     postHistoryInstructions: str(r.postHistoryInstructions, 10000),
     creatorNotes: str(r.creatorNotes, 5000),
-    // 备选开场白。空数组就不落这个键（和 expressions 同理）—— 省得每一张老卡
-    // 存盘后都多出一个空数组，白白撑大 characters.json。
+    // 空数组就不落这个键 —— 否则老卡存盘后都多一个空数组，白白撑大 characters.json。
     ...(alternateGreetings.length ? { alternateGreetings } : {}),
-    // 元信息：作者与版本号。转录站会填（语料里 77% / 65% 有值），
-    // 用来分辨「同一个角色的不同作者 / 不同版本」；没有就是空串。
+    // 作者与版本号：用来分辨同一角色的不同作者 / 版本。
     creator: str(r.creator, MAX_META_CHARS).trim(),
     characterVersion: str(r.characterVersion, MAX_META_CHARS).trim(),
     tags: Array.isArray(r.tags)
       ? r.tags.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim().slice(0, 40)).slice(0, 20)
       : [],
-    // 状态面板的字段模板。少了这一行，界面上填的属性一存盘就没了。
+    // ⚠️ 少了这一行，界面上填的属性一存盘就没了。
     attributes: normalizeAttributes(r.attributes),
-    // 剧情选项的配置（每轮给几个 + 额外要求）。没配过的角色默认给 4 条；
     // 只有 `false` 才表示「这张卡明确不要剧情选项」。
     optionsSpec: normalizeOptionsSpec(r.optionsSpec),
-    // 角色自带的世界书。导入带 character_book 的角色卡时自动绑上，
-    // 之后用户也能自己加/删。
+    // 导入带 character_book 的角色卡时自动绑上，之后用户也能自己加/删。
     worldbookIds: normalizeWorldbookIds(r.worldbookIds),
-    // 开关：关掉后这张角色在哪儿都不带入自带的那些书。
-    // 缺省视为开启（导入即可用）；只有显式 false 才算关。
+    // 缺省视为开启；只有显式 false 才算关。
     worldbookEnabled: r.worldbookEnabled !== false,
-    // 「在状态栏显示」：只对世界书副本有意义，勾了才让这个 NPC 的状态进入口条。
-    // ⚠️ 白名单式，必须显式保留，否则一存盘就丢。只在显式 true 时写出来。
+    // ⚠️ 白名单式，必须显式保留否则一存盘就丢；只在显式 true 时写出来。
     ...(r.showInPanel === true ? { showInPanel: true } : {}),
     source: ['png', 'json', 'manual'].includes(r.source) ? r.source : fallbackSource,
     createdAt: Number(r.createdAt) || Date.now(),

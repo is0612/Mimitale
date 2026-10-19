@@ -1,23 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  main/window.js —— 主窗口 + 开发模式热重载
-//
-//  跑 `npm run dev` 时会自动打开 DevTools，并按「让改动生效要多大代价」分两档监听：
-//
-//    · 界面层（renderer/** 和根目录的 preload.js）
-//        保存即刷新窗口。这些文件每次 reload 都会重新加载 / 重新注入，本来就不用重启。
-//        用 reloadIgnoringCache() 而不是 reload()：file:// 下的脚本/样式会被 Chromium
-//        记住，普通 reload() 偶尔仍吃旧代码 —— 「改了怎么没生效」多半是这么来的。
-//
-//    · 主进程（main.js、main/**、preload-pet.js）
-//        整进程重启（app.relaunch + app.quit()）。主进程代码只在启动时读一次，
-//        Electron 也没有「只重启主进程」这回事，只能重开一个进程。
-//        ⚠️ 用 quit() 不用 exit()：exit() 跳过 before-quit，而桌宠位置落盘和单实例
-//           标记清理都挂在 before-quit 上（见 main.js）。
-//
-//  改动有没有被接住，看终端里的 [dev] 行。
-// ============================================================================
+// 主窗口 + 开发模式热重载。跑 `npm run dev` 时开 DevTools，并按「让改动生效要多大代价」分两档监听。
+// ⚠️ 界面层用 reloadIgnoringCache() 而不是 reload()（file:// 下普通 reload 偶尔仍吃旧代码）；主进程改动只能整进程重启，且用 quit() 不用 exit() —— exit() 跳过 before-quit，桌宠落盘和单实例清理都挂在上面。
 
 const { app, BrowserWindow, shell } = require('electron');
 const path = require('node:path');
@@ -27,19 +11,14 @@ const { DEFAULT_SETTINGS, loadSettings, ACCENTS } = require('./providers.js');
 
 let mainWindow = null;
 
-// 窗口底色跟着主题 + 配色方案走，启动时就不会先闪一下别的颜色。
-// 这两个值必须和 style.css 里各配色的 --bg 保持一致（改配色时两边一起改）。
-// ⚠️ 第一项是默认配色（见 providers.js 的 ACCENTS）；加新配色时这里要一起补，
-//    否则 `WINDOW_BG[accent]` 是 undefined，会兜回默认配色。
+// 窗口底色跟着主题 + 配色走，启动时就不会先闪一下别的颜色。
+// ⚠️ 值必须和 style.css 里各配色的 --bg 一致；加新配色时这里同步补，否则 `WINDOW_BG[accent]` 是 undefined。
 const WINDOW_BG = {
   amber: { light: '#f4f5f7', dark: '#101113' }
 };
 
-// 窗口尺寸 —— **只有这一处定义**。
-//
-// 用 useContentSize，所以这几个数就是「画布」的尺寸，和设计稿的 frame 一一对应。
-// 冒烟测试的截图窗口也从这里读（tools/smoke-test.js）——
-// 别再另写一份尺寸，否则「设计稿 / 真机 / 出图」会各用各的。
+// ⚠️ 窗口尺寸只有这一处定义：useContentSize 下这几个数就是画布尺寸，和设计稿 frame 一一对应。
+//    冒烟测试的截图窗口也从这里读，别再另写一份，否则「设计稿 / 真机 / 出图」会各用各的。
 const WINDOW_SIZE = {
   width: 1440,
   height: 900,
@@ -93,11 +72,8 @@ function scheduleDevRelaunch(reason) {
   }, DEV_DEBOUNCE_MS);
 }
 
-// 项目根下这几个文件的代价不一样：
-//   preload.js      每次窗口 reload 都会重新注入 —— 刷新就生效
-//   preload-pet.js  属于宠物窗口那一侧 —— 跟着整进程重启最省事
-// 监听方式是「监听根目录 + 按文件名过滤」，不用 fs.watch 盯单个文件：
-// 编辑器保存是「写临时文件再改名」，盯单文件的 watcher 会跟丢目标。
+// ⚠️ 根目录用「非递归监听 + 文件名过滤」而不是 fs.watch 盯单文件：编辑器保存是「写临时文件再改名」，
+//    盯单文件的 watcher 会跟丢目标。preload.js 刷新即生效，preload-pet.js 跟着整进程重启。
 const ROOT_RELOAD_FILES = new Set(['preload.js']);
 const ROOT_RELAUNCH_FILES = new Set(['main.js', 'preload-pet.js']);
 
@@ -106,15 +82,11 @@ function watchRendererForDev() {
 
   const rootDir = path.join(__dirname, '..');
 
-  // 界面层：整个 renderer/ 目录，递归
   addDevWatcher(path.join(rootDir, 'renderer'), { recursive: true }, () => scheduleDevReload('renderer/'));
 
-  // 主进程：main/ 目录递归
   addDevWatcher(path.join(rootDir, 'main'), { recursive: true }, () => scheduleDevRelaunch('main/'));
 
-  // 根目录：**非递归** —— 只报直接子项的变化，data/ 里的读写（会话、角色、宠物位置）
-  // 打不进来。即便如此也还是按文件名白名单过滤一遍，因为根目录下还住着
-  // assets/、node_modules/、generated-images/ 这些会被频繁碰的东西。
+  // ⚠️ 根目录非递归（data/ 里的读写打不进来），但仍按白名单过滤：assets/、node_modules/ 等会被频繁碰。
   addDevWatcher(rootDir, { recursive: false }, (filename) => {
     if (ROOT_RELOAD_FILES.has(filename)) return scheduleDevReload(filename);
     if (ROOT_RELAUNCH_FILES.has(filename)) return scheduleDevRelaunch(filename);
@@ -150,23 +122,18 @@ function createWindow() {
   try {
     const saved = loadSettings();
     theme = saved.theme === 'dark' ? 'dark' : 'light';
-    // 兜底要和 providers.js 的 normalizeSettings / preload.js / ui/theme.js 三处一致，
-    // 别在这儿写死一个具体配色名。
+    // ⚠️ 兜底配色要和 providers.js / preload.js / ui/theme.js 三处一致，别在这儿写死配色名。
     accent = ACCENTS.includes(saved.accent) ? saved.accent : ACCENTS[0];
   } catch (err) {
     // 读不到设置就用默认主题，不影响启动
   }
 
   mainWindow = new BrowserWindow({
-    // 1440×900 的内容区：三栏（224 对话列表 / 对话 / 300 在场角色）在 1180 宽下太挤，
-    // 对话区只剩六百多像素，中文字一行放不下十来个字。
-    // 本机屏幕 1920×1080、工作区 1920×1040，边框再吃掉一点也放得下。
     ...WINDOW_SIZE,
     useContentSize: true,
     backgroundColor: (WINDOW_BG[accent] || WINDOW_BG[ACCENTS[0]])[theme],
     title: '如我所书',
-    // 窗口 / 任务栏图标。图标真源在 图片/logo.jpg（1040×1040 深蓝底），
-    // 这里用的是 client/assets/icon.ico（16~256 七档尺寸），由脚本一次性生成。
+    // 图标真源是 图片/logo.jpg；这里用的是 client/assets/icon.ico（16~256 七档），由脚本一次性生成。
     icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
     autoHideMenuBar: true,
     webPreferences: {
@@ -178,8 +145,7 @@ function createWindow() {
       additionalArguments: [
         `--mimitale-theme=${theme}`,
         `--mimitale-accent=${accent}`,
-        // 版本号同路：侧栏品牌行要显示它，而渲染层是无构建、无 Node 的，
-        // 读不到 package.json —— 只能在启动时从主进程递进去。
+        // 渲染层无构建、无 Node，读不到 package.json —— 版本号只能启动时从主进程递进去。
         `--mimitale-version=${app.getVersion()}`
       ]
     }
@@ -190,9 +156,7 @@ function createWindow() {
     watchRendererForDev();
   }
 
-  // F12 开/关 DevTools、F5 / Ctrl+R 刷新页面。
-  // Electron 默认只绑了 Ctrl+Shift+I 和 Ctrl+R，从浏览器过来的人会习惯性按 F12 / F5，
-  // 那两下在 Electron 里是没反应的，所以这里补上。
+  // Electron 默认只绑了 Ctrl+Shift+I 和 Ctrl+R；F12 / F5 在 Electron 里没反应，这里补上。
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
     // 长按会自动连发，刷一次就够了
@@ -204,9 +168,7 @@ function createWindow() {
       return;
     }
 
-    // F5 和 Ctrl+R 都给刷新。用 reloadIgnoringCache 而不是 reload：
-    // file:// 下的脚本/样式会被 Chromium 缓存，普通 reload 偶尔仍吃旧代码 ——
-    // 按刷新就是为了「看新的」，宁可多读一次盘。
+    // ⚠️ 用 reloadIgnoringCache 而不是 reload：file:// 下脚本/样式被 Chromium 缓存，普通 reload 偶尔吃旧代码。
     const isReload =
       input.key === 'F5' ||
       (input.control && !input.shift && !input.alt && (input.key === 'r' || input.key === 'R'));
@@ -219,20 +181,9 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
-  /**
-   * 窗口只准停在本地界面这一个文档上。
-   *
-   * 为什么必须有这条：preload 是**每个文档**都会注入的，而它把 window.mimitale
-   * 整个暴露出去（getSettings 会返回所有服务商的 API Key 明文）。没有这道守卫时，
-   * 往窗口里拖一个 .html 或一个链接（聊天区、侧栏都行，不只是输入框）就会让窗口
-   * **导航到那个文档**，外来页面于是拿到了同一套特权接口 —— 拖放等于把钥匙递出去。
-   *
-   * 允许的只有「同文档内的锚点跳转」（帮助页目录是 <a href="#xxx">）：
-   * 那种情况 url 和应用自己的地址就只差一个 hash，不换文档，也就不会重新注入 preload。
-   * 这里按「路径是不是那个 index.html」判断，不去拼 URL 字符串比 ——
-   * index.html 的 file URL 里中文/空格会被百分号编码，字符串比较容易出假阴性。
-   * 其余一律拦掉：拖进来的文件、外站链接、重定向。
-   */
+  /** ⚠️ 窗口只准停在本地界面这一个文档：preload 每个文档都注入，且 window.mimitale 暴露了 API Key 明文，
+   *  拖 .html 或链接进来就会导航过去，外来页面于是拿到同一套特权接口。
+   *  只允许同文档锚点跳转；按路径比，不拼 URL 字符串 —— file URL 里中文 / 空格会被百分号编码。 */
   const appIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
 
   const isOwnDocument = (url) => {

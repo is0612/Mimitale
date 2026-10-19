@@ -1,27 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  main/pet-ipc.js —— 桌宠的编排层：IPC 通道 + 右键菜单 + 「让宠物说话」这条流程
-//
-//  这一层是三份职责的交汇点：
-//    main/pet-store.js   数据（设置 / 记忆 / 人格 / 形象）
-//    main/pet-window.js  那个透明窗口
-//    main/pet-brain.js   怎么让它开口
-//
-//  ── 关于「谁决定该说话了」────────────────────────────────────────────
-//  **判断在主界面（renderer）那边做，主进程只负责「说」。**
-//  原因是上下文：主界面手里有会话、有最近几条、有摘要、有状态面板，
-//  这些都在渲染层的内存里；主进程只有一个磁盘上的 conversations.json，
-//  让它去还原「现在聊到哪了」等于把一份逻辑抄两遍，迟早对不上。
-//
-//  所以链路是：
-//    主界面判断「该说话了」→ pet:speak（带上它组好的上下文）→ 主进程调模型
-//      → pet:chunk / pet:say 推给**宠物窗口**（不是主界面）
-//
-//  反向的（右键点「让桌宠现在说话」）也一样：主进程弹菜单，但它同样没有上下文，
-//  所以它只是通知主界面「用户想让它说一句」，由主界面组上下文再发回来。
-//  ────────────────────────────────────────────────────────────────────────
-// ============================================================================
+//  main/pet-ipc.js —— 桌宠编排层：IPC 通道 + 右键菜单 + 「让宠物说话」流程。
+//  ⚠️ 该不该说话由渲染层判断（会话上下文都在那边），主进程只负责「说」；
+//     右键「现在说话」也只是通知渲染层组好上下文再发回来。
 
 const { ipcMain, Menu } = require('electron');
 
@@ -65,16 +46,12 @@ const {
   stopDrag
 } = require('./pet-window.js');
 
-// ---------------------------------------------------------------------------
-//  宠物自己的「正在生成」控制器
-//
-//  ⚠️ 它和 main/ipc.js 的 activeControllers 是**两套独立控制器**，别合并。
-//     合并之后，宠物一开口就会 abort 掉正在流的角色回复（见 pet-brain.js 顶部）。
-// ---------------------------------------------------------------------------
+// 宠物自己的「正在生成」控制器
+// ⚠️ 与 main/ipc.js 的 activeControllers 是两套，别合并：合并后宠物一开口会 abort 掉正在流的角色回复
 
 let petController = null;
 
-/** 点一下宠物时的应声。全是本地模板 —— 不调模型、不花钱、也不进记忆。 */
+/** 点一下宠物时的应声：本地模板，不调模型、不进记忆 */
 const POKE_LINES = [
   '…干嘛呀，正看着呢。',
   '*耳朵抖了一下* 嗯？',
@@ -94,7 +71,7 @@ function focusMainWindow() {
   win.focus();
 }
 
-/** 把当前会话用的模型列表摊平，给「切换模型」子菜单用 */
+/** 把模型列表摊平，供「切换模型」子菜单用 */
 function flattenModels(settings) {
   const out = [];
   for (const provider of (settings && settings.providers) || []) {
@@ -111,15 +88,9 @@ function flattenModels(settings) {
   return out;
 }
 
-// ---------------------------------------------------------------------------
-//  状态打包 / 广播
-// ---------------------------------------------------------------------------
+// ---- 状态打包 / 广播 ----
 
-/**
- * 给主界面（设置页）用的完整状态。
- * 和给宠物窗口的那份不是一回事：这边还要人格正文、记忆条数，
- * 那些宠物页面都用不上（它连人格都不该知道）。
- */
+/** 给主界面（设置页）的完整状态：比宠物窗口那份多出人格正文、记忆条数（宠物页不该知道人格）。 */
 function mainStatePayload() {
   const config = loadPetConfig();
   const pet = findPet(config, config.activeId);
@@ -139,26 +110,19 @@ function mainStatePayload() {
   };
 }
 
-/** 设置变了 → 两边都刷一遍（设置页和右键菜单要同步，需求里写死的一条） */
+/** 设置变了就两边都刷（设置页与右键菜单要同步） */
 function broadcastState() {
   sendToRenderer('pet:changed', mainStatePayload());
   const win = getPetWindow();
   if (win) pushPetState();
 }
 
-/** 宠物窗口要的那份状态统一走 pet-window.js 的 buildPetStatePayload（rig 形象包） */
+/** 宠物窗口那份状态统一走 buildPetStatePayload */
 
-// ---------------------------------------------------------------------------
-//  说话
-// ---------------------------------------------------------------------------
+// ---- 说话 ----
 
-/**
- * 真的让宠物说一次。
- *
- * @param {object} payload { reason: 'auto'|'manual'|'preview', context, petId }
- *   reason 决定要不要写记忆 —— **preview 永远不写**（设置页的「预览」是用来调人格的，
- *   反复点几次就把记忆灌满了，那是明显的污染）。
- */
+/** 真的让宠物说一次。@param payload { reason: 'auto'|'manual'|'preview', context, petId }
+ *  ⚠️ preview 永远不写记忆：设置页反复点预览会把记忆灌满。 */
 async function speakOnce(payload) {
   const request = payload || {};
   const reason = request.reason === 'preview' ? 'preview' : request.reason === 'manual' ? 'manual' : 'auto';
@@ -169,29 +133,24 @@ async function speakOnce(payload) {
   const pet = findPet(config, request.petId || config.activeId);
   if (!pet) return { ok: false, error: '没有可用的桌宠' };
 
-  // 静音只挡「自己冒出来」；用户点了「现在说话」和设置页的预览都不受它影响 ——
-  // 否则用户点了没反应，会以为坏了
+  // 静音只挡自动触发；手动「现在说话」和预览不受影响，否则用户点了没反应会以为坏了
   if (reason === 'auto' && pet.mutedUntil > Date.now()) {
     return { ok: false, skipped: true, error: '正在静音' };
   }
 
-  // 隐藏 = 不说话。这里再挡一道的理由和上面静音那条一样：主界面那份缓存有可能
-  // 晚一拍（用户是在宠物窗口上右键改的配置），而这里读的是刚落盘的 config，最准。
-  // 少了这一道，speakOnce 后面那句 setPetVisible(true) 会把用户刚藏起来的猫
-  // 重新顶到桌面上来。
+  // 隐藏 = 不说话。这里再挡一道：主界面缓存可能晚一拍，而这里读的是刚落盘的 config，最准。
+  // 少了这一道，后面那句 setPetVisible(true) 会把用户刚藏起来的猫重新顶到桌面上。
   if (reason === 'auto' && !pet.visible) {
     return { ok: false, skipped: true, error: '桌宠已隐藏' };
   }
 
-  // 上一次还没说完：直接掐掉重来（宠物不该排队说两遍）
+  // 上一次还没说完就直接掐掉重来（不排队）
   if (petController) petController.abort();
   petController = new AbortController();
   const { signal } = petController;
 
-  // ⚠️ 被掐掉的那次请求还没走完它的 finally / onDelta —— 那些回调如果照常往
-  //    宠物窗口推消息，就会把**新**这次请求的流式和「思考中」状态搅乱
-  //    （旧的 finally 会把新请求的思考气泡关掉）。所以每次推送前先确认
-  //    「我还是当前那一次」。abort 只取消底层的网络请求，不会取消已经排好的回调。
+  // ⚠️ 被 abort 的那次请求仍会跑完 finally / onDelta：它们若照常推送，会搅乱新请求的流式与
+  //    「思考中」状态（旧的 finally 会把新请求的气泡关掉）。abort 只取消网络，不取消已排的回调。
   const isCurrent = () => petController !== null && petController.signal === signal;
 
   const win = getPetWindow();
@@ -214,7 +173,7 @@ async function speakOnce(payload) {
       return { ok: false, error: result.error };
     }
 
-    // 已经被新一次请求顶掉时，这一句就不该再往窗口里挤
+    // 已被新一次请求顶掉时不再推送
     if (isCurrent()) {
       sendToPet('pet:say', {
         lines: result.lines,
@@ -256,8 +215,7 @@ async function speakOnce(payload) {
       fellBack: result.tried > 1
     };
   } finally {
-    // 只有「还是当前这一次」才关思考状态并交还控制器：
-    // 被顶掉的那次如果照关，新请求刚点亮的思考气泡会被它顺手吹灭。
+    // 只有还是当前这一次才关思考状态，否则旧请求会吹灭新请求刚点亮的思考气泡
     if (isCurrent()) {
       sendToPet('pet:busy', false);
       petController = null;
@@ -266,15 +224,13 @@ async function speakOnce(payload) {
   }
 }
 
-/** 让主界面去组上下文再来找我们（主进程手里没有「现在聊到哪了」） */
+/** 让主界面组好上下文再来找我们（主进程手里没有「现在聊到哪了」） */
 function askRendererToSpeak(reason) {
   focusMainWindow();
   sendToRenderer('pet:want-speak', { reason: reason === 'manual' ? 'manual' : 'auto' });
 }
 
-// ---------------------------------------------------------------------------
-//  静音
-// ---------------------------------------------------------------------------
+// ---- 静音 ----
 
 function muteRemainMs(pet) {
   return Math.max(0, (pet.mutedUntil || 0) - Date.now());
@@ -284,13 +240,8 @@ function setMute(pet, until) {
   return patchPet(pet.id, { mutedUntil: until }).then(() => broadcastState());
 }
 
-// ---------------------------------------------------------------------------
-//  原生右键菜单
-//
-//  用 Electron 的 Menu 而不是在宠物页面里自绘：宠物窗口只有 300×380，
-//  一个带二级菜单的右键菜单根本铺不下，还得自己处理溢出、勾选态、点到外面关掉。
-//  原生菜单这些全是白拿的，二级菜单、单选勾、禁用项、分隔线都不用写一行 CSS。
-// ---------------------------------------------------------------------------
+// 原生右键菜单：宠物窗口只有 300×380，带二级菜单的自绘菜单铺不下，
+// 用 Electron Menu 白拿二级菜单、单选勾、禁用项、分隔线。
 
 function everyTurnsSubmenu(pet) {
   const options = [1, 2, 3, 5, 10].filter((n) => n >= SPEAK_EVERY_MIN && n <= SPEAK_EVERY_MAX);
@@ -302,14 +253,8 @@ function everyTurnsSubmenu(pet) {
   }));
 }
 
-/**
- * 「大小」子菜单。五档等比递增（0.7 → 2 倍），其中「标准」= 1。
- *
- * 用**离散档位**而不是「放大 / 缩小」两个按钮：菜单是一次性弹层，点一下就关了，
- * 用户看不到「又变大了一点」的反馈，只能反复右键 —— 不如直接给几档让他看见目标。
- * 想连续微调的走设置页的滑块（那条路能拖、能实时看效果）。
- * 勾选态按 pet.scale 判，容差 0.01 —— 滑块调出 1.02 这种值时不至于一档都不高亮。
- */
+/** 「大小」子菜单：五档 0.7 → 2 倍，「标准」= 1。用离散档位而非「放大 / 缩小」按钮 ——
+ *  菜单点一下就关、看不到反馈；勾选态按 pet.scale 判，容差 0.01 免得滑块值一档都不高亮。 */
 const SCALE_STEPS = [
   { scale: 0.7, label: '小' },
   { scale: 1, label: '标准' },
@@ -328,14 +273,14 @@ function scaleSubmenu(pet) {
   }));
 }
 
-/** 改缩放：既走 patchPet（落盘），也让当前窗口立刻跟上，最后广播一次 */
+/** 改缩放：落盘 + 立即应用到窗口 + 广播 */
 function setPetScale(scale) {
   const config = loadPetConfig();
   const pet = findPet(config, config.activeId);
   if (!pet) return Promise.resolve();
   const value = Math.max(0.4, Math.min(2, Number(scale) || 1));
   return patchPet(pet.id, { scale: value }).then(() => {
-    // patchPet 拿到的是队列里写完的那份，再读一次确保是最终值
+    // 再读一次，确保拿到队列写完的最终值
     applyScale(findPet(loadPetConfig(), pet.id));
     broadcastState();
   });
@@ -422,8 +367,7 @@ function popupPetMenu() {
     }
   ];
 
-  // 静音 / 暂停的状态直接摆在最上面 —— 用户右键的第一件事就是想知道
-  // 「它为什么不说话了」，别让他去菜单深处找
+  // 静音 / 暂停状态摆最上面 —— 用户右键第一件事就是想知道「它为什么不说话了」
   if (muted) template.push({ label: `已静音，还剩 ${mins} 分钟`, enabled: false });
   if (!pet.speakEnabled) template.push({ label: '主动发言已暂停', enabled: false });
 
@@ -486,12 +430,9 @@ function setVisibleAndRemember(pet, visible) {
   });
 }
 
-// 换形象：设置页那个下拉走 pet:skins / listRigSkins，
-// 列出 assets/pet/ 和 data/pet/skins/ 下所有带 model.json 的目录。
+// 换形象下拉走 pet:skins / listRigSkins（扫 assets/pet/ 与 data/pet/skins/ 下带 model.json 的目录）。
 
-// ---------------------------------------------------------------------------
-//  窗口位置记忆（pet-window.js 里是懒 require 调过来的）
-// ---------------------------------------------------------------------------
+// ---- 窗口位置记忆（pet-window.js 里懒 require 调过来） ----
 
 function rememberBounds(bounds) {
   const config = loadPetConfig();
@@ -500,27 +441,17 @@ function rememberBounds(bounds) {
   return patchPet(pet.id, { bounds });
 }
 
-// ---------------------------------------------------------------------------
-//  注册
-// ---------------------------------------------------------------------------
+// ---- 注册 ----
 
 function registerPetIpc() {
   // ---- 来自主界面（设置页 / 触发） ----
 
   ipcMain.handle('pet:get', () => mainStatePayload());
 
-  /**
-   * 列出可用的形象包（换肤下拉用）。扫 assets/pet/ 与 data/pet/skins/ 下所有
-   * 带 model.json 的目录 —— 所以「把自己的角色放进去」就等于「多了个可选形象」。
-   */
+  /** 列出可用形象包（换肤下拉用）：扫 assets/pet/ 与 data/pet/skins/ 下带 model.json 的目录。 */
   ipcMain.handle('pet:skins', () => listRigSkins());
 
-  /**
-   * 改配置。两种调用方式：
-   *   { patch }            改根上的（enabled / activeId）
-   *   { petId, patch }     改某一只的
-   * 返回最新的完整状态，界面不用再拉一次。
-   */
+  /** 改配置：{ patch } 改根上的，{ petId, patch } 改某一只的；返回最新完整状态。 */
   ipcMain.handle('pet:update', async (_event, payload) => {
     const data = payload || {};
     const patch = data.patch && typeof data.patch === 'object' ? data.patch : {};
@@ -532,7 +463,7 @@ function registerPetIpc() {
       await patchPetConfig(patch);
     }
 
-    // 几个字段改完有副作用，得跟上
+    // 几个字段改完要跟上副作用
     const config = loadPetConfig();
     const pet = findPet(config, config.activeId);
     if (pet) {
@@ -548,14 +479,12 @@ function registerPetIpc() {
 
   ipcMain.handle('pet:speak', (_event, payload) => speakOnce(payload));
 
-  // 设置页「预览」旁边的「让桌宠说出这句」：把已经生成好的那句话直接推过去，
-  // 不重新生成、不写记忆（它本来就是预览的产物）
+  // 把已生成好的那句话直接推过去：不重新生成、不写记忆（它本来就是预览的产物）
   ipcMain.handle('pet:say-now', (_event, payload) => {
     const text = String((payload && payload.text) || '').trim();
     if (!text) return { ok: false, error: '没有可说的内容' };
     const config = loadPetConfig();
-    // 用户点过「退出桌宠」就别把窗口又拉起来（setPetVisible 会重建窗口），
-    // 跟 speakOnce 的口径一致
+    // 用户点过「退出桌宠」就别把窗口又拉起来（setPetVisible 会重建窗口）
     if (!config.enabled) return { ok: false, error: '桌宠已关闭' };
     const pet = findPet(config, config.activeId);
     if (pet && !pet.visible) setPetVisible(true);
@@ -584,8 +513,7 @@ function registerPetIpc() {
     if (!pet) return { ok: false, error: '没有可用的桌宠' };
 
     const text = String(data.text == null ? '' : data.text);
-    // 清空当「还原成默认」处理：一个空人格会让宠物变成没有性格的文字生成器，
-    // 而那几乎不会是用户想要的（也别用写空文件来实现，理由见 pet-store 的 resetPersona）
+    // 清空当「还原成默认」：空人格会让宠物变成没有性格的生成器，别用写空文件实现（见 pet-store 的 resetPersona）
     if (!text.trim()) {
       return { ok: true, persona: resetPersona(pet.id), reset: true };
     }
@@ -613,8 +541,7 @@ function registerPetIpc() {
     return { ok: true };
   });
 
-  // 删**一条**记忆（设置页每条右侧那个垃圾桶）。
-  // 和 clear 一样广播一次：状态行里的「记忆 N 条」要跟着变。
+  // 删**一条**记忆；和 clear 一样广播一次（状态行的「记忆 N 条」要跟着变）
   ipcMain.handle('pet:memory:delete', async (_event, payload) => {
     const data = payload || {};
     const config = loadPetConfig();
@@ -659,8 +586,7 @@ function registerPetIpc() {
   ipcMain.on('pet:set-click-through', (_event, ignore) => {
     const win = getPetWindow();
     if (!win) return;
-    // forward 只在「正在穿透」时有意义：它让窗口在忽略鼠标的同时
-    // 仍把移动事件转发给页面，页面才能判断出「鼠标回到宠物身上了」
+    // forward 只在穿透时有意义：忽略鼠标的同时仍转发移动事件，页面才判得出鼠标回到了宠物上
     if (ignore) win.setIgnoreMouseEvents(true, { forward: true });
     else win.setIgnoreMouseEvents(false);
   });
@@ -676,11 +602,7 @@ function registerPetIpc() {
   });
 }
 
-/**
- * 启动桌宠：第一次读配置 + 该显示就把窗口起起来。
- * 单独一个函数，是因为它必须在**主窗口建好之后**才调
- * （注册 IPC 时调的话，宠物会先于主界面冒出来）。
- */
+/** 启动桌宠。⚠️ 必须在主窗口建好之后才调 —— 注册 IPC 时调的话宠物会先于主界面冒出来。 */
 function startPet() {
   const config = loadPetConfig();
   const pet = findPet(config, config.activeId);
@@ -688,10 +610,9 @@ function startPet() {
   if (!config.enabled || !pet.visible) return;
 
   const win = createPetWindow();
-  // 用 showInactive：启动时宠物冒出来**不该抢焦点**，
-  // 否则用户一开软件光标就被从输入框里挤走了
+  // 用 showInactive：启动时宠物不该抢焦点，否则用户一开软件光标就被从输入框挤走
   if (win) win.showInactive();
-  startWalkLoop(); // 散步循环跟窗口一起起（条件不满足时它自己会不动）
+  startWalkLoop(); // 散步循环跟窗口一起起（条件不满足时自己不动）
 }
 
 /** 关软件时的收尾：把位置同步写下去（异步写盘可能来不及） */

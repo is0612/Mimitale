@@ -1,32 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  tools/test-pet-window.js —— 桌宠「接线」的专项测试（纯 Node，不需要 Electron 运行时）
-//
-//  为什么单独一个文件：2026-10-09 桌宠连续炸在两个**接线**问题上，而当时项目里
-//  另外三个测试全绿 —— 因为谁都没覆盖到这两处：
-//
-//    1. renderer/pet/cat-figure.js 里 `box` 被声明了两次 → **语法错误** →
-//       整个模块解析失败 → pet.js 一行都不执行（猫、气泡、鼠标穿透、右键菜单
-//       全没了，窗口就是一块透明的空壳）。
-//       这是**加载期**的错误：test-pet-store.js 只测纯逻辑；冒烟测试只跑主界面
-//       （假后端根本不建宠物窗口），两边都碰不到宠物页面的模块图。
-//
-//    2. main/pet-window.js 的 buildPetStatePayload 忘了写进 module.exports，
-//       而 main/pet-ipc.js 直接解构它 → `pet:state:get` 每次抛 TypeError →
-//       宠物页面 pullState() 永远拿不到状态。
-//
-//  这两类问题的共同点：**出错的地方是「两个文件对不对得上」，静态看着都好、
-//  跑起来才知道**。所以这个文件用「静态核对 + 真让 Node 解析一遍」把她们钉住，
-//  一秒内跑完。
-//
-//  跑法：
-//    node tools/test-pet-window.js
-//
-//  ⚠️ 它只读源码、只用 `node --check` **解析**（不执行）宠物页面那几个模块，
-//     所以既不碰 electron、也不碰你的真实数据（项目里出过拿真实 userData
-//     做实测、把 conversations.json 覆盖掉的事故，别再犯）。
-// ============================================================================
+// tools/test-pet-window.js —— 桌宠「接线」的静态核对（纯 Node，不起 Electron）；跑法：node tools/test-pet-window.js
+// ⚠️ 只读源码、只用 `node --check` 解析（不执行），绝不碰真实 userData（出过覆盖 conversations.json 的事故）
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -35,7 +10,6 @@ const { spawnSync } = require('node:child_process');
 const ROOT = path.join(__dirname, '..');
 const PET_DIR = path.join(ROOT, 'renderer', 'pet');
 
-// ---- 断言器：和项目里其他专项测试同一口径（认失败数） ----
 let passed = 0;
 const failures = [];
 
@@ -56,28 +30,13 @@ function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
 }
 
-/**
- * 去掉注释后的源码 —— 断言「代码里没有 X」时必须用它。
- *
- * ⚠️ 直接对着带注释的源码断言会踩两个坑，我都踩过：
- *   1. 我说「这里**不看** enabledGestures」这句注释，本身含有 `enabledGestures`，
- *      于是「poked 不看 enabledGestures」这条断言必然失败；
- *   2. 我写「别做『至少留一个』的兜底」这句注释，含有「至少…一个」，
- *      于是「没有至少留一个的兜底」这条也必然失败。
- *   也就是说：**注释在解释「我们没做某件事」，而断言在找「有没有出现这个词」**，
- *   两者天然打架。凡是要断言「不该出现」的，一律先剥注释。
- */
+/** ⚠️ 断言「代码里不该出现 X」前必须剥注释：注释解释「我们没做 X」时本身就含 X，断言必然失败 */
 function stripComments(src) {
   return src
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')  // 块注释
-    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 '); // 行注释（避开 http:// 之类）
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 '); // [^:] 是为了避开 http:// 里的 ://
 }
 
-// ---------------------------------------------------------------------------
-//  小工具：从源码里静态抠东西（不执行任何模块）
-// ---------------------------------------------------------------------------
-
-/** 抠出 `require('<modulePath>')` 左边那个解构块的变量名 */
 function destructuredFrom(src, modulePath) {
   const at = src.indexOf(`require('${modulePath}')`);
   if (at < 0) return null;
@@ -91,11 +50,7 @@ function destructuredFrom(src, modulePath) {
     .filter((s) => /^[A-Za-z_$][\w$]*$/.test(s));
 }
 
-/**
- * 抠出 `module.exports = { ... }` 里的键。
- * 只认「一层花括号、逗号分隔的标识符」这一种写法 —— 配合下面
- * 「至少抠出一个名字」的断言，写法一变就当场暴露，而不是静默失效。
- */
+/** 只认「一层花括号、逗号分隔的标识符」：写法一变由「至少抠出一个名字」那条断言暴露，不静默失效 */
 function exportedNames(src) {
   const at = src.indexOf('module.exports');
   if (at < 0) return null;
@@ -118,30 +73,13 @@ function exportedNames(src) {
     .filter((s) => /^[A-Za-z_$][\w$]*$/.test(s));
 }
 
-/**
- * 让 Node 去**解析**一个模块（`--check`，只解析不执行）。
- *
- * 为什么用子进程而不是 import()：
- *   · import() 会真的执行模块，pet.js 一进来就摸 document，在 Node 里必崩 ——
- *     那就分不清「语法坏了」和「这个环境跑不起来」，而只有前者是我们要抓的；
- *   · import() 对这几个文件还会吐 MODULE_TYPELESS_PACKAGE_JSON 警告刷屏；
- *   · --check 不执行任何一行，所以 pet.js 这种要 DOM 的也能照样查。
- *
- * ⚠️ **不能用 `process.execPath`**：这个测试经常是在 electron.exe 里跑的
- *    （`env -u ELECTRON_RUN_AS_NODE electron.exe tools/test-pet-window.js`），
- *    那时 execPath 是 electron.exe —— 它不认 `--check`，会把每个文件都判成解析失败
- *    （2026-10-09 之前一直有 4 条这样的**假失败**）。
- *    Electron 会把 `ELECTRON_RUN_AS_NODE` 的路径塞在 package.json 里，
- *    但更稳的做法是直接找一个真的 node。
- */
+/** ⚠️ 不能用 process.execPath：在 electron.exe 里跑时它不认 --check，会把每个文件都判成解析失败 */
+// 用 --check 而不是 import()：import() 会真执行模块（pet.js 摸 document 必崩），分不清「语法坏了」和「环境跑不起来」
 function findNodeForCheck() {
-  // 1) 显式环境变量优先（CI / 沙箱 / 特殊环境可以指）
   if (process.env.MIMITALE_NODE) return process.env.MIMITALE_NODE;
 
-  // 2) 自己的 execPath 就是 node（直接用 node 跑这个脚本时）
   if (!/electron/i.test(path.basename(process.execPath))) return process.execPath;
 
-  // 3) electron 自带一个 node，但它埋在 dist 深处；不行就退到 PATH
   const candidates = [
     path.join(ROOT, 'node_modules', 'electron', 'dist', 'node.exe'),
     process.env.NODE_EXE,
@@ -150,10 +88,8 @@ function findNodeForCheck() {
 
   for (const c of candidates) {
     const probe = spawnSync(c, ['--version'], { encoding: 'utf8' });
-    // ⚠️ 注意 `probe.error`：**子进程根本没起来**时 status 是 null。
-    //    沙箱（或权限策略）会直接 EBUSY，这时换再多候选也是白搭 ——
-    //    立刻返回 null，别把「起不来」当成「这个候选不好用」一个个试下去，
-    //    更别顺手把它当成「文件有语法错」。
+    // ⚠️ probe.error = 子进程根本没起来（沙箱直接 EBUSY）：立刻返回 null 表示「查不了」，
+    //    别当成「这个候选不好用」挨个试，更别当成「文件有语法错」
     if (probe.error) return null;
     if (probe.status === 0) return c;
   }
@@ -162,25 +98,14 @@ function findNodeForCheck() {
 
 const NODE_FOR_CHECK = findNodeForCheck();
 
-/**
- * 让 node 解析（不执行）一个文件。
- *
- * 三种结果必须分清楚，混起来就是灾难：
- *   ok:true                   → 解析过了
- *   ok:false                  → **真的**有语法错（这是本函数存在的意义）
- *   ok:true, skipped:true     → 查不了（子进程起不来 / 没有 node）
- *
- * ⚠️ skipped 的情况在结尾**单独吼一声**：它意味着这轮「语法检查」实际没生效，
- *    别让一整屏 ✓ 把它盖过去。2026-10-09 我就在沙箱里被这个坑了一次 ——
- *    沙箱禁 spawn，`probe` 全是 EBUSY，于是**注入语法错也照样 87/87 全绿**。
- */
+/** ⚠️ ok:true + skipped:true = 没查（子进程起不来）。沙箱禁 spawn 时注入语法错也全绿，结尾必须单独吼一声 */
 function syntaxCheck(file) {
   if (!NODE_FOR_CHECK) return { ok: true, skipped: true, detail: '没找到可用的 node' };
 
   const result = spawnSync(NODE_FOR_CHECK, ['--check', file], { encoding: 'utf8' });
 
   if (result.error) {
-    // 探测阶段起得来、这里起不来 —— 极少见，但同样不是语法问题，不许赖文件
+    // 探测阶段起得来、这里起不来 —— 同样不是语法问题，不许赖文件
     return { ok: true, skipped: true, detail: `子进程起不来（${result.error.code}）` };
   }
   if (result.status === 0) return { ok: true, skipped: false, detail: '' };
@@ -214,7 +139,7 @@ if (Array.isArray(wanted) && Array.isArray(exported)) {
     missing.length === 0,
     `pet-ipc.js 解构的每个名字都被导出了${missing.length ? `（缺：${missing.join(', ')}）` : ''}`
   );
-  // 2026-10-09 那个 TypeError 的直接回归断言
+  // 回归：漏导出会让 pet:state:get 每次抛 TypeError，宠物页永远拿不到状态
   ok(
     wanted.includes('buildPetStatePayload') && exported.includes('buildPetStatePayload'),
     'buildPetStatePayload 两边都有（pet:state:get 直接调它）'
@@ -237,7 +162,7 @@ for (const channel of channelsFromPreload) {
   ok(handled, `通道 ${channel} 在主进程注册过 handler`);
 }
 
-// 反向：注册了却没人调的宠物通道 = 白注册（名字打错就会这样）
+// 反向：注册了却没人调的宠物通道 = 白注册（名字打错就会这样），也查一遍
 const registered = [
   ...new Set(
     [...petIpcSrc.matchAll(/ipcMain\.(?:handle|on)\(\s*'([^']+)'/g)]
@@ -247,7 +172,7 @@ const registered = [
 ];
 ok(registered.length > 0, '能从 pet-ipc.js 里读出注册过的宠物通道');
 for (const channel of registered) {
-  // 一半通道给宠物窗口（preload-pet.js），一半给主界面（preload.js）
+  // 宠物通道分两处出口：宠物窗口走 preload-pet.js，主界面走 preload.js
   const outlet = channelsFromPreload.includes(channel) || preloadMainSrc.includes(`'${channel}'`);
   ok(outlet, `通道 ${channel} 有出口（宠物窗口或主界面）`);
 }
@@ -268,8 +193,7 @@ for (const file of petModules) {
   if (result.skipped) syntaxSkipped += 1;
 }
 
-// 一条都查不了 = 这一节其实**没生效**。它不是「失败」（环境的问题不是代码的问题），
-// 但绝不能安安静静地混在满屏 ✓ 里 —— 必须显眼到一眼看见。
+// 一条都查不了 = 这节没生效（环境的错不是代码的错），但不能悄悄混在满屏 ✓ 里
 if (syntaxSkipped === petModules.length && petModules.length > 0) {
   console.log(
     `\n  ⚠️⚠️  ${petModules.length} 个模块**一个都没真正检查**（${syntaxCheck(petModules[0]).detail || '子进程起不来'}）` +
@@ -301,18 +225,10 @@ ok(
 );
 ok(/contextIsolation:\s*true/.test(createSrc), 'contextIsolation:true');
 ok(/nodeIntegration:\s*false/.test(createSrc), 'nodeIntegration:false');
-// 设计记录 / CHANGELOG 写的是「contextIsolation:true + sandbox:true 全开」，
-// 主窗口 main/window.js 又是默认 true —— 宠物窗口不该比主窗口更宽松
 ok(/sandbox:\s*true/.test(createSrc), 'sandbox:true（和设计记录一致，别比主窗口更宽松）');
 ok(!/sandbox:\s*false/.test(createSrc), 'sandbox 没有被关掉');
 
-// 尺寸自愈要「位置」和「尺寸」两条都接上：
-// Windows 重算内容区尺寸时位置可能一点都不变（只把尺寸改大），'moved' 不送 ——
-// 少了 'resize' 这条，窗口就停在放大状态再也缩不回来（用户报的「长按拖动时放大」）。
-// ⚠️ 但它必须是**节流**：ensureSize 自己就 setContentBounds，而它会再送一次
-//    'resize' —— 同步调是递归，连着调是事件风暴（每秒几十次窗口缩放 = 闪）。
-//    用**防抖**更糟：拖动 / 散步时 resize 源源不断，「停下才执行」等于永不执行，
-//    表现就是「长按拖动时一直变大、松手才变回去」（2026-10-10 实际踩过）。
+// ⚠️ resize 必须节流：同步调 ensureSize 会递归，防抖会被持续的 resize 饿死（= 长按拖动时一直变大）
 ok(
   /on\('resize',[\s\S]{0,500}?throttledEnsureSize\(\)/.test(createSrc),
   "窗口 resize 走节流纠尺寸（同步=递归、防抖=被饿死）"
@@ -325,10 +241,8 @@ ok(
   !/setTimeout\(ensureSize,\s*60\)/.test(petWindowSrc),
   '没有退回「防抖 60ms」那个会被持续 resize 饿死的写法'
 );
-// 拖动 / 散步挪窗口必须走 movePetWindow（setContentBounds 带着正确尺寸），
-// 不能用 setPosition —— setPosition 挪完，系统会重算一次内容区尺寸，拖着拖着
-// 就变大；而「挪完再用 ensureSize 纠回去」= 窗口在两个值之间每帧振荡 = 抖
-// （2026-10-10 第四轮：第三轮那种「setPosition + ensureSize(true)」就是这么抖的）。
+// ⚠️ 挪窗口必须走 movePetWindow（带尺寸的 setContentBounds）：setPosition 之后系统会重算内容区尺寸，
+//   拖着拖着就变大；「挪完再 ensureSize 纠回去」= 每帧在两个值之间振荡 = 抖
 ok(/function movePetWindow\(x, y\)/.test(petWindowSrc), '有 movePetWindow（带尺寸挪窗口，防漂）');
 {
   const dragBlock = (petWindowSrc.match(/dragTimer = setInterval[\s\S]*?\}, 16\);/) || [''])[0];
@@ -346,10 +260,8 @@ ok(/function movePetWindow\(x, y\)/.test(petWindowSrc), '有 movePetWindow（带
 // ---------------------------------------------------------------------------
 section('「隐藏 = 不说话」这条口径');
 
-// 判断层（渲染层）的闸门
 ok(/if\s*\(!pet\.visible\)/.test(petContextSrc), 'maybePetAutoSpeak 里有 pet.visible 这道闸门');
-// 闸门必须排在**轮数计数之前**：否则隐藏期间会照攒轮数，
-// 重新显示的那一刻立刻蹦一句，看起来还是「隐藏没用」
+// 闸门必须排在轮数计数之前：否则隐藏期间照攒轮数，重新显示时立刻蹦一句
 {
   const gateAt = petContextSrc.indexOf('if (!pet.visible)');
   const countAt = petContextSrc.indexOf('turnCounters.set(convo.id, done)');
@@ -404,10 +316,6 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
 {
   const cssSrc = read('renderer/pet/pet.css');
 
-  // 尾巴（旋转圆角方块，见 .bubble::before）—— 没有它气泡就是浮在头上的一张卡片，
-  // 跟宠物是「两张贴纸」，不像它在说话。
-  // 2026-10-10 定版（星布谷地方向）：从「两层 CSS 三角」换成**单个旋转方块**
-  // （描边顺着气泡流下来、尖端圆润、放大不锯齿），::after 那层因此删掉了。
   ok(/\.bubble::before/.test(cssSrc), '气泡有指向宠物的小尾巴');
   ok(
     /transform:\s*rotate\(45deg\)/.test(cssSrc),
@@ -418,17 +326,11 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
   // 尾巴的实际探出量要声明给 pet.js（旋转方块探出量读不出 bottom 偏移）
   ok(/--tail-overhang/.test(cssSrc), '有 --tail-overhang 给 pet.js 的气泡锚点用');
 
-  // ---- 「可爱」这一版的具体做法（2026-10-10）----
-  // 都是**观感**上的取舍，容易被后来的人当成"随便调的"改回去，所以钉住：
-  // 圆角给足（小圆角 = 系统对话框，大圆角才软）
   {
     const m = cssSrc.match(/\.bubble\s*\{[^}]*border-radius:\s*(\d+)px/);
     ok(m && Number(m[1]) >= 16, '气泡圆角 >= 16px（软，不是对话框那种小圆角）');
   }
-  // 描边带主题蓝，不是灰的
   ok(/--bubble-edge/.test(cssSrc), '气泡描边用带主题色的 --bubble-edge（不是纯灰）');
-  // 2026-10-10 定版（星布谷地方向）：**纯白底**，不要渐变 —— 用户原话「渐变色
-  // 不是很好看，感觉风格有点老气」。别把 linear-gradient 加回 .bubble 的背景。
   ok(
     /\.bubble\s*\{[^}]*background:\s*var\(--bubble-bg\)/.test(cssSrc),
     '气泡是纯白底（--bubble-bg），不再用渐变'
@@ -437,17 +339,14 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
     !/\.bubble\s*\{[^}]*background:\s*linear-gradient/.test(cssSrc),
     '.bubble 背景没有退回渐变'
   );
-  // 冒出来有回弹（过冲的 cubic-bezier），不是直上直下
   ok(
     /\.bubble\s*\{[^}]*animation:\s*bubble-in[^;]*cubic-bezier\(\s*0\.34\s*,\s*1\.5/,
     '气泡进场带回弹（cubic-bezier 过冲）'
   );
-  // 分隔线从 dashed 改成淡渐变线 —— dashed 是系统 UI 语言，跟"可爱"相反
   ok(
     !/\.bubble-line\s*\+\s*\.bubble-line\s*\{[^}]*border-top:\s*1px\s+dashed/.test(cssSrc),
     '句间分隔不再是 dashed 虚线'
   );
-  // 动作字用主题色，别用灰（灰在宠物身上常糊成一片）
   ok(
     /\.bubble-line em\s*\{[^}]*color:\s*var\(--accent\)/.test(cssSrc),
     '动作（em）用主题色，不是灰'
@@ -458,7 +357,6 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
     '气泡字体优先圆体、但兜底里有雅黑（没装圆体也不能坏）'
   );
 
-  // 长句不能把气泡撑满整个窗口、把宠物脸盖住
   ok(
     /\.bubble-lines\s*\{[^}]*max-height/.test(cssSrc),
     '气泡正文有 max-height（长句在气泡里滚，不撑破）'
@@ -477,8 +375,7 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
   // 冒到超出可视区时要跟着滚，否则用户以为它只说了一两句
   ok(/bubbleLines\.scrollTop\s*=\s*bubbleLines\.scrollHeight/.test(petJs), '逐句冒出来时跟着滚到底');
 
-  // 气泡的尺寸**不跟宠物缩放**（用户 2026-10-10 提的：缩放一调小，字就小到看不见了）。
-  // 这四条是防止有人"为了比例协调"又把 --scale 乘回去 —— 乘上去在缩小档会真的把话读没。
+  // 气泡尺寸故意不跟 --scale：缩到小档时乘上去会把字缩到读不出来
   ok(
     /\.bubble-line\s*\{[^}]*font-size:\s*var\(--bubble-font\)/.test(cssSrc),
     '气泡字号走 --bubble-font（固定基准，不乘 --scale）'
@@ -491,8 +388,7 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
     /\.bubble-lines\s*\{[^}]*max-height:\s*\d+vh/.test(cssSrc),
     '气泡高度上限用 vh（跟着窗口走，不是写死像素）'
   );
-  // 高度上限别压得太狠：0.7× 时 30vh 只有 80px≈3.8 行，"说三句"折一下就被切掉
-  // （2026-10-10 实测）。这里钉住下限，防止有人"为了不挡脸"把它调更小。
+  // 35vh 是下限：0.7× 档下再小只放得下 3.8 行，「说三句」会被切掉
   {
     const m = cssSrc.match(/\.bubble-lines\s*\{[^}]*max-height:\s*(\d+)vh/);
     ok(m && Number(m[1]) >= 35, '气泡高度上限 >= 35vh（太小会把最后一句切掉）');
@@ -501,8 +397,7 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
     !/\.bubble\s*\{[^}]*padding:[^;}]*var\(--scale\)/.test(cssSrc),
     '气泡内边距不乘 --scale'
   );
-  // 滚动吸附：`scrollTop = scrollHeight` 会让最上面那句切半行；但无脑吸附到
-  // 最后一行顶边，又会让**新说的那句**底部出界。两者都要防。
+  // 滚到底会切半行顶边，无脑吸附末行顶边又会让新说的那句底部出界 —— 两头都要防
   ok(/function scrollToLastLine\s*\(/.test(petJs), '有 scrollToLastLine() 处理行边界');
   ok(
     /scrollToLastLine\(\)/.test(petJs),
@@ -518,9 +413,7 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
     '流式增量仍然滚到底（正在写的字不能被切）'
   );
 
-  // 气泡**底边锚定**在宠物头顶：rig 画布是方的（fitCanvas 按宽度收高），
-  // 画布上方那片空白不属于宠物；气泡要是钉在窗口顶部，就会和它之间留一条
-  // 「不知道哪来的」间隔，而且说的话一长一短间隔还跟着变。
+  // 气泡底边锚定在宠物头顶：钉在窗口顶部的话，一长一短的话会让间隔跟着变
   ok(
     /\.bubble\s*\{[^}]*bottom:\s*var\(--bubble-bottom/.test(cssSrc),
     '气泡是底边锚定（bottom: var(--bubble-bottom)）'
@@ -534,8 +427,7 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
     '--bubble-bottom 有 % 兜底（掩码读不出时也别跑到窗外）'
   );
   ok(/function syncBubbleAnchor\s*\(/.test(petJs), '有 syncBubbleAnchor() 摆气泡');
-  // ⚠️ 气泡**框**的下沿 ≠ 视觉下沿：尾巴挂在框外往下伸，
-  //    摆位置时要把这截补上，否则尾巴压在宠物头发上（2026-10-10 踩过）。
+  // ⚠️ 框的下沿 ≠ 视觉下沿（尾巴挂在框外往下伸），不补这截尾巴会压在宠物头发上
   ok(
     /function overhangBelowBubble\s*\(/.test(petJs),
     '有 overhangBelowBubble() 量尾巴探出的高度'
@@ -544,12 +436,10 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
     /spriteTopInWrap\s*-\s*gap\s*-\s*tailDrop/.test(petJs),
     '摆气泡时把尾巴的外挂高度算进气口（不然尾巴压头发）'
   );
-  // 尾巴高度是从 CSS 量出来的，不是写死的常量 —— 改 CSS 尺寸这边自动跟上
   ok(
     /getComputedStyle\(bubble,\s*'::before'\)/.test(petJs),
     '尾巴外挂高度实测（不是写死常量）'
   );
-  // 头顶从掩码扫出来，不是写死一个数字 —— 换形象 / 缩放 / 点头都要跟上
   ok(
     /spriteTopInWrap/.test(petJs) && /alpha\[base \+ x\]\s*>\s*128/.test(petJs),
     '头顶由掩码实测（实心像素行），不是写死的常数'
@@ -558,8 +448,7 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
     /spriteTopInWrap\s*==\s*null/.test(petJs) || /spriteTopInWrap\s*===?\s*null/.test(petJs),
     '读不到头顶时退回 CSS 默认位置（不硬摆）'
   );
-  // ⚠️ 预留量必须按气泡自身高度算：0.7× 时窗口 266px 高、气泡 ~98px，
-  //    写死一个小数字会让气泡顶边跑到窗户外面（实测到过 -19px）。
+  // ⚠️ 防出界按气泡自身高度预留：写死一个小数字会让顶边跑出窗口（实测 -19px）
   ok(
     /bubble\.offsetHeight/.test(petJs),
     '防出界按气泡自身高度预留（不是写死的常数）'
@@ -573,16 +462,14 @@ section('气泡：有尾巴、长句不撑破、逐句淡入');
 // ---------------------------------------------------------------------------
 section('「形象」下拉这条链路四层都接上了');
 
-// 加形象这条链是「主进程扫盘 → IPC → preload → 设置页 → patchPet」，
-// 任何一层漏了都是**静默失效**（下拉空白 / 切了没反应），所以四层各断言一次。
+// 这条链任何一层漏了都是静默失效（下拉空白 / 切了没反应），所以逐层断言
 {
   const petStoreSrc = read('main/pet-store.js');
 
   ok(/function listRigSkins\s*\(/.test(petStoreSrc), 'pet-store.js 有 listRigSkins()');
   ok(/^\s*listRigSkins,?\s*$/m.test(petStoreSrc), 'pet-store.js 把它导出了');
 
-  // 只认「真有 model.json」的目录 —— 否则一个空目录也会出现在下拉里，
-  // 选中就变成占位框（2026-10-09 cat 被清空那次就是这样）
+  // 空目录不能进下拉：选中就是占位框
   ok(
     /statSync\s*\(\s*path\.join\(dir,\s*'model\.json'\)\s*\)/.test(petStoreSrc),
     'listRigSkins 用 model.json 存在与否筛目录（空目录不进下拉）'
@@ -617,8 +504,7 @@ section('「形象」下拉这条链路四层都接上了');
 // ---------------------------------------------------------------------------
 section('缩放入口：设置页滑块 + 右键菜单「大小」');
 
-// 缩放有三处要接上：右键菜单（主进程）、设置页滑块（渲染层）、落盘（pet-store）。
-// 任何一层漏了都是「点了没反应」，所以分开断言。
+// 右键菜单 / 设置页滑块 / 落盘三处漏一处就是「点了没反应」
 {
   ok(/function scaleSubmenu\s*\(/.test(petIpcSrc), 'pet-ipc.js 有 scaleSubmenu()');
   ok(/label:\s*'大小'/.test(petIpcSrc), '右键菜单里有「大小」这一项');
@@ -642,8 +528,7 @@ section('缩放入口：设置页滑块 + 右键菜单「大小」');
 // ---------------------------------------------------------------------------
 section('默认形象是大肥鱼，且老的 cat 配置会被迁移');
 
-// 2026-10-10 蓝白猫形象包从 assets/pet/ 移出 —— 这两条要一起成立，
-// 否则升级上来的老用户（配置里存着 'cat'）会看到一个占位框。
+// 配置里存着 'cat' 的老用户必须被迁移，否则升级上来就是一个占位框
 {
   const petStoreSrc = read('main/pet-store.js');
   ok(/const DEFAULT_SKIN\s*=\s*'whale'/.test(petStoreSrc), '默认形象常量是 whale');
@@ -662,14 +547,11 @@ section('默认形象是大肥鱼，且老的 cat 配置会被迁移');
 // ---------------------------------------------------------------------------
 section('形象包里「靠运行时 alpha 才不显示」的部件不许出现');
 
-// 2026-10-09 星宝报「deepseek 的形象不对 重叠了」—— 根因是 Coopanion 用 per-part
-// alpha 做「站/坐二选一」，而 Mimitale 没有坐姿状态，于是坐姿件常驻、和站姿件重叠。
-// 转换脚本必须把这类部件**删掉**（不是留着让 renderer 去关）。
-// 这里直接查成品 model.json：这些 id 出现一个就是回归。
+// 靠运行时 alpha 才不显示的部件（源模型的站/坐二选一）必须被转换脚本删掉，不是留着让 renderer 关
+// 成品 model.json 里出现这些 id = 回归（会和正主重叠）
 {
   const converterSrc = read('tools/pet/pipeline/convert_whale.py');
 
-  // 转换脚本要真的列了这几个（删了才算处理过）
   for (const id of ['skirt_sit', 'waist_bow_sit_front', 'eye_creases']) {
     ok(converterSrc.includes(`"${id}"`), `convert_whale.py 把 ${id} 列进了删除表`);
   }
@@ -680,7 +562,6 @@ section('形象包里「靠运行时 alpha 才不显示」的部件不许出现'
     'convert_whale.py 从 source/model-original.json 读输入（否则重跑会叠在成品上）'
   );
 
-  // 真读 whale 的 model.json，确认这三个 id 确实不在里边
   const whaleModelPath = path.join(ROOT, 'assets', 'pet', 'whale', 'model.json');
   if (fs.existsSync(whaleModelPath)) {
     let whale = null;
@@ -699,12 +580,8 @@ section('形象包里「靠运行时 alpha 才不显示」的部件不许出现'
         ok(ids.includes(keep), `whale 成品里保留了 ${keep}`);
       }
 
-      // ---- tex/ 里不许留「model 已不引用」的孤儿贴图 ----
-      //
-      // 删了部件但忘了删贴图 → 目录里躺着永远加载不到的文件（skirt_sit 一张 104 KB），
-      // 而且下次有人照着目录数部件会被误导。转换脚本现在会清，这里兜一道。
-      //
-      // ⚠️ 注意两张表：parts[].tex 在 **tex/**，feat[].tex 在 **feat/**（不是同一个目录）。
+      // 删了部件忘了删贴图 → 永远加载不到的孤儿文件；转换脚本会清，这里兜一道
+      // ⚠️ parts[].tex 在 tex/，feat[].tex 在 feat/ —— 两个目录，别查错
       const texDir = path.join(ROOT, 'assets', 'pet', 'whale', 'tex');
       const featDir = path.join(ROOT, 'assets', 'pet', 'whale', 'feat');
       if (fs.existsSync(texDir) && fs.existsSync(featDir)) {
@@ -717,19 +594,14 @@ section('形象包里「靠运行时 alpha 才不显示」的部件不许出现'
           .filter((stem) => !partTex.has(stem));
         ok(orphans.length === 0, `whale/tex 没有孤儿贴图${orphans.length ? `（多余：${orphans.join(', ')}）` : ''}`);
 
-        // 反过来也要对：引用的每张贴图都得在**它该在的那个目录**里
         const missingParts = [...partTex].filter((t) => !fs.existsSync(path.join(texDir, `${t}.png`)));
         ok(missingParts.length === 0, `parts 引用的贴图都在 tex/${missingParts.length ? `（缺：${missingParts.join(', ')}）` : ''}`);
         const missingFeat = [...featTex].filter((t) => !fs.existsSync(path.join(featDir, `${t}.png`)));
         ok(missingFeat.length === 0, `feat 引用的贴图都在 feat/${missingFeat.length ? `（缺：${missingFeat.join(', ')}）` : ''}`);
       }
 
-      // ---- 五官必须落在脸的竖直范围内 ----
-      //
-      // 2026-10-09 星宝报「眼睛位置不对」：feat 的 box y 取成了 V(底边)，
-      // 于是整组五官**向上偏移了整整一个自身高度**，眼睛飘到发际线上。
-      // 正确的口径是 V(顶边)（见 convert_whale.py 的 feat_entry + step3_pack.py:83）。
-      // 这里用几何关系兜底：五官的竖直范围必须**被脸包住**，且眼在上、嘴在下。
+      // ⚠️ feat 的 box[1] 必须是 V(顶边)：取成底边会让整组五官上移一个自身高度（眼睛飘到发际线）
+      // 几何兜底：五官竖直范围被脸包住、且眼在上嘴在下
       const face = whale.parts.find((p) => p.id === 'face');
       if (face && face.box && whale.feat) {
         const fLo = face.box[1];
@@ -743,8 +615,7 @@ section('形象包里「靠运行时 alpha 才不显示」的部件不许出现'
             `feat「${key}」落在脸的竖直范围内（${lo.toFixed(1)}~${hi.toFixed(1)} ⊂ ${fLo.toFixed(1)}~${fHi.toFixed(1)}）`
           );
         }
-        // 眼睛必须比嘴高 —— 注意 V() 是**向下增长**的（母图 y 越大 → V 越大 → 越靠下），
-        // 所以「更高」= **更小的 V**。写反了就是 y 轴取错边的典型症状。
+        // ⚠️ V 向下增长：「更高」= 更小的 V，写反就是 y 轴取错边
         if (whale.feat.eye_open && whale.feat.mouth) {
           const eyeLo = whale.feat.eye_open.box[1];
           const mouthLo = whale.feat.mouth.box[1];
@@ -758,12 +629,7 @@ section('形象包里「靠运行时 alpha 才不显示」的部件不许出现'
 // ---------------------------------------------------------------------------
 section('空闲手势：只有点头/摇头/招手，没有遗留的「鞠躬」');
 
-// 2026-10-10 用户：「好像有一个遗留的磕头动作，如果有的话就把它去掉吧」—— 确实有。
-// `bow`（鞠躬/磕头）是 idle 下四个随机手势之一，一低头整只都塌下去，
-// 在小窗口里看着像卡住，也不是这只宠物的性格。
-//
-// 这个手势散在**三处**，删干净必须三处都动（漏一处就是"代码里没了、还能做出来"）：
-//   1. cat.js 挑手势的数组    2. cat.js 的 GESTURE_DUR    3. cat-figure.js 的渲染
+// bow 散在三处（挑手势数组 / GESTURE_DUR / 渲染），漏删一处就是「代码里没了、还能做出来」
 {
   const catJs = read('renderer/pet/cat.js');
   const figJs = read('renderer/pet/cat-figure.js');
@@ -775,9 +641,7 @@ section('空闲手势：只有点头/摇头/招手，没有遗留的「鞠躬」
     !/GESTURE_DUR\s*=\s*\{[^}]*\bbow\b/.test(catJs),
     'GESTURE_DUR 里也删掉了 bow（漏删会被 `|| 1` 悄悄兜住，不报错）'
   );
-  // 挑手势的地方不该再写死数组 —— 手势列表只在一处维护，否则两边会不同步。
-  // 2026-10-10 起挑的是 enabledGestures（= IDLE_GESTURES ∩ 用户在设置里勾的），
-  // 但「不许就地写死数组」这条口径不变：挑的那行仍然只引用一个变量。
+  // 手势列表只在一处维护：挑的那行只引用变量，别就地写死数组（两边会不同步）
   ok(
     /(IDLE_GESTURES|enabledGestures)\[Math\.floor\(Math\.random\(\)\s*\*\s*(IDLE_GESTURES|enabledGestures)\.length\)\]/.test(catJs),
     '挑手势读的是变量（IDLE_GESTURES / enabledGestures），不是就地写死的数组'
@@ -814,13 +678,7 @@ section('空闲手势：只有点头/摇头/招手，没有遗留的「鞠躬」
 // ---------------------------------------------------------------------------
 section('「空闲小动作」开关：设置页 → 主进程 → 宠物窗口这条链路接上了');
 
-// 2026-10-10 用户：「桌宠的动作也做到设置里」。做的是「空闲小动作」三个勾
-// （点头/摇头/招手）—— 关掉的那个就再也不出现。
-//
-// 这条链路的特别之处：**手势是宠物窗口自己挑的**，配置却在主进程和设置页。
-// 所以数据要跨两个边界走一遍：
-//   设置页勾 → pet:update → pet-store 落盘 → pet:state 推给宠物窗口 → cat.js 挑手势时读
-// 任何一层断了都表现为「勾了没反应」，而且不报错。逐层断言。
+// 手势由宠物窗口自己挑、配置却在主进程和设置页：跨两个边界，断一层就是「勾了没反应」且不报错
 {
   // ---- 第一层：pet-store 有字段、且缺字段 / 空数组两种情形分开处理 ----
   const storeSrc = read('main/pet-store.js');
@@ -828,9 +686,7 @@ section('「空闲小动作」开关：设置页 → 主进程 → 宠物窗口�
   ok(/gestureEnabled:\s*\[\.\.\.KNOWN_GESTURES\]/.test(storeSrc), 'defaultPet 里 gestureEnabled 默认全集');
   ok(/gestureEnabled:\s*normalizeGestureList\(/.test(storeSrc), 'normalizePet 会收 gestureEnabled');
   ok(/function normalizeGestureList\s*\(/.test(storeSrc), '有 normalizeGestureList 归一化函数');
-  // ⚠️ 这条是整节里最要紧的：**空数组必须原样保留**。
-  //    写成 `value || [...fallback]` 或 `value.length ? value : fallback` 都会让
-  //    「三个勾全取消」在存盘/读盘时被兜回全集 —— 用户会发现设置没生效。
+  // ⚠️ 空数组必须原样保留：写成 `value || fallback` 会让「三个全取消」被兜回全集
   {
     const fnSrc = storeSrc.match(/function normalizeGestureList[\s\S]*?\n\}/);
     ok(!!fnSrc, '能抠出 normalizeGestureList 的实现');
@@ -854,8 +710,7 @@ section('「空闲小动作」开关：设置页 → 主进程 → 宠物窗口�
   // ---- 第二层：宠物页面把它转给 cat.js；cat.js 按它挑手势 ----
   const petJs = read('renderer/pet/pet.js');
   ok(/catRig\.setGestures\(pet\.gestureEnabled\)/.test(petJs), 'pet.js 把 pet.gestureEnabled 转给 catRig');
-  // ⚠️ 这行必须在「rig 缺失就 return」之前 —— 放后面的话，形象没加载出来时
-  //    这个设置就永远传不到渲染层（用户改了什么都没反应，而且没人会想到是这个原因）
+  // ⚠️ 这行必须在「rig 缺失就 return」之前：放后面，形象没加载出来时设置永远传不到渲染层
   {
     const gestureLine = petJs.indexOf('catRig.setGestures');
     const rigReturn = petJs.indexOf('if (!rigData || !rigData.model)');
@@ -869,9 +724,7 @@ section('「空闲小动作」开关：设置页 → 主进程 → 宠物窗口�
   ok(/function setGestures\s*\(/.test(catJs), 'cat.js 有 setGestures()');
   ok(/setGestures\s*,/.test(catJs), 'setGestures 挂进了 catRig 的导出');
   ok(/let enabledGestures\s*=\s*\[\.\.\.IDLE_GESTURES\]/.test(catJs), 'enabledGestures 默认全集（字段缺失时不缩水）');
-  // ⚠️ 断言要落在**真的把它当条件用**上，不能只找 `enabledGestures.length` 这个词 ——
-  //    我注释里写过「空数组是合法的」这类话，光搜词的话把 `if (enabledGestures.length)`
-  //    改成 `if (true)` 都照样通过（实测过）。所以剥掉注释、要求它出现在 if 条件里。
+  // ⚠️ 断言要落在「真的当条件用」上：只搜 `enabledGestures.length` 的话改成 if (true) 也照样通过
   {
     const code = stripComments(catJs);
     ok(
@@ -887,8 +740,7 @@ section('「空闲小动作」开关：设置页 → 主进程 → 宠物窗口�
       'setGestures 用 IDLE_GESTURES ∩ 传入列表（不认识的名字进不来）'
     );
   }
-  // 点它的反应 / 说话时的点头**不受这个开关管** —— 那是交互反馈，不是空闲小动作
-  // （先剥注释：实现里那句「这里不看 enabledGestures」的说明本身含有这个词）
+  // 关掉动作 ≠ 点它没反应（poked() 不看这个开关）；先剥注释再查，注释里提到这个词会让断言假绿
   {
     const code = stripComments(catJs);
     const poked = code.match(/function poked\s*\(\)\s*\{[\s\S]*?\n\}/);
@@ -911,8 +763,7 @@ section('「空闲小动作」开关：设置页 → 主进程 → 宠物窗口�
   }
   ok(/gestureEnabled:\s*enabled/.test(petSettingsSrc), 'petSettings.js 改动会 patchPet({ gestureEnabled })');
   ok(/renderGestures\(\)/.test(petSettingsSrc), 'renderPetSettings 里调了 renderGestures（否则重画时勾会丢）');
-  // ⚠️ 三个勾全不勾是合法状态，别在 UI 层做「至少留一个」的兜底
-  // （剥注释再查：我写的那句「别做『至少留一个』的兜底」本身就含这个词）
+  // ⚠️ 三个全不勾是合法状态，别做「至少留一个」兜底；剥注释再查（注释里那句话本身就含这个词）
   ok(
     !/至少[^。\n]{0,6}一个[^。\n]{0,6}(勾|选)/.test(stripComments(petSettingsSrc)),
     '设置页没有「至少留一个」的兜底（那会让用户取消最后一个勾时看着没反应）'
@@ -926,9 +777,7 @@ section('散步：只能左右走（不许斜着 / 纵向移动）');
   const walkSrc = read('main/pet-walk.js');
   const code = stripComments(walkSrc);
 
-  // ⚠️ 2026-10-12 用户要求「不要斜着移动，只能左右移动」。
-  //    曾经是「全圆随机角度」→ 收敛成 ±55° 斜角 → 现在收到纯水平。
-  //    这条断言钉死「纵向不许再掺进来」，别因为「斜一点点好看」改回去。
+  // ⚠️ 只许左右走：别把纵向分量加回来（「斜一点点好看」也不行）
   ok(!/Math\.sin\(/.test(code), '挑目标点不再用 sin（没有纵向分量）');
   ok(!/Math\.PI\s*\*\s*\d+\s*\/\s*180/.test(code), '不再按角度求点（角度那套已删）');
   ok(
@@ -940,7 +789,6 @@ section('散步：只能左右走（不许斜着 / 纵向移动）');
     '代码里不存在 dy —— 有 dy 就说明纵向又回来了'
   );
 
-  // 只左右走后，判据自然是横向位移；朝向也恒由横向分量定，不需要「近乎垂直」的兜底
   ok(/Math\.abs\(dx\)\s*<\s*\d+/.test(code), '按横向位移 dx 判「这一趟值不值得走」');
   ok(/Math\.random\(\)\s*<\s*0\.5\s*\?\s*-1\s*:\s*1/.test(code), '左右方向各半，不偏向一侧');
   ok(
@@ -956,13 +804,8 @@ section('参数口径：尾巴摇动 / 缩放重算，别改回会「抖」的�
 {
   const figSrc = read('renderer/pet/cat-figure.js');
 
-  // ⚠️ 尾巴摇动频率已经两轮下调（9 → 5.5 → 2.8 rad/s 上限），且尾巴弹簧
-  //    spring(40,12) 的阻尼也加重了（欠阻尼的过冲回弹 = 果冻感「抖」）。
-  //    这两处是「尾巴抖得快」的根因，别改回去。sin() 里是 rad/s，别当 Hz。
-  //
-  //    2026-10-10 起四个手感参数抽成了「🎚️ 尾巴手感调节区」的命名常量（星宝要自己调），
-  //    所以断言口径跟着改：查的是「公式用了常量」+「常量的取值」两件事，
-  //    不再匹配内联的字面量 —— 否则星宝一改数值测试就红，而那是预期行为。
+  // ⚠️ 尾巴频率 + 弹簧阻尼是「抖」的根因，别调回去；sin() 里是 rad/s，别当 Hz
+  // 手感参数抽成了可调常量，所以查「公式用了常量」+「常量取值」，不匹配内联字面量（改数值不算回归）
   ok(
     !/Math\.sin\(t \* \(4 \+ 5 \* wagAmp\)\)/.test(stripComments(figSrc)),
     '尾巴摇动不再用最初的 4 + 5 * wagAmp'
@@ -989,11 +832,9 @@ section('参数口径：尾巴摇动 / 缩放重算，别改回会「抖」的�
   ok(/tail \* TAIL_BEND_K \* u \* u/.test(figSrc), 'tailBend 放大系数走 TAIL_BEND_K');
   ok(!/spring\(40,\s*5,/.test(stripComments(figSrc)), '旧的尾巴弹簧 (40,5) 已清掉');
 
-  // 摇头手势：原来 π*6（0.8 秒甩 3 个来回 = 7.5Hz），改成 π*4（2.5Hz）
   ok(/Math\.sin\(gk \* Math\.PI \* 4\)/.test(figSrc), '摇头手势改成 π*4（2.5Hz，不再是 7.5Hz 的打摆子）');
   ok(!/Math\.sin\(gk \* Math\.PI \* 6\)/.test(stripComments(figSrc)), '旧的 π*6 摇头已经清掉');
 
-  // 缩放：fitCanvas 要能吃 force 参数、并暴露 refit（窗口 resize 时立刻重算位图）
   ok(/function fitCanvas\(force\)/.test(figSrc), 'fitCanvas 支持 force（绕过 8% 容差）');
   ok(/refit\(\)\s*\{\s*fitCanvas\(true\)/.test(figSrc), 'figure 暴露 refit() = 强制重算');
 
@@ -1005,17 +846,8 @@ section('参数口径：尾巴摇动 / 缩放重算，别改回会「抖」的�
   ok(/\bafterDrawOnce\b/.test(catSrc), 'cat.js 有「下一帧 draw 之后执行一次」的回调机制');
 
   const petSrc = read('renderer/pet/pet.js');
-  /**
-   * ⚠️ 掩码重建必须挂在 refit 的「下一帧画完」回调上。
-   *
-   * 2026-10-10 修的 bug：原来是同一帧里 `catRig.refit(); rebuildMask();`，
-   * 注释给的理由是「掩码要读新画布的像素」—— 恰恰相反。`fitCanvas` 给
-   * `canvas.width / height` 赋新值会**清空 WebGL 绘制缓冲**，当帧读到的是一张
-   * **空白**画布，算出来的掩码整张透明 → `inSprite` 次次落空 → 窗口一直保持
-   * 鼠标穿透 → 宠物看得见却点不动、也拖不走。用户实测形态：长按拖动之后点不到，
-   * 去设置里改一次大小又能点（那条路是延迟 150ms 重建的）。
-   * 别把这两条改回「同一帧」的写法。
-   */
+  /** ⚠️ 掩码重建必须挂在 refit 的「下一帧画完」回调上：fitCanvas 给 canvas.width/height 赋新值会清空
+   * WebGL 绘制缓冲，当帧读到的是空白画布 → 掩码全透明 → 鼠标穿透 → 宠物看得见却点不动 */
   const resizeBlock = (petSrc.match(/addEventListener\('resize'[\s\S]{0,400}/) || [''])[0];
   ok(/refitNow\(\)/.test(resizeBlock), 'pet.js 的 resize 回调走 refitNow()');
   ok(
@@ -1042,8 +874,7 @@ section('参数口径：尾巴摇动 / 缩放重算，别改回会「抖」的�
     'canvas 像素尺寸差 1px 不重设（重设会清空 → 闪）'
   );
 
-  // blur 兜底（拖到窗口外松手）除了复位拖动，还得重算穿透状态 ——
-  // 少这一步窗口会卡在「不穿透」那侧，整块矩形变成桌面上一片点不动的死区
+  // blur 兜底还要重算穿透状态：少这步会卡在「不穿透」那侧，整块变成点不动的死区
   const blurBlock = (petSrc.match(/addEventListener\('blur'[\s\S]{0,700}/) || [''])[0];
   ok(/setClickThrough\(/.test(blurBlock), 'blur 兜底复位拖动时也重算穿透状态');
   ok(/lastPointer/.test(petSrc), '有 lastPointer 记录，blur 才知道该按哪一点重算');

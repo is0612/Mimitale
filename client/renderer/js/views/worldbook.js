@@ -1,36 +1,5 @@
-// ---------------------------------------------------------------------------
-//  世界书编辑器（World Info / Lorebook）—— 视图八的本体
-//
-//  左栏选书，中栏列条目，右栏编辑。数据在主进程的 worldbooks.json。
-//  词条只由「会话绑定了哪本书」生效；每本书还能装若干角色副本（独立个体）。
-//
-//  「保存后才生效」：书名 / 开场白 / 条目全是**草稿**（wbDrafts，按书各存一份），
-//  改动只进内存里的那一份，点页头「保存」才写回 state.worldbooks 并落盘。
-//  没保存就离开要问一句「放弃改动？」。角色副本不在此列 ——
-//  见 wbDrafts 上面那段注释。
-//
-//  ⚠️ 它是主区域里的一屏（走 viewSwitch 的 showView('wbEditor')），
-//     离开时回到进来之前那一屏（世界书列表页）。没有遮罩，所以也没有
-//     「点空白处关闭」这回事；页头的「返回」和 Esc 管离开。
-//
-//  两处刻意的边界：
-//
-//   · 本书角色的「编辑 / 新建」要切角色编辑器的作用域（charEditorScope）
-//     再切到角色编辑页 —— 那是跨视图编排，由入口层通过 initWorldbook
-//     注入四个动作（openInBook / draftInBook / releaseScope / stashDraft），
-//     本模块不向上 import 入口层，也不 import 角色编辑器。
-//
-//   · 「导入世界书」留在入口层（它要同时动角色库、世界书列表页和角色列表页），
-//     同样靠注入拿进来（importBooks）。
-//
-//  这一屏只在打开时渲染，不参与整体重绘，所以不向刷新总线登记 ——
-//  只做事件绑定（和 views/perspectiveUi.js 一样）。
-//
-//  只有「编辑某一本」这个入口动作（editWorldbookFromPage）例外：它要设
-//  editingWorldbookId —— 那是**本模块**的状态，所以它住在这儿并导出，
-//  由入口层反过来注入给世界书列表页（列表页不需要知道「当前选中的是哪本」）。
-//  「删除某一本」（deleteWorldbookById）同理：列表页卡片右上角的 × 也走它。
-// ---------------------------------------------------------------------------
+// 世界书编辑器：左栏选书、中栏列条目、右栏编辑。书名 / 开场白 / 条目都是草稿（wbDrafts），
+// 点页头「保存」才写回并落盘；跨视图编排（角色编辑 / 导入）由 initWorldbook 注入。
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
@@ -65,12 +34,8 @@ function syncEditorLayout() {
   renderBookFacts();
 }
 
-/**
- * 「书籍设置」右侧的本书信息卡：条目 / 启用 / 常驻 / 字数 / 角色 / 最后修改。
- *
- * 卡片标题（「本书信息」）现在是 HTML 里的 <h3>，这里只铺下面的行 ——
- * 上一版是这里现拼一颗 .wb-fact-head 塞进去，结果标题和卡片头重了一份。
- */
+/** 「书籍设置」右侧的本书信息卡：条目 / 启用 / 常驻 / 字数 / 角色 / 最后修改。
+ *  标题由 HTML 里的 <h3> 提供，这里只铺下面的行。 */
 function renderBookFacts() {
   const host = el.wb.bookFacts;
   if (!host) return;
@@ -106,11 +71,7 @@ function renderBookFacts() {
 }
 
 // --- 入口层注入的跨视图编排动作 ---
-// openInBook(id)：把编辑焦点切到这本书里的某个角色副本并打开角色编辑器
-// draftInBook()：在「世界书副本」作用域下起草一个新角色
-// releaseScope()：删掉本书时把角色编辑器作用域退回角色库
-// stashDraft()：把角色编辑器表单里的内容先写回内存（导入前要先保存）
-// importBooks()：导入世界书（入口层跨角色库的编排）
+// 切到本书某角色 / 本书内起草 / 释放作用域 / 回写草稿 / 导入世界书
 let openInBook = () => {};
 let draftInBook = () => {};
 let releaseScope = () => {};
@@ -158,16 +119,16 @@ export function initWorldbook(opts = {}) {
   el.wb.btnPreview.addEventListener('click', runAsync(previewWorldbook));
   el.wb.btnAddChars.addEventListener('click', openWorldbookCharPicker);
   el.wb.btnNewChar.addEventListener('click', newWorldbookCharacter);
-  // 书籍条那颗封面缩略 = 通往「书籍设置」的捷径。上传入口**只有设置屏那一个**——
-  // 在 28×42 的缩略图上再挂一套裁剪流程，等于同一件事两条路、两处状态要同步。
+  // 书籍条封面缩略 = 通往「书籍设置」的捷径；上传入口**只有设置屏那一个**，
+  // 别在 28×42 的缩略图上再挂一套裁剪流程。
   if (el.wb.bookbarCover) {
     el.wb.bookbarCover.addEventListener('click', () => {
       setWorldbookPanel('settings');
       el.wb.cover?.focus({ preventScroll: true });
     });
   }
-  // 「AI 生成」→ 按这本书的设定生成一个 NPC 副本。生成结果一样落到角色编辑器
-  // 草稿里（和「＋ 新建」同一条路），看过再保存。
+  // 「AI 生成」：按这本书的设定生成一个 NPC 副本，结果同样落到角色编辑器草稿里，
+  // 和「＋ 新建」同一条路，看过再保存。
   if (el.wb.btnAiChar) {
     el.wb.btnAiChar.addEventListener('click', () => {
       const book = currentWorldbook();
@@ -185,9 +146,8 @@ export function initWorldbook(opts = {}) {
     if (event.target === el.wbPicker.modal) closeWorldbookCharPicker();
   });
 
-  // 书名 / 开场白 / 条目全是**草稿**：边打字边留在内存里的草稿里，
-  // 点「保存」才写回世界书并落盘（见文件头）。所以这里只写草稿 + 举「未保存」的旗子，
-  // 不再顺手重画列表页 —— 没保存的东西不该在外面的卡片上露头。
+  // 书名 / 开场白 / 条目都只写草稿 + 举「未保存」的旗子，点「保存」才写回并落盘；
+  // 没保存的东西不该在列表页卡片上露头。
   el.wb.name.addEventListener('input', () => {
     if (!currentDraft()) return;
     stashWorldbookName();
@@ -205,9 +165,8 @@ export function initWorldbook(opts = {}) {
     markDraftDirty();
   });
 
-  // 条目表单里的任何一下改动都算「这本书有未保存的改动」。
-  // 回填（fillEntryForm）是程序写 .value，不触发事件 —— 所以不会误标。
-  // input 管文本 / 数字 / 文本域，change 管下拉和几个勾选框。
+  // 表单任何改动都算「这本书有未保存的改动」；fillEntryForm 是程序写 .value，
+  // 不触发事件，所以不会误标。input 管文本 / 数字 / 文本域，change 管下拉和勾选框。
   el.wb.form.addEventListener('input', markDraftDirty);
   el.wb.form.addEventListener('change', markDraftDirty);
   el.wb.e.content.addEventListener('input', () => {
@@ -222,8 +181,8 @@ export function initWorldbook(opts = {}) {
     });
   }
 
-  // 条目名 / 关键词跟着左栏那一行实时走。不同步的话，新建的条目会一直叫「新条目」，
-  // 直到整本书保存才改过来，看着像名字没生效。
+  // 条目名 / 关键词跟着左栏那一行实时走，否则新建的条目会一直叫「新条目」，
+  // 直到整本书保存才改过来。
   el.wb.e.title.addEventListener('input', () => {
     const entry = currentEntry();
     if (!entry) return;
@@ -237,13 +196,9 @@ export function initWorldbook(opts = {}) {
     entry.keys = parseEntryKeys(el.wb.e.keys.value);
     renderEntryList();
   });
-
-  // 世界书编辑器是主区域里的一屏，没有遮罩可点；页头的「返回」和 Esc 管离开。
 }
 
-// ---------------------------------------------------------------------------
-//  条目 / 编辑器状态
-// ---------------------------------------------------------------------------
+// --- 条目 / 编辑器状态 ---
 
 const WB_NEW_ENTRY_DEFAULTS = {
   order: 100,
@@ -254,22 +209,8 @@ const WB_NEW_ENTRY_DEFAULTS = {
 let editingWorldbookId = null; // 世界书编辑器里当前选中的书
 let editingEntryId = null; // 编辑器里当前选中的条目
 
-/**
- * 编辑器里的草稿：bookId → { name, opening, entries, dirty, isNew }。
- *
- * 「保存后才生效」就落在这儿。书名 / 开场白 / 条目的改动一律先写进草稿，
- * 界面上（列表页卡片、会话注入用的 state.worldbooks）看到的还是**上次保存过**的那份；
- * 点「保存」才 commitDraft() 写回 state.worldbooks 并落盘。
- *
- * 三处刻意的选择：
- *   · **每本书各留一份**（不是一个全局草稿）—— 在两本书之间来回切不会把没保存的改动弄丢，
- *     也不用在切换的半路上弹一个「要保存吗」。
- *   · **不含 characters**。世界书里的角色副本由「本书角色」那一排按钮直接改、直接落盘，
- *     角色编辑器也在往上写（它认的是 currentWorldbook()）。草稿只认书名/开场白/条目，
- *     提交时也只覆盖这三个字段，两边才不会互相踩。
- *   · `isNew`：新建出来还没保存过的书。离开编辑器时要是被放弃，连壳一起收掉
- *     （它从来没进过 worldbooks.json，留着就是一个重启就没的幽灵）。
- */
+/** 编辑器草稿：bookId → { name, opening, entries, dirty, isNew }，每本书各留一份。
+ *  **不含 characters**（角色副本直接改直接落盘，两边才不会互相踩）；isNew 被放弃时连壳收掉。 */
 const wbDrafts = new Map();
 
 /** 条目的深拷贝：草稿改了不能顺手改到 state 里那份 */
@@ -317,14 +258,7 @@ function markDraftDirty() {
   renderDirtyHint();
 }
 
-/**
- * 页头右侧的保存状态胶囊（和角色编辑页那颗 .save-pill 同一套观感）。
- * 只显示当前这本的状态 + 顺带说一句别的书还欠着几本 ——
- * 把别的书的改动说成本书的，会让人以为点了「保存」就全存了。
- *
- * 2026-10-18：从「只在脏的时候亮一条 amber 提示」改成**常驻三态胶囊**。
- * 好处是页头高度和角色编辑页一致，而且「已保存」这件事也有地方交代。
- */
+/** 页头右侧的保存状态胶囊：只显示当前这本，另附一句别的书还欠着几本。 */
 function renderDirtyHint() {
   syncEditorLayout();
   const node = el.wb.saveState;
@@ -358,10 +292,7 @@ function commitDraft(bookId) {
   return true;
 }
 
-/**
- * 丢掉所有草稿（离开编辑器时「放弃改动」那一步）。
- * 新建但没保存过的书连壳一起收掉 —— 它还不算存在。
- */
+/** 丢掉所有草稿；新建但没保存过的书连壳一起收掉 —— 它还不算存在。 */
 function discardDrafts() {
   for (const [id, draft] of [...wbDrafts]) {
     if (draft.isNew) {
@@ -374,12 +305,8 @@ function discardDrafts() {
   }
 }
 
-/**
- * 把「正在编辑的这本书」保存到磁盘。
- *
- * 保存的粒度是**整本书**（书名 + 开场白 + 所有条目）—— 条目不是独立对象，
- * 拆成「保存条目」只会让人以为存过了其实没存。所以界面上只有一个「保存」。
- */
+/** 把「正在编辑的这本书」保存到磁盘：粒度是**整本书**（书名 + 开场白 + 所有条目）。
+ *  条目不是独立对象，拆成「保存条目」会让人以为存过了其实没存。 */
 async function saveWorldbook() {
   const book = currentWorldbook();
   const draft = currentDraft();
@@ -394,8 +321,8 @@ async function saveWorldbook() {
     return;
   }
 
-  // 既没关键词也不是常驻的条目永远不会被注入，提醒一下（但不阻止保存）。
-  // 提醒并进保存结果那一条 toast 里 —— 弹两条只有后一条看得见。
+  // 既没关键词也不是常驻的条目永远不会被注入：提醒但不阻止保存，
+  // 提醒并进保存结果那条 toast（弹两条只有后一条看得见）。
   const dead = draft.entries.filter((e) => !e.constant && !(Array.isArray(e.keys) && e.keys.length));
 
   const name = draft.name;
@@ -406,7 +333,7 @@ async function saveWorldbook() {
   renderWorldbookChars();
   renderDirtyHint();
 
-  // 失败提示由 persistLibrary 弹（「世界书没能写进磁盘…」）——
+  // 失败提示由 persistLibrary 弹（「世界书没能写进磁盘…」），
   // 这里再弹一条会把那条更具体的盖掉。
   if (!(await persistLibrary())) return;
   const tail = dead.length ? ` · ${dead.length} 条没有关键词也不是常驻，永远不会被注入` : '';
@@ -435,23 +362,11 @@ function currentEntry() {
   return draft.entries.find((e) => e.id === editingEntryId) || null;
 }
 
-// ---------------------------------------------------------------------------
-//  封面
-//
-//  一张 2:3 竖版图，铺在世界书列表的卡片上 —— 比例和角色形象完全一致，
-//  所以直接复用 ui/imageCrop.js 那套（它按目标尺寸输出，这里不再二次缩放）。
-//
-//  它是**草稿的一部分**（不是立刻落盘的外挂字段）：点页头「保存」才写回书里，
-//  和书名 / 开场白同一条规矩。不保存关掉就还原。
-// ---------------------------------------------------------------------------
+// 封面：2:3 竖版图，铺在世界书列表卡片上，复用 ui/imageCrop.js（按目标尺寸输出）。
+// 它是草稿的一部分（不是立刻落盘的外挂字段），点「保存」才写回，不保存关掉就还原。
 
-// 输出 800×1200。
-// ⚠️ 为什么比角色形象（1024×1536）小一档：卡片上只显示 ~170px 宽，
-//    「worldbooks.json 是整库覆盖写」——改一个字就要重写整个文件，
-//    几十本书各带一张封面时，体积是实打实的保存耗时。800 宽在列表里和
-//    1024 看不出差别。
-// ⚠️ 2:3 才对应 800×1200。改比例要三处一起改：这里、style.css 的
-//    .wb-cover-frame、以及 #wb-page-grid .wb-card-cover 的 aspect-ratio。
+// 输出 800×1200（2:3）。⚠️ 改比例要三处一起改：这里、style.css 的 .wb-cover-frame、
+// #wb-page-grid .wb-card-cover 的 aspect-ratio。
 const WB_COVER_RATIO = 2 / 3;
 const WB_COVER_WIDTH = 800;
 
@@ -542,9 +457,8 @@ function stashEntryForm() {
   entry.title = el.wb.e.title.value.trim().slice(0, 200) || parseEntryKeys(el.wb.e.keys.value)[0] || '未命名条目';
   entry.keys = parseEntryKeys(el.wb.e.keys.value);
   entry.secondaryKeys = parseEntryKeys(el.wb.e.keys2.value);
-  // 界面上没有「启用副关键词」这个开关，所以它由「格子里有没有填」决定。
-  // 必须在这里同步：从酒馆导入的条目可能带着 selective:false + 旧副关键词，
-  // 用户之后在界面上填了副关键词却仍被忽略，是看不出原因的静默失效。
+  // 界面上没有「启用副关键词」开关，由「格子里有没有填」决定；必须在这里同步，
+  // 否则从酒馆导入的条目会静默失效，看不出原因。
   entry.selective = entry.secondaryKeys.length > 0;
   entry.selectiveLogic = el.wb.e.logic.value;
   entry.content = el.wb.e.content.value.slice(0, 20000);
@@ -591,10 +505,7 @@ function renderEntryList() {
   }
 
   for (const entry of entries) {
-    // 一行两行：① 名称 + 状态徽章 + 「字数 · 顺序」（靠右，**不再压着 × 按钮**）
-    //           ② 关键词
-    // 上一版是三行（标题 / 别名 / 元信息各占一行），88px 一条，一屏只看得到 7 条；
-    // 而且元信息是绝对定位的 × 的受害者 —— 「顺序 100」显示成「1」。
+    // 一行两行：① 名称 + 状态徽章 + 「字数 · 顺序」（靠右，不压 × 按钮）② 关键词
     const order = entry.order ?? WB_NEW_ENTRY_DEFAULTS.order;
     const words = String(entry.content || '').length;
     el.wb.entryList.appendChild(
@@ -620,12 +531,10 @@ function renderEntryList() {
           h('span', { class: 'wb-entry-name', text: entry.title }),
           entry.constant && h('span', { class: 'wb-badge', text: '常驻' }),
           entry.enabled === false && h('span', { class: 'wb-badge', text: '停用' }),
-          // 决定这条「生不生效 / 什么时候生效」的两样，一行读完
           h('span', { class: 'wb-entry-meta', text: `${words} 字 · ${order}`, title: `${words} 字 · 插入顺序 ${order}` })
         ),
         h('div', { class: 'wb-entry-keys', text: (entry.keys || []).join(' / ') || '（无关键词）' }),
-        // 行上的 ×：一键删（不问确认框 —— 删的只是草稿，整本书点「保存」才落盘，
-        // 反悔的办法是不保存）。stopPropagation 是必须的：不然这一下同时把该条选中了。
+        // 行上的 ×：只删草稿所以不问确认；stopPropagation 必须加，否则这一下会同时选中该条。
         button({
           class: 'wb-entry-del',
           text: '×',
@@ -670,33 +579,16 @@ function fillEntryForm(entry) {
   syncEditorLayout();
 }
 
-/**
- * 把编辑焦点安全地切到某一本。
- *
- * 外面要用这个，**不要自己去动 editingWorldbookId** —— 切换前必须让
- * selectWorldbook 先把界面上的表单 stash 回原来那一本（理由见 selectWorldbook 上面）。
- * AI 生成角色那条路要它：弹窗开着的时候用户可能已经换了书，生成完得切回原来那本，
- * 新副本才落对地方。
- *
- * @returns {boolean} 有没有切过去（书不存在就是 false）
- */
+/** 把编辑焦点安全地切到某一本；外部**不要自己动 editingWorldbookId**，切换前必须让
+ *  selectWorldbook 先把界面表单 stash 回原来那一本。@returns {boolean} 书不存在为 false */
 export function focusWorldbook(id) {
   if (!worldbookById(id)) return false;
   selectWorldbook(id);
   return true;
 }
 
-/**
- * 选中一本世界书。
- *
- * ⚠️ 这是**唯一**改 editingWorldbookId 的地方，而且改之前必须先 stash ——
- * 那两个 stash 读的是界面上的输入框，只有此时 currentWorldbook() 还指着
- * 「正在显示的那一本」才写得对。外部（openWorldbooksModal 的调用方）
- * 千万别抢先把 editingWorldbookId 设成目标书，否则脏表单会盖到新书上。
- *
- * 现在 stash 写的是**草稿**（不是世界书本身），所以「盖到新书上」这件事
- * 从结构上就不成立了 —— 每本书的草稿各归各的。
- */
+/** 选中一本世界书。⚠️ 这是**唯一**改 editingWorldbookId 的地方，且必须先 stash ——
+ *  那两个 stash 读的是界面输入框，只有此时 currentWorldbook() 还指着正在显示的那本才写得对。 */
 function selectWorldbook(id) {
   stashWorldbookName();
   stashEntryForm();
@@ -746,15 +638,8 @@ function selectEntry(id) {
   if (currentEntry()) el.wb.e.title.focus({ preventScroll: true });
 }
 
-// ---------------------------------------------------------------------------
-//  本书角色：从角色库复制进来的独立副本
-//  和角色库里的那个角色互相独立 —— 改这边不影响那边，反之亦然。
-//
-//  这一块同时就是「这本书的 NPC 名单」（GM 提示词里的名单按它拼）。一本酒馆书
-//  动辄十来号人，2026-10-18 起它有了**自己的一屏**（分区标签的第三屏），
-//  所以上一版那套「标题整块当折叠开关 / 副本超过 6 个自动收起」全部撤掉了 ——
-//  那是单栏时代为了不让一排 chip 把开场白挤没才做的，现在列表自己有滚动区。
-// ---------------------------------------------------------------------------
+// 本书角色：从角色库复制进来的独立副本（改这边不影响角色库，反之亦然）。
+// 它同时就是「这本书的 NPC 名单」——GM 提示词里的名单按它拼。
 
 /** 画「本书角色」这一屏（卡片网格 + 空态引导卡） */
 export function renderWorldbookChars() {
@@ -768,8 +653,7 @@ export function renderWorldbookChars() {
 
   const copies = worldbookCharacters(book);
 
-  // 一个副本都没有：给一张虚线引导卡（上一版是「一片空白」，
-  // 用户根本不知道这里该有东西、也不知道副本和角色库是两回事）
+  // 一个副本都没有时给一张虚线引导卡，说明副本和角色库是两回事
   if (!copies.length) {
     host.appendChild(
       h(
@@ -806,7 +690,7 @@ export function renderWorldbookChars() {
             'strong',
             { class: 'wb-char-card-name' },
             h('span', { class: 'wb-char-card-title', text: c.name }),
-            // 「本书副本」：同一张卡在角色库里还有一份原件，标清楚改的是哪一份
+            // 「本书副本」：角色库里还有一份原件，标清楚改的是哪一份
             h('span', { class: 'wb-local-tag', text: '本书副本', title: '从角色库复制进来的一份快照；改它不会动角色库里的原卡' })
           )
         ),
@@ -815,8 +699,8 @@ export function renderWorldbookChars() {
         h(
           'div',
           { class: 'wb-char-card-foot' },
-          // 「显示状态」：勾上之后这个副本的状态会出现在右栏「在场角色」入口条上。
-          // 不做成按钮是因为它是个**每本书各自一份**的持久开关，勾选状态要一眼看见。
+          // 「显示状态」：勾上后这个副本的状态出现在右栏「在场角色」入口条上；
+          // 用复选框是因为它是每本书各自一份的持久开关，勾选状态要一眼看见。
           h(
             'label',
             { class: 'wb-char-card-show', title: '把这个副本的状态显示在右栏「在场角色」入口条上' },
@@ -875,9 +759,8 @@ async function addWorldbookCharacters(ids) {
   const ok = await persistLibrary();
   showToast(ok ? `已加入 ${picked.length} 个角色副本` : '加入失败，没能写入磁盘', ok ? 'ok' : 'error');
 
-  // 正在玩这本书的会话：把新角色的属性也种进它们的状态面板，立刻就能点开看。
-  // 加入副本本身只动了世界书（persistLibrary），不回头通知会话 —— 这里补上，
-  // 否则「进世界之后再往书里加角色」会看不到新 NPC 的状态。
+  // 加入副本只动了世界书（persistLibrary），这里把新角色的属性种进正在玩这本书的
+  // 会话面板，否则「进世界之后再往书里加角色」看不到新 NPC 的状态。
   if (ok) {
     const seeded = seedWorldbookCharactersIntoConvos(state.conversations, book, copies);
     if (seeded) {
@@ -890,9 +773,7 @@ async function addWorldbookCharacters(ids) {
 }
 
 /**
- * 在本书里新建一个角色副本。
- * 和角色库那边一样：先只做成草稿给用户填，点「保存角色」之后才真的加进这本书 ——
- * 免得点一下就在书里多出一个空的「新角色」。
+ * 在本书里新建一个角色副本：先只做成草稿给用户填，点「保存角色」才真的加进这本书。
  */
 function newWorldbookCharacter() {
   if (!currentWorldbook()) return;
@@ -940,11 +821,8 @@ function editWorldbookCharacter(id) {
   openInBook(id);
 }
 
-/**
- * 把角色库同名卡的属性补进本书副本。副本是快照，角色库后来补的属性不会回流，
- * 所以需要这一步。只按名字匹配（副本 id 另发）、只补副本没有的字段，已有值不覆盖；
- * 只补属性，不动 description / personality 等其它字段。
- */
+/** 把角色库同名卡的属性补进本书副本：只按名字匹配、只补副本没有的字段，已有值不覆盖，
+ *  也不动 description / personality 等其它字段。 */
 async function syncWorldbookCharAttrs() {
   const book = currentWorldbook();
   if (!book) return;
@@ -970,8 +848,7 @@ async function syncWorldbookCharAttrs() {
   renderWorldbookPage();
 
   if (saved) {
-    // 正在玩这本书的会话：把补上的属性也种进面板，头像 / 状态卡立刻可见。
-    // 属性是「新副本才有」还是「老副本补的」对种子层没区别 —— 按 owner 去重。
+    // 把补上的属性种进正在玩这本书的会话面板，头像 / 状态卡立刻可见。
     const seeded = seedWorldbookCharactersIntoConvos(state.conversations, book, copies);
     if (seeded) {
       persistConversations(0);
@@ -985,14 +862,8 @@ async function syncWorldbookCharAttrs() {
   }
 }
 
-/**
- * 切换某个副本「在状态栏显示」。
- *
- * `showInPanel` 存在**这本世界书里的副本**上（不是角色库那张卡）—— 同一个角色
- * 放进不同的书，可以这本书显示、那本书不显示。改完立刻重绘当前会话：
- * 勾上的人头像马上出现在「当前状态」入口条上（属性早就种在面板里了，只是原先
- * 被 panelEntities 过滤掉），取消则立刻收掉。
- */
+/** 切换某个副本「在状态栏显示」：showInPanel 存在本书的副本上，同一角色放进不同的书
+ *  可以各显示各的；改完立刻重绘当前会话。 */
 async function toggleWorldbookCharShowInPanel(id, on) {
   const book = currentWorldbook();
   if (!book) return;
@@ -1015,8 +886,7 @@ async function toggleWorldbookCharShowInPanel(id, on) {
     renderWorldbookChars();
     return;
   }
-  // 「当前状态」入口条是按当前会话的面板画的 —— 正在玩这本书就得重绘一次，
-  // 头像才会立刻增删。别的会话不动。
+  // 「当前状态」入口条按当前会话的面板画，正在玩这本书就得重绘一次，头像才会立刻增删。
   if (activeConvo() && convoWorldbookIds(activeConvo()).includes(book.id)) {
     renderAll();
   }
@@ -1112,18 +982,10 @@ async function confirmWorldbookCharPicker() {
   await addWorldbookCharacters(ids);
 }
 
-// ---------------------------------------------------------------------------
-//  世界书编辑器
-//  只负责编辑「当前这一本」：选书、新建、游玩、导入都在世界书列表页那边。
-//  世界书是一个世界，从列表页点「游玩」进入。
-// ---------------------------------------------------------------------------
+// 编辑器只负责编辑「当前这一本」：选书 / 新建 / 游玩 / 导入都在世界书列表页那边。
 
-/**
- * 打开编辑器去编辑某一本。这是列表页「编辑」按钮的动作，由入口层注入给列表页。
- *
- * 目标那一本**必须由 openWorldbooksModal 去切**（见那里的注释）：
- * 调用方如果自己先写 editingWorldbookId，就会把界面上残留的旧表单盖到新书上。
- */
+/** 列表页「编辑」按钮的动作：目标那一本**必须由 openWorldbooksModal 去切**，
+ *  调用方自己先写 editingWorldbookId 会把残留的旧表单盖到新书上。 */
 export function editWorldbookFromPage(id) {
   if (!worldbookById(id)) return;
   openWorldbooksModal(id);
@@ -1136,15 +998,8 @@ export function openWorldbookEditor(id) {
   openWorldbooksModal(id);
 }
 
-/**
- * 打开编辑器，可选地切到某一本（不传就沿用当前选中的 / 第一本）。
- *
- * ⚠️ 这里**只传目标 id，不先改 editingWorldbookId** —— 顺序是这套东西的全部要点：
- * selectWorldbook 一上来会把「界面上正在显示的表单」写回 currentWorldbook()，
- * 也就是**还没切走的那一本**。要是调用方抢先把 editingWorldbookId 换成新书，
- * 那次回写就落在新书头上，输入框里残留的旧书名会被写进新书、界面也仍然显示旧名字，
- * 甚至把另一本书的名字覆盖掉。
- */
+/** 打开编辑器，可选地切到某一本。⚠️ 这里**只传目标 id，不先改 editingWorldbookId**：
+ *  selectWorldbook 一上来会把界面表单 stash 给还没切走的那一本，抢先改就会把旧书名写进新书。 */
 function openWorldbooksModal(targetId) {
   // 角色库可能没开着（侧边栏可以直接进世界书），stashCharForm 内部会自己判断
   stashDraft();
@@ -1152,8 +1007,7 @@ function openWorldbooksModal(targetId) {
   const wanted = typeof targetId === 'string' && targetId ? targetId : editingWorldbookId;
   const next = worldbookById(wanted) ? wanted : worldbooks().length ? worldbooks()[0].id : null;
 
-  // 记下来处：Esc / 页头「返回」/ 保存完都会回到它。
-  // 已经在编辑页里就别覆盖，不然「返回」会在原地打转。
+  // 记下来处：Esc / 页头「返回」/ 保存完都会回到它；已经在编辑页里就别覆盖，不然「返回」会原地打转。
   const from = currentViewName();
   if (from !== 'wbEditor') editorReturnView = from;
 
@@ -1166,15 +1020,8 @@ function openWorldbooksModal(targetId) {
 /** 进来之前停在哪一屏（离开世界书编辑器时回到它） */
 let editorReturnView = 'worldbooks';
 
-/**
- * 离开世界书编辑器。导出是为了让入口层的 Esc 链统一走它（见 main.js）。
- *
- * 「保存后才生效」的另一面是「不保存就会丢」，所以有草稿改动时先问一句。
- * 选「继续改」就直接返回，这一屏留着 —— 和角色编辑器放弃新建那个确认框同一个套路。
- *
- * 名字从 closeWorldbooksModal 改成了 leaveWorldbookEditor：弹窗改成页面之后，
- * 「关掉」= 回到进来之前那一屏（跟设置页的 leaveSettings 对齐）。
- */
+/** 离开世界书编辑器（入口层的 Esc 链统一走它）；有草稿改动时先问一句「放弃改动？」。
+ *  「保存后才生效」的另一面就是「不保存就会丢」。 */
 export async function leaveWorldbookEditor() {
   stashWorldbookName();
   stashEntryForm();
@@ -1194,19 +1041,15 @@ export async function leaveWorldbookEditor() {
 
   // 放弃：草稿清掉，新建但没保存过的书连壳一起收掉
   discardDrafts();
-  // ⚠️ 表单也得收起来：输入框里还留着刚放弃的书名 / 条目原文。下次打开时
-  //    selectWorldbook 会先 stash —— 表单可见就把这些「已放弃」的值又写进一份
-  //    新草稿，再点保存就落盘了。两个 stash 都认「表单隐藏 → 不读」，收起即可；
-  //    重新打开时 selectWorldbook 会按目标书把它们再亮出来、重填。
+  // ⚠️ 表单必须收起来：否则下次 selectWorldbook 先 stash 时，会把已放弃的书名 / 条目
+  //    再写进一份新草稿、一点保存就落盘。两个 stash 都认「表单隐藏 → 不读」。
   el.wb.bookWrap.classList.add('hidden');
   showEntryForm(false);
 
   showView(editorReturnView === 'wbEditor' ? 'worldbooks' : editorReturnView);
   renderWorldbookChars();
   renderDirtyHint();
-  // 列表页马上就该看到最新状态（showView('worldbooks') 本身会重画一次，
-  // 但回到别的屏时不会）—— 没保存的东西本来也没在外面的卡片上露过头，
-  // 这里是给「新建又放弃」收尾。
+  // 列表页要马上看到最新状态（给「新建又放弃」收尾）。
   renderWorldbookPage();
 }
 
@@ -1216,7 +1059,7 @@ function newWorldbook() {
     id: `w${uid()}`,
     name: '新世界书',
     opening: '',
-    // 新书没有封面 —— 卡片上先是「世」字占位块，进编辑器点一下就换掉
+    // 新书没有封面：卡片上先是「世」字占位块，进编辑器点一下就换掉
     cover: '',
     entries: [],
     characters: [],
@@ -1226,33 +1069,21 @@ function newWorldbook() {
 
   state.worldbooks = [...worldbooks(), book];
 
-  // 新建的这本还没落盘，所以草稿从出生起就是脏的：点「保存」才真的写进
-  // worldbooks.json；直接关掉的话它会被当成「没建成」收回去（见 discardDrafts）。
+  // 新建的这本还没落盘，草稿从出生起就是脏的；直接关掉会被当成「没建成」收回去（见 discardDrafts）。
   const draft = draftFor(book);
   draft.isNew = true;
   draft.dirty = true;
 
-  // 切到新书这一步交给 openWorldbooksModal —— 它会先把旧书的表单收进旧书的草稿再切。
-  // 自己在这里先写 editingWorldbookId 的话，旧书残留的书名会被写进这本新书里。
+  // 切书交给 openWorldbooksModal：它会先把旧表单收进旧书草稿。自己先写 editingWorldbookId
+  // 的话，旧书残留的书名会被写进这本新书。
   openWorldbooksModal(book.id);
   setWorldbookPanel('settings');
   el.wb.name.focus();
   el.wb.name.select();
 }
 
-// ---------------------------------------------------------------------------
-//  世界书条目模板：一键种入世界模拟类卡最常用的四条骨架
-//
-//  从社区角色卡里归纳出来的那套「世界模拟三件套 + 事件表」：
-//  主线走向 / 主要人物 / 专有名词 常驻（世界模型得一直知道这个世界长什么样），
-//  事件表也用常驻 + 固定关键词（玩家提到关键词就把那段剧情演出来）。
-//
-//  四条都是**空骨架**，占位符用 { } 圈起来，只为让用户照着填，不替用户创作。
-//
-//  ⚠️ 刻意**不含**「视角规则」和「人物的变化」：那两条已经做成了内置默认规则
-//    （见 data/narration.js 的 cameraRuleText / changeRuleText），这里再种一份
-//    只会白占 token；用户真要在某一本书里改，直接新建条目覆盖即可。
-// ---------------------------------------------------------------------------
+// 世界书条目模板：主线走向 / 主要人物 / 专有名词常驻，事件表常驻 + 固定关键词；四条都是空骨架。
+// ⚠️ 不含「视角规则」「人物的变化」——那两条已是内置默认规则（data/narration.js），再种只会白占 token。
 const WB_ENTRY_TEMPLATE = [
   {
     title: '主线走向',
@@ -1319,12 +1150,7 @@ function entriesFromTemplate(existing) {
   }));
 }
 
-/**
- * 「套用模板」：种入四条骨架并跳到第一条。
- *
- * 和 newEntry 一样只动**草稿** —— 整本书点「保存」才写进磁盘，
- * 所以这里不需要确认框（点错了把这四条删掉就行）。
- */
+/** 「套用模板」：种入四条骨架并跳到第一条；只动草稿，点「保存」才落盘，所以不用确认框。 */
 function applyEntryTemplate() {
   const draft = currentDraft();
   if (!draft) return;
@@ -1379,18 +1205,8 @@ function newEntry() {
   el.wb.e.title.select();
 }
 
-// ---------------------------------------------------------------------------
-//  「＋ 事件」——一条一个事件，靠关键词激活
-//
-//  依据（这批语料里最常见的「时间轴」写法）：《美月》的 `<Plot_Trigger>` 把
-//  「圣诞节 / 假扮情侣 / 庙会 / 相亲 / 游乐园 / 情侣酒店」这些剧情各挂一个关键词，
-//  玩家聊到哪个就把哪段演出来 —— 事件不用等模型「想起来」，提到就点着。
-//
-//  ⚠️ 它和上面四条模板里那条「事件表」是**配套而不是重复**：
-//      模板那条是常驻的（constant=true），给模型一张「有哪些事件」的地图；
-//      这条是每条一个事件、靠关键词激活（constant=false），给的是开关。
-//      两个都要 —— 只留地图会全都一次性涌出来，只留开关模型不知道还有别的。
-// ---------------------------------------------------------------------------
+// 「＋ 事件」：一条一个事件，靠关键词激活。⚠️ 和上面模板里的「事件表」配套不重复 ——
+// 那条常驻、给模型一张事件地图；这条 constant=false、是开关，两个都要。
 const WB_EVENT_CONTENT = [
   '触发时机：{玩家提到关键词、或者走到这里的时候}',
   '发生什么：{具体演出来什么 —— 写成能直接演的段落，别只写梗概}',
@@ -1414,9 +1230,7 @@ function addEventEntry() {
     secondaryKeys: [],
     selectiveLogic: WB_NEW_ENTRY_DEFAULTS.selectiveLogic,
     content: WB_EVENT_CONTENT,
-    // 888 = 排在主线 / 人物 / 名词（100）之后，更贴近生成位置 ——
-    // 事件是要被「演出来」的，压在设定后面才不会被前面那几条冲淡。
-    // （和模板里那条「事件表」用同一个数，两者本来就该挨在一起。）
+    // 888 = 排在主线 / 人物 / 名词（100）之后：事件要被「演出来」，压在设定后面才不被冲淡。
     order: 888,
     // 关键差异：**不常驻** —— 靠关键词激活，不是每轮都塞给模型
     constant: false,
@@ -1433,28 +1247,21 @@ function addEventEntry() {
   renderEntryList();
   selectEntry(entry.id);
 
-  // 标题已经填了「事件：」，把光标落到末尾接着打名字 ——
-  // 不 select：那一整段是要接着写的，不是要被覆盖掉的
+  // 标题已经填了「事件：」，光标落到末尾接着打名字；不 select，那一整段是要接着写的。
   el.wb.e.title.focus();
   el.wb.e.title.setSelectionRange(entry.title.length, entry.title.length);
 
   showToast('已新建一条事件条目 —— 别忘了填关键词，改完点「保存」才写进磁盘');
 }
 
-/**
- * 从草稿里删掉一条条目。两个入口共用：列表行上的 ×（不问，图快）和表单底部的
- * 「删除条目」（问一句）。
- *
- * 删的只是**草稿**里的那一份 —— 整本书点「保存」才写进磁盘，所以这里不需要
- * 自己确认。返回是否真的删了。
- */
+/** 从草稿里删掉一条条目（列表 × 与表单「删除条目」共用）；删的只是草稿，返回是否真的删了。 */
 function removeEntry(id) {
   const draft = currentDraft();
   if (!draft) return false;
   if (!draft.entries.some((e) => e.id === id)) return false;
 
-  // 表单里正在填的先收进草稿：删的不一定是正在编辑的那条，
-  // 不 stash 的话紧接着的 renderEntryList / fillEntryForm 会把它正在打的字冲掉。
+  // 表单里正在填的先收进草稿：不 stash 的话紧接着的 renderEntryList / fillEntryForm
+  // 会把它正在打的字冲掉。
   stashEntryForm();
 
   draft.entries = draft.entries.filter((e) => e.id !== id);
@@ -1488,18 +1295,13 @@ async function deleteEntry() {
   showToast('条目已删除，点「保存」才会写进磁盘');
 }
 
-/**
- * 删掉一本书。两个入口共用这一份逻辑：编辑器里的「删除本书」，
- * 和列表页卡片右上角那个 ×（跟角色卡一样，悬停浮出来）。
- * 返回是否真的删了。
- */
+/** 删掉一本书（编辑器「删除本书」和列表卡片 × 共用）；返回是否真的删了。 */
 export async function deleteWorldbookById(id) {
   const book = worldbookById(id);
   if (!book) return false;
   const wasEditingBook = editingWorldbookId === book.id;
 
-  // 表单里正在填的东西先收进草稿 —— 确认框弹出来这一下 currentWorldbook()
-  // 还指着这本，写进去才有地方落（确认之后整本连同草稿一起没了，不会留下脏数据）。
+  // 表单里正在填的先收进草稿：确认框弹出时 currentWorldbook() 还指着这本，写进去才有地方落。
   if (wasEditingBook) {
     stashWorldbookName();
     stashEntryForm();
@@ -1539,10 +1341,8 @@ export async function deleteWorldbookById(id) {
   // 角色编辑器可能正开在这本书的副本上，退回角色库
   releaseScope();
 
-  // ⚠️ 编辑器里正显示着这本时必须走 selectWorldbook 真正「切」到另一本 ——
-  // 只改 editingWorldbookId 再重画列表页的话，编辑区里还留着**刚删掉那本**的字段；
-  // 接着 stashWorldbookName() 会把这个残留书名写进 currentWorldbook()（列表第一本），
-  // 等于把别人的书改名并覆盖开场白。
+  // ⚠️ 编辑器里正显示着这本时必须走 selectWorldbook 真正「切」走：只改 id 再重画，
+  //    编辑区还留着刚删那本的字段，紧接着 stash 会把残留书名写进列表第一本（等于改名）。
   if (wasEditingBook) {
     selectWorldbook(worldbooks().length ? worldbooks()[0].id : null);
   }
@@ -1551,12 +1351,10 @@ export async function deleteWorldbookById(id) {
   renderDirtyHint();
 
   if (!(await persistLibrary())) {
-    // 写盘失败（看到 toast 了）→ 把内存也退回去：书还在列表里、会话绑定也恢复，
-    // 界面和磁盘一致，用户能直接再删一次。草稿故意留到最后才删，就是为了这一下。
+    // 写盘失败：把内存也退回去，界面和磁盘一致。草稿故意留到最后才删，就是为了这一下。
     state.worldbooks = beforeBooks;
     for (const [convo, ids] of unbound) convo.worldbookIds = ids;
-    // 只有「刚才正在编辑这本」才需要重新选中它；删的是另一本时，
-    // 别把编辑器从用户正在看的那本切走。
+    // 只有「刚才正在编辑这本」才重新选中它；删的是另一本时别把编辑器从用户正看的那本切走。
     if (wasEditingBook) selectWorldbook(book.id);
     renderWorldbookPage();
     renderDirtyHint();
@@ -1576,14 +1374,7 @@ async function deleteWorldbook() {
   await deleteWorldbookById(editingWorldbookId);
 }
 
-/**
- * 批量导出世界书：每本一个 .json（酒馆 lorebook 规范），选一次文件夹全写出去。
- *
- * 导的是**盘上那份**，不是编辑器里的草稿 —— 列表页看不见草稿，拿草稿导反而会
- * 把「你正在改但还没保存的东西」偷偷带出去。要导草稿就进编辑器点「导出本书」。
- *
- * @param {string[]} ids
- */
+/** 批量导出世界书：每本一个 .json（酒馆 lorebook 规范）。导的是**盘上那份**，不是草稿。@param {string[]} ids */
 export async function exportWorldbooksByIds(ids) {
   const wanted = new Set(Array.isArray(ids) ? ids : []);
   const list = worldbooks().filter((book) => wanted.has(book.id));
@@ -1601,24 +1392,15 @@ export async function exportWorldbooksByIds(ids) {
   });
 }
 
-/**
- * 批量删除世界书：列表页选中几本之后一次删掉。
- *
- * 不复用上面的单本删除：那条每本都要弹一次确认框，选五本就弹五次。
- * 这里**一次确认**把总量摆清楚（条目 / 角色副本 / 还在哪些会话里生效），
- * 然后一次性改内存、一次写盘 —— 失败时整批回滚，不会删一半留一半。
- *
- * @param {string[]} ids
- * @returns {Promise<boolean>} 真的删掉了没有
- */
+/** 批量删除世界书：一次确认、一次写盘，失败整批回滚；不复用单本删除（会连弹 N 次确认框）。
+ *  @param {string[]} ids @returns {Promise<boolean>} 真的删掉了没有 */
 export async function deleteWorldbooksByIds(ids) {
   const wanted = new Set(Array.isArray(ids) ? ids : []);
   const targets = worldbooks().filter((book) => wanted.has(book.id));
   if (!targets.length) return false;
 
   const wasEditing = targets.some((book) => book.id === editingWorldbookId);
-  // 记下「原来正在编辑的是哪本」：下面 selectWorldbook 会改写 editingWorldbookId，
-  // 写盘失败回滚时就没法再从它反推了
+  // 记下原来正在编辑的是哪本：下面 selectWorldbook 会改写 editingWorldbookId，回滚时就反推不出来了
   const editingTarget = wasEditing ? targets.find((book) => book.id === editingWorldbookId) : null;
   // 表单里正在填的先收进草稿：确认后整本没了，草稿跟着清掉；取消时它还在原处
   if (wasEditing) {
@@ -1663,8 +1445,7 @@ export async function deleteWorldbooksByIds(ids) {
   // 角色编辑器可能正开在这几本书的副本上，退回角色库
   releaseScope();
 
-  // 编辑器里正显示着被删的书：必须走 selectWorldbook 真正切走。
-  // 只改 editingWorldbookId 再重画，编辑区里还留着刚删那本的字段（见单本删除里那段说明）。
+  // 编辑器里正显示着被删的书：必须走 selectWorldbook 真正切走，否则编辑区里还留着刚删那本的字段。
   if (wasEditing) {
     selectWorldbook(worldbooks().length ? worldbooks()[0].id : null);
   }
@@ -1688,13 +1469,8 @@ export async function deleteWorldbooksByIds(ids) {
   return true;
 }
 
-/**
- * 预览「正在编辑的这本书」会在当前会话里命中哪些条目。
- * 用的就是真实请求时的扫描逻辑，方便排查关键词写没写对。
- *
- * ⚠️ 预览跑在**主进程**里，读的是已经落盘的那份数据 —— 所以有没保存的改动时
- * 得先说一声，不然会拿着旧内容预览，看着像关键词没写对。
- */
+/** 预览这本书会在当前会话里命中哪些条目（用真实请求的扫描逻辑）。
+ *  ⚠️ 预览跑在主进程、读的是已落盘的那份，有未保存改动就得先拒绝。 */
 async function previewWorldbook() {
   const book = currentWorldbook();
   if (!book) {

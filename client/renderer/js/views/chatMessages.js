@@ -1,18 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  views/chatMessages.js —— 对话区（消息列表 + 空状态）
-//
-//  一条消息画成什么样子：头像、说话人、思考过程、正文（Markdown）、配图、
-//  以及悬停浮出的那一排操作（复制/编辑/重新生成/继续/配图/帮我想想/删除/分支）。
-//
-//  操作按下去之后干什么，都不归这里 —— 编辑与重新生成在 views/composer.js，
-//  删除与分支在 views/convoActions.js，配图在 views/chatImages.js，
-//  建议在 views/suggestionsUi.js。这里只负责「画」和「把按钮接到谁身上」。
-//
-//  「正在生成开局」那一句要读 openingBusyId（世界会话开局的进度），
-//  它由 views/worldPlay.js 在生成前后设置 —— 所以开了 setOpeningBusy() 这个口子。
-// ============================================================================
+// 对话区（消息列表 + 空状态）：负责画消息、把按钮接到动作上。
+// 编辑 / 重新生成在 composer.js，删除 / 分支在 convoActions.js，配图在 chatImages.js，建议在 suggestionsUi.js。
 
 import { state } from '../core/state.js';
 import { el } from '../core/dom.js';
@@ -35,12 +24,7 @@ import { openStateCard } from './stateCard.js';
 /** 正在生成开局的那个会话 id；同一时间只允许一个 */
 let openingBusyId = null;
 
-/** 消息头右端那个时间：24 小时制、两位补零（22:41）。
- *
- *  只用于显示。读不到 `at`（老数据 / 手改过的 JSON）就返回空串、什么都不画 ——
- *  宁可少一个时间，也不要随手 `new Date()` 编一个假的出来，
- *  那种「所有历史消息都显示成刚才」的错看着特别真、特别难查。
- */
+/** 消息头右端的时间（24 小时制，22:41）。读不到 at 就返回空串，不要用 new Date() 编一个假的。 */
 function formatClock(at) {
   const ms = Number(at);
   if (!Number.isFinite(ms) || ms <= 0) return '';
@@ -48,7 +32,7 @@ function formatClock(at) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-/** 一天的分组键（`2026-10-12`）。读不到时间返回空串 —— 空串不参与跨天判断，也不会插分隔。 */
+/** 一天的分组键（`2026-10-12`）；读不到时间返回空串，不参与跨天判断。 */
 function dayKeyOf(at) {
   const ms = Number(at);
   if (!Number.isFinite(ms) || ms <= 0) return '';
@@ -67,15 +51,8 @@ function dayLabel(at) {
   return `${d.getMonth() + 1} 月 ${d.getDate()} 日`;
 }
 
-/**
- * 日期分隔（设计稿的「——— 今天 · 第 12 轮 ———」）。
- *
- * 只在**跨天**时插一条：聊到第三天时，上下两段一眼分得清是另一天了 ——
- * 之前只能自己拿每条消息的时间戳去算。
- *
- * ⚠️ 「第 N 轮」按**一问一答算一轮**（见 data/memory.js 的「一轮 = 2 条」），
- *    不是消息条数；要和顶栏 renderHeader 里同一个数字保持同口径。
- */
+/** 日期分隔（「——— 今天 · 第 12 轮 ———」），只在跨天时插一条。
+ *  ⚠️ 「第 N 轮」按一问一答算一轮（一轮 = 2 条），要和顶栏 renderHeader 同口径。 */
 function dateSeparator(message, index) {
   const at = Number(message.at);
   const when = Number.isFinite(at) && at > 0 ? dayLabel(at) : '';
@@ -90,13 +67,7 @@ function dateSeparator(message, index) {
 }
 
 // ---- Markdown 渲染缓存 ----
-// renderAll 在每次发消息 / 收流结束 / 编辑 / 切候选 / 配图完成后都会整棵重建
-// 消息列表，长会话下几百条 assistant 消息每条都要重跑一遍 renderMarkdown
-// 的十几条正则 —— 而其中只有最后几条是新的。一条消息的渲染结果只取决于
-// 三个输入：正文、面板字段名、分组名，用 WeakMap 以消息对象为键缓存结果，
-// 输入没变就直接复用上次的 HTML。
-// 编辑消息 / 切换候选会换掉 content，sig 对不上自然重算，无需手动失效；
-// 消息对象被丢弃（删消息 / 换会话）时 WeakMap 自动跟着释放。
+// 整棵重建时用 WeakMap 以消息对象为键，正文 / 字段名 / 分组名没变就复用上次的 HTML（几百条长会话才不卡）。
 const markdownCache = new WeakMap();
 
 function cachedMarkdown(message, ctx) {
@@ -124,13 +95,8 @@ export function setOpeningBusy(id) {
   openingBusyId = id;
 }
 
-/**
- * 剧情选项块：每行一个选项（点一下当作玩家说了这句话），底下一条小工具行 ——
- * 「换一批」（这批没有想要的，重新让模型给一批）和「✕」（收起这一批）。
- *
- * 按钮接到谁身上：点选项 / 点换一批 / 点收起 都是 suggestionsUi.js 里的动作 ——
- * 它要动输入框、走发送流程、调模型，那些都是入口层的编排，这里只管接线。
- */
+/** 剧情选项块：每行一个选项（点一下当作玩家说了这句话），底下有「换一批」和「✕」。
+ *  按钮动作都在 suggestionsUi.js，这里只管接线。 */
 function buildOptionsBlock(options) {
   const box = h('div', { class: 'msg-options' });
 
@@ -159,8 +125,7 @@ function buildOptionsBlock(options) {
     });
   }
 
-  // 骨架屏：几条闪烁的灰条，占住选项的位置，等模型返回再换成真按钮。
-  // 条数跟着这批选项的个数走，高度也用「一行」的样式，过渡才不跳。
+  // 骨架屏：几条闪烁灰条占住选项位置；条数跟着选项个数走，高度用「一行」的样式，过渡才不跳。
   function renderSkeleton() {
     list.textContent = '';
     const n = Math.max(2, Math.min(options.length || 3, 4));
@@ -173,9 +138,8 @@ function buildOptionsBlock(options) {
 
   renderButtons();
 
-  // 「换一批」：点下去先把选项换成骨架屏，再禁用按钮、等模型返回。
-  // 成功时 refreshAll 会把整块重绘成新选项（骨架屏自然被换掉）；失败则原地
-  // 把旧选项画回来。
+  // 「换一批」：先换骨架屏并禁用按钮，等模型返回；失败时原地把旧选项画回来
+  // （成功时 refreshAll 已整块重绘）。
   const reroll = h(
     'button',
     {
@@ -192,8 +156,7 @@ function buildOptionsBlock(options) {
         renderSkeleton();
         try {
           const ok = await rerollOptions(activeConvo());
-          // 失败（含「没生成出可用选项」）时 rerollOptions 已把旧选项写回，
-          // 这里把骨架屏换成旧按钮；成功时 refreshAll 已整块重绘，无需处理。
+          // 失败时 rerollOptions 已把旧选项写回，这里换回旧按钮；成功时 refreshAll 已整块重绘。
           if (!ok) renderButtons();
         } finally {
           btn.disabled = false;
@@ -218,12 +181,10 @@ function buildOptionsBlock(options) {
 function messageNode(message, index, character, labels, ctx) {
   const isUser = message.role === 'user';
   const isError = message.role === 'error';
-  // 角色只用来标识助手那一侧。用户消息和错误提示绝不能套角色的头像和名字，
-  // 否则你自己的气泡上会顶着角色的脸。
+  // 角色只标识助手侧：用户消息和错误提示绝不能套角色的头像和名字。
   const speaker = isUser || isError ? null : character;
 
-  // 说话人显示名：助手那侧，绑了角色卡就是角色名，进了世界就是世界名；
-  // 你自己那侧用会话上存的玩家角色名，没设就是「你」。
+  // 说话人显示名：助手侧是角色名 / 世界名，自己侧是会话上的玩家名（没设就是「你」）。
   const userLabel = (labels && labels.user) || userName();
   const assistantLabel = String((speaker ? speaker.name : labels && labels.assistant) || 'AI');
 
@@ -233,8 +194,7 @@ function messageNode(message, index, character, labels, ctx) {
 
   const avatar = document.createElement('div');
   avatar.className = 'msg-avatar';
-  // 底色跟「会话条目 / 状态卡 / 在场角色栏」共用同一套渐变（设计稿 .g1~.g6），
-  // 同一个人在哪都是同一个颜色；「我」固定那支蓝（.gme）。
+  // 底色跟会话条目 / 状态卡 / 在场角色栏共用一套渐变；「我」固定那支蓝（.gme）。
   avatar.classList.add(isUser ? 'gme' : entityTone(character && character.id, assistantLabel));
 
   if (speaker && speaker.avatar) {
@@ -248,11 +208,8 @@ function messageNode(message, index, character, labels, ctx) {
     avatar.textContent = isError ? '!' : isUser ? '我' : assistantLabel.slice(0, 1);
   }
 
-  // 点「我」的头像 → 打开我的状态卡（浮动卡片，默认只读）。
-  // 普通聊天的「在场角色」入口条不显示「我」（只有玩世界书才显示），
-  // 这个头像就是那边给自己看 / 加状态的入口。
-  // AI 那侧不挂：它的消息里既有角色又有场景描写，点开「算谁的」说不清；
-  // 而且角色/场景的状态卡从顶部面板栏的头像进更明确。
+  // 点「我」的头像打开我的状态卡（普通聊天没有「在场角色」条，这里是唯一入口）；
+  // AI 那侧不挂 —— 消息里既有角色又有场景，算谁的说不清。
   if (isUser) {
     avatar.classList.add('clickable');
     avatar.title = '查看我的状态';
@@ -271,8 +228,7 @@ function messageNode(message, index, character, labels, ctx) {
   const body = document.createElement('div');
   body.className = 'msg-body';
 
-  // 消息头（设计稿：「谢临舟 掌柜 [deepseek-flash] ……… ‹2/3› 22:41」）
-  // 整行是 flex：左端名字，右端候选翻页和时间，正文上面不再另起一行。
+  // 消息头整行 flex：左端名字，右端候选翻页和时间。
   const role = document.createElement('div');
   role.className = 'msg-role';
 
@@ -289,13 +245,11 @@ function messageNode(message, index, character, labels, ctx) {
     role.appendChild(tag);
   }
 
-  // 弹性空隙：把后面那几项（候选翻页 / 时间）顶到最右边。
-  // ⚠️ 用户那侧要**隐藏**它 —— 设计稿里自己的消息头是整体靠右的（「你 22:43」挨在一起，
-  //    不是「你」在左、「22:43」在右）。靠 .msg.user .msg-role .msg-spacer 那条规则实现。
+  // 弹性空隙：把候选翻页 / 时间顶到最右。⚠️ 用户那侧要**隐藏**它 —— 自己的消息头整体靠右，
+  // 靠 .msg.user .msg-role .msg-spacer 那条规则实现。
   role.appendChild(h('span', { class: 'msg-spacer' }));
 
-  // 候选切换（重新生成过才会有多个版本）。
-  // 放在消息头而不是操作栏：操作栏是悬停才浮出的，那样就**看不出这条有几个版本**了。
+  // 候选切换放消息头而不是操作栏：操作栏悬停才浮出，看不出这条有几个版本。
   const variants = Array.isArray(message.variants) ? message.variants : null;
   if (!isUser && !isError && variants && variants.length > 1) {
     const at = Number.isFinite(message.variantIndex)
@@ -337,8 +291,7 @@ function messageNode(message, index, character, labels, ctx) {
     const details = document.createElement('details');
     details.className = 'reasoning';
     const summary = document.createElement('summary');
-    // 把「思考花了多少」摆在标题上：这正是判断「是不是思考把额度吃光」的依据。
-    // 有服务商给的精确 token 就用它，没有就退回字数 —— 至少看得出长短。
+    // 标题上写思考花了多少：有精确 token 就用，没有退回字数。
     const rt = Number(message.reasoningTokens);
     summary.textContent =
       Number.isFinite(rt) && rt > 0
@@ -357,11 +310,8 @@ function messageNode(message, index, character, labels, ctx) {
   if (isUser || isError) {
     content.textContent = String(message.content == null ? '' : message.content);
   } else {
-    // 气泡里也要剥掉「状态栏行」和「剧情选项行」：
-    //   · 状态值已经由面板权威持有并在顶部常驻显示，正文里再来一份是重复的；
-    //   · 选项已经变成可点的按钮了，原文留着只会吵。
-    // （换候选时靠面板里的输入框看当前值，不靠正文。）
-    // 渲染结果走上面的缓存 —— 长会话整棵重建时，没改过的消息不重跑正则。
+    // 气泡里剥掉「状态栏行」和「剧情选项行」：状态值由面板权威持有，选项已变成按钮。
+    // 渲染结果走上面的缓存，没改过的消息不重跑正则。
     content.innerHTML = cachedMarkdown(message, ctx);
   }
 
@@ -371,8 +321,7 @@ function messageNode(message, index, character, labels, ctx) {
   // 只带图没打字的，就不要留一个空段落了
   if (String(message.content || '').trim() || !imageBlock) bubble.appendChild(content);
 
-  // 撞到回复上限、写到一半被服务商截断的回复：明说一句，别让残缺悄悄过去。
-  // （操作栏上的「继续」本来就有，这里只是点出来可以用它。）
+  // 撞到回复上限、被服务商截断的回复：明说一句，别让残缺悄悄过去。
   if (!isUser && !isError && message.truncated && String(message.content || '').trim()) {
     const note = document.createElement('div');
     note.className = 'truncated-note';
@@ -393,19 +342,13 @@ function messageNode(message, index, character, labels, ctx) {
   body.appendChild(role);
   body.appendChild(bubble);
 
-  // 剧情选项：跟在**最新一条** AI 回复的气泡下面（对齐官方互动模板的位置 ——
-  // 模型每轮给几个可点选项，点一下就当玩家说了这句话）。
-  // 只在「最后一条是 AI 回复 + 没在生成下一轮」时出现：你自己刚发完话、
-  // 或正在流式生成时，上一轮的旧选项挂在下面只会碍事。
+  // 剧情选项挂在**最新一条** AI 回复下面；你是最后一条或正在生成时不挂（旧选项只会碍事）。
   if (!isUser && !isError && index === ctx.lastIndex && ctx.options && ctx.options.length) {
     body.appendChild(buildOptionsBlock(ctx.options));
   }
 
-  // 操作按钮。
-  // 低频操作（继续 / 配图 / 帮我想想 / 分支 / 删除）收进末尾那颗「⋯」，
-  // 常用操作只留复制 / 编辑 / 重新生成。
-  // ⚠️ 收的是**视觉**不是 DOM：低频按钮仍然留在 .msg-actions 里（只是 display:none），
-  //    因为冒烟是靠 `.msg-actions .mini-btn` 的文字找按钮的 —— 节点不在就全断。
+  // 操作按钮：低频操作（继续 / 配图 / 帮我想想 / 分支 / 删除）收进「⋯」，常用只留复制 / 编辑 / 重新生成。
+  // ⚠️ 收的是**视觉**不是 DOM：低频按钮仍在 .msg-actions 里（display:none），冒烟按 `.mini-btn` 文字找按钮。
   const actions = document.createElement('div');
   actions.className = 'msg-actions';
   const extras = [];
@@ -507,18 +450,8 @@ function messageNode(message, index, character, labels, ctx) {
   return wrap;
 }
 
-/**
- * 把低频操作收进工具条末尾那颗「⋯」。
- *
- * 收起用的纯粹是 CSS（`.mini-extra { display: none }` +
- * `.msg-actions.open .mini-extra { display: inline-block }`）——
- * **按钮一直在 DOM 里**，`⋯` 只是给 .msg-actions 挂一个 .open。
- * 这样有两个好处：冒烟按文字找按钮的那几条不用改成「先点开再找」；
- * 展开/收起也不涉及任何重渲染。
- *
- * @param {HTMLElement} actions 工具条（.msg-actions）
- * @param {HTMLElement[]} extras 要收起来的按钮，按展开后的显示顺序
- */
+/** 把低频操作收进「⋯」。收起纯粹是 CSS 切 display —— **按钮一直在 DOM 里**，所以冒烟按文字
+ *  找按钮不用改、展开收起也不重渲染。@param {HTMLElement} actions 工具条 @param {HTMLElement[]} extras 要收起的按钮 */
 function appendExtras(actions, extras) {
   if (!extras.length) return;
 
@@ -526,8 +459,7 @@ function appendExtras(actions, extras) {
   more.type = 'button';
   more.className = 'mini-btn mini-more';
   more.textContent = '⋯';
-  // 提示按**这条消息实际有的**列出来 —— 用户消息没有「配图 / 帮我想想」，
-  // 写死一份会把不存在的项也念出来。
+  // 提示按这条消息实际有的按钮列出来，写死一份会念出不存在的项。
   more.title = `更多操作（${extras.map((b) => b.textContent.trim()).join(' / ')}）`;
   more.setAttribute('aria-label', '更多操作');
   more.setAttribute('aria-expanded', 'false');
@@ -581,8 +513,7 @@ export function renderMessages(options) {
       <p class="hint">当前扮演的是「${esc(character.name)}」。想换角色，去左下角「角色库」点另一张卡上的「聊天」。</p>
     `;
     } else {
-      // 名字取自「默认人设」里当前模型那一份，切模型 / 改名这里都跟着变。
-      // 没写名字就干脆不提名字 —— 别硬塞一个内置假名上去
+      // 名字取自「默认人设」里当前模型那一份；没写名字就不提名字，别硬塞内置假名
       const who = assistantName(convo);
       empty.innerHTML = `
       <h2>${who ? `开始和${esc(who)}聊天吧～` : '开始聊天吧～'}</h2>
@@ -615,19 +546,16 @@ export function renderMessages(options) {
   const ctx = {
     panelFields,
     panelGroups,
-    // 缓存签名用的两把钥匙：字段名 / 分组名变了（比如编辑面板定义），
-    // 旧消息的剥离结果就该跟着变 —— 拼成一串字符串参与比对，改一个字都能对不上
+    // 缓存签名的两把钥匙：字段名 / 分组名变了（比如编辑面板定义），旧消息的剥离结果也得跟着变。
     fieldsKey: panelFields.join('\u0000'),
     groupsKey: panelGroups.join('\u0000'),
     lastIndex: convo.messages.length - 1,
     options: showOptions ? convo.options : null
   };
 
-  // 先攒进 fragment 再一次性挂上去：逐条往已挂载的列表里 append，
-  // 每条都可能让样式失效一次；几百条时攒一批明显更稳
+  // 先攒进 fragment 再一次性挂上：逐条 append 到已挂载的列表会让样式反复失效。
   const frag = document.createDocumentFragment();
-  // 跨天时插一条日期分隔。第一条前面也插（显示「今天 · 第 1 轮」）——
-  // 设计稿里那条就在第一条消息上方，它是这一段的抬头，不是「两条之间的东西」。
+  // 跨天时插日期分隔；第一条前面也插（「今天 · 第 1 轮」是这一段抬头，不是两条之间的东西）。
   let lastDay = null;
   convo.messages.forEach((message, index) => {
     const day = dayKeyOf(message.at);

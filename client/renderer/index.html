@@ -230,9 +230,6 @@
           <div class="page-actions">
             <span id="char-total-words" class="editor-total"></span>
             <span id="char-save-state" class="save-pill" data-state="saved" hidden>所有更改已保存</span>
-            <!-- 导出回到页头右上（2026-10-19 下半场）：它是一次性的「拿走一张卡」，不属于
-                 填表流程，和「字数 / 保存状态」这些页面级信息待在一起更合适。 -->
-            <m-button id="btn-export-char" variant="ghost" size="sm" title="存成 PNG 卡（酒馆可直接导入）或 JSON">导出</m-button>
           </div>
         </header>
 
@@ -262,9 +259,6 @@
                 </div>
               </div>
 
-              <!-- 表情图：直接在「表情图」分区里管理，不再开弹窗 ——
-                   这一屏本来就只有这一件事，弹一层窗反而多一次开关。
-                   草稿仍是角色编辑器那一份，点页头「保存」才写回卡。 -->
               <div class="char-expr-entry">
                 <div class="char-expr-head">
                   <span id="expr-count" class="char-expr-count"></span>
@@ -588,23 +582,16 @@
           </div>
         </div>
 
-        <!-- 「这张卡是哪来的」+ 两颗不好放页头的动作。
-             2026-10-16（V2 重组版）从底部通栏移进左栏底部：通栏条会从左右两列同时
-             收走高度，而左栏底部本来就有一块不滚动的空白；顺带把「删除」和页头的
-             「保存」拉开距离，误点成本低一点。
-             ⚠️ 这三个节点由 characterEditorLayout.js 搬进 .char-identity-pane，
-                id 一个都不能改（characterEditor.js 直接按 id 取用）。 -->
+        <!-- ⚠️ 这一块由 characterEditorLayout.js 整块搬进 .char-identity-pane，
+             id 一个都不能改（characterEditor.js 直接按 id 取用）。
+             ⚠️ 四颗按钮占三行是高度算好的：各占一行会多约 34px，左栏就长出滚动条。 -->
         <div id="char-rail-foot" class="char-rail-foot">
-          <!-- 左栏底部这一串是「填完之后干什么」：保存 / 返回 / 删除角色。
-               保存是主操作放第一颗（2026-10-19 从页头右上挪下来）——左栏是「从上往下填完就存」的终点；
-               导出同日搬回页头右上，那不是填表流程的一部分。
-               ⚠️ 这里原来还有一行来源提示（.foot-hint，如「来自酒馆 PNG 卡」），
-                  加上「返回」之后左栏在 1440×900 下装不下、底部按钮被裁，所以拿掉了 ——
-                  它说的三件事别处都有：未保存看页头那颗胶囊、来源看角色库卡片上的小字、
-                  世界书副本看页头说明。左栏只剩「操作」这一件事。 -->
-          <m-button id="btn-save-char" variant="primary" size="sm">保存角色</m-button>
-          <m-button id="btn-back-char" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
-          <m-button id="btn-del-char" variant="danger" size="sm">删除角色</m-button>
+          <m-button id="btn-save-char" variant="primary" size="sm">保存</m-button>
+          <div class="char-rail-pair">
+            <m-button id="btn-export-char" variant="ghost" size="sm" title="存成 PNG 卡（酒馆可直接导入）或 JSON">导出</m-button>
+            <m-button id="btn-back-char" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
+          </div>
+          <m-button id="btn-del-char" variant="danger" size="sm">删除</m-button>
         </div>
       </section>
 

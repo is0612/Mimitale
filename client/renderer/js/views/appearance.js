@@ -1,18 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  views/appearance.js —— 对话窗口外观（字号 / 加粗颜色 / 背景图）
-//
-//  这三样只影响「怎么显示」，一个字都不会进提示词。
-//  实现上都是往 <html> 上写 CSS 变量，样式表里用 var() 取 ——
-//  这样换主题、换背景都不用重写一套规则。
-//
-//  外观控件在 设置 → 外观（#sec-appearance）里。只挪容器、不碰 id，
-//  所以下面的接线保持原样。入口层只从这儿取两个：
-//    · applyChatAppearance()  启动时把设置里的外观刷到 CSS 变量上
-//    · renderAppearanceForm() 设置页切到「外观」这一组时回填控件
-//  其余（落盘、选图、滑块、配色、明暗）都由 initAppearance() 内部接线。
-// ============================================================================
+// 对话窗口外观（字号 / 加粗颜色 / 背景图）：只影响怎么显示，不进提示词。
+// 都是往 <html> 上写 CSS 变量；入口层只取 applyChatAppearance() 和 renderAppearanceForm()。
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
@@ -24,22 +13,12 @@ const CHAT_FONT_MIN = 12;
 const CHAT_FONT_MAX = 22;
 const CHAT_FONT_DEFAULT = 14;
 
-// ---------------------------------------------------------------------------
-//  界面字号：三档 → 一个 --ui-size 系数
-//
-//  为什么是「一个系数 × 一组 token」而不是「三张字号表」：
-//  样式表里所有字号只认 --fs-xs/sm/md/lg/xl 五个 token，而这五个 token 本身就写成
-//  `calc(基准px * var(--ui-size))`（见 style.css 的 :root）。所以这里只写一个数，
-//  整站（标题 / 按钮 / 列表 / 弹窗）等比缩放，层次一格不乱。
-//
-//  ⚠️ 「小」档会让最小的那个 token 落到 10.8px —— 那是用户自己选的紧凑档；
-//     默认的「中」严格 ≥12px（界面字号不小于 12、不要小数、用双数）。
-// ---------------------------------------------------------------------------
+// 界面字号：三档 → 一个 --ui-size 系数（样式表的字号 token 本身就写成 calc(基准px * var(--ui-size))）。
+// 「小」档最小的 token 会落到 10.8px（用户自己选的紧凑档）；默认「中」严格 ≥12px。
 export const UI_SCALES = { small: 0.9, medium: 1, large: 1.15 };
 const UI_SCALE_DEFAULT = 'medium';
 
-// 界面字体：这几套都是**本机实测装了的**，每条都带满回退 ——
-// 就算真选到没装的那套，也只是回退到雅黑，不会出现方框。
+// 界面字体都带满回退：选到没装的那套也只是回退到雅黑，不会出现方框。
 export const UI_FONTS = {
   default: '"Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif',
   noto: '"Noto Sans SC", "Source Han Sans CN", "Microsoft YaHei", sans-serif',
@@ -47,27 +26,16 @@ export const UI_FONTS = {
   serif: '"Noto Serif SC", "SimSun", "Songti SC", serif'
 };
 const UI_FONT_DEFAULT = 'default';
-// 对话宽度的左右内缩。20 = 设计稿的消息流内边距；360 是上限，
-// 再大消息区就窄得没法读了（1440 的窗口两侧各 360 只剩 470）。
-// 这两个常量是 export 的：宽度那套 UI（顶栏弹层 + 两侧抓手）在 views/chatPad.js，
-// 两边必须同一个上限 —— 别再各写一份。
+// ⚠️ 上限 360 export 给 views/chatPad.js 共用，别各写一份（1440 的窗口两侧各 360 只剩 470）。
 export const CHAT_PAD_DEFAULT = 20;
 export const CHAT_PAD_MAX = 360;
-// 下限 12：拖到头正文会**紧贴窗口边缘**，看着像没排过版。
-// ⚠️ 主进程 main/providers.js 存盘时也夹同一个下限；它在主进程里，import 不到这里，
-//    那份数值得**手动对齐**（两边都夹一次是故意的：手改 config.json 能绕过保存那条路）。
+// ⚠️ 下限 12 要和主进程 main/providers.js 手动对齐（它在主进程，import 不到这里）；
+//    两边都夹一次是故意的：手改 config.json 能绕过保存那条路。
 export const CHAT_PAD_MIN = 12;
 // 读不到主题色时给色盘一个兜底值（正常情况走 currentAccentHex()）
 const BOLD_COLOR_FALLBACK = '#409eff';
 
-/**
- * 当前主题配色的实际色值（给色盘当初始值）。
- *
- * 「加粗」默认是跟随主题配色的（见 style.css 的 `--chat-bold-color` 回落到 `--accent`）——
- * 所以没自己设过颜色时，色盘该显示的是**这一套配色现在的主色**，
- * 而不是写死一个蓝（那样和任何一套配色都对不上，看着像已设过一个奇怪的颜色）。
- * 换主题 / 换明暗后这个值会变，调用方负责重刷（见 initAppearance 里的配色与明暗点击）。
- */
+/** ⚠️ 没自定义过加粗色时，色盘要显示这套配色的当前主色（--accent）；写死一个蓝看着像已设过奇怪颜色。 */
 function currentAccentHex() {
   try {
     const raw = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
@@ -94,17 +62,15 @@ export function applyChatAppearance() {
   const px = Number.isFinite(size) && size >= CHAT_FONT_MIN && size <= CHAT_FONT_MAX ? size : CHAT_FONT_DEFAULT;
   root.style.setProperty('--chat-font-size', `${px}px`);
 
-  // 界面字号 / 字体：这两样是**整个界面**的，和上面那些只管聊天区的分开走。
-  // 值不认识就回落默认 —— 手改过 config.json 也拉得回来（主进程那边还会再洗一遍）。
+  // 界面字号 / 字体是整个界面的，和上面只管聊天区的分开走；值不认识就回落默认。
   root.style.setProperty('--ui-size', String(UI_SCALES[s.uiSize] || UI_SCALES[UI_SCALE_DEFAULT]));
   root.style.setProperty('--font-ui', UI_FONTS[s.uiFont] || UI_FONTS[UI_FONT_DEFAULT]);
 
   if (s.chatBoldColor) root.style.setProperty('--chat-bold-color', s.chatBoldColor);
   else root.style.removeProperty('--chat-bold-color');
 
-  // 对话宽度：左右各一个变量，样式表里分别落在 .messages 的左右 padding 上。
-  // 写成同一个值就会「一调两边一起缩」—— 那正是用户不要的行为。
-  // 夹取放在这里再做一遍（主进程已经夹过）：手改过的 config.json 可能绕过保存那条路。
+  // ⚠️ 左右是两个变量：写成同一个值就「一调两边一起缩」，那正是用户不要的行为。
+  // 夹取在这里再做一遍（主进程已夹过）：手改的 config.json 能绕过保存那条路。
   for (const [key, cssVar] of [['chatPadLeft', '--chat-pad-left'], ['chatPadRight', '--chat-pad-right']]) {
     const n = Number(s[key]);
     const v = Number.isFinite(n)
@@ -133,12 +99,7 @@ export function syncRangeFill(input) {
   input.style.setProperty('--range-fill', `${pct}%`);
 }
 
-/**
- * 外观那一组控件的当前值（从内存里的设置读，不读 DOM）。
- *
- * ⚠️ 这一块在设置页里：「什么时候回填」不由这里决定 —— views/settings.js 在进设置页 /
- * 切到「外观」那一组时会调它（见 initSettings 里那两处调用）。
- */
+/** ⚠️ 「什么时候回填」不由这里决定：views/settings.js 在进设置页 / 切到「外观」组时调它。 */
 export function renderAppearanceForm() {
   const s = state.settings || {};
 
@@ -148,9 +109,7 @@ export function renderAppearanceForm() {
   el.appearanceFontSizeValue.textContent = `${px}px`;
   syncRangeFill(el.appearanceFontSize);
 
-  // ⚠️ 对话宽度由 views/chatPad.js 管（顶栏弹层 + 两侧抓手）；
-  //    「外观」只管长什么样，宽度管的是版面。
-  // 界面字号（三档单选）+ 字体（下拉）
+  // ⚠️ 对话宽度由 views/chatPad.js 管：这里只管长什么样，宽度管的是版面。
   const uiSize = UI_SCALES[s.uiSize] ? s.uiSize : UI_SCALE_DEFAULT;
   if (el.appearanceUiScale) {
     for (const btn of el.appearanceUiScale.querySelectorAll('[data-uiscale]')) {
@@ -192,10 +151,7 @@ export async function persistAppearance(patch) {
   renderAppearanceForm();
 }
 
-/**
- * 背景图先压到最长边 1920 再存。
- * 头像那套是「居中裁成正方形」，背景不能裁 —— 裁了就变形，所以只等比缩。
- */
+/** ⚠️ 背景只等比缩到最长边 1920：不能像头像那样居中裁正方形，裁了就变形。 */
 function shrinkBackground(dataUrl) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -212,7 +168,6 @@ function shrinkBackground(dataUrl) {
         canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
 
-        // 背景图不需要透明，webp 有透明通道也不亏；压到 0.82 体积和观感比较平衡
         const out = canvas.toDataURL('image/webp', 0.82);
         resolve(out.startsWith('data:image/') ? out : dataUrl);
       } catch (err) {
@@ -246,10 +201,7 @@ async function pickChatBackground() {
   showToast('背景图已换上', 'ok');
 }
 
-/**
- * 文本框里可能是 #abc / #aabbcc / #aabbccdd，也可能带不带 #。
- * 认不出来就返回 null（调用方提示一下，不要静默丢掉）。
- */
+/** 接受 #abc / #aabbcc / #aabbccdd（可不带 #）；认不出来返回 null（调用方提示一下，不要静默丢掉）。 */
 function normalizeHexColor(text) {
   let t = String(text || '').trim();
   if (!t) return '';
@@ -259,12 +211,7 @@ function normalizeHexColor(text) {
 
 /** 绑定外观那一组的所有控件（配色 / 明暗 / 字号 / 加粗色 / 背景图） */
 export function initAppearance() {
-  // 这一组**改完立即生效 + 落盘**，所以没有「保存」按钮
-  // （页头那颗「保存」管的是上面几组配置，不碰这里）。
-
-  // 主题配色 / 明暗：整块界面的东西，放在这一组的上面。
-  // 用事件委托而不是逐个绑 —— 以后加配色不用回来补绑定。
-  // 选中态由 ui/theme.js 统一刷。
+  // ⚠️ 这一组改完立即生效 + 落盘，没有「保存」按钮（页头那颗管的是上面几组配置）。
   if (el.appearanceAccents) {
     el.appearanceAccents.addEventListener('click', (event) => {
       const btn = event.target.closest('[data-accent]');
@@ -292,7 +239,7 @@ export function initAppearance() {
       persistAppearance({ uiSize: btn.dataset.uiscale });
     });
   }
-  // 字体：原生 <select>，change 就落盘（没有拖动过程，不用像滑块那样分 input/change）
+  // 字体：原生 <select>，change 就落盘
   if (el.appearanceFont) {
     el.appearanceFont.addEventListener('change', () => {
       persistAppearance({ uiFont: el.appearanceFont.value });
@@ -311,11 +258,8 @@ export function initAppearance() {
     persistAppearance({ chatFontSize: Number(el.appearanceFontSize.value) });
   });
 
-  // ⚠️ 对话宽度那两根滑块在 views/chatPad.js（顶栏弹层 + 消息区两侧可拖的线），
-  //    不在外观这一组。
-  // 加粗颜色：和字号一个道理 —— 色盘拖动时 input 每帧都触发，
-  // 只预览不落盘（不然拖一次色盘要写几十次配置文件），松手（change）才落盘。
-  // 手填的等回车/失焦再认
+  // ⚠️ 对话宽度那两根滑块在 views/chatPad.js，不在这一组。
+  // 色盘拖动时 input 每帧触发，只预览不落盘，change 才写；手填的等回车 / 失焦再认。
   el.appearanceBoldColor.addEventListener('input', () => {
     const hex = el.appearanceBoldColor.value;
     state.settings = { ...(state.settings || {}), chatBoldColor: hex };

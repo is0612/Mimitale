@@ -1,24 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  views/chatPad.js —— 对话区宽度（消息流两侧可拖的线）
-//
-//  抓手是唯一入口。本文件管三件事：
-//    · 两侧的抓手（拖动改内缩）
-//    · 拖动时浮出的小标签（「左内缩 224px · 可拖动」）—— 它是**唯一能看到
-//      准确值的地方**，别删
-//    · 拖动时那条虚线（画在松开后会落到的地方）
-//
-//  真正把值写到 CSS 变量上的是 applyChatAppearance()（views/appearance.js），
-//  这里只管「改值 → 预览 → 松手落盘」。
-//
-//  ⚠️ 左右**各写各的键**。用户明确要求过「不要一调节就左右两边一起收缩」——
-//     动左边时右边那个值连读都不会被读到，这是它和「一个对称宽度滑块」的全部区别。
-//
-//  ⚠️ 抓手挂在 **.composer** 上（它是 position:relative），**不能**挂进 .messages ——
-//     那个容器 overflow-y:auto，绝对定位的把手会跟着正文一起滚走。
-//     ⚠️ 也**不能**改回挂在 .chat-col 上：输入框会 auto-grow，写死 top/bottom 对不准。
-// ============================================================================
+// 这个视图负责对话区宽度：两侧可拖的抓手、拖动时的数值标签（唯一能看到准确值的地方，别删）、预览落点的虚线。
+// ⚠️ 左右各写各的键：动左边时右边那个值连读都不会被读到 —— 用户明确要求过不要「一调节就左右一起收缩」。
+// ⚠️ 抓手挂在 .composer 上：挂进 .messages 会被 overflow-y:auto 一起滚走，挂 .chat-col 则因输入框 auto-grow 对不准。
 
 import { el } from '../core/dom.js';
 import { state } from '../core/state.js';
@@ -33,14 +17,14 @@ import {
 
 const KEYS = { left: 'chatPadLeft', right: 'chatPadRight' };
 
-/** 读某一侧当前的内缩值（夹取过；坏值退回默认，跟 applyChatAppearance 同一套口径） */
+/** 坏值退回默认，夹取口径与 applyChatAppearance 一致 */
 function padValue(side) {
   const n = Number((state.settings || {})[KEYS[side]]);
   if (!Number.isFinite(n)) return CHAT_PAD_DEFAULT;
   return Math.min(CHAT_PAD_MAX, Math.max(CHAT_PAD_MIN, Math.round(n)));
 }
 
-/** 拖动中的实时值也夹同一套边界 —— 下限 12，往内拖到底也不会贴边（见 CHAT_PAD_MIN） */
+/** 拖动中的实时值夹同一套边界：下限 12，往内拖到底也不贴边（见 CHAT_PAD_MIN） */
 function clamp(px) {
   return Math.min(CHAT_PAD_MAX, Math.max(CHAT_PAD_MIN, Math.round(px)));
 }
@@ -53,9 +37,7 @@ function preview(side, px) {
   applyChatAppearance();
 }
 
-// ---------------------------------------------------------------------------
-//  拖动时那个小标签（设计稿：「左内缩 224px · 可拖动」）
-// ---------------------------------------------------------------------------
+// --- 拖动时的小标签 ---
 
 let badge = null;
 
@@ -80,14 +62,10 @@ function hideBadge() {
   if (badge) badge.classList.add('hidden');
 }
 
-// ---------------------------------------------------------------------------
-//  拖动时那条虚线
-//
-//  画在**松开后会落到的地方**（= 当前内缩值），不是跟着鼠标跑 —— 跟着鼠标
-//  只能告诉你「手在哪」，这条线要回答的是「松手之后正文会缩到哪」。
-//  ⚠️ 竖直范围得按消息区算：虚线的定位基准是 .chat-col（整个对话列，含顶栏
-//     和输入框），不夹一下就会从顶栏一直裂到底部。
-// ---------------------------------------------------------------------------
+// --- 拖动时那条虚线 ---
+
+// 画在松手后会落到的地方（= 当前内缩值），不是跟着鼠标跑 —— 要回答的是「松手之后正文会缩到哪」。
+// ⚠️ 竖直范围按消息区算：定位基准是 .chat-col（含顶栏和输入框），不夹一下会从顶栏一直裂到底部。
 
 function guideFor(side) {
   return side === 'left' ? el.padGuideLeft : el.padGuideRight;
@@ -98,9 +76,7 @@ function showGuide(side, px) {
   const guide = guideFor(side);
   if (!msgs || !guide) return;
 
-  // 竖直范围：**从消息区顶一直到对话列底**（消息区 + 输入区）。
-  // ⚠️ 内缩对两者都生效（.messages 和 .composer 吃同一对变量）——
-  //    只画消息区那段会让人以为「输入框不会动」，拖完发现它也跟着缩，就突兀了。
+  // ⚠️ 竖直范围从消息区顶一直到对话列底：内缩对消息区和输入框都生效，只画消息区那段会让人以为输入框不会动
   const col = msgs.parentElement; // .chat-col
   const top = msgs.offsetTop;
   const height = col ? Math.max(0, col.clientHeight - top) : msgs.offsetHeight;
@@ -121,11 +97,8 @@ function hideGuides() {
   if (el.padGuideRight) el.padGuideRight.classList.add('hidden');
 }
 
-// 拖动时让抓手按钮**跟着虚线走**：虚线落在当前内缩值 px 上，抓手就骑到同一处，
-// 手按着的按钮和它要落到的位置在一条直线上，不会出现「虚线在正文里、按钮钉在边缘」的割裂。
-// 抓手宽 16px，减 8 让它**中心**对齐 0 宽的虚线（而不是左边缘贴线）。
-// 基准说明：.chat-col 无 padding、.composer 是它贴边的直接子元素且无 border，
-// 所以抓手相对 .composer 的 left/right 和虚线相对 .chat-col 的 left/right 是同一把尺，直接赋值即对齐。
+// 抓手跟着虚线走，减 8 = 抓手宽 16px 的中心对齐 0 宽虚线（不是左边缘贴线）。
+// ⚠️ 直接赋值即对齐：.chat-col 无 padding、.composer 是它贴边且无 border 的直接子元素，两把尺是同一把。
 function moveHandleTo(handle, side, px) {
   if (!handle) return;
   const offset = px - 8;
@@ -138,14 +111,11 @@ function moveHandleTo(handle, side, px) {
   }
 }
 
-// ---------------------------------------------------------------------------
-//  抓手
-// ---------------------------------------------------------------------------
+// --- 抓手 ---
 
 function bindHandle(handle, side) {
   if (!handle) return;
-  // 图标直接插进去（这些按钮是空标签 + data-icon，applyFieldIcons 只扫一遍静态 HTML，
-  // 动态创建的元素得自己插）
+  // 图标得自己插：这些按钮是空标签 + data-icon，applyFieldIcons 只扫一遍静态 HTML
   if (!handle.querySelector('svg')) {
     const svg = iconSvg('width');
     if (svg) handle.insertAdjacentHTML('afterbegin', svg);

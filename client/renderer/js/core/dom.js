@@ -1,27 +1,21 @@
 'use strict';
 
-// ============================================================================
-//  core/dom.js —— DOM 引用的集中缓存
-//  el 里的每个字段都是页面加载时取一次的节点引用（全项目都在用它）。
-//  注意：module 脚本要等 HTML 解析完才执行，所以这里取节点是安全的。
-// ============================================================================
+// core/dom.js —— DOM 引用的集中缓存
+// ⚠️ module 脚本要等 HTML 解析完才执行，所以这里取节点是安全的
 
 const $ = (id) => document.getElementById(id);
 
 export const el = {
   convoList: $('convo-list'),
-  // 会话列表头上的分组标签（「最近 · 5」，条数由 renderConvoList 填）
   convoCap: $('convo-cap'),
   // 左栏与顶栏的收放入口共享 collapsed 状态。
   sidebar: $('sidebar'),
   btnSidebarToggle: $('btn-sidebar-toggle'),
-  // 图标轨最下面那颗：当前会话的头像（只在收起态显示，由 renderConvoList 填）
   railAvatar: $('rail-avatar'),
-  // 品牌行右端的版本号，值从 preload 的 appVersion 来（main.js 启动时填）
+  // 值从 preload 的 appVersion 来（main.js 启动时填）
   brandVersion: $('brand-version'),
   convoTitle: $('convo-title'),
   convoMeta: $('convo-meta'),
-  // 顶栏左边那颗头像 + 标题旁边的小胶囊（都是 renderHeader 填的）
   topbarAvatar: $('topbar-avatar'),
   convoPill: $('convo-pill'),
   messages: $('messages'),
@@ -38,7 +32,7 @@ export const el = {
   btnChars: $('btn-chars'),
   btnWorldbooks: $('btn-worldbooks'),
   btnPresets: $('btn-presets'),
-  // 侧栏入口右边的数量（角色库 / 世界书 / 预设）。数字由 views/viewSwitch.js 铺
+  // 数字由 views/viewSwitch.js 铺
   footCharsCount: $('foot-chars-count'),
   footWorldbooksCount: $('foot-worldbooks-count'),
   footPresetsCount: $('foot-presets-count'),
@@ -52,24 +46,19 @@ export const el = {
   btnDelProvider: $('btn-del-provider'),
   providerTabs: $('provider-tabs'),
   providerPresets: $('provider-presets'),
-  // 分组头部那颗统计小胶囊（「4 家服务商」「已开 3 / 8 项」）；
-  // 只给数得出来的几组填，空着时 CSS 的 :empty 会自己隐藏
+  // 空着时 CSS 的 :empty 会自己隐藏
   statModels: $('stat-models'),
   statBehavior: $('stat-behavior'),
   statRag: $('stat-rag'),
   statPet: $('stat-pet'),
-  // 顶栏切换模型：按钮 + 它下面的弹层（自绘的，不是原生 select —— 见 ui/modelMenu.js）
+  // 弹层是自绘的，不是原生 select —— 见 ui/modelMenu.js
   modelSwitch: $('model-switch'),
   modelSwitchLabel: $('model-switch-label'),
   modelMenu: $('model-menu'),
-  // 状态卡入口条（点头像开各人的状态卡）—— 一行，排在消息区上面
   panelBox: $('panel-box'),
   panelCast: $('panel-cast'),
-  // 「在场角色 N」里的那个数字，条数由 panelUi 的 renderPanelCast 填
   panelCastCount: $('panel-cast-count'),
-  // 「全部展开 / 全部收起」批量开关（在入口条那一行的右端）
   btnCardsAll: $('btn-cards-all'),
-  // 右侧在场角色与场景面板。
   castPanel: $('cast-panel'),
   castPanelCount: $('cast-panel-count'),
   castPanelBody: $('cast-panel-body'),
@@ -77,27 +66,21 @@ export const el = {
   castFootBook: $('cast-foot-book'),
   castFootHit: $('cast-foot-hit'),
   btnCastCollapse: $('btn-cast-collapse'),
-  // 浮动状态卡的容器（铺满对话列、本身不挡鼠标，只有卡片实体可交互）
+  // 本身不挡鼠标，只有卡片实体可交互
   stateCards: $('state-cards'),
-  // 外观（主题配色 + 明暗管整个界面，字号 / 加粗色 / 背景图只管聊天区）
-  // 控件都在 设置 → 外观（#sec-appearance）里；下面这些 id 原样复用。
-  // 「主题配色」：容器里是 [data-accent] 按钮（现在只剩琥珀一套），选中态由 ui/theme.js 刷
+  // 外观：主题配色 + 明暗管整个界面，字号 / 加粗色 / 背景图只管聊天区
+  // 容器里是 [data-accent] 按钮，选中态由 ui/theme.js 刷
   appearanceAccents: $('appearance-accents'),
-  // 「明暗」两态：容器里是两个 [data-mode] 按钮，同上
   appearanceModes: $('appearance-modes'),
-  // 「界面字号」三档（小 / 中 / 大）：容器里是三个 [data-uiscale] 按钮，
-  // 选中态由 views/appearance.js 的 renderAppearanceForm 刷
+  // 容器里是三个 [data-uiscale] 按钮，选中态由 views/appearance.js 刷
   appearanceUiScale: $('appearance-uiscale'),
-  // 「字体」：一个原生 <select>（4 套本机确认存在的字体栈）
   appearanceFont: $('appearance-font'),
   appearanceFontSize: $('appearance-fontsize'),
   appearanceFontSizeValue: $('appearance-fontsize-value'),
-  // 对话区宽度：只剩消息区两侧的抓手。
-  // ⚠️ 左右是**两个独立的元素**，不是同一个控件的两处引用：用户要的就是「改一边另一边不动」。
-  // 对话区左右内缩的拖动抓手（垂直居中那颗）
+  // ⚠️ 左右是两个独立的元素，不是同一个控件的两处引用：用户要的就是「改一边另一边不动」
   padHandleLeft: $('pad-handle-left'),
   padHandleRight: $('pad-handle-right'),
-  // 拖动时那条虚线（落在「松开后会到的地方」，由 chatPad.js 定位）
+  // 落在「松开后会到的地方」，由 chatPad.js 定位
   padGuideLeft: $('pad-guide-left'),
   padGuideRight: $('pad-guide-right'),
   appearanceBoldColor: $('appearance-boldcolor'),
@@ -106,26 +89,15 @@ export const el = {
   btnPickBg: $('btn-pick-bg'),
   btnClearBg: $('btn-clear-bg'),
   btnBoldColorReset: $('btn-boldcolor-reset'),
-  // ⛔ btnCloseAppearance / btnCloseAppearance2 同上，随弹窗一起删了。
-  // 剩下的编辑弹窗头上的「放大」按钮：把**这个弹窗自己**铺满应用窗口（编辑时能多看见几行）。
-  // ⚠️ 不是把窗口切成系统全屏（那版做过、已撤掉，见 ui/modalMax.js 顶部注释）。
-  // ⚠️ 角色卡 / 世界书那两颗 2026-10-13 撤了：两个编辑器从弹窗改成**页面**，
-  //    本来就占满主区域，没有「放大」这回事（和设置那颗一样）。
+  // 把**这个弹窗自己**铺满应用窗口（不是把窗口切成系统全屏）
   btnFsPreset: $('btn-fs-preset'),
-  // 视角设置
   btnPerspective: $('btn-perspective'),
-  // 顶栏「⋯」菜单：记忆 / 复制全文 / 导出 / 清空对话 都收在里面（见 ui/menu.js）
   btnMore: $('btn-more'),
   moreMenu: $('topbar-more'),
-  // 「⋯」上的小圆点：菜单里藏着东西（比如有记忆摘要）时提示一下，不然收起来就看不见了
-  // ⛔ moreDot（「⋯」上那颗小圆点）2026-10-12 深夜删：它提示的是「菜单里有记忆」，
-  //    而记忆已经提到顶栏、改成自己的角标了（见 style.css 的 .topbar-icon .memory-badge）。
-  // 「帮我想想」的建议条
   suggestStrip: $('suggest-strip'),
   suggestList: $('suggest-list'),
   btnSuggestClose: $('btn-suggest-close'),
-  // 输入框左边的快捷短语（按钮 + 它上面的弹层）。
-  // 行由 views/quickPhrases.js 铺，开合也在那边（纯插入，不发送 —— 发送归建议条）。
+  // 行由 views/quickPhrases.js 铺，开合也在那边（纯插入，不发送 —— 发送归建议条）
   btnQuick: $('btn-quick'),
   quickMenu: $('quick-menu'),
   perspectiveModal: $('perspective-modal'),
@@ -135,7 +107,6 @@ export const el = {
   pPace: $('p-pace'),
   pGm: $('p-gm'),
   pPresetList: $('p-preset-list'),
-  // 记忆
   btnMemory: $('btn-memory'),
   memoryCount: $('memory-count'),
   memoryModal: $('memory-modal'),
@@ -160,13 +131,10 @@ export const el = {
   pickList: $('pick-list'),
   pickCancel: $('pick-cancel'),
   toast: $('toast'),
-  // 角色编辑器（从弹窗改成了页面，占满主区域的一屏）
   charsTitle: $('chars-title'),
   charsSub: $('chars-sub'),
   charTotalWords: $('char-total-words'),
   charSaveState: $('char-save-state'),
-  // 主区域的七个视图：聊天 / 角色列表页 / 角色编辑页 / 世界书列表页 / 世界书编辑页
-  //                / 预设列表页 / 帮助页（设置页在下面单独一段）
   viewChat: $('view-chat'),
   viewChars: $('view-chars'),
   viewCharEditor: $('view-char-editor'),
@@ -178,7 +146,7 @@ export const el = {
   charPageCount: $('char-page-count'),
   charPageGrid: $('char-page-grid'),
   charPageEmpty: $('char-page-empty'),
-  // 批量选择（角色库工具条）：常态只露「批量」，进入选择态后换成另一组
+  // 常态只露「批量」，进入选择态后换成另一组
   charBatchNormal: $('char-batch-normal'),
   charBatchActive: $('char-batch-active'),
   charBatchCount: $('char-batch-count'),
@@ -192,7 +160,7 @@ export const el = {
   wbPageCount: $('wb-page-count'),
   wbPageGrid: $('wb-page-grid'),
   wbPageEmpty: $('wb-page-empty'),
-  // 批量选择（世界书工具条），和角色库那一组一一对应
+  // 和角色库那一组一一对应
   wbBatchNormal: $('wb-batch-normal'),
   wbBatchActive: $('wb-batch-active'),
   wbBatchCount: $('wb-batch-count'),
@@ -207,7 +175,6 @@ export const el = {
   btnNewPreset: $('btn-new-preset'),
   btnImportPreset: $('btn-import-preset'),
   btnExportPresets: $('btn-export-presets'),
-  // 进入世界前先创建玩家自己的角色
   playerModal: $('player-modal'),
   playerTitle: $('player-title'),
   playerSub: $('player-sub'),
@@ -227,7 +194,6 @@ export const el = {
   btnDelChar: $('btn-del-char'),
   btnSaveChar: $('btn-save-char'),
   btnExportChar: $('btn-export-char'),
-  // 左栏底部的「返回」（和页头左上那颗同一个动作，2026-10-19 星宝要的）
   btnBackChar: $('btn-back-char'),
   btnExportConvo: $('btn-export-convo'),
   btnAddAttr: $('btn-add-attr'),
@@ -240,7 +206,6 @@ export const el = {
   charExprList: $('char-expr-list'),
   btnAddExpr: $('btn-add-expr'),
   btnBatchExpr: $('btn-batch-expr'),
-  // 表情图现在是「表情图」分区里的常显内容，没有弹窗、没有入口摘要
   exprCount: $('expr-count'),
   c: {
     name: $('c-name'),
@@ -250,8 +215,7 @@ export const el = {
     scenario: $('c-scenario'),
     first: $('c-first'),
     btnFirstTemplate: $('btn-first-template'),
-    // 备选开场白：个数不定，行是动态铺的（characterEditor.js 的 renderAltGreetings）。
-    // 这里只登记「列表容器 / 总条数角标 / 添加按钮」三样。
+    // 行是动态铺的（characterEditor.js 的 renderAltGreetings）
     altList: $('c-alt-list'),
     altCount: $('c-alt-count'),
     btnAltAdd: $('btn-alt-add'),
@@ -259,27 +223,22 @@ export const el = {
     system: $('c-system'),
     post: $('c-post'),
     notes: $('c-notes'),
-    // 年龄/性别/种族**没有**输入框：这些是角色的固定设定，写进「角色描述」里。
-    // （index.html 里那三个 id 早删了，这里曾经留着三个指向 null 的键 —— 别加回来。）
+    // ⚠️ 年龄/性别/种族没有输入框（写进「角色描述」里）；index.html 里那三个 id 早删了，别加回来
     attrNew: $('c-attr-new'),
     btnAttrTemplate: $('btn-attr-template'),
-    // 分组标签栏：属性按分组切开，点哪个标签就只看哪一组
     attrTabs: $('c-attr-tabs'),
     attrList: $('c-attr-list'),
-    // 分组操作条（改名 / 解散），铺在字段列表上面
     attrGroupEdit: $('c-attr-group-edit'),
     btnAttrPaste: $('btn-attr-paste'),
     attrPaste: $('c-attr-paste'),
-    // 剧情选项：开关 + 数量 + 额外要求
     optionsOn: $('c-options-on'),
     optionsConfig: $('c-options-config'),
     optionsCount: $('c-options-count'),
     optionsHint: $('c-options-hint'),
-    // 在状态栏显示（`showInPanel`）：只对世界书副本有意义
+    // 只对世界书副本有意义
     showInPanelBox: $('c-show-in-panel-box'),
     showInPanel: $('c-show-in-panel'),
     showInPanelHelp: $('c-show-in-panel-help'),
-    // 角色自带的世界书：清单 + 绑定按钮 + 开关
     wbBox: $('c-worldbook-box'),
     wbList: $('c-wb-list'),
     wbAddBtn: $('c-wb-add-btn'),
@@ -308,7 +267,6 @@ export const el = {
     embeddingProvider: $('s-embedding-provider'),
     embeddingModel: $('s-embedding-model')
   },
-  // 默认人设：设置里只留一行入口（按钮 + 当前状态），正文在弹窗里编辑
   btnAssistantPersona: $('btn-assistant-persona'),
   assistantHint: $('s-assistant-hint'),
   personaModal: $('persona-modal'),
@@ -322,7 +280,7 @@ export const el = {
     model: $('persona-model'),
     hint: $('persona-foot-hint')
   },
-  // 请求记录（顶栏「⋯」里进）：最近几次实际发出去的请求，只在内存里
+  // 最近几次实际发出去的请求，只在内存里
   btnRequestLog: $('btn-request-log'),
   requestsModal: $('requests-modal'),
   btnCloseRequests: $('btn-close-requests'),
@@ -338,7 +296,6 @@ export const el = {
     apiKey: $('p-apikey'),
     models: $('p-models')
   },
-  // 预设编辑器
   pr: {
     modal: $('preset-modal'),
     title: $('preset-title'),
@@ -358,16 +315,11 @@ export const el = {
     btnSave: $('btn-save-preset'),
     btnDel: $('btn-del-preset')
   },
-  // 世界书
-  // ⚠️ 编辑器本体（view-wb-editor）不在这里登记：它 2026-10-13 从弹窗改成了**页面**，
-  //    归上面那排视图（el.viewWbEditor）—— 这里剩下的都是编辑器**里面**的控件。
+  // ⚠️ 编辑器本体归上面那排视图（el.viewWbEditor），这里只登记编辑器**里面**的控件
   wb: {
     btnClose: $('btn-close-worldbooks'),
     btnImport: $('btn-import-lorebook'),
     btnNew: $('btn-new-worldbook'),
-    // ⚠️ 这两个 2026-10-13 改过名（原 entriesEmpty / entriesWrap）：
-    //    编辑器改成「本书设置 / 条目列表 / 条目编辑」三栏之后，「没选书」的占位
-    //    和「整本书的表单」那层壳都跟条目无关了，旧名里那个 entries 会误导下一位。
     bookEmpty: $('wb-book-empty'),
     bookWrap: $('wb-book-wrap'),
     cover: $('wb-cover'),
@@ -409,7 +361,6 @@ export const el = {
     },
     btnDelEntry: $('btn-del-entry')
   },
-  // 从角色库多选加入世界书
   wbPicker: {
     modal: $('wb-char-picker'),
     list: $('wb-char-picker-list'),
@@ -418,10 +369,8 @@ export const el = {
     btnCancel: $('btn-cancel-wb-char-picker'),
     btnConfirm: $('btn-confirm-wb-char-picker')
   },
-  // 桌宠（设置弹窗里的一个区块）
-  //
-  // ⚠️ 桌宠的**展示**在另一个窗口里，这里只有它留在设置页上的那些控件。
-  //    两边的同步靠主进程推 `pet:changed`（右键菜单改了配置，这边要跟着变）。
+  // ⚠️ 桌宠的展示在另一个窗口里，这里只有它留在设置页上的控件
+  // 两边同步靠主进程推 `pet:changed`（右键菜单改了配置，这边要跟着变）
   pet: {
     section: $('pet-section'),
     enabled: $('s-pet-enabled'),

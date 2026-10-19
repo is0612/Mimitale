@@ -1,22 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  views/preset.js —— 预设编辑器（弹窗）
-//
-//  只编辑**一个**预设：名字 + 说明 + 标签 + 指令正文 +（可选）采样参数。
-//  「保存后才生效」：改动先落在本地草稿上，点「保存」才写回 state 并落盘，
-//  没保存就关要问一句「放弃改动？」—— 和世界书编辑器同一套手感。
-//
-//  这个模块不向上 import 入口层：保存后要「全量重绘」（预设页、会话视角弹窗
-//  都可能要跟着变）属于入口层编排，由 initPreset 注入 rerender。
-//
-//  弹窗只在打开时渲染，不参与整体重绘，所以不向刷新总线登记。
-//
-//  草稿（draft）的语义：
-//    · null            —— 没在编辑任何预设
-//    · { id: null, … } —— 新建，还没写进 state
-//    · { id: 'pr…', …} —— 编辑已有的那个（可能是新加的）
-// ============================================================================
+//  views/preset.js —— 预设编辑器（弹窗）：只编辑一个预设，改动先落草稿，点「保存」才写回并落盘。
+//  保存后的全量重绘由入口层注入 rerender；弹窗只在打开时渲染，不登记刷新总线。
+//  草稿：null = 没在编辑；{ id: null } = 新建；{ id: 'pr…' } = 编辑已有的。
 
 import { state } from '../core/state.js';
 import { el } from '../core/dom.js';
@@ -85,9 +71,7 @@ function numberOrNull(node, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-// ---------------------------------------------------------------------------
-//  打开 / 关闭
-// ---------------------------------------------------------------------------
+// 打开 / 关闭
 
 /** 打开编辑器编辑已有的一个预设 */
 export function openPresetEditor(id) {
@@ -155,10 +139,7 @@ function showEditor(subText) {
   el.pr.modal.classList.remove('hidden');
 }
 
-/**
- * 关编辑器。有未保存的改动时先问一句。
- * 返回 true = 真的关掉了（调用方据此决定要不要继续别的事）。
- */
+/** 关编辑器；有未保存改动先问一句。返回 true = 真的关掉了。 */
 export async function closePresetEditor() {
   if (!draft) {
     el.pr.modal.classList.add('hidden');
@@ -179,9 +160,7 @@ export async function closePresetEditor() {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-//  保存 / 删除
-// ---------------------------------------------------------------------------
+// 保存 / 删除
 
 /** 把表单写回草稿对象 */
 function stashPresetForm() {
@@ -262,15 +241,11 @@ async function savePreset() {
   el.input.focus();
 }
 
-/**
- * 删掉一个预设。两个入口共用这一份逻辑：编辑器里的「删除」，
- * 和列表页卡片右上角那个 ×。返回是否真的删了。
- */
+/** 删掉一个预设（编辑器「删除」和列表页卡片右上角 × 共用）。返回是否真的删了。 */
 export async function deletePresetById(id) {
   const preset = dialoguePresets().find((p) => p.id === id);
   if (!preset) return false;
 
-  // 绑了这个预设的会话有几条？删之前说清楚
   const used = (Array.isArray(state.conversations) ? state.conversations : []).filter(
     (c) => convoDialoguePresetIds(c)?.includes(id)
   ).length;
@@ -322,8 +297,7 @@ function deletePreset() {
       }
     })
     .catch((err) => {
-      // deletePresetById 内部已经处理了「写盘失败」；这里兜的是意外异常，
-      // 不让它变成 unhandled rejection。
+      // 这里只兜意外异常，不让它变成 unhandled rejection。
       console.error('删除预设失败', err);
       showToast('删除预设失败', 'error');
     });

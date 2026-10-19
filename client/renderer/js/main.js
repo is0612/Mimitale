@@ -1,15 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  main.js —— 界面逻辑的入口（跑在窗口里）
-//  职责：画对话、把消息发给主进程、接收流式增量做「打字机」效果、存历史。
-//
-//  按 ES module 分层：core/（常量、状态、DOM、preload 桥、工具）← ui/（通用界面件）
-//  ← data/（纯逻辑）← views/（一个功能一块）← 入口。两条约束：
-//    · 依赖方向只能向下，且别让两个功能模块互相 import 成环。
-//    · 只有「入口层才知道的编排」才用注入 —— initXxx({ theAction })。
-//  刷新总线在 views/refresh.js（registerRefreshListeners 登记），全量重绘走
-//  views/redraw.js 的 renderAll()。单向 import 一个不回头依赖你的展示层是允许的。
+// main.js —— 界面入口：画对话、发消息、流式打字机、存历史
+// 依赖只能向下（core ← ui ← data ← views ← 入口），功能模块之间别互相 import。
+// 只有「入口层才知道的编排」才用注入 —— initXxx({ theAction })。
 
 import { api } from './core/api.js';
 import { state } from './core/state.js';
@@ -115,9 +108,6 @@ import { summarizeNow } from './views/summarize.js';
 import { exportCharacter, exportConversation, exportCharactersByIds } from './views/chatExport.js';
 import { startPlayerFlow, chatWithCharacter } from './views/worldPlay.js';
 
-// 「设置页里当前正在编辑的服务商」的初始值随设置页状态走（views/settings.js），
-// 入口层只在启动时把它带过去（setEditingProvider）。
-
 // 事件监听器里跑异步动作：出错只落日志，避免变成 unhandled rejection。
 function runAsync(action) {
   return () => {
@@ -127,58 +117,38 @@ function runAsync(action) {
   };
 }
 
-/**
- * 登记「谁需要被重绘」。顺序 = 绘制顺序。
- *
- * 这里是 views/ 拆分的接线板：各模块导出的 initXxx() 在自己的 init 里登记
- * （下面带 → 注释的那几行）。顺序固定下来是为了绘制顺序稳定；
- * 各视图只写自己的 DOM 区域，顺序其实不影响结果，但没必要改。
- */
+/** 登记「谁需要被重绘」；顺序 = 绘制顺序。 */
 function registerRefreshListeners() {
   onRefresh(renderConvoList);
   initHeader(); // → onRefresh(renderHeader)
   onRefresh(renderModelSwitch);
-  // 状态卡入口条：只列「本局有谁」，点头像开那张状态卡（字段在卡里看/改）。
-  // 剧情选项挂在气泡下面，它的动作（点选项/换一批/收起）由 chatMessages.js
-  // 直接接 suggestionsUi.js，不经过这里。
   initPanelUi(); // → onRefresh(renderPanel)
-  initCastPanel(); // → onRefresh(renderCastPanel)：右侧那条常驻面板（跟入口条共用名单）
+  initCastPanel(); // → onRefresh(renderCastPanel)
   initMemoryUi(); // → onRefresh(renderMemoryIndicator)
   onRefresh(renderMessages);
-  // 浮动状态卡（点「我」/角色的头像打开）。登记在消息之后：它读的是同一份面板数据，
-  // 顺序不影响结果，跟着消息后面画一遍即可。
   initStateCards(); // → onRefresh(renderStateCards)
   onRefresh(refreshLibraryPage);
-  // 世界书列表页要「点编辑 = 打开世界书编辑器」，而编辑器开关属于入口层的编排
-  // （要设 editingWorldbookId，那是编辑器弹窗的状态）。所以注入进去。
-  // 卡片右上角那个删除 × 同理：它要一起解绑会话、收掉编辑器里的草稿。
-  // 它自己不登记重绘 —— 列表页的重绘由上面的 refreshLibraryPage 按当前视图分发。
+  // 世界书列表自己不登记重绘，由上面的 refreshLibraryPage 按当前视图分发。
   initWorldbookList({
     openEditor: editWorldbookFromPage,
     remove: deleteWorldbookById,
     removeMany: deleteWorldbooksByIds,
     exportMany: exportWorldbooksByIds
   });
-  // 预设列表页同理：「编辑」要打开预设编辑器（编辑器状态住在 views/preset.js），
-  // 「删除」要收掉那份没保存的草稿，「导出」是另一条通道。都是跨模块编排，由入口层注入。
+  // 预设列表同理：动作跨模块，由入口层注入。
   initPresetList({ openEditor: openPresetEditor, remove: deletePresetById, exportOne: exportPreset });
-  // 预设编辑器自己绑弹窗里的按钮；它保存 / 删除之后要全量重绘（预设页、
-  // 会话视角弹窗都可能跟着变），那也是入口层的编排。
+  // 预设编辑器保存 / 删除后要全量重绘（预设页、视角弹窗都可能跟着变）。
   initPreset({ rerender: () => renderAll() });
-  // 预设的导入 / 导出：按钮在预设页头部，导入完要重绘整页
   initPresetIo({ rerender: () => renderAll() });
 }
 
-// ---------------------------------------------------------------------------
-//  事件绑定
-// ---------------------------------------------------------------------------
+// ---- 事件绑定 ----
 
 // Promise.all 任一读取失败时内存仍是初值，关窗不能拿它覆盖磁盘。
 let startupDataLoaded = false;
 
 function bindEvents() {
-  // 品牌行右端的版本号：主进程启动时通过 preload 递过来。
-  // 格式化成 major.minor（package.json 的 1.0.0 → v1.0），拿不到就整个不显示。
+  // 版本号由 preload 递过来，格式化成 major.minor；拿不到就不显示。
   if (el.brandVersion) {
     const raw = String((window.mimitale && window.mimitale.appVersion) || '');
     const m = raw.match(/^(\d+)\.(\d+)/);
@@ -206,8 +176,7 @@ function bindEvents() {
   if (el.btnSidebarToggle) el.btnSidebarToggle.addEventListener('click', toggleSidebar);
   applySidebarCollapsed();
 
-  // 「＋ 新对话」= 直接建一个空白会话并切到聊天屏。
-  // 想跟某个角色聊，去角色库点卡片上的「聊天」—— 那条路会自己建会话并绑角色。
+  // 「＋ 新对话」= 建空白会话并切到聊天屏；跟角色聊走角色库卡片上的「聊天」。
   el.btnNew.addEventListener('click', () => {
     if (state.streaming) {
       showToast('正在生成回答，先停止再新建会话');
@@ -218,12 +187,7 @@ function bindEvents() {
     renderAll({ forceScroll: true });
   });
 
-  /**
-   * 发消息的统一入口：**先发再清**，发不出去就把文字留在框里。
-   *
-   * sendMessage 有一堆早退路径（没配模型、没填 Key、正在生成中），
-   * 它返回「到底发出去没有」，只有 true 才清空输入框。
-   */
+  /** 发消息统一入口：**先发再清**，只有真的发出去了才清空输入框。 */
   const submitInput = () => {
     const text = el.input.value;
     const sent = sentTextOf(text);
@@ -253,7 +217,6 @@ function bindEvents() {
       showToast('当前会话是空的');
       return;
     }
-    // 导出时用和界面一致的称呼：你 = 玩家角色名，对方 = 角色名 / 世界名。
     // 通用助手没填名字时 speakerName 是空串，这里得有个称呼顶着
     const assistantLabel = speakerName(convo) || 'AI';
     const meLabel = convoUserName(convo);
@@ -278,9 +241,7 @@ function bindEvents() {
   if (el.btnNewPreset) el.btnNewPreset.addEventListener('click', newPreset);
   // 状态卡入口条不用在这里绑事件 —— 头像的点击由 views/panelUi.js 铺的时候就地挂上。
 
-  // 记忆管理：弹窗本体（开关 / 摘要增删改 / 存档点）在 views/memoryUi.js 里绑定。
-  // 这里只留「手动压一段」—— 它要改头部的「正在整理记忆…」提示，
-  // 等 header 独立成模块之后再让它归位。
+  // 记忆管理弹窗在 views/memoryUi.js；这里只留「手动压一段」。
   el.btnSummarizeNow.addEventListener('click', runAsync(summarizeNow));
 
   // 进入世界前创建玩家角色
@@ -294,9 +255,8 @@ function bindEvents() {
 
   // 主题配色 / 夜间模式在「外观」弹窗里，点击由 views/appearance.js 接。
 
-  // 打开数据文件夹。主进程回 { ok, path, error } —— 失败时得说一句人话，别吞错。
   // ⚠️ ok:true 只代表 explorer.exe 起来了，不代表文件夹真弹出来了（见 main/ipc.js），
-  //    所以这里把路径无条件塞进剪贴板：真没弹出来，用户 Ctrl+L 一粘就进去了。
+  //    所以路径无条件塞进剪贴板：真没弹出来，用户 Ctrl+L 一粘就进去了。
   el.btnFolder.addEventListener('click', async () => {
     let result = null;
     try {
@@ -324,23 +284,18 @@ function bindEvents() {
     }
   });
 
-  // 编辑弹窗头上的「放大」：把**那个弹窗**铺满应用窗口，再点还原。
-  // 传的是按钮本身（模块靠 closest('.modal') 找到它所属的弹窗），所以各弹窗互不影响。
-  // 逐个绑而不是循环数组 —— tools/audit-buttons.js 是按「el.xxx 后面同一行有没有
-  // addEventListener」查漏绑的，写成数组它会把这几个全报成没绑。
-  // 现在只剩预设编辑器还是弹窗（其余的都改成了占满整窗的页面）。
+  // 必须逐个绑：tools/audit-buttons.js 按「el.xxx 同一行有 addEventListener」查漏绑。
+  // 传按钮本身，模块靠 closest('.modal') 找所属弹窗，各弹窗互不影响。
   el.btnFsPreset.addEventListener('click', () => toggleModalMax(el.btnFsPreset));
 
   el.input.addEventListener('input', autoGrowInput);
 
   el.input.addEventListener('keydown', (event) => {
-    // 中文/日文输入法：敲拼音时按回车是**选词**，那一下在 Chromium 里也会报成
-    // Enter（keyCode 229，且 isComposing 为 true）。不挡的话会拿半截拼音去发消息。
-    // 两个判据都看，各家输入法不一致。
+    // ⚠️ 输入法选词那下回车在 Chromium 里也报成 Enter（isComposing / keyCode 229），
+    // 不挡会拿半截拼音发消息；两个判据都看，各家输入法不一致。
     if (event.isComposing || event.keyCode === 229) return;
 
-    // 数字键 1~9 快捷选剧情选项：只在输入框为空、且不是组合键时触发，
-    // 否则会跟「想输入数字」打架。选项按钮上印着对应序号，一眼对上。
+    // 数字键 1~9 快捷选剧情选项：只在输入框为空、且无组合键时触发。
     if (event.key >= '1' && event.key <= '9' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
       const convo = activeConvo();
       const options = asArray(convo && convo.options);
@@ -386,26 +341,22 @@ function bindEvents() {
       closeWorldbookCharPicker();
       return;
     }
-    // 角色编辑器里那个「绑定世界书」浮层挂在 body 上、层级还比编辑器高，
-    // 所以它是最上面那一层，先关它（别顺手把编辑器一起关了）
+    // 「绑定世界书」浮层挂在 body 上、层级比编辑器高：先关它，别顺手把编辑器关了
     if (isWorldbookPickerOpen()) {
       closeWorldbookPicker();
       return;
     }
-    // 角色编辑器是**页面**而不是弹窗：在里面按 Esc = 回到进来之前那一屏，
-    // 和页头那颗「返回」同一个动作。
+    // 角色编辑器是页面不是弹窗：Esc = 返回上一屏（同页头「返回」）。
     if (!el.viewCharEditor.classList.contains('hidden')) {
       leaveCharacterEditor();
       return;
     }
-    // 人设弹窗是从设置里开的、压在设置之上，所以先关它 ——
-    // 不然按一下 Esc 会把底下的设置页也一起离开
+    // 人设弹窗压在设置之上：先关它，否则 Esc 会把设置页也一起离开。
     if (!el.personaModal.classList.contains('hidden')) {
       closePersonaDialog();
       return;
     }
-    // 设置是**页面**而不是弹窗：在它里面按 Esc = 返回上一屏，
-    // 和页头那颗「返回」同一个动作。
+    // 设置是页面不是弹窗：Esc = 返回上一屏。
     if (!el.viewSettings.classList.contains('hidden')) {
       leaveSettings();
       return;
@@ -428,9 +379,7 @@ function bindEvents() {
     }
   });
 
-  // 主进程推来的流式增量
-  // chunkTarget 缓存「这次流式输出该往哪个节点里写」，按 requestId 判断是否失效。
-  // base / delta 用来拼流式阶段的显示文本（见下面的注释）。
+  // 流式增量：chunkTarget 缓存写入节点，按 requestId 判失效；base / delta 拼显示文本。
   let chunkTarget = { requestId: null, node: null, base: '', delta: '' };
 
   api.onChunk(({ requestId, text }) => {
@@ -440,11 +389,8 @@ function bindEvents() {
     const { convo, assistant } = target;
     if (!state.conversations.includes(convo) || !convo.messages.includes(assistant) || assistant.role !== 'assistant') return;
 
-    // 续写（「继续」/自动续写）是把新文本接在**已有正文**后面，而旧正文的末尾一行
-    // 往往是状态行 / 剧情选项行 —— 模型写完正文顺手就写它们，且那一行末尾没有换行。
-    // 直接拼上去会和它黏成一条：显示时整行按「状态行」被剥掉，续写的**头一行**
-    // 就凭空消失了（开着剧情选项之后，每条回复末尾都带一行选项，这条天天踩）。
-    // 所以一次新的流式开始、且旧正文没以换行收尾时先补一个换行。
+    // ⚠️ 续写：旧正文末尾若是状态行 / 选项行且没换行，直接拼会黏成一条被整行剥掉，
+    // 续写的头一行会凭空消失 —— 新流开始且旧正文没以换行收尾时先补一个 '\n'。
     const newStream = chunkTarget.requestId !== requestId;
     if (newStream && assistant.content && !assistant.content.endsWith('\n') && text && !text.startsWith('\n')) {
       assistant.content += '\n';
@@ -458,21 +404,12 @@ function bindEvents() {
       return;
     }
 
-    // 一次流式过程中目标节点一般不变，缓存起来 —— 否则每个 token 都要
-    // 在消息列表里查一次 DOM，长对话下这些查询加起来也不少。
-    //
-    // ⚠️ 但缓存必须认「节点已经脱离文档」这种情况：生成过程中只要发生一次整体重绘
-    //    （存设置走 afterSettingsSave、改状态卡字段走 refreshAll 都会调 renderMessages，
-    //    而它整片重建 #messages 的 innerHTML），缓存的 .msg-content 就成了文档外的孤儿 ——
-    //    之后每个分片都写进那个孤儿里，屏幕上的气泡**看起来卡住了**，
-    //    直到 finally 里 renderAll 才把整段正文一次性刷出来。
-    //    isConnected 为 false 就地重查一次，代价只有那些被重绘的轮次。
+    // 缓存目标节点省掉每 token 的 DOM 查询；⚠️ 但必须认 isConnected：生成中一次整体重绘
+    // 会让缓存节点成孤儿，分片写进去气泡就「卡住」，直到 finally 的 renderAll 才刷出来。
     if (chunkTarget.requestId !== requestId || !chunkTarget.node || !chunkTarget.node.isConnected) {
       const index = convo.messages.indexOf(assistant);
-      // 本次流式开始前这条消息已有的正文（继续时 = 上一轮的原文，可能带旧状态块）。
-      // 它是完整的，用 cleanAssistantText 精确剥掉旧状态块，得到干净正文 base。
-      // 重绘之后重查也走同一条路：assistant.content 已经含了本轮全部增量，
-      // 减掉这一次的 text 就得到基准，delta 归零再往后拼，不会丢字也不会重复。
+      // 基准 = 本轮之前的完整正文，用 cleanAssistantText 剥掉旧状态块；
+      // 重绘后重查同一条路：assistant.content 减去本轮 text 即基准，delta 归零。
       const before = assistant.content.slice(0, assistant.content.length - text.length);
       chunkTarget = {
         requestId,
@@ -482,20 +419,11 @@ function bindEvents() {
       };
     }
 
-    // 流式阶段的显示 = 干净的历史正文（base）+ 本轮新文本（delta，砍掉末尾状态块）。
-    //
-    // 为什么不能直接 cleanAssistantText(assistant.content)：它在流式阶段会**抖动** ——
-    // 每 token 重算时，半截的字段行（【时间】还没写到冒号）匹配不上正则，
-    // 会闪一两帧再被剥掉，字段多的时候一行闪一次，气泡就上下抖。
-    //
-    // 为什么砍的是 delta 而不是整段：继续（continue）时 assistant.content 里躺着
-    // 上一轮的状态块，直接整段「从第一个状态行砍」会把夹在中间的正文也误砍。
-    // 所以 base 用 cleanAssistantText 剥旧状态块（保留夹在中间的正文），
-    // 本轮新增的 delta 用 cutTrailingStatusBlock 从第一个状态行起整体截断（不闪）。
+    // 显示 = base + delta。不能直接 clean 整段：半截字段行匹配不上正则会闪；
+    // 也不能从整段砍状态块（续写时会误砍夹在中间的正文），所以只砍 delta 的尾部。
     chunkTarget.delta += text;
-    // 把这一局的面板字段名 + 分组名带进去：只有「真的是面板字段 / 已知分组标题」
-    // 的行才砍 —— 内心描写 / 上帝视角的【心理】【旁白】小标题，以及中文对话里
-    // 破折号起头的正文（「——等等，你说什么？」），都不能被当成状态块吞掉。
+    // 带上本局面板字段名 / 分组名：只有真字段与已知分组标题才砍 ——
+    // 内心描写【心理】【旁白】、破折号起头的正文都不能被当成状态块吞掉。
     const display =
       chunkTarget.base +
       cutTrailingStatusBlock(chunkTarget.delta, convoFieldDisplayNames(convo), [...panelGroupNames(convo)]);
@@ -519,27 +447,16 @@ function bindEvents() {
     } catch (err) {
       console.warn('关窗前保存会话失败', err);
     }
-    // 角色和世界书一起写（主进程收到 worldbooks 才会更新那个文件，漏掉的话
-    // 角色绑定关系会指向一本已经不在磁盘上的书）。
-    // 必须走 persistCharacters —— 它带着「世界书没读出来就别写」的守卫
-    // （data/persist.js 的 worldbooksLoaded）：世界书读失败时 state.worldbooks
-    // 是空数组，绕过守卫写盘会把 worldbooks.json 清空。
+    // ⚠️ 必须走 persistCharacters —— 它带「世界书没读出来就别写」的守卫；
+    // 绕过会拿空数组把 worldbooks.json 清空。
     persistCharacters(true);
   });
 }
 
-// ---------------------------------------------------------------------------
-//  导入世界书（跨视图编排，刻意留在入口层）
-// ---------------------------------------------------------------------------
+// ---- 导入世界书（跨视图编排，刻意留在入口层） ----
 
-/**
- * 在世界书弹窗里「导入世界书」。
- * 复用角色的导入通道（同一个文件框），只是落点不同：
- * 角色照样进角色库，世界书则挂到当前选中的这本书所在的位置。
- *
- * 刻意留在入口层：它要同时动角色库、世界书列表页、角色列表页 ——
- * 属于跨视图编排。世界书弹窗里的「导入」按钮由 initWorldbook 注入到这个函数。
- */
+/** 导入世界书：复用角色导入通道，落点挂在当前这本书下。
+ *  刻意留在入口层 —— 它同时动角色库 / 世界书列表 / 角色列表（跨视图编排）。 */
 async function importWorldbooks() {
   const picked = await pickImportFiles({
     before: () => stashWorldbookForm(),
@@ -555,7 +472,6 @@ async function importWorldbooks() {
   if (freshChars.length) state.characters = [...characters(), ...freshChars];
 
   if (freshBooks.length) {
-    // 直接打开刚导入的那本，方便马上核对设定对不对
     openWorldbookEditor(freshBooks[freshBooks.length - 1].id);
   } else {
     renderWorldbookPage();
@@ -564,7 +480,7 @@ async function importWorldbooks() {
   renderCharacterPage();
   renderWorldbookChars();
 
-  // 写盘失败就别报「已导入」—— 提示由 persistLibrary 弹（导进来的东西留在界面上）
+  // 写盘失败就别报「已导入」（提示由 persistLibrary 弹）。
   if (!(await persistLibrary())) return;
 
   const parts = [];
@@ -575,35 +491,24 @@ async function importWorldbooks() {
   warnImportErrors(errors);
 }
 
-// ---------------------------------------------------------------------------
-//  启动
-// ---------------------------------------------------------------------------
+// ---- 启动 ----
 
 async function init() {
-  // 自定义元素组件库（components/）：**必须抢在第一次渲染之前**注册。
-  // 组件元素是进文档那一刻由浏览器 upgrade 的，晚注册的话先渲染出来的
-  // <m-button> 会停在"未知元素"状态 —— 看得见、没样式、没行为。
+  // ⚠️ 必须抢在第一次渲染之前注册：组件元素进文档那一刻 upgrade，晚注册就停在「未知元素」。
   defineComponents();
   bindEvents();
-  // 静态 HTML 里带 data-icon 的字段标签，启动时一次性挂上图标（见 ui/icons.js）。
-  // 动态渲染出来的标签要自己在渲染完成后对那一段再调一次。
+  // 静态 HTML 里带 data-icon 的标签启动时挂一次；动态渲染的要自己再调一次。
   applyFieldIcons();
-  // 静态 HTML 里那 13 个原生 <select>：系统画的下拉列表碰不到 CSS，这里换成
-  // 自己的那份（见 ui/select.js）。原生 <select> 原地留着当值的地基，所以
-  // 各处读 `.value` / 监听 'change' 的接线一行都不用改。
+  // 原生 <select> 原地留着当值的地基，这里只换列表皮肤：读 .value / 监听 'change' 不用改。
   initSelects();
-  // 必须在第一次 renderAll 之前登记 —— 否则首屏一个视图都不会画。
-  // 各功能模块的事件绑定也在这一步完成（它们的 init 里带着自己的登记）。
+  // 必须在第一次 renderAll 之前登记，否则首屏一个视图都不会画。
   registerRefreshListeners();
-  // 只绑事件、不参与整体重绘的模块
-  // 顶栏「⋯」下拉菜单：纯开关，菜单里的功能各有各的归属（见 ui/menu.js）
+  // 只绑事件、不参与整体重绘的模块；顶栏「⋯」菜单是纯开关（见 ui/menu.js）。
   initMoreMenu();
-  // 顶栏「切换模型」弹层：同上，纯开关。列表内容由 renderModelSwitch 铺，
-  // 选中之后干什么这边接给 applyModelChoice —— 它俩不互相认识，免得绕出 import 环。
+  // 顶栏「切换模型」弹层：内容由 renderModelSwitch 铺，选中后走 onPick（不互相 import）。
   initModelMenu({ onPick: applyModelChoice });
   initPerspectiveUi();
-  // 「请求记录」：只读主进程内存里的最近几次请求，打开时现拉一次。
-  // 它不碰 state、不落盘，所以没有要注入的动作。
+  // 「请求记录」：只读主进程内存、打开时现拉；不碰 state、不落盘。
   initRequestLog();
   // 外观弹窗同理：改完即时生效 + 落盘，没有需要整体重绘的 DOM。
   initAppearance();
@@ -618,18 +523,15 @@ async function init() {
     rerender: (opts) => renderAll(opts),
     openSettings
   });
-  // 建议条自己绑关闭按钮；点建议 / 点剧情选项 = 发一条消息，那也是入口层的编排
-  // （填输入框、让它长高、走发送流程）。
+  // 建议条：点建议 / 点剧情选项 = 发一条消息（入口层编排）。
   initSuggestionsUi({
     send: sendMessage
   });
-  // 输入框左边的快捷短语面板：纯「插进输入框」，不发送 —— 发送那条路由上面的
-  // 建议条负责。它只碰 el.input，没有要注入的动作。
+  // 快捷短语面板：只往输入框里插，不发送。
   initQuickPhrases();
   // 侧边栏的「角色库 / 世界书」入口自己绑（切屏是 viewSwitch 自己的事）。
   initViewSwitch();
-  // 角色卡上的三个按钮都跨分区（编辑要开编辑器、聊天要建会话并切屏、删除要解绑会话），
-  // 所以由这里把动作交给列表页。
+  // 角色卡三个按钮都跨分区，动作由入口层交给列表页。
   initCharacterList({
     edit: (id) => openCharacterEditor(id, 'library'),
     chat: chatWithCharacter,
@@ -640,8 +542,7 @@ async function init() {
   });
   // 角色编辑器自己绑弹窗里的按钮；它保存 / 删除之后要全量重绘，那是入口层的编排。
   initCharacterEditor({ rerender: () => renderAll() });
-  // AI 生成角色 / NPC：生成完把字段交给角色编辑器开一份新草稿。
-  // 走的是和「＋ 新建角色」完全同一条路 —— 看过、改过、点保存才真正创建。
+  // AI 生成角色 / NPC：生成完交给编辑器开新草稿，看过、改过、保存才真正创建。
   initAiGen({
     startDraft: (fields, scope, bookId) => startCharacterDraftFromAi(fields, scope, bookId)
   });
@@ -650,8 +551,7 @@ async function init() {
     openEditor: (id) => openCharacterEditor(id, 'library'),
     stashForm: () => stashCharacterForm()
   });
-  // 世界书编辑器同理。它要切「角色编辑器作用域」再打开角色编辑器弹窗 ——
-  // 那是跨视图编排，所以那几个动作由这里注入进去（视图不向上 import）。
+  // 世界书编辑器要切「角色编辑器作用域」再开编辑器，动作由入口层注入。
   initWorldbook({
     importBooks: importWorldbooks,
     stashDraft: () => stashWorldbookForm(),
@@ -661,8 +561,7 @@ async function init() {
     // 「AI 生成 NPC」：带上这本书的 id，生成时拿它的条目和副本名单当上下文
     aiDraftInBook: (bookId) => openAiGenModal({ scope: 'worldbook', bookId })
   });
-  // 设置页同样只绑事件。它保存后要重绘「右上角切换器」和消息列表，
-  // 那两样属于入口层（前者读会话状态、后者是聊天区），所以注入进去。
+  // 设置页保存后要重绘右上角切换器和消息列表，所以注入进去。
   initSettings({
     refreshModelSwitch: () => renderModelSwitch(),
     afterSettingsSave: () => {
@@ -671,14 +570,11 @@ async function init() {
     }
   });
 
-  // ---- 桌宠 ----
-  // 设置页里那一块。它上面的「现在说一句」和右键菜单里那一项走的是**同一条路**
-  //（组上下文 → 生成 → 推给宠物窗口），所以把入口层的 speakNow 注入进去，
-  // 而不是让视图自己去 import 数据层 —— 免得多出一份「谁知道怎么触发」。
+  // 桌宠：设置页那块和右键菜单走同一条路（组上下文 → 生成 → 推给宠物窗口），
+  // 所以注入入口层的 speakNow，别让视图自己去 import 数据层。
   initPetSettings({ speakNow });
 
-  // 主进程手里没有「现在聊到哪了」（会话、摘要、状态面板都在渲染层内存里），
-  // 所以右键菜单点「让桌宠现在说话」是**反着来**的：
+  // 主进程不知道「现在聊到哪了」，所以右键菜单是反着的：
   // 主进程通知界面 → 界面组好上下文再发回去。
   api.onPetWantSpeak((payload) => {
     speakNow(payload && payload.reason === 'manual' ? 'manual' : 'auto').catch((err) =>
@@ -686,25 +582,21 @@ async function init() {
     );
   });
 
-  // 右键菜单点「桌宠设置 / 查看记忆」→ 把主窗口叫到前面并打开设置
   api.onPetOpenSettings((payload) => {
     openSettings();
     const focus = (payload && payload.focus) || '';
-    // 「查看记忆」要直接滚到桌宠那一块 —— 设置页现在是折叠卡片，
-    // 那块多半是收着的；不收起来的话 scrollIntoView 只会滚到一张合着的卡上。
+    // 「查看记忆」要直接滚到桌宠那块 —— 折叠着的卡片 scrollIntoView 滚不到位。
     if (focus === 'memory') expandSettingsSection('pet-section');
     openPetSection(focus).catch((err) =>
       console.error('打开桌宠区块失败', err)
     );
   });
 
-  // 开局先拉一份桌宠状态：不拉的话第一轮「该说话了」会因为没缓存而被跳过。
-  // 失败也不影响任何事（桌宠是可选功能）。
+  // 开局先拉一份桌宠状态，不拉第一轮会被跳过；失败不影响任何事。
   refreshPetCache().catch(() => {});
 
   // ---- 启动数据：五份互不依赖，并行去取 ----
-  // 世界书 / 预设读失败不该拦住启动（但要记住没读到，各自 catch 里见），
-  // 所以这两份单独包一层、失败也 resolve；其余三份失败 = 启动失败。
+  // 世界书 / 预设读失败不拦启动（但要记住没读到），其余三份失败 = 启动失败。
   const soft = (p) => p.then(
     (r) => ({ ok: true, r }),
     (err) => ({ ok: false, err })
@@ -719,9 +611,8 @@ async function init() {
 
   state.settings = config.settings;
   state.presets = asArray(config.presets);
-  // 主进程改过用户的设置（比如一次性迁移）就要说出来 —— 取走即清空，只有启动这次拿得到。
-  // ⚠️ 先存着、等 init 末尾再弹：showToast 只有一个元素和一个定时器，
-  //    下面那条「填 API Key」的提示会把它顶掉，而这条最不该被顶掉。
+  // 迁移告知取走即清空，只有启动这次拿得到。
+  // ⚠️ 先存着、等 init 末尾再弹：下面「填 API Key」那条会把它顶掉。
   const settingsNotices = asArray(config.notices);
   setEditingProvider(state.settings.activeProviderId);
 
@@ -730,15 +621,13 @@ async function init() {
   // 配色方案同理（默认 amber；preload 已先打标记）
   applyAccent(state.settings.accent);
   applyChatAppearance();
-  // ⚠️ 抓手的位置也得按**真实**内缩值再摆一次 —— initChatPad() 跑在 state.settings
-  //    赋值之前，那时只读得到默认值，抓手会停在 20px 处；正文/输入框却是按下面这行
-  //    之后的真实值缩进的。不补这一次，表现就是「一重启抓手就回到默认位置」。
+  // ⚠️ initChatPad() 跑在 state.settings 赋值之前，那时只读得到默认值，抓手会停在 20px；
+  // 这里按真实内缩值再摆一次，否则「一重启抓手就回到默认位置」。
   syncChatPadHandles();
 
   state.characters = asArray(storedChars && storedChars.characters);
 
-  // 世界书读不到不该拦住启动，但**必须记住没读到** ——
-  // 否则之后随便存一次角色，就会把 worldbooks.json 覆盖成空文件。
+  // ⚠️ 世界书读不到要记住没读到，否则之后存一次角色就把 worldbooks.json 覆盖成空。
   if (books.ok) {
     state.worldbooks = asArray(books.r && books.r.worldbooks);
     markWorldbooksLoaded();
@@ -759,19 +648,16 @@ async function init() {
   state.conversations = asArray(stored.conversations);
   state.activeId = stored.activeId || null;
 
-  // 读盘进来的字段定义不可信（手改过 JSON、老版本写的），过一遍归一化。
-  // 只在真有坏数据时才重写这个键，免得给所有老会话平白加上一个空对象。
+  // 读盘进来的字段定义不可信（手改 / 老版本写的），过一遍归一化。
   for (const convo of state.conversations) {
     if (!convo || typeof convo !== 'object') continue;
-    // 先迁移（老格式「字段名」→「字段名+owner」复合键），再归一化。
-    // 顺序不能反：migrate 要从老格式的 defs[name].owner 读归属，归一化之后
-    // 键已经变成复合键，就取不到 owner 了（见 data/panel.js 的 migrateConvoPanel）。
+    // ⚠️ 先迁移再归一化，顺序不能反：migrate 要从老格式 defs[name].owner 读归属，
+    // 归一化后键变成复合键就取不到 owner 了（见 data/panel.js）。
     migrateConvoPanel(convo);
     if (convo.panelDefs !== undefined) convo.panelDefs = normalizePanelDefs(convo.panelDefs);
     // 老会话里 owner 为空的字段当场认领（归角色或并回主角），幂等。
     absorbTopLevelIntoPlayer(convo);
-    // 「玩家挑的卡」和世界书里的同名副本撞了 → 副本那份并回「我」，
-    // 同一个人只留一张状态卡。幂等，只在真撞上时才动数据。
+    // 「玩家挑的卡」和世界书同名副本撞了 → 并回「我」，同一个人只留一张卡（幂等）。
     mergePlayerOwnedFields(convo);
     // 选项是程序写进去的，读盘时只要保证形状对（不是数组就当没有）
     if (!Array.isArray(convo.options)) convo.options = [];
@@ -786,10 +672,8 @@ async function init() {
           ? defaultOptionsSpec()
           : null;
     }
-    // 预设绑定：三种形状都要留得住
-    //   · 数组         → 手动配过（可能是空数组 = 显式「一条都不要」）
-    //   · 非空字符串   → 老数据（单值），迁成一条
-    //   · 其它/缺失    → null = 没配过，自动跟随全局预设
+    // 预设绑定：数组 = 手动配过（空数组 = 显式「一条都不要」）；
+    // 非空字符串 = 老数据，迁成一条；其它/缺失 = null，自动跟随全局预设。
     if (Array.isArray(convo.dialoguePresetIds)) {
       convo.dialoguePresetIds = convo.dialoguePresetIds
         .filter((id) => typeof id === 'string' && id.trim())
@@ -818,8 +702,7 @@ async function init() {
     setTimeout(() => showToast('先点左下角「设置」填入 API Key 就能聊了'), 500);
   }
 
-  // 设置迁移的告知：排在「填 API Key」那条**之后**（那条 500ms 起、3.2 秒后自己收），
-  // 并给更长的显示时间 —— 它是一次性的、内容也长，一闪而过等于没说。
+  // 迁移告知排在「填 API Key」之后，给更长显示时间 —— 一次性内容，一闪而过等于没说。
   if (settingsNotices.length) {
     setTimeout(() => showToast(settingsNotices.join('　'), undefined, { durationMs: 9000 }),
       needsKeyHint ? 4200 : 600);

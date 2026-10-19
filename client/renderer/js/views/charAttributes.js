@@ -1,72 +1,32 @@
 'use strict';
 
-// ============================================================================
-//  views/charAttributes.js —— 角色属性（状态面板的字段模板）编辑器
-//
-//  玩法：在角色卡上先声明「这个角色有哪些属性」（金币/上衣/好感度…），
-//  绑定时把它们种进会话的状态面板 —— 于是 AI 第一轮就知道该维护哪些字段，
-//  不用等它自己碰巧输出一个【金币】：100。
-//
-//  ★ 分组只是**视图键**：属性在数据上仍是一维数组，分组记在每个字段自己的
-//    `group` 上。标签栏点哪个，下面就只铺哪一组的字段。
-//    这么切的原因：数据形状一个字都不用改，于是导出 / 导入 / 面板注入 /
-//    既有的存盘断言全都不受影响，改动被关在「属性编辑器」这一块里。
-//    面板注入那边的分组小标题（—— 关系 ——）走的是同一批 group 值。
-//
-//  这里填的是**初始值（模板）**；进游戏之后在面板里改的是**那一局的当前值**。
-//  两者分开存，改角色卡不会影响正在进行的游戏。
-//
-//  和其他视图模块不同：它不持有草稿，而是**接收**一个数组（渲染时传进来）。
-//  因为那份草稿的所有者是角色编辑器（保存时要跟表单一起写回角色卡），
-//  让它自己存一份就得来回同步 —— 传引用、就地改，两边看到的永远是同一份。
-// ============================================================================
+// views/charAttributes.js —— 角色属性编辑界面（分组标签 + 字段行）
+// 填的是初始值（模板），进游戏后改的是那一局的当前值；分组只是视图键，数据仍是一维数组。
 
 import { el } from '../core/dom.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear, append } from '../ui/build.js';
-// 轻量输入框工厂：「＋ 新建分组」那颗**药丸形**的临时输入框用它
-//（它是个一次性的定制件，不归通用组件管）。见 ui/controls.js
+// 「＋ 新建分组」用一次性药丸输入框（ui/controls.js）
 import { input } from '../ui/controls.js';
 import { MAX_PANEL_FIELDS, panelFieldAllowed } from '../data/panel.js';
-// 组件库：属性行里的控件（三个下拉 + 五个输入框）。见 components/index.js
 import { mInput, mSelect, mButton } from '../components/index.js';
 import { setCharSectionCount } from './characterEditorLayout.js';
 
-/** 编辑器里的字段类型选择框（文本 / 数值 / 列表） */
 const ATTR_TYPES = [
   { value: 'text', label: '文本' },
   { value: 'meter', label: '数值' },
   { value: 'list', label: '列表' }
 ];
 
-/**
- * 字段的「更新频率」选择框：每轮维护（随剧情变的状态）/ 变了才说（几乎不变的设定）。
- * 默认「每轮维护」，具体哪个字段标「变了才说」由使用者在卡片上自己决定。
- *
- * ⚠️ 「变了才说」的代价必须写在**看得见的地方**（选项文字上），不能只藏在 tooltip 里：
- * 它把「这一轮到底要不要写这行」这个判断**交给模型**。剧情明明变了（脱了衣服、
- * 钱花掉了），模型也可能自判「这轮我没细写它」而整行省掉 —— 于是状态卡上的值
- * 就停在那儿不动，用户看到的现象是「属性卡不同步更新」。
- * 这个坑已经踩过两次，所以宁可让标签长一点，也要让人在选择的那一刻就知道风险。
- * ⚠️ 也别在这儿写具体字段名（穿着/身高/钱包…）—— 那是用户自己的卡，
- * 应用里不应写死别人的字段名。
- */
+// ⚠️ 「变了才说」的风险必须写在选项文字上，不能只藏 tooltip（漏更新已踩过两次）。
+// 这里不准写死具体字段名（穿着/钱包…），那是用户自己的卡。
 const ATTR_MODES = [
   { value: 'dynamic', label: '每轮维护' },
   { value: 'static', label: '变了才说（有漏更新的风险）' }
 ];
 
-/**
- * 官方「互动模板」的预设分组与默认字段。
- *
- * 点一下就把这几个官方面板连同默认字段一起种进属性草稿 —— 字段可再改名、
- * 修改或删除，分组名和 main/card-import.js 的 TEMPLATE_GROUP_LABELS 对齐
- * （状态栏 / 关系 / 背包），导入的官方模板卡落进来的组名和这里完全一致。
- *
- * 变化规则（hint）照着官方模板的「好例子」来写：告诉模型什么时候变、
- * 变多少，而不是一句「随剧情变化」。
- */
+/** 官方互动模板的预设分组；组名与 main/card-import.js 的 TEMPLATE_GROUP_LABELS 对齐 */
 const INTERACTIVE_TEMPLATE = [
   {
     group: '状态栏',
@@ -103,50 +63,23 @@ const INTERACTIVE_TEMPLATE = [
   }
 ];
 
-/** 「没有归到任何分组」那一桶在界面上的标题；数据上它对应 group === ''。 */
+/** 未分组这一桶的标题；数据上它对应 group === '' */
 const UNGROUPED_TITLE = '未分组';
 
-/**
- * 「更多」里的分组下拉，末尾那个「＋ 新建分组…」用的哨兵值。
- * 组名是使用者自己打的，理论上可能真叫这个名字 —— 所以铺选项时会把
- * 同名的分组过滤掉（代价是那个组选不到，实际不可能撞上，但别留暗坑）。
- */
+/** 「＋ 新建分组…」的哨兵值；铺选项时过滤掉同名真实分组 */
 const NEW_GROUP_VALUE = '__new_group__';
 
-/**
- * 视图状态（当前选中的分组 / 手工新建但还空着的分组）挂在**草稿数组**上，
- * 而不是模块级变量。两个原因：
- *   · 换角色、重开编辑器时草稿是新建的数组，视图状态自然跟着重置，
- *     不用再写一遍清理逻辑；
- *   · 数组上的自定义属性不会被 JSON.stringify 带走，所以它绝不会混进角色卡。
- *
- * ⚠️ 千万别把这类状态挂到**字段对象**上：保存时字段是整体展开写盘的
- * （见 characterEditor.js 保存属性那一段），挂上去就真写进盘里了 ——
- * `_moreOpen` 得手动 delete 就是因为这个。
- */
+// 视图状态（_activeGroup 等）挂在草稿数组上：换角色自然重置，自定义属性也不会被 JSON.stringify 带走。
+// ⚠️ 不能挂到字段对象上 —— 保存时字段整体展开写盘，会被写进角色卡（_moreOpen 就是为此手动 delete）。
 function activeGroupOf(list) {
   return typeof list._activeGroup === 'string' ? list._activeGroup.trim() : '';
 }
 
-/**
- * 分组的**创建顺序**（视图状态，挂在草稿数组上，和 _activeGroup 一样）。
- *
- * 为什么不直接按字段在数组里的先后排：那样分组的位置会跟着**字段的增删**
- * 上下浮动 —— 建了一个空分组，它排在最后；一旦别的组先有了字段，
- * 这个空组就被挤到更后面；等它自己有了字段又跳回前面。
- * 表现出来就像是「按字段多少排队」，标签栏每次动一下都换个样子。
- *
- * 所以这里显式记一份顺序：新建分组时追加，改名时原位替换，解散时删掉。
- * 标签栏永远按这份表铺，字段怎么增删都不影响。
- *
- * ⚠️ 它挂在**数组**上而不是字段对象上：数组的自定义属性不会被
- * JSON.stringify 带走，所以绝不会混进角色卡（字段上就不行了，
- * 保存时字段是整体展开写盘的）。
- */
+// 分组的创建顺序（挂在草稿数组上，规则同 _activeGroup）。
+// 不按字段先后排：那样空组会随字段增删在标签栏里前后跳。
 function groupOrderOf(list) {
   if (!Array.isArray(list._groupOrder)) {
-    // 第一次渲染（刚打开一张卡）：用「字段里第一次出现的顺序」当初值 ——
-    // 这是老数据里唯一能还原出来的顺序。空组跟在后面。
+    // 首次渲染用「字段里第一次出现的顺序」当初值，空组跟在后面
     const seed = [];
     const seen = new Set();
     const push = (raw) => {
@@ -163,11 +96,7 @@ function groupOrderOf(list) {
 }
 
 /**
- * 把草稿按分组分桶，**按创建顺序**铺。
- *
- * 和 main/panel-fields.js 的 groupPanelFields 是同一套语义（那边没有视图状态，
- * 只能按字段先后），两边组次序基本一致，不至于出现
- * 「编辑器里一个顺序、面板上另一个顺序」的错觉。
+ * 把草稿按分组分桶，按创建顺序铺（语义与 main/panel-fields.js 的 groupPanelFields 一致）。
  */
 function bucketsOf(list) {
   const order = groupOrderOf(list);
@@ -182,9 +111,7 @@ function bucketsOf(list) {
     if (id && !order.includes(id)) order.push(id);
   }
 
-  // 「＋ 新建分组」建出来、但还没填字段的分组：数据上它还不存在
-  // （没有任何字段引用它），只活在视图里。不兜这一手的话，
-  // 刚点完新建就被下一次重画吃掉了。
+  // 空组（还没有字段引用它）只活在 _extraGroups 里，不兜住会被下次重画吃掉
   for (const raw of list._extraGroups || []) {
     const id = String(raw || '').trim();
     if (id && !map.has(id)) map.set(id, []);
@@ -199,23 +126,16 @@ function bucketsOf(list) {
   return named.map((id) => ({ id, title: id || UNGROUPED_TITLE, fields: map.get(id) || [] }));
 }
 
-/**
- * 重画属性区：分组标签栏 + 当前这一组的字段 + 加字段的输入行。
- *
- * 只铺**当前分组**的字段。切标签、加字段、删字段、改类型都会重画一次 ——
- * 都是一次性动作，重画不会打断正在打字的手。
- * （例外：「更多」里的输入框只更新草稿、不重画，否则光标会跳走。）
- */
+/** 重画属性区：只铺当前分组的字段、「更多」里的输入框不重画（否则光标会跳走） */
 export function renderCharAttrs(list) {
   if (!el.c.attrList) return;
   const draft = Array.isArray(list) ? list : [];
 
-  // 分区导航「属性」右侧的计数徽章：跟着这份草稿走（加 / 删字段实时变）。0 也照显示
+  // 分区导航计数：0 也照显示
   setCharSectionCount('state', String(draft.length));
 
   const buckets = bucketsOf(draft);
-  // 选中的分组可能已经不存在了（这一组被删空 / 刚换了角色），
-  // 这时退回第一个桶；否则会看到一条空列表，还找不到自己站在哪一组。
+  // 选中的组已不存在（被删空 / 换了角色）时退回第一个桶
   let active = activeGroupOf(draft);
   if (!buckets.some((bucket) => bucket.id === active)) active = buckets[0].id;
   draft._activeGroup = active;
@@ -228,34 +148,26 @@ export function renderCharAttrs(list) {
   renderAttrAddRow(current);
 }
 
-/** 切到某个分组。点的是当前组就什么都不做 —— 白重画一次会清掉输入框里没提交的字 */
+/** 切到某个分组；点的就是当前组则不动 —— 白重画会清掉输入框里没提交的字 */
 function selectGroup(list, id) {
   if (activeGroupOf(list) === id) return;
   list._activeGroup = id;
-  // 换组了，上一组留着的「改名 / 删除」操作条和「新建分组」输入框都收起来 ——
-  // 不收的话它们会挂在新标签下面，看着像在操作新这一组。
+  // 换组要收起上一组的改名/删除条与新建输入框
   list._groupEditOpen = false;
   list._movingName = '';
   renderCharAttrs(list);
 }
 
-/**
- * 新建一个分组并切过去。
- * 建出来的是**空组** —— 没有任何字段引用它，所以只记在 _extraGroups 里；
- * 用户在里面加进第一个字段时，字段自然就带上了这个分组名。
- */
+/** 新建一个空分组并切过去；空组只记在 _extraGroups 里（还没有字段引用它） */
 function createGroup(list, rawName) {
   const name = String(rawName || '').trim().slice(0, 24);
   if (!name) return;
 
-  // 组名就叫「未分组」的话等同于切回那个桶（它的 id 是空串）
   if (name === UNGROUPED_TITLE) {
     selectGroup(list, '');
     return;
   }
 
-  // 创建顺序表里记一笔。已经有的名字不重复追加 ——
-  // 否则改回旧名字会让这一组在标签栏里再冒一个位置出来。
   const order = groupOrderOf(list);
   if (!order.includes(name)) order.push(name);
 
@@ -265,14 +177,7 @@ function createGroup(list, rawName) {
   selectGroup(list, name);
 }
 
-/**
- * 把分组改名：改的是**这一组下面所有字段**的 group。
- *
- * 三种情况都走这一条路：
- *   · 改成新名字   → 原地改名，标签栏里的位置不动（否改名会让标签跳到末尾）
- *   · 改成已有的名字 → 两组并成一组（提示一声，免得以为字段弄丢了）
- *   · 改成「未分组」 → 等于解散，字段的 group 清掉、退回兜底桶
- */
+/** 给分组改名：改这一组下所有字段的 group；撞名则并组，改成「未分组」等于解散 */
 function renameGroup(list, from, to) {
   const name = String(to || '').trim().slice(0, 24);
   if (!name || name === from) return;
@@ -292,14 +197,12 @@ function renameGroup(list, from, to) {
   const order = groupOrderOf(list);
   const at = order.indexOf(from);
   if (at >= 0) {
-    // 并组时被并掉的那个位置要消失，让目标组保留它自己的位置；
-    // 改成新名字则原地替换。
+    // 并组时被并掉的位置要消失，改成新名字则原地替换
     if (target && !merging) order[at] = target;
     else order.splice(at, 1);
   }
 
-  // 空组（还没有任何字段引用它，数据上它还不存在）也得跟着换名字，
-  // 否则改完名它就消失了 —— 明明什么都没改丢。
+  // 空组也要跟着改名，否则改完就消失了
   const extras = (list._extraGroups || []).filter((g) => String(g || '').trim() !== from);
   if (target && !merging && !moved && !extras.includes(target)) extras.push(target);
   list._extraGroups = extras;
@@ -313,14 +216,7 @@ function renameGroup(list, from, to) {
   else showToast(`「${from}」已解散，${moved} 个属性退回「未分组」`, 'ok');
 }
 
-/**
- * 解散 / 删除一个分组。
- *
- * 字段**不跟着删** —— 退回「未分组」这个兜底桶。理由：分组是给人看的
- * 组织方式，删组的人想清掉的多半是「这个分类」，而不是辛苦填的字段；
- * 真要字段消失，在那一行右边点 ✕，那是明确得多的动作。
- * 组里还有字段时先问一句，把「字段会退回未分组」说清楚。
- */
+/** 解散分组：字段不删，退回「未分组」；组里有字段时先确认 */
 async function deleteGroup(list, id) {
   const group = String(id || '').trim();
   if (!group) return; // 「未分组」不能删 —— 字段总得有地方落
@@ -367,13 +263,8 @@ function renderAttrTabs(list, buckets, active) {
       onClick: () => selectGroup(list, bucket.id)
     });
 
-    // 组名和数字拆成两个节点，是为了把数字做成一个小徽标 ——
-    // 拼成一整串文字的话，它和组名同字号同颜色，看着像一个名字的一部分。
-    //
-    // ⚠️ 中间那个空格（' '）不能省，也不能换成 CSS gap 就完事：
-    //    标签是 display:inline-flex，纯空白的文本节点在 flex 布局里会被
-    //    丢掉不参与排版，但它**仍然算在 textContent 里** —— 冒烟测试就按
-    //    「关系 3」这个整串在比对。删了空格断言会集体红，而界面上完全看不出来。
+    // ⚠️ 组名与数字之间那个空格不能省、也不能换成 CSS gap：flex 里空白文本节点不参与排版，
+    //    但仍算进 textContent，冒烟测试按「关系 3」整串比对。
     append(tab, [
       h('span', { class: 'attr-tab-name', text: bucket.title }),
       ' ',
@@ -383,8 +274,7 @@ function renderAttrTabs(list, buckets, active) {
     el.c.attrTabs.appendChild(tab);
   }
 
-  // 「＋ 新建分组」：长得像一个标签，但它是个输入框，回车确认。
-  // 不做成「点按钮弹输入框」，是因为那要多点一次，而组名本来就是随手打的。
+  // 「＋ 新建分组」长得像标签但其实是输入框，回车确认
   el.c.attrTabs.appendChild(
     input({
       class: 'attr-tab-new',
@@ -398,14 +288,7 @@ function renderAttrTabs(list, buckets, active) {
     })
   );
 
-  // 「⋯ 管理这一组」：改名 / 删除。
-  //
-  // 只在停在**命名分组**上时才出现 ——「未分组」是兜底桶，没有名字可改，
-  // 也不能删（删了零散字段就没地方落了）。
-  //
-  // 做成一个独立入口而不是「双击标签改名」之类的手势：手势没人猜得到，
-  // 而整组改名 / 删除需要一个明确入口，不能只靠「更多」里逐个改字段的 group。
-  // 靠 margin-left:auto 推到卡头最右边，和标签拉开距离，免得被看成一个特殊标签。
+  // 「⋯ 管理这一组」只在命名分组上出现（未分组不能改名/删除），靠 margin-left:auto 推到最右
   if (active) {
     el.c.attrTabs.appendChild(
       button({
@@ -422,11 +305,7 @@ function renderAttrTabs(list, buckets, active) {
   }
 }
 
-/**
- * 分组操作条：改名 + 解散。铺在卡身最上面（字段列表之上）。
- *
- * 它管的是**标签栏里当前选中的那一组**，所以只在这一组有名字时才铺。
- */
+/** 分组操作条：改名 + 解散，只在当前组有名字时铺 */
 function renderAttrGroupEdit(list, bucket) {
   if (!el.c.attrGroupEdit) return;
   clear(el.c.attrGroupEdit);
@@ -447,20 +326,18 @@ function renderAttrGroupEdit(list, bucket) {
         event.preventDefault();
         nameInput.blur(); // 失焦触发下面的 change，提交走同一条路
       } else if (event.key === 'Escape') {
-        // 必须 stopPropagation：main.js 的全局 Esc 链监听在 document 上，
-        // 不拦住的话「取消改名」会顺带把整个角色编辑器关掉（还可能在草稿上多弹一个确认框）。
+        // 必须 stopPropagation：全局 Esc 链会顺手把整个角色编辑器关掉
         event.preventDefault();
         event.stopPropagation();
         list._groupEditOpen = false;
         renderCharAttrs(list);
       }
     },
-    // 用 change（回车 / 失焦）而不是 input：边打字边改名会每敲一个字
-    // 就重画一次列表，光标被踢出去，整页都在跳。
+    // 用 change 而不是 input：每敲一个字重画会踢走光标
     onchange: () => {
       const next = nameInput.value.trim().slice(0, 24);
       if (!next || next === bucket.id) {
-        nameInput.value = bucket.id; // 空名字退回原名，不提交
+        nameInput.value = bucket.id;
         return;
       }
       renameGroup(list, bucket.id, next);
@@ -482,17 +359,11 @@ function renderAttrGroupEdit(list, bucket) {
   ]);
 }
 
-/**
- * 铺当前分组的字段行。
- *
- * 每行是「名字 + 初始值 + 类型 + 更多」。范围/变化规则/分组收在「更多」里，
- * 平时只露出名字和值 —— 大多数属性就是个文本，不该被一排输入框淹掉。
- */
+/** 铺当前分组的字段行：名字 + 初始值 + 类型 + 更多 */
 function renderAttrRows(list, bucket) {
   clear(el.c.attrList);
 
-  // 空组给句话。刚建的分组点进去本来是一片空白，既看不出坏了没有，
-  // 也不知道下一步该干嘛 —— 尤其「新建分组」是新加的入口，最容易撞上。
+  // 空组给句话，否则看不出是空的还是坏了
   if (!bucket.fields.length) {
     el.c.attrList.appendChild(
       h('div', {
@@ -517,8 +388,6 @@ function renderAttrRows(list, bucket) {
       }
     });
 
-    // 尺寸（26px / xs 字号 / 小圆角）归组件的 size="xs"，
-    // 页面 CSS 只剩「它在行里占多宽」和这个上下文的文字颜色。
     const typeSelect = mSelect(
       {
         class: 'attr-type',
@@ -527,8 +396,7 @@ function renderAttrRows(list, bucket) {
         title: '字段类型：数值可以设范围，超出范围时程序会拉回来',
         onchange: () => {
           const next = typeSelect.value;
-          // 切到「数值」时自动把「更多」展开 —— 否则用户选了类型还得再点一次
-          // 才能看到范围输入框，很容易以为这个功能不存在。
+          // 切到「数值」自动展开「更多」，否则找不到范围输入框
           if (next === 'meter' && attr.type !== 'meter') attr._moreOpen = true;
           attr.type = next;
           renderCharAttrs(list);
@@ -539,14 +407,7 @@ function renderAttrRows(list, bucket) {
     for (const t of ATTR_TYPES) typeSelect.appendChild(h('option', { value: t.value, text: t.label }));
     typeSelect.value = attr.type || 'text';
 
-    // 「更多」：默认展开条件是「已经有范围或变化规则」，但用户手动收起/展开过
-    // 就以手动状态为准（_moreOpen 是 true/false/undefined 三态）——
-    // 只看 hasMore 的话，一旦设过范围就再也收不起来了。
-    //
-    // 「有没有分组」**不再**算进默认展开条件：分组现在由上面的标签栏表达，
-    // 而且在这一版里新增的字段都自带分组 —— 再让每行都自动展开，
-    // 列表会被「变化规则 / 分组」两行输入框淹没，一屏看不到几个字段。
-    // 分组照样能从「更多」里改，只是默认收着了。
+    // 「更多」默认按「已有范围/变化规则」展开；手动收展过则以 _moreOpen 为准
     const hasMore = typeof attr.min === 'number' || typeof attr.max === 'number' || !!attr.hint;
     const moreOpen = attr._moreOpen === undefined ? hasMore : attr._moreOpen === true;
 
@@ -570,8 +431,7 @@ function renderAttrRows(list, bucket) {
         text: '✕',
         title: bucket.id ? `从「${bucket.title}」里删掉这个属性` : '删掉这个属性',
         onClick: () => {
-          // 按字段本身定位，不用下标 —— 列表已经按分组过滤过，
-          // 视图里的第 N 行不等于草稿数组里的第 N 项。
+          // 按字段本身定位，不用下标：列表已按分组过滤，行号 ≠ 数组下标
           const at = list.indexOf(attr);
           if (at >= 0) list.splice(at, 1);
           renderCharAttrs(list);
@@ -590,8 +450,7 @@ function renderAttrRows(list, bucket) {
 function buildMoreBox(list, attr) {
   const more = h('div', { class: 'attr-more' });
 
-  // 范围只在「数值」类型下有意义，别的类型不显示 —— 露出来只会让人以为
-  // 填了就有用（实际 clampFieldValue 只对 meter 动作）
+  // 范围只对 meter 有意义；别的类型露出来会误导（clampFieldValue 只处理 meter）
   if ((attr.type || 'text') === 'meter') {
     const numInput = (key, placeholder, label) =>
       mInput({
@@ -641,9 +500,6 @@ function buildMoreBox(list, attr) {
   return more;
 }
 
-/**
- * 「更多」里的更新频率行。默认「每轮维护」。
- */
 function buildModeRow(attr) {
   const row = h('div', { class: 'attr-mode-row' }, h('span', { class: 'attr-range-label', text: '更新频率' }));
 
@@ -669,15 +525,11 @@ function buildModeRow(attr) {
   return row;
 }
 
-/**
- * 「更多」里的分组行：把这个属性搬到别的分组。做成下拉而不是输入框（选项直接列）。
- * 但只给下拉会卡住第一个分组（卡里还没有命名分组时无从选起），所以末尾挂一个
- * 「＋ 新建分组…」，选中就临时变输入框，建组 + 搬过去一步完成。
- */
+/** 分组行：下拉搬到别组，末尾「＋ 新建分组…」可建组并搬过去 */
 function buildGroupRow(list, attr) {
   const row = h('div', { class: 'attr-group-row' }, h('span', { class: 'attr-range-label', text: '分组' }));
 
-  // 「＋ 新建分组…」的输入框模式。等这一行铺完再聚焦 —— 节点这会儿还没进文档。
+  // 「＋ 新建分组…」的输入框模式：等这一行铺完再聚焦（节点这会儿还没进文档）
   if (list._movingName === attr.name) {
     const nameInput = mInput({
       class: 'attr-group-new',
@@ -704,9 +556,8 @@ function buildGroupRow(list, attr) {
   }
 
   const current = String(attr.group || '').trim();
-  // ⚠️ 「未分组」必须**永远**在选项里：bucketsOf 只在「真的有零散字段、
-  //    或者一个命名分组都没有」时才铺出这一桶，光靠它会漏 ——
-  //    一旦所有属性都归了组，就再也没法把某个属性拿出来了。
+  // ⚠️ 「未分组」必须永远在选项里：bucketsOf 只在有零散字段或没有命名分组时才铺它，
+  //    否则属性全归组后再也拿不出来。
   const named = bucketsOf(list)
     .filter((bucket) => bucket.id && bucket.id !== NEW_GROUP_VALUE)
     .map((bucket) => bucket.id);
@@ -745,12 +596,7 @@ function waitForNewGroupName(list, attr) {
   renderCharAttrs(list);
 }
 
-/**
- * 建一个新分组，并把这个属性搬进去。
- * **不切到新组** —— 搬完还停在原来那一页，方便接着搬下一个
- * （「把未分组里五个零散属性归类」是一串连续动作，每搬一个就跳走很烦）。
- * 新标签会出现在标签栏里，加上一条提示，去向是看得见的。
- */
+/** 建新分组并把属性搬进去；刻意不切过去，方便连续搬下一个 */
 function createGroupAndMove(list, attr, rawName) {
   const name = String(rawName || '').trim().slice(0, 24);
   list._movingName = '';
@@ -763,47 +609,31 @@ function createGroupAndMove(list, attr, rawName) {
   if (!order.includes(name)) order.push(name);
   attr.group = name;
 
-  // 组名撞上了？那就是并进去，说清楚点，别让人以为建了个新组
+  // 撞名即并入已有组，提示文案要区分
   const merging = bucketsOf(list).some((bucket) => bucket.id === name && bucket.fields.some((f) => f !== attr));
   renderCharAttrs(list);
   showToast(merging ? `已搬进「${name}」` : `已新建「${name}」并搬了进去`, 'ok');
 }
 
-/**
- * 加字段那一行的占位文案要跟着当前分组走 ——
- * 否则用户不知道「添加」到底加进了哪一组。
- */
+/** 加字段行的占位文案跟着当前分组走 */
 function renderAttrAddRow(bucket) {
   if (!el.c.attrNew) return;
   el.c.attrNew.placeholder = bucket.id ? `往「${bucket.title}」里加一个属性` : '属性名，比如 金币';
 }
 
-/**
- * 把粘贴进来的一段文本解析成属性。
- *
- * 一行一项，认这几种写法：
- *   【金币】：9900      金币：9900      金币:9900
- *   金币	9900          金币 9900
- * 冒号后面留空也算（就是「有这个名字、值先空着」）。
- *
- * 认不出来的行**直接跳过**，不报错 —— 粘贴过来的文本经常带标题、空行、说明文字，
- * 为了几行杂音打断整次粘贴不值得。跳过了多少行会告诉用户。
- */
+/** 解析粘贴文本：一行一项，认「【名】：值」「名：值」「名 值」；认不出的行跳过并计数 */
 function parseAttributesFromText(text) {
   const pairs = [];
   const seen = new Set();
   let skipped = 0;
 
   for (const rawLine of String(text || '').split('\n')) {
-    // 去掉列表符号（- * + •）和首尾空白
     const line = rawLine.trim().replace(/^[-*+•]\s*/, '').trim();
     if (!line) continue;
 
-    // 【名字】：值 —— 先试这个，否则下面的通用规则会把「【金币】」连括号一起当名字
+    // 【名字】：值 要先试，否则通用规则会把「【金币】」连括号一起当名字
     let m = line.match(/^【([^】\n]{1,24})】\s*[：:]\s*(.*)$/);
-    // 名字：值 / 名字:值
     if (!m) m = line.match(/^([^：:\n]{1,24}?)\s*[：:]\s*(.*)$/);
-    // 名字 + 空格/Tab + 值
     if (!m) m = line.match(/^([^\s：:]{1,24})[\s\u3000]+(.+)$/);
 
     if (!m) {
@@ -826,12 +656,7 @@ function parseAttributesFromText(text) {
   return { pairs, skipped };
 }
 
-/**
- * 把解析出来的属性并进草稿：新的追加，同名的覆盖值。
- *
- * 新增的字段归到**当前分组** —— 在「背包」那一页粘贴一串东西，
- * 意图显然就是往背包里放，让它们掉进「未分组」反而要再搬一次。
- */
+/** 把解析结果并进草稿：同名覆盖值，新字段归当前分组 */
 function applyParsedAttributes(list, pairs) {
   let added = 0;
   let updated = 0;
@@ -915,15 +740,7 @@ function addCharAttr(list, rawName) {
 }
 
 /**
- * 一键应用官方「互动模板」：把预设分组和默认字段种进属性草稿。
- *
- * 规则（和手动加字段 / 粘贴文本一致）：
- *   · 已存在的字段名跳过（不覆盖用户已填的值）；
- *   · 字段归入模板指定的分组，保留类型 / 范围 / 变化规则；
- *   · 撞到字段上限就停。
- *
- * 返回 { added, skipped }，调用方据此给提示。应用完停在「状态栏」这一组，
- * 让用户一眼看到刚种进来的东西。
+ * 一键套用官方互动模板：已存在的字段跳过、撞字段上限就停，返回 { added, skipped }。
  */
 function applyInteractiveTemplate(list) {
   if (!Array.isArray(list)) return { added: 0, skipped: 0 };
@@ -964,22 +781,19 @@ function applyInteractiveTemplate(list) {
     }
   }
 
-  // 停在第一个固定分组，让刚种进来的字段可见
   list._activeGroup = INTERACTIVE_TEMPLATE[0].group;
   renderCharAttrs(list);
 
   return { added, skipped };
 }
 
-// 草稿数组的所有者是角色编辑器（保存时要跟表单一起写回角色卡），
-// 所以这里不存它，只在需要的时候问一声。
+// 草稿数组归角色编辑器所有，这里只在需要时向 getList 要
 let getDraft = () => [];
 
 /** 绑属性区的按钮（分组标签栏是渲染时就带的，不用绑） */
 export function initCharAttrsUi({ getList } = {}) {
   if (typeof getList === 'function') getDraft = getList;
 
-  // 加点属性：按钮和回车都能加。加进当前选中的那一组。
   el.btnAddAttr.addEventListener('click', () => {
     addCharAttr(getDraft(), el.c.attrNew.value);
     el.c.attrNew.value = '';
@@ -993,11 +807,9 @@ export function initCharAttrsUi({ getList } = {}) {
     el.c.attrNew.value = '';
   });
 
-  // 批量粘贴：一行一项，省得一条条手打
   el.c.btnAttrPaste.addEventListener('click', () => toggleAttrPaste());
   el.c.btnAttrPasteApply.addEventListener('click', () => applyAttrPaste(getDraft()));
 
-  // 官方互动模板：一键种入预设分组和默认字段
   if (el.c.btnAttrTemplate) {
     el.c.btnAttrTemplate.addEventListener('click', () => {
       const { added, skipped } = applyInteractiveTemplate(getDraft());

@@ -1,44 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  data/messages.js —— 发给模型的那串消息怎么拼
-//
-//  这是整个应用最核心的一段「纯逻辑」：把人设、世界书、示例对话、真实历史、
-//  面板状态按固定顺序拼成一个数组。不进 DOM，只读 state / library / panel。
-//
-//  顺序（和酒馆的思路一致）：
-//    1. system：人设 + 扮演规则/GM 规则 + 角色设定/性格/场景 + 叙述模式 + 日期
-//    2. 世界书命中的设定 → 语义检索捞回的往事
-//    3. 角色卡里的示例对话（当成已经发生过的对话塞进去）
-//    4. 最近 N 轮真实对话（面板行已剥掉）
-//    5. 面板状态（当前权威值）
-//    6. 角色卡里的「对话后指令」，放最后最管用
-//
-//  人设只有两个来源，而且互斥：绑了角色卡 → 用那张卡的 systemPrompt；
-//  **既没绑卡、也没进世界**（默认对话）→ 用设置里的「默认人设」（可编辑，见 main/providers.js）。
-//  两者不会同时出现，免得两份设定打架（你扮演雷电将军，提示词却在说另一套人设）。
-//  ⚠️ 「默认人设」只管默认对话：进世界（GM）时角色卡字段本来就全跳过，若还把人设
-//  塞进去，GM 会拿它当自己的身份，跟世界书 / 主持规则拧在一起（用户报过这个）。
-//
-//  默认聊天（「＋ 新对话」建出来的那条）只带人设、历史、摘要、日期和用户自己选的预设
-//  —— 就是「跟模型聊天」，跟 chat.deepseek.com 上一样，不演任何东西。
-//  扮演 / GM 规则、世界书、玩家角色、面板、剧情选项、表情**和视角设置**
-//  （叙述模式 / 推进节奏）仅用于角色卡或世界模式。
-//
-//  ⛔ 2026-10-13：叙述模式 / 推进节奏**也从默认聊天里摘掉了**。
-//  它们原先是「普通聊天也注入」（2026-10-08 为了修「视角弹窗能选却不生效」放开的），
-//  结果新会话生下来就带着 narrationMode='standard' + paceMode='step' 两个**默认值**，
-//  于是「＋ 新对话」拿到的 system 里有一整套舞台指示：「对话、动作、神态，连同环境
-//  （光、气味、声音）都融在里面往下写」「一轮里至少要有一句角色直接说出口的话」
-//  「别整轮都是动作和神态 —— 一个沉默的角色，玩家是在看哑剧」。
-//  模型没有身份，又必须写环境、写动作、说台词，就**自己现编一个身份和一个场景演起来**
-//  （用户报的现场：新对话里 AI 自己坐在地毯上修台灯）。默认人设里写「像跟朋友聊天那样
-//  自然、不要写成报告」也压不住 —— 那两段排在它后面，离生成位置更近。
-//
-//  正确修法不是「注入但设个默认档」，而是**默认聊天里根本没有这两项**：
-//  提示词不注入（下面），视角弹窗里也不给（见 views/perspectiveUi.js）。
-//  想扮演就去角色库建角色卡对话 / 去世界书「游玩」—— 那才是「玩」的入口。
-// ============================================================================
+/** 消息数组：系统提示词、世界书、示例对话、历史、面板按固定顺序拼。
+ *  ⚠️ 人设互斥：绑卡用卡 systemPrompt，纯聊天用默认人设，GM 一律不注入。 */
 
 import { state } from '../core/state.js';
 import { asArray } from '../core/util.js';
@@ -70,23 +33,13 @@ import {
   panelEntities
 } from './cast.js';
 
-/**
- * 替换角色卡里的占位符。
- * {{char}} / <BOT> 是角色自己，{{user}} / <USER> 是你。
- * 只在「发给模型」和「插入开场白」时替换，原始文本保持不动，
- * 这样以后改了名字，旧消息不会莫名其妙跟着变。
- *
- * 没绑卡时「角色自己」是谁，取决于默认人设 —— 那份是按模型存的，
- * 所以调用方知道是哪个模型的话（buildApiMessages 就知道），把它传进来，
- * 免得这里只能拿设置里的当前模型去猜（会话可以有自己的模型）。
- */
+// 替换 {{char}}/<BOT> 与 {{user}}/<USER>；只在发给模型和插入开场白时替换，原文不动。
 export function applyMacros(text, character, name, assistantFallback) {
   const charName =
     (character && character.name) || String(assistantFallback || '').trim() || assistantName();
   const me = name || userName();
 
-  // 用函数式替换：字符串形式的替换参数会把 $&、$1 之类的序列当特殊写法，
-  // 角色名里万一有 $ 就会替换错乱。
+  // 用函数式替换：替换串里的 $& / $1 会被当特殊序列，角色名带 $ 就替换错乱。
   return String(text == null ? '' : text)
     .replace(/\{\{char\}\}/gi, () => charName)
     .replace(/\{\{user\}\}/gi, () => me)
@@ -94,18 +47,13 @@ export function applyMacros(text, character, name, assistantFallback) {
     .replace(/<USER>/gi, () => me);
 }
 
-/**
- * 把角色卡的「示例对话」拆成真正的 user / assistant 消息。
- * 格式是每行以 {{user}}: 或 {{char}}: 开头，多组之间用 <START> 分隔。
- * 解析不出来就返回空数组，不会影响正常对话。
- */
+/** 拆示例对话：每行以 {{user}}: / {{char}}: 开头，<START> 分组；解析不出返回空数组 */
 function parseExampleDialogue(text, charName, me) {
   const out = [];
   const raw = String(text || '');
   if (!raw.trim()) return out;
 
-  // 注意：这里的 reEsc 是「正则转义」，和上面转义 HTML 的 esc() 不是一回事，
-  // 刻意换个名字，免得以后改错。
+  // 正则转义，和转义 HTML 的 esc() 不是一回事
   const reEsc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // 名字为空时不能把「空字符串」也当成一种匹配，否则任意行都会被吃掉
   const alternatives = (name, kind, extraTags) => {
@@ -139,7 +87,6 @@ function parseExampleDialogue(text, charName, me) {
   };
 
   for (const line of raw.split(/\r?\n/)) {
-    // <START> 表示一组新的示例，只是分割线
     if (/^\s*<START>\s*$/i.test(line)) {
       flush();
       continue;
@@ -155,7 +102,6 @@ function parseExampleDialogue(text, charName, me) {
         break;
       }
     }
-    // 没匹配到前缀就当作上一句的续行（角色说了好几行的情况很常见）
     if (!matched && pending) pending.lines.push(line);
   }
 
@@ -163,18 +109,12 @@ function parseExampleDialogue(text, charName, me) {
   return out;
 }
 
-/** 这条消息带的图（配图 / 桥接自动出的图都存这儿） */
+/** 这条消息带的图（配图 / 桥接自动出的图） */
 export function messageImages(message) {
   return asArray(message.images).filter((s) => typeof s === 'string' && s);
 }
 
-/**
- * 给本机桥接服务传的「角色外貌」上下文。
- *
- * 桥接的图像模型不认识角色名，只认视觉标签，所以要把角色的长相用自然语言
- * 描述出来，由桥接服务翻译成英文 tag。这里取角色卡的身份三项 + 设定（description），
- * 描述里通常就带着发色瞳色服装体型。没绑定角色（进世界 / 通用助手）时返回空串。
- */
+/** 给桥接的外貌上下文：图像模型只认视觉标签，得把长相写成自然语言。 */
 export function characterContextForConvo(convo) {
   const character = characterForConvo(convo);
   if (!character) return '';
@@ -188,24 +128,13 @@ export function characterContextForConvo(convo) {
   return parts.join('\n');
 }
 
-/**
- * 预设（叠在对话上的一层指令）拼成的注入段。
- *
- * 它是**独立的整块**，不掺进扮演规则里 —— 这样「关掉预设」就是逐字回到
- * 默认规则，不用担心合并出残余。预设本身不承载任何逻辑，只是一段文本。
- *
- * 一个会话**可以挂多条**（比如「禁比喻」+「固定称呼」），按挂的顺序依次拼上，
- * 每条各自成块（`【预设 · 名称】`）。没手动配过的会话带上所有「可全局」的预设。
- *
- * 条目有两种：带关键词的只在近期历史里命中才带上；没关键词的（constant）每轮都带。
- * 关键词扫描范围跟世界书一致（往回看几条消息），但只扫真实对话，不递归。
- */
+// 预设拼成的注入段：每条独立成块（【预设 · 名称】），按挂载顺序拼。
+// 带关键词的只在近期历史命中时带上，无关键词的（constant）每轮带。
 export function dialoguePresetSection(convo, recentMessages) {
   const presets = effectiveDialoguePresets(convo);
   if (!presets.length) return '';
 
-  // 命中判定只看「最近这几条」的正文；和世界书的扫描深度保持同一个量级。
-  // 多条预设共用同一份扫描文本，不必每条各扫一遍。
+  // 命中只看最近几条正文，扫描深度和世界书一致；多条预设共用同一份文本。
   const haystack = asArray(recentMessages)
     .slice(-WORLDBOOK_SCAN_DEPTH)
     .map((m) => String((m && m.content) || ''))
@@ -215,7 +144,6 @@ export function dialoguePresetSection(convo, recentMessages) {
   const sections = [];
   for (const preset of presets) {
     const blocks = [];
-    // 正文（顶层 content）：常驻
     if (String(preset.content || '').trim()) blocks.push(String(preset.content).trim());
 
     const entries = asArray(preset.entries);
@@ -224,7 +152,6 @@ export function dialoguePresetSection(convo, recentMessages) {
       const text = String(entry.content || '').trim();
       if (!text) continue;
       const keys = asArray(entry.keys);
-      // 没关键词就是常驻（normalizePresetEntry 已把这种情况标成 constant）
       if (!keys.length || entry.constant === true) {
         blocks.push(text);
         continue;
@@ -240,7 +167,7 @@ export function dialoguePresetSection(convo, recentMessages) {
   return sections.join('\n\n');
 }
 
-/** 会话实际生效的预设上的采样参数（多条时取**第一条设过值**的项，没设过的项不覆盖） */
+/** 生效预设的采样参数：多项取第一条设过值的项，没设过的项不覆盖 */
 export function dialoguePresetSampling(convo) {
   const presets = effectiveDialoguePresets(convo);
   const out = {};
@@ -252,29 +179,14 @@ export function dialoguePresetSampling(convo) {
   return Object.keys(out).length ? out : null;
 }
 
-/**
- * 这一局真正要发出去的采样参数：**预设**（再往下就交给主进程的全局设置）。
- *
- * 主进程（ipc.js 的 chat:send）的逻辑是「请求里带的 sampling 逐项覆盖全局设置」，
- * 这里只传递预设中明确填写的参数；其余项采用设置页中的全局值。
- * 旧会话的 sampling 保留在数据中，不再覆盖全局设置。
- */
+// 本局采样参数：只传预设明确填的项（主进程按项覆盖全局设置）。
 export function effectiveSampling(convo) {
   const preset = dialoguePresetSampling(convo) || {};
   const out = { ...preset };
-  // 旧会话的 sampling 仍留在磁盘上，但不再覆盖全局设置。
   return Object.keys(out).length ? out : null;
 }
 
-/**
- * 世界书那两段注入文本的取用口。
- *
- * 兼容两种入参，因为这条链路有两条：
- *   · 正式链路（composer / suggestionsUi）传 `matchWorldbookSections()` 的返回值，
- *     形状是 `{ section, deepSection }`；
- *   · 老调用和一堆测试传的是**一个字符串**（就是 section 本身）。
- * 都收在这一处，免得下面每用到一次就判一次。
- */
+// 世界书注入文本的取用口：兼容 { section, deepSection } 和只有 section 的字符串。
 function worldbookParts(value) {
   if (value && typeof value === 'object') {
     return { section: String(value.section || ''), deep: String(value.deepSection || '') };
@@ -282,35 +194,20 @@ function worldbookParts(value) {
   return { section: String(value == null ? '' : value), deep: '' };
 }
 
-/**
- * 组装真正发给模型的消息数组。
- * 参数里的两段（世界书命中 / 语义检索）是调用方异步取好的 ——
- * 这里保持同步，方便两边共用同一份拼接逻辑（发送、继续、重新生成都走它）。
- *
- * `worldbook` 收字符串或 `{ section, deepSection }`，见 `worldbookParts`。
- */
+/** 组装发给模型的消息数组；世界书 / 语义检索由调用方异步取好，这里保持同步。 */
 export function buildApiMessages(convo, worldbook, ragSection) {
   const settings = state.settings || {};
-  // 进了世界的会话用玩家自己创建的角色名，其它会话用设置里的名字
   const me = convoUserName(convo);
   const gmMode = isGmMode(convo);
-  // ⚠️ GM 模式没有「某个人」：哪怕会话上还绑着卡（视角弹窗里可以手动开 GM），
-  //    也不注入卡的人设 / 设定 / 示例对话 / 对话后指令 —— 否则主持规则会跟卡打架，
-  //    模型会把「你扮演 X」和「你是叙述者」揉在一起。
+  // ⚠️ GM 没有「某个人」：即使会话上还绑着卡，也不注入卡的人设/设定/示例/对话后指令。
   const character = gmMode ? null : characterForConvo(convo);
-  // 「纯聊天」= 既没绑角色卡、也不是世界模式 —— 那就是**跟模型聊天**，不是扮演。
-  // 判定收在 cast.js 的 isPlainChatConvo 里（视角弹窗、顶栏标签也用同一份，口径只有一处）。
-  // 这种会话只带人设、历史、摘要、日期和预设；酒馆那一套（扮演 / GM 规则、世界书、
-  // 玩家角色、面板、剧情选项、表情、叙述模式、推进节奏）一个字都不注入 ——
-  // 人设是自己写的、自足的，多叠一层只会跟它打架（见文件头 2026-10-13 那一段）。
+  // 纯聊天 = 没绑卡也不是世界模式：只带人设、历史、摘要、日期和预设。
+  // ⚠️ 扮演/GM 规则、世界书、玩家角色、面板、选项、表情、视角设置一个字都不注入。
   const plainChat = isPlainChatConvo(convo);
 
-  // 助手那侧叫什么名字：绑卡用卡名，「默认对话」用人设里配的名字。
-  // ⚠️ 世界模式（GM）**没有「某个人」**，不取人设名 —— 否则那段「默认人设」
-  //    会顺着 charName/charMacro 漏进世界书宏替换和冒出的 NPC 名单里。
+  // ⚠️ GM 不取人设名：否则「默认人设」会漏进世界书宏替换和 NPC 名单。
   const charName = (character && character.name) || (plainChat ? assistantName(convo) : '');
-  // {{char}} / <BOT> 的替换值：GM 下没有具体角色，统一落成「叙述者」；
-  // 其它情况就是上面的 charName（为空时由 applyMacros 各自兜底）。
+  // {{char}} 的替换值：GM 下没有具体角色，统一落成「叙述者」。
   const charMacro = charName || (gmMode ? '叙述者' : '');
 
   // 摘要覆盖点按同一份有效历史计数；空占位和无正文消息不发给模型。
@@ -328,10 +225,7 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   // ---- 1. 系统提示词 ----
   const parts = [];
 
-  // 人设：绑了卡就用卡自己的 systemPrompt；**通用助手（默认对话）**才用「默认人设」。
-  // 两者互斥 —— 一张卡一旦被绑定，默认人设就不参与，免得两份设定打架。
-  // 世界模式（GM）同样不参与：它没有「某个人」的人设，叙述者由主持规则来立，
-  // 再叠一份模型人设只会让 GM 把自己的身份跟世界设定搅在一起（见文件头注释）。
+  // 人设互斥：绑卡用卡 systemPrompt，纯聊天用「默认人设」，GM 两者都不用。
   const persona = plainChat ? assistantPersona(convo) : '';
   const base = character ? character.systemPrompt || '' : persona;
   if (String(base).trim()) parts.push(applyMacros(base, character, me, charName).trim());
@@ -342,32 +236,21 @@ export function buildApiMessages(convo, worldbook, ragSection) {
     if (character.scenario) parts.push(`【当前场景】\n${applyMacros(character.scenario, character, me)}`);
   }
 
-  // GM 模式换掉那段「不要跳出角色」：世界模型必须能写第三人称、切多个 NPC 视角，
-  // 被单角色那套叙述口径捆着会一轮缩回单角色腔调。
-  // 两种规则里都带上了「推进节奏」—— 否则模型会一口气把整场戏演完，玩家只剩看的份。
-  // 默认对话（plainChat）不要这一段：那段规则是给「扮演某个角色」用的，
-  // 而这里要的是普通聊天，规则交给用户写的人设自己交代。
+  // GM 换掉「不要跳出角色」：世界模型要能写第三人称、切多个 NPC 视角。
+  // 两种规则内部都带了推进节奏；纯聊天不注入这段（那是给扮演用的）。
   if (!plainChat) {
     parts.push(gmMode ? gmRuleText(charName, me, convo) : roleplayRuleText(charName, me, convo));
   }
 
-  // 预设：对话层面额外叠上去的一层行为框架，紧跟扮演规则之后。
-  // ⚠️ 刻意放在上面那个 if 外面 —— 通用助手（既没绑卡、也不是 GM）一样能用预设，
-  //   而那种场景恰恰最需要它。它是一整块独立文本，不并进 ruleText，
-  //   这样「不绑预设」就是逐字回到默认规则。
+  // 预设是独立整块，紧跟扮演规则；⚠️ 刻意放在 if 外面 —— 纯聊天也能用预设。
   const presetText = dialoguePresetSection(convo, history);
   if (presetText) parts.push(presetText);
 
-  // 玩家角色：从世界书列表页「游玩」进来的会话才有这段。
-  // 只有名字的话上面那句规则已经交代了，所以这里只在写了设定时才注入。
+  // 玩家角色：只有写了设定才注入（上面那句规则已交代名字）。
   const player = convoPlayer(convo);
   const playerProfileText = playerProfileForPrompt(convo);
-  // 和世界书段一起挡：默认对话不认「我在这个世界里是谁」—— 那是扮演才有的事。
   if (!plainChat && player && playerProfileText) {
-    // 抬头里点明口径：这份设定是**玩家自己的角色**，不是给 GM 演的 NPC。
-    // 玩家从角色库挑一张卡当自己时，注入的是那张卡的第三人称设定；
-    // 紧接着就是【这个世界的人】名单，两者容易被模型混成一类，
-    // 于是主角被当成 NPC 描写、替 TA 写起了动作。
+    // 抬头点明「玩家本人操作的主角」：紧跟着【这个世界的人】，否则主角会被当 NPC 写。
     parts.push(
       `【玩家角色：${player.name || me}】\n` +
         `（这是玩家本人操作的主角，由玩家自己驱动 —— 一律用第二人称「你」称呼 TA，` +
@@ -380,19 +263,13 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   const cast = plainChat ? '' : worldbookCast(convo);
   if (cast) parts.push(cast);
 
-  // 叙述模式：决定要不要写心理 / 旁白，以及用什么标记（标记对上渲染样式）。
-  // ⛔ 纯聊天**不注入**（2026-10-13，见文件头那一段）。
-  // 2026-10-08 曾经为了修「视角弹窗能选却不生效」把它放开给普通聊天 —— 那个修法
-  // 修出了新问题（新对话里 AI 自己编身份演起来）。现在改成**入口也不给**：
-  // 弹窗对纯聊天不显示这两项（views/perspectiveUi.js），所以「能选却不生效」不会复发。
+  // 叙述模式决定心理/旁白标记；⛔ 纯聊天不注入，视角弹窗里也不给这两项。
   if (!plainChat) {
     const narration = narrationInstruction(convo);
     if (narration) parts.push(narration);
   }
 
-  // 推进节奏：扮演 / 主持规则（roleplayRuleText / gmRuleText）内部本来就带了一段，
-  // 以前是「普通聊天那两段都不注入，所以这里单独补一次」。现在纯聊天整块不注入，
-  // 于是这一档的落点只剩规则内部那一次 —— 这里不再需要补。
+  // 推进节奏已由扮演 / 主持规则内部带上，这里不再补。
 
   if (settings.showDate !== false) {
     const today = new Date().toLocaleDateString('zh-CN', {
@@ -406,32 +283,24 @@ export function buildApiMessages(convo, worldbook, ragSection) {
 
   if (parts.length) messages.push({ role: 'system', content: parts.join('\n\n') });
 
-  // ---- 2. 世界书：命中的设定紧跟人设之后 ----
-  // 放在角色定义后面（酒馆叫 After Char Defs）——比角色本身靠前会稀释人设，
-  // 比对话历史靠后又容易被忽略，这里是比较稳的位置。
-  // 默认对话不带：那是「这个世界有哪些设定」的补充，属于扮演那一套。
-  // ⚠️ 这里只放**关键词命中**的那批。常驻条目是另一块，在第 6b 步注入（要靠生成位置近）。
+  // ---- 2. 世界书：关键词命中的设定紧跟人设之后（After Char Defs）----
+  // ⚠️ 这里只放关键词命中的；常驻条目在 6b 步，要靠生成位置近。
   const wb = worldbookParts(worldbook);
   if (!plainChat && wb.section.trim()) {
     messages.push({ role: 'system', content: applyMacros(wb.section, character, me, charMacro).trim() });
   }
 
-  // ---- 2.2 语义检索捞回来的往事 / 设定 ----
-  // 紧跟在世界书后面：都是「参考背景」，而且都是可选的（捞不到就什么都不加）
+  // ---- 2.2 语义检索捞回的往事 / 设定（可选）----
   if (!plainChat && String(ragSection || '').trim()) {
     messages.push({ role: 'system', content: String(ragSection).trim() });
   }
 
-  // ---- 2.5 前面的剧情：较早对话的摘要 ----
-  // 放在对话历史之前、示例对话之后的位置，让模型先读背景再读最近对话。
+  // ---- 2.5 较早对话的摘要（先读背景再读最近对话）----
   const summaryText = formatSummaryForPrompt(convo);
   if (summaryText) messages.push({ role: 'system', content: summaryText });
 
   // ---- 3. 示例对话 ----
-  // 注意：parseExampleDialogue 只剥掉了行首的「{{user}}:」前缀，
-  // 正文里的宏还得自己替换一遍，否则模型会读到字面的 {{user}}。
-  // GM 模式不注入示例对话：那是「某个角色怎么说话」的样本，
-  // 而这里要的是主持人腔调，塞进去反而把模型的视角拉回单角色。
+  // 正文里的宏要再替换一遍（parseExampleDialogue 只剥了行首前缀）；GM 不注入。
   if (character && !gmMode) {
     for (const example of parseExampleDialogue(character.mesExample, charName, me)) {
       messages.push({
@@ -442,7 +311,6 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   }
 
   // ---- 4. 真实对话历史（剥掉面板行，面板由程序权威注入）----
-  // 用本会话的已知字段名（显示名）来剥：正文里提到同名字样不会被误删。
   const panelFields = convoFieldDisplayNames(convo);
   const panelGroups = [...panelGroupNames(convo)];
   const cleanHistoryText = compileAssistantCleaner(panelFields, panelGroups);
@@ -453,18 +321,16 @@ export function buildApiMessages(convo, worldbook, ragSection) {
     messages.push({ role: m.role, content: text });
   }
 
-  // ---- 5. 面板状态：紧贴对话历史之后，权重很高 ----
-  // 放在这里而不是塞进历史，是因为历史会被 maxTurns 截断 ——
-  // 面板一旦被截出去，模型就开始凭感觉编数值。
+  // ---- 5. 面板状态：紧贴历史之后 ----
+  // 历史会被 maxTurns 截断，面板被截出去模型就会编数值。
   const panelText = plainChat ? '' : formatPanelForPrompt(convo);
   if (panelText) messages.push({ role: 'system', content: panelText });
 
-  // ---- 5b. 剧情选项：和面板同一批（都是「这轮要维护的状态」）----
-  // 只在这张卡/这个会话开了剧情选项时才注入。
+  // ---- 5b. 剧情选项：只在开了选项时注入 ----
   const optionsText = plainChat ? '' : optionsInstruction(convo);
   if (optionsText) messages.push({ role: 'system', content: optionsText });
 
-  // ---- 5c. 表情标签：只在有人配了「带情绪键的表情图」时才注入 ----
+  // ---- 5c. 表情标签：只在配了「带情绪键的表情图」时注入 ----
   const emoText = plainChat ? '' : expressionInstruction(convo);
   if (emoText) messages.push({ role: 'system', content: emoText });
 
@@ -476,42 +342,18 @@ export function buildApiMessages(convo, worldbook, ragSection) {
     });
   }
 
-  // ---- 6b. 世界书的「常驻条目」：送到离生成位置最近的地方 ----
-  // 常驻条目（`constant` / 不带关键词）不是「这一轮聊到才相关的资料」，而是
-  // 「每一轮都成立的规则」—— 社区卡拿它写「不许代写玩家」「输出格式」「状态栏每轮必须写」，
-  // 作者在酒馆里是把它们放到 at depth（贴近生成位置）的。
-  //
-  // 所以这里**故意不跟第 2 步那批放一起**：关键词条目是参考资料（早读早有用），
-  // 常驻条目是要被照做的规则（越近越管用）。放这儿之后，后面只剩
-  // 「主角不可代写 → 标重点 → 状态表提醒」三条，抬头也换成了「每一轮都成立」。
-  // 这就是「导入的卡在酒馆里管用、在我们这儿变弱」那条差距的补丁。
-  //
-  // ⚠️ 必须排在下面 7b 的 playerOwnershipReminder **之前**：那条提醒存在的理由正是
-  //    「世界书条目太贴近生成位置会把玩家当 NPC 写」（见 7b 的注释）。把常驻条目压到它后面，
-  //    等于把这道闸拆掉 —— 那会变成「修一个坏一个」。
-  // ⚠️ 已经在这里了，别再往末尾挪：末尾是【标重点】和状态表提醒的地盘（那两条各管一件事）。
+  // ---- 6b. 世界书常驻条目：送到离生成位置最近的地方（每轮都成立的规则）----
+  // ⚠️ 必须排在 7b 主角不可代写之前，且不能挪到末尾（末尾是【标重点】和状态表提醒）。
   if (!plainChat && wb.deep.trim()) {
     messages.push({ role: 'system', content: applyMacros(wb.deep, character, me, charMacro).trim() });
   }
 
-  // ---- 7. 状态表的最后一声提醒 ----
-  // 必须是**整批 system 的最后一条**（这时它离生成位置最近）。上面第 5 步的状态表
-  // 段已经交代了格式，但第 5b/6 步（剧情选项、角色的对话后指令）排在它后面 ——
-  // 角色口吻的提醒最容易把注意力拉回「写正文」，模型就把状态表整段丢了。
-  // 实测（真实 API）：同一输入，面板段只在中同时约 1/4 的回合漏写状态表；
-  // 末尾补这一句之后命中率明显上去。没有面板字段时不注入。
-  // ---- 7b. 世界模式：主角不可代写 ----
-  // 世界书里常有**同名角色**的第三人称设定（条目 + GM 名单副本），它们排在
-  // 【主持规则】之后，离生成位置更近，会把模型拉回「主角也是 NPC、顺手替 TA 写了」。
-  // 所以在这里再压一句 —— 但要让位给下面的状态表提醒，保持它是最后一条。
+  // ---- 7. 状态表提醒（必须是整批 system 的最后一条）----
+  // ---- 7b. 主角不可代写：⚠️ 必须排在状态表提醒之前（世界书同名设定会把主角当 NPC 写）
   if (gmMode) messages.push({ role: 'system', content: playerOwnershipReminder(me) });
 
   // ---- 7c. 【标重点】的最后一声 ----
-  // 加粗规则在【扮演规则】/【主持规则】里，离生成位置太远，模型经常当没看见
-  // （2026-10-08：用户拿真实回复来报「台词没加粗」，整篇一个 ** 都没有）。
-  // 跟状态表一个套路，在最靠近生成位置的地方再点一次 —— 但仍然**让位给下面的
-  // 状态表提醒**（那一句必须是整批 system 的最后一条，见上面的注释）。
-  // 普通聊天没有扮演/主持规则，也就没有【标重点】，这里跟着一起跳过。
+  // 加粗规则离生成位置太远模型看不见；再点一次，但仍让位给状态表提醒。
   if (!plainChat) messages.push({ role: 'system', content: EMPHASIS_REMINDER });
 
   if (panelText) messages.push({ role: 'system', content: PANEL_PROMPT_REMINDER });
@@ -519,15 +361,7 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   return messages;
 }
 
-/**
- * 【表情】说明 —— 只在这个会话里有人配了「带情绪键的表情图」时才注入。
- *
- * 为什么不只给规则、还要把键列出来：光说「用 <emo>键</emo> 指定表情」，
- * 模型只能自己编英文词，键对不上等于没写。所以把现有的键连中文名一起列出来，
- * 它照着挑一个就行。
- *
- * 一张卡都没配（或者配的表情没填 key）时返回空串 —— 那些会话完全不受这条影响。
- */
+// 【表情】说明：只给规则不够，必须把现有键列出来，否则模型自己编词对不上。
 function expressionInstruction(convo) {
   const rows = [];
   for (const entity of panelEntities(convo)) {

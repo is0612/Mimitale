@@ -2,23 +2,13 @@
 
 import { iconHtml } from '../ui/icons.js';
 
-// ============================================================================
-//  角色编辑页的骨架：左栏（资料 + 分区导航）／内容列／右侧字段目录
-//
-//  结构：五个写作字段全部常显在「角色设定」里，上下滚就能互相参照；
-//  栅格是三栏，第三列是字段目录，只在「角色设定」展开（其余分区仍是两栏）；
-//  左栏底部放 .char-rail-foot（保存角色 / 返回 / 删除角色）。
-//
-//  从头到尾守一条：**只搬运已有控件，绝不克隆** —— id / 值 / 监听器都得原样留着。
-// ============================================================================
+//  角色编辑页的骨架：左栏（资料 + 分区导航）／内容列／右栏字段目录。
+//  ⚠️ 只搬运已有控件，绝不克隆 —— id / 值 / 监听器都得原样留着。
+//  第三列（字段目录）只在「角色设定」展开。
 
 let layout = null;
 
-// 分区导航的图标：**只留名字**，形状在 ui/icons.js 的注册表里。
-// ⚙ 2026-10-19：原来是五段内联 SVG 抄在这里，和 index.html 里那些一样，
-// 同一套图标在别处再画一遍就没人维护了。现在统一走 iconHtml()。
-// 挑的都是注册表里语义最近的那颗（表情图 = smile、世界书 = book-open、
-// 高级设置 = settings），所以这三颗的样子和以前略有差别 —— 换来的是全站一套线宽。
+// 分区导航的图标：只留名字，形状在 ui/icons.js 的注册表里。
 const SECTION_ICONS = {
   writing: 'file-text',
   state: 'sliders-horizontal',
@@ -27,10 +17,7 @@ const SECTION_ICONS = {
   advanced: 'settings'
 };
 
-/**
- * 五个写作字段的顺序。
- * ⚠️ 三处必须一致：这里的顺序 = index.html 里 .field-no 写的序号 = 右栏目录的序号。
- */
+/** ⚠️ 顺序三处一致：这里 = index.html 里 .field-no 写的序号 = 右栏目录的序号。 */
 const FIELD_SPECS = [
   ['desc', '角色描述'],
   ['personality', '性格'],
@@ -42,12 +29,7 @@ const FIELD_SPECS = [
 /** 高级设置那三栏的 id。只用来数「填了几栏」，不搬运 */
 const ADVANCED_FIELDS = ['c-system', 'c-post', 'c-notes'];
 
-/**
- * 五个分区：[key, 标题, 标题下那句说明]。
- *
- * ⚠️ 说明只喂给内容列的标题，**不喂给左栏导航** —— 同一句话显示两处是重复，
- *    而且窄窗口下左栏那份会被媒体查询整条藏掉，可见性还会随窗口高度跳变。
- */
+/** 五个分区：[key, 标题, 说明]。⚠️ 说明只喂给内容列的标题，不喂给左栏导航。 */
 const SECTIONS = [
   ['writing', '角色设定', '五栏连成一页，上下滚着就能对照'],
   ['state', '属性', '管理角色的初始状态与互动选项'],
@@ -124,9 +106,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
     panel.dataset.section = key;
     panel.setAttribute('role', 'tabpanel');
     panel.setAttribute('aria-labelledby', button.id);
-    // is-work 给**五个分区都挂上**：标题一行、说明挪到右边同一行、底下一道细线。
-    // 只给「角色设定」挂过一次，切到属性/表情/世界书/高级时标题会突然变成两行 ——
-    // 同一页里换分区标题就换长相，看着像换了个页面。
+    // is-work 五个分区都挂：否则切分区时标题会突然变成两行。
     const heading = node('header', 'char-panel-heading is-work');
     heading.append(node('h2', '', title), node('p', '', description));
     panel.append(heading);
@@ -138,8 +118,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   }
   identity.append(nav);
 
-  // 底部那三样（来源提示 / 导出 / 删除角色）放进左栏底部。
-  // ⚠️ 搬的是**节点本身**，id 不许改 —— characterEditor.js 按 id 直接取用。
+  // ⚠️ 搬的是节点本身，id 不许改 —— characterEditor.js 按 id 直接取用。
   const railFoot = document.getElementById('char-rail-foot');
   if (railFoot) identity.append(railFoot);
 
@@ -158,7 +137,6 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   const firstItem = fieldItems.find((item) => item.key === 'first');
   if (alt && firstItem) firstItem.field.after(alt);
 
-  // 其余分区照旧：属性那块 / 表情入口 / 世界书 / 高级设置各归各位
   sections.get('state').append(text);
   sections.get('expressions').append(expressions);
   sections.get('worldbook').append(worldbook);
@@ -224,10 +202,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
     for (const item of indexItems) item.button.setAttribute('aria-current', String(item.key === key));
   }
 
-  /**
-   * 用 scroll 事件算当前栏，不用 IntersectionObserver ——
-   * 一共五栏，每帧比五个 rect 更简单，也不会出现「一格都不相交就停在上一次」的僵局。
-   */
+  /** 用 scroll 而非 IntersectionObserver 算当前栏：五栏比 rect 更简单，也不会僵在上一次。 */
   function syncCurrentIndex() {
     if (!indexItems.length || form.dataset.editorSection !== 'writing') return;
     const line = main.getBoundingClientRect().top + 12;
@@ -249,13 +224,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   refreshCharSectionCounts();
 }
 
-/**
- * 刷新徽章与目录上的字数 / 已写圆点。
- *
- * **徽章只允许一种含义：这个分区里已经有多少条内容。**
- * 只有「角色设定」有天然总数（五栏），所以只有它用分数；其余报条目数。
- * 0 也要显示出来 —— 隐藏会让人以为「没有这个功能」。
- */
+/** 刷新徽章与字数 / 圆点。⚠️ 徽章只表示「已有多少条内容」：只有「角色设定」用分数；0 也要显示。 */
 export function refreshCharSectionCounts() {
   if (!layout) return;
   const filled = layout.indexItems.filter((item) => (item.control.value || '').trim()).length;
@@ -289,12 +258,7 @@ export function setCharSourceChip(text) {
   layout.sourceChip.hidden = !text;
 }
 
-/**
- * 把某个控件带到眼前：先切到它所在的分区，再滚进视野。
- *
- * 五个写作字段现在全都可见，所以这里不再需要「翻开某个字段面板」那一步；
- * 保留的只有「折叠条要是收着就先展开」—— 不然滚过去也看不见说明。
- */
+/** 把控件带到眼前：先切到它所在的分区，再滚进视野（折叠条收着就先展开）。 */
 export function showCharacterField(target, { focus = false } = {}) {
   const control = typeof target === 'string'
     ? document.getElementById(target.replace(/^#/, ''))

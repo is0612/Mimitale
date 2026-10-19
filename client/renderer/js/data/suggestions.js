@@ -1,21 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  data/suggestions.js —— 「帮我想想」和「剧情选项」的纯逻辑
-//
-//  两块东西长得像，用途不同：
-//    · 帮我想想：**额外发一次请求**，一次性给几个建议，不算常驻功能；
-//    · 剧情选项：**面板的一部分** —— 跟状态栏一起在正文里输出，不用多发请求，
-//      每轮都更新，选项常驻在面板里。
-//
-//  这里只放「拼指令 / 解析文本 / 同步到会话」这类纯函数，一行 DOM 都不碰；
-//  按钮怎么排、点了怎么发出去在 views/suggestionsUi.js。
-//
-//  选项为什么不做成普通面板字段（【剧情选项】：A / B / C）：
-//  面板字段的值是「一个字符串」，而选项是**可变长的列表**，还要逐个变成按钮。
-//  塞进字段里就得再切一次、还得处理玩家手改这种字段的边界情况，不如单独一条
-//  指令 + 单独的解析，语义清楚也不互相干扰。
-// ============================================================================
+// data/suggestions.js —— 「帮我想想」和「剧情选项」的纯逻辑，一行 DOM 都不碰（按钮 / 交互在 views/suggestionsUi.js）
+// 「帮我想想」= 额外发一次请求的一次性建议；「剧情选项」= 面板的一部分，跟状态栏一起在正文里输出、每轮更新。
 
 import { OPTIONS_LABEL, OPTIONS_LINE_RE } from './panel.js';
 import { asArray } from '../core/util.js';
@@ -68,14 +54,12 @@ export function parseSuggestions(text) {
 
 // --- 剧情选项 ---
 
-// 选项行的标记（OPTIONS_LABEL / OPTIONS_LINE_RE）在 data/panel.js 里 ——
-// 「剥掉选项行」和「剥掉状态栏行」是同一件事，两边的解析放在一起。
+// 选项行标记（OPTIONS_LABEL / OPTIONS_LINE_RE）在 data/panel.js：剥选项行和剥状态栏行是同一件事
 // 一条选项最多多少字 —— 点下去要当消息发出去，不能变成小作文
 const MAX_OPTION_CHARS = 120;
 // 一屏最多几个（模型给多了会挤爆面板）
 const MAX_OPTIONS = 6;
-// 默认给几个 —— 和主进程 main/characters.js 的 DEFAULT_OPTIONS 对齐。
-// 角色卡上没配过（老卡、导入的卡、世界书里自己写的角色）时按这个数走。
+// 默认给几个 —— 须和 main/characters.js 的 DEFAULT_OPTIONS 对齐（角色卡没配过时按这个数走）
 export const DEFAULT_OPTIONS_COUNT = 4;
 
 /** 默认的剧情选项配置（没在角色卡上关掉的角色都用它） */
@@ -84,14 +68,7 @@ export function defaultOptionsSpec() {
 }
 
 /**
- * 角色卡上的剧情选项配置 → **这个会话**该用的配置。
- *
- *   · 卡上明确关了（`optionsSpec === false`）→ null（这一局不要剧情选项）；
- *   · 卡上配过 → 复制一份（改卡不该动到正在进行的这一局）；
- *   · 没配过 / 没有卡（进世界时自己写的那个「主角」）→ 默认 4 条。
- *
- * 没配过 / 没有卡（进世界时自己写的那个「主角」）→ 默认 4 条。
- * 这样在角色编辑器里没勾过选项的卡、以及进世界时手写的主角，都不会整局没有选项。
+ * 角色卡上的剧情选项配置 → 这个会话该用的配置。⚠️ 卡上明确关了（optionsSpec === false）→ null；配过 → 复制一份（改卡不该动到进行中的这一局）；没配过 / 没卡 → 默认 4 条。
  */
 export function optionsSpecFromCharacter(character) {
   const spec = character && character.optionsSpec;
@@ -113,17 +90,13 @@ function convoOptions(convo) {
   return asArray(convo && convo.options);
 }
 
-// 孤立的拉丁字母片段（模型把格式示例里的「A / B / C」当成标签抄出来了）。
-// 单独一个字母当选项毫无意义（界面上也不显示编号），直接丢掉；
-// 只丢**单个**字母，「OK」「B超」这种多字组合不受影响。
+// 孤立的拉丁字母片段（模型把示例里的「A / B / C」当成标签抄出来了）；只丢**单个**字母，「OK」「B超」不受影响
 const STANDALONE_LABEL_RE = /^[A-Za-z]$/;
-// 「A. 」「A、」「A: 」这类**字母前缀** —— 标签贴在选项内容前面时剥掉它
+// 「A. 」「A: 」这类字母前缀 —— 标签贴在选项内容前面时剥掉
 const LETTER_PREFIX_RE = /^[A-Za-z]\s*[.、,，)）:：．]\s*/;
 
 /**
- * 从模型回复里抽选项。
- * 只认**最后一段**「【剧情选项】：」—— 模型有时会先说一遍再重写，
- * 取最后的才是最终答案。返回空数组表示这轮没给（那就保持上一轮的）。
+ * 从模型回复里抽选项；返回空数组表示这轮没给（那就保持上一轮）。⚠️ 只认**最后一段**「【剧情选项】：」—— 模型有时先说一遍再重写，取最后的才是最终答案。
  */
 export function extractOptionsFromText(text) {
   const lines = String(text || '').split('\n');
@@ -157,12 +130,7 @@ export function extractOptionsFromText(text) {
 }
 
 /**
- * 「换一批」的指令：上一批剧情选项玩家不满意，让模型按同一套设定再给一批。
- *
- * 关键是要它**别再给和上一批一样的**，否则点了等于没点。所以明确把上一批
- * 列出来，要求避开。选项格式和 optionsInstruction 保持一致（一行、用「 / 」隔开）。
- *
- * 格式示例里给的是真实内容而不是「A / B / C」—— 占位字母会被模型照抄成单字母标签。
+ * 「换一批」的指令：按同一套设定再给一批，格式和 optionsInstruction 一致。⚠️ 必须把上一批列出来要求避开，否则点了等于没点；示例给真实内容而非「A / B / C」—— 占位字母会被照抄成单字母标签。
  */
 export function rerollOptionsInstruction(convo) {
   const spec = convoOptionsSpec(convo);
@@ -217,20 +185,7 @@ export function optionsInstruction(convo) {
 }
 
 /**
- * 把最新一条回复里的选项同步到会话上。
- *
- * 规则：
- *   · 只看**最新一条**助手消息 —— 它这一轮给出选项就用新的；
- *   · 这一轮没给 → **保留上一批**（不清空）。选项应该常驻，模型偶尔漏输出
- *     「【剧情选项】」那行时，面板不能整批消失，否则就是「一会有一会没有」；
- *   · 没开剧情选项的会话直接清空并返回。
- *
- * 为什么「保留上一批」而不是「从历史往回找」：两者都拿旧选项，区别在跨度。
- * 往回扫会命中好几轮前那条（严重过时，玩家看到「每次第一个都是之前的」）；
- * 只退到**紧邻上一批**则基本还贴着当前局面，最多是内容略有重复，体验远好于
- * 选项凭空消失。真正要选项「更新」的是模型下一轮给新的，这里只是兜底不断档。
- *
- * 返回是否发生了变化。
+ * 把最新一条回复里的选项同步到会话上，返回是否变化。⚠️ 只看最新一条 assistant：这轮没给就**保留上一批**（不清空）；兜底只退到紧邻上一批、不往回扫历史（会命中好几轮前的过时选项）。
  */
 export function syncConvoOptions(convo) {
   if (!convo || !Array.isArray(convo.messages)) return false;
@@ -249,8 +204,7 @@ export function syncConvoOptions(convo) {
         if (items.length) found = items;
       }
     } else {
-      // 最后一条不是 assistant（空历史、或停在用户/错误消息上）——没有
-      // 「最新一轮剧情」可依附，保留残留选项只会让面板挂着无关内容，清空。
+      // 最后一条不是 assistant（空历史 / 停在用户或错误消息上）：没有「最新一轮剧情」可依附，清空
       found = [];
     }
   } else {

@@ -1,62 +1,34 @@
 'use strict';
 
-// ============================================================================
-//  ui/imageCrop.js —— 选好图之后、存下来之前，框一下要哪一块
-//
-//  两处用：角色头像（1:1）、角色形象（2:3）。存下来的比例是固定的，
-//  所以这里不提供自由比例 —— 界面上只有「拖动 / 缩放 / 确定」三件事，
-//  框住的那块就是最终存下来的那块。
-//
-//  视口用 canvas 直接绘制（拖动和缩放都是重画，不走 CSS transform）——
-//  这样屏幕上看到的裁剪结果和输出的像素是同一套坐标，不存在对不齐。
-//
-//  只用 canvas 标准 API，零依赖。返回 Promise<string|null>：
-//  确定得到 dataURL，取消（按钮 / Esc / 点空白）得 null。
-//
-//  还导出一个「选完再裁」的顺手封装 pickAndCrop —— 角色头像 / 形象、表情图
-//  三个地方都要「弹文件框 → 裁剪 → 拿 dataURL」，走同一份实现。
-// ============================================================================
+// ui/imageCrop.js —— 选好图之后、存下来之前，框一下要哪一块
+// 视口用 canvas 直接绘制：屏幕上看到的和输出的像素是同一套坐标
+// 返回 Promise<string|null>：确定得 dataURL，取消（按钮 / Esc / 点空白）得 null
 
 import { h, button } from './build.js';
 import { mButton } from '../components/index.js';
 import { api } from '../core/api.js';
 import { showToast } from './toast.js';
 
-// 视口宽度上限；实际会再按窗口高度收一档，保证高窗口里也放得下
+// 视口宽度上限（还会按窗口高度再收一档）
 const VIEW_MAX_W = 340;
-// 允许放大到「刚好铺满视口」的几倍
+// 最多放大到「刚好铺满视口」的几倍
 const ZOOM_RANGE = 4;
 
-/**
- * 把宽高比拆成整数对。传进来的 aspect 多半是 `2 / 3` 这种浮点值，
- * 直接拿它做除法和取整会一路带歪（340 / (2/3) = 510.0000 → 510，
- * 但换个比例比如 3/4：340 / 0.75 = 453.33 → 453，453/340 = 1.3324 ≠ 4/3，
- * 输出就成了 1024×1364）。这里把它还原成 [2, 3]，后面的尺寸全用整数算。
- */
+/** ⚠️ 宽高比一律拆成整数对：浮点做除法取整会带歪比例（340/0.75=453.33→453，453/340≠4/3，输出成 1024×1364） */
 function ratio(aspect) {
   const a = Number(aspect);
   if (!Number.isFinite(a) || a <= 0) return [1, 1];
-  // 常见比例直接给整数，省得靠浮点反推（1:1 / 2:3 / 3:2 / 3:4 / 4:3 够用了）
+  // 常见比例直接给整数，省得靠浮点反推
   for (let h = 1; h <= 16; h += 1) {
     const w = a * h;
     if (Math.abs(w - Math.round(w)) < 1e-9) return [Math.round(w), h];
   }
-  // 兜底：放大到百万分之一精度再约分
+  // 兜底：放大 1000 倍再取整
   return [Math.round(a * 1000), 1000];
 }
 
 /**
- * 不弹界面，直接把一张图按比例**从顶部对齐**裁好、缩到 outWidth、转成 dataURL。
- * 给「批量导入表情图」用 —— 二十几张逐个开裁剪浮层点确定，没人受得了。
- *
- * 为什么顶部对齐：差分素材都是「头顶对齐」的立绘，从上往下裁才不会把脸切掉
- * （和状态卡 .sc-photo 的 object-position: center top 是同一套对齐）。
- *
- * @param {string} dataUrl 原图
- * @param {object} options
- * @param {number} [options.aspect]   宽高比（1 = 正方形）
- * @param {number} [options.outWidth] 输出宽度（高度按 aspect 算）
- * @returns {Promise<string>} 裁好的 dataURL（解不开时 reject）
+ * 不弹界面直接按比例裁好、缩到 outWidth 转 dataURL（批量导入表情图用）。⚠️ 从顶部对齐：立绘头顶对齐，从上往下裁才不切脸（解不开时 reject）。
  */
 export function cropTopToDataUrl(dataUrl, options) {
   const opts = options || {};
@@ -70,7 +42,7 @@ export function cropTopToDataUrl(dataUrl, options) {
       const srcW = Math.max(1, image.naturalWidth);
       const srcH = Math.max(1, image.naturalHeight);
 
-      // 在原图里取一块比例正确的最大矩形：先按宽度铺满，算出来太高就反过来按高度定
+      // 原图里取比例正确的最大矩形：先按宽度铺满，太高就反过来按高度定
       let cw = srcW;
       let ch = Math.round(cw / target);
       if (ch > srcH) {
@@ -80,7 +52,7 @@ export function cropTopToDataUrl(dataUrl, options) {
       const ox = Math.round((srcW - cw) / 2);
       const oy = 0; // 顶部对齐，脸留在框里
 
-      // 输出高度**从宽度按整数比算**，不借道裁剪框的取整结果（比例会歪）
+      // ⚠️ 输出高度从宽度按整数比算，不借道裁剪框的取整结果（比例会歪）
       const w = Math.max(1, Math.min(outWidth, cw));
       const h = Math.max(1, Math.round((w * rh) / rw));
 
@@ -95,7 +67,7 @@ export function cropTopToDataUrl(dataUrl, options) {
       let url = out.toDataURL('image/webp', 0.85);
       if (url.startsWith('data:image/')) return resolve(url);
 
-      // 浏览器不支持编码 webp，给了张 PNG 回来，那就用它
+      // 浏览器不支持编码 webp 时会回一张 PNG，那就用它
       url = out.toDataURL('image/png');
       resolve(url.startsWith('data:image/') ? url : dataUrl);
     };
@@ -104,17 +76,7 @@ export function cropTopToDataUrl(dataUrl, options) {
   });
 }
 
-/**
- * 打开裁剪浮层。
- *
- * @param {object} options
- * @param {string} options.dataUrl   原图（dataURL）
- * @param {number} [options.aspect]  宽高比（1 = 正方形，2/3 = 竖版）
- * @param {number} [options.outWidth] 输出宽度（高度按 aspect 算）
- * @param {string} [options.title]   浮层标题
- * @param {string} [options.hint]    标题下的一行说明
- * @returns {Promise<string|null>} 裁剪后的 dataURL，取消为 null
- */
+/** 打开裁剪浮层。@returns {Promise<string|null>} 裁剪后的 dataURL，取消为 null */
 export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = '裁剪图片', hint = '' }) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -122,17 +84,13 @@ export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = '�
     img.onload = () => build(img);
     img.src = dataUrl;
 
-    // 浮层建好之后就一直挂在这儿，直到用户确定 / 取消 —— 两条路都调 resolve
     function build(image) {
       const dpr = Math.max(1, window.devicePixelRatio || 1);
 
-      // 比例一律按**整数**算（2:3 → [2, 3]）。aspect 是 2/3 这种浮点传进来的，
-      // 拿它做除法/取整都会跑偏：340 / 0.75 = 453.33 → 453，453/340 就是 1.3324，
-      // 不是 4/3 —— 视口比例一歪，输出尺寸跟着歪（1024×1536 会变成 1024×1364）。
-      // 用整数比则 vh = vw * b / a，误差只来自一次取整。
+      // ⚠️ 比例一律按整数算（2:3 → [2,3]）：视口比例一歪，输出尺寸跟着歪（1024×1536 会变成 1024×1364）
       const [rw, rh] = ratio(aspect);
 
-      // 视口尺寸：先按宽度取上限，再按窗口高度收 —— 太高的竖图不能顶到屏幕外
+      // 按窗口高度再收一档 —— 太高的竖图不能顶到屏幕外
       const maxH = Math.max(160, Math.min(window.innerHeight * 0.52, 460));
       let vw = Math.round(Math.min(VIEW_MAX_W, Math.max(180, window.innerWidth - 120)));
       let vh = Math.round((vw * rh) / rw);
@@ -141,18 +99,14 @@ export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = '�
         vw = Math.round((vh * rw) / rh);
       }
 
-      // scale = 原图 1px 在视口里占几 px。minScale 是「图片刚够铺满视口」，
-      // 低于它就露出空白，所以是缩放下限。
+      // scale = 原图 1px 在视口里占几 px；minScale 是「刚够铺满视口」，再低就露白
       const minScale = Math.max(vw / image.width, vh / image.height);
-      // 理论上限：取景框最多只能缩到原图的 1 个像素（再小就是凭空放大），
-      // 即 scale 不超过 1。再加上「别超过目标输出的像素数」——
-      // 这样默认停在「刚好够目标尺寸」，图省事的用户不用手动缩放就能拿到全清晰度，
-      // 想裁小一点他自己往里推。留一点余量让手感不至于顶死。
+      // 上限：取景框最小到原图 1px（再小是凭空放大），且不超过目标输出的像素数
       const fitForOutput = vw / outWidth;
       const maxScale = Math.max(minScale, Math.min(1, fitForOutput) * ZOOM_RANGE);
 
-      // 当前变换：图片左上角相对视口左上角的位移 + 缩放倍数
       let scale = minScale;
+
       let ox = (vw - image.width * scale) / 2;
       let oy = (vh - image.height * scale) / 2;
 
@@ -256,22 +210,13 @@ export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = '�
 
       // --- 输出：按视口这块直接缩放画到目标尺寸 ---
       function output() {
-        // 视口框住的这块，在原图上本来有多少像素（scale = 图上 1px 在视口里占几 px）。
-        // 目标尺寸比它大就按原样输出 —— 放大只是把同一份信息摊得更糊、文件更大，
-        // 一个细节都补不出来（老卡里的小图尤其明显）。
+        // 视口框住的这块在原图上有多少像素；目标尺寸比它大就按原样输出（放大补不出细节）
         const srcWidth = Math.max(1, Math.round(vw / scale));
-        // 原图这块能给的最大高度，同理。
         const srcHeight = Math.max(1, Math.round(vh / scale));
         let w = Math.max(1, Math.min(outWidth, srcWidth));
-        // 高度**直接从 w 按整数比算**：w * rh / rw。
-        // 中间不能借道视口的取整结果 —— vw/vh 一取整比例就歪了（340 / 453 = 1.3324），
-        // 拿它换算出来是 1365 而不是 1536。
+        // ⚠️ 高度直接从 w 按整数比算：借道 vw/vh 的取整结果比例会歪（算出来 1365 而不是 1536）
         let h = Math.max(1, Math.round((w * rh) / rw));
-        // ⚠️ 但「按 w 算出来的 h」可能比原图能给的高 1px（w 四舍五入上去的时候：
-        //    134 × 3/2 = 201，而原图那块只有 200 高）。这时**把高度收回上限、
-        //    再按比例回算宽度**（→133），而不是留着它越界。
-        //    「不放大」是这个函数的硬约束；比例失真同样不能接受，所以改宽不改比。
-        //    （2026-10-12：冒烟那条「不放大」的断言就是这么红起来的。）
+        // ⚠️ h 可能比原图那块高 1px：收高度再按比例回算宽度 —— 不放大是硬约束，宁可改宽不改比
         if (h > srcHeight) {
           h = srcHeight;
           w = Math.max(1, Math.min(outWidth, Math.round((h * rw) / rh)));
@@ -281,24 +226,18 @@ export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = '�
         out.width = w;
         out.height = h;
 
-        // 落笔范围和输出同比例，图片不会被拉扁。
-        // ⚠️ 取两个方向里**较大的**那个比例：上面「h 超了就收窄 w」那步会把
-        //    k = w / vw 一起带小，于是落笔高度够不到画布底 —— 实测 200 高的画布
-        //    只画到 ≈198.5（w 从 134 收到 133），底边留一条半透明缝。
-        //    取 max 保证盖满画布，多出来的那一丁点被裁掉，跟「不放大」的约束不冲突。
+        // ⚠️ 取两个方向里较大的比例：上面「h 超了收窄 w」会把 k 带小，落笔够不到画布底、底边留缝
         const k = Math.max(w / vw, h / vh);
         const octx = out.getContext('2d');
         octx.imageSmoothingEnabled = true;
         octx.imageSmoothingQuality = 'high';
         octx.drawImage(image, ox * k, oy * k, image.width * scale * k, image.height * scale * k);
 
-        // 先按 1.0 存 webp（在有损编码里已经到顶，肉眼看不出区别了）。它体积只有
-        // PNG 的 1/3 左右 —— 而这个文件每存一次角色就要整个重写一遍，体积是实打实的成本。
+        // webp 只有 PNG 的 1/3 体积，而这个文件每存一次角色就要整个重写一遍
         let url = out.toDataURL('image/webp', 1);
         if (url.startsWith('data:image/')) return url;
 
-        // 浏览器给了张 PNG 回来，说明它压根不支持编码 webp —— 那就直接用这张。
-        // 少走「先试 webp 再转 PNG」那一趟，也省得把图重新编码一遍掉细节。
+        // 浏览器不支持编码 webp 时回的是 PNG，直接用它（少重编码一次，不掉细节）
         url = out.toDataURL('image/png');
         return url.startsWith('data:image/') ? url : dataUrl;
       }
@@ -343,8 +282,7 @@ export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = '�
         resolve(result);
       }
 
-      // Esc 用捕获阶段拦下：底下的角色编辑器也在听 Esc（冒泡阶段），
-      // 不拦住的话关掉的是整个编辑器。
+      // ⚠️ Esc 用捕获阶段拦下：底下的角色编辑器也在听 Esc（冒泡阶段），不拦会连它一起关掉
       const keyHandler = (event) => {
         if (event.key !== 'Escape') return;
         event.preventDefault();
@@ -367,12 +305,7 @@ export function openImageCrop({ dataUrl, aspect = 1, outWidth = 512, title = '�
   });
 }
 
-/**
- * 选一张本地图 → 裁剪 → 返回最终 dataURL；取消或出错返回 null。
- *
- * 三个调用方（头像 / 形象 / 表情图）的差别只有比例和文案，流程完全一样，
- * 所以收在这里。出错已经弹过 toast 了，调用方拿到 null 直接 return 即可。
- */
+/** 选一张本地图 → 裁剪 → dataURL；取消或出错（已弹过 toast）返回 null */
 export async function pickAndCrop({ aspect, outWidth, title, hint, pickTitle }) {
   let result;
   try {

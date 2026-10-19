@@ -1,43 +1,17 @@
 'use strict';
 
-// ============================================================================
-//  main/panel-fields.js —— 状态面板字段的「类型 / 范围 / 变化规则」
-//
-//  字段默认只有 {name, value} 两个字符串，模型看不到任何约束：
-//  卡里写着「好感度 0~100」，注入过去的也只有「好感度：50」——
-//  模型写个 150 也没人拦，写个负数也没人拦。
-//
-//  这里给字段加上三样东西（都是**可选**的，老数据不受影响）：
-//    · type   文本 text / 数值 meter / 列表 list
-//    · min,max  数值的范围（只在 type=meter 时有意义）
-//    · hint   给模型看的变化规则，原样注入，比如
-//             「按本轮剧情在当前值基础上合理增减，单轮变化不超过 10」
-//
-//  ——这套形状是从一张真实导出的角色卡里学来的（那边的字段叫
-//  {type:'meter', min:0, max:100, hint:'…'}），所以导入时能直接映射过来。
-//
-//  ⚠️ 这个文件必须能同时被两种环境加载（写法别乱改）：
-//    · 主进程：require('./panel-fields.js') —— CommonJS
-//    · 渲染层：<script> 之后读 window.PanelFields（不能 import：CommonJS 在浏览器里
-//      没有具名导出）
-//  两种环境跑同一份代码，范围/规则的判断不会两边不一致。
-//
-//  ⚠️ 主进程（导入）和渲染层（编辑器、注入）必须用同一份这里，分开写会漂。
-// ============================================================================
+// 状态面板字段的「类型 / 范围 / 变化规则」。
+// ⚠️ 必须能同时被两种环境加载：主进程 require（CommonJS）、渲染层 <script> 后读 window.PanelFields（浏览器没有具名导出，不能 import）。
 
 const MAX_FIELD_NAME = 24;
 const MAX_FIELD_VALUE = 500;
 const MAX_FIELD_HINT = 200;
 const MAX_FIELDS = 120;
-// 分组名（面板标题）的长度上限。它是给人看的标题，不用太长。
 const MAX_GROUP_TITLE = 24;
 
 const FIELD_TYPES = ['text', 'meter', 'list'];
 
-// 字段的「更新频率」标记：决定它要不要每轮都出现在状态栏里。
-//   · 'dynamic' 每轮维护 —— 随剧情变的状态，默认值。
-//   · 'static'  变了才说 —— 几乎不变的设定，没变化就不输出。
-// 老数据没有这个键，一律按 dynamic 处理（向后兼容）。
+// 更新频率：dynamic 每轮维护（默认）/ static 变了才说；老数据没有这个键，一律按 dynamic。
 const FIELD_MODES = ['dynamic', 'static'];
 const DEFAULT_FIELD_MODE = 'dynamic';
 
@@ -83,18 +57,8 @@ function clampNumber(n, min, max) {
   return out;
 }
 
-/**
- * 把模型写的一个值夹回范围内，并保留它原来的写法。
- *
- *   clampFieldValue('150/100', {min:0,max:100})  →  { value: '100/100', clamped: true }
- *   clampFieldValue('-5/100',  {min:0,max:100})  →  { value: '0/100',   clamped: true }
- *   clampFieldValue('50/100',  {min:0,max:100})  →  { value: '50/100',  clamped: false }
- *   clampFieldValue('80',      {min:0,max:100})  →  { value: '80',      clamped: false }
- *   clampFieldValue('很累',    {min:0,max:100})  →  { value: '很累',     clamped: false }
- *
- * 解析不出数字就原样返回 —— 宁可不管，也不要因为模型写了个中文就把值抹掉。
- * 分母（/100 那部分）不动：它通常是这个字段的满值，改了反而怪。
- */
+/** 把模型写的值夹回范围内并保留原写法（'150/100' → '100/100'）。
+ *  解析不出数字就原样返回 —— 宁可不管，也不要因为模型写了个中文就把值抹掉；分母不动。 */
 function clampFieldValue(value, field) {
   const text = String(value == null ? '' : value).trim();
   const f = field || {};
@@ -110,10 +74,7 @@ function clampFieldValue(value, field) {
   return { value: out, clamped: true };
 }
 
-/**
- * 归一化一个字段定义。类型不认识就退回 text（而不是丢掉这个字段）——
- * 丢字段是静默失效，退类型至少还能用。
- */
+/** 归一化一个字段定义。类型不认识就退回 text —— 丢字段是静默失效，退类型至少还能用。 */
 function normalizePanelField(raw) {
   if (!raw || typeof raw !== 'object') return null;
 
@@ -129,8 +90,7 @@ function normalizePanelField(raw) {
   };
 
   if (type === 'meter') {
-    // 只认真正的数字；null / 空串 / 非数字都不算范围。
-    // 没有范围时 min/max 都不写，clampFieldValue 自然什么都不做。
+    // 只认真正的数字：没有范围时 min/max 都不写，clampFieldValue 自然什么都不做。
     const min = toFiniteNumber(raw.min);
     const max = toFiniteNumber(raw.max);
     const hasMin = min !== null;
@@ -148,7 +108,6 @@ function normalizePanelField(raw) {
   const hint = String(raw.hint == null ? '' : raw.hint).trim().slice(0, MAX_FIELD_HINT);
   if (hint) field.hint = hint;
 
-  // 更新频率标记：不认识的值退回默认 dynamic。老数据没有这个键，也走默认。
   const mode = FIELD_MODES.includes(raw.mode) ? raw.mode : DEFAULT_FIELD_MODE;
   if (mode !== DEFAULT_FIELD_MODE) field.mode = mode;
 
@@ -156,25 +115,15 @@ function normalizePanelField(raw) {
   const group = String(raw.group == null ? '' : raw.group).trim().slice(0, MAX_GROUP_TITLE);
   if (group) field.group = group;
 
-  // 归属：这个字段属于谁。'player' = 玩家自己；某个角色卡 id = 那个角色；
-  // 空 = 场景 / 不归属（默认全归角色卡的状态栏）。
-  // 用它把「我的状态」从面板里拆出去单独看（见 views/stateCard.js）。
+  // 归属：'player' = 玩家自己；角色卡 id = 那个角色；空 = 场景 / 不归属。
   const owner = String(raw.owner == null ? '' : raw.owner).trim().slice(0, 40);
   if (owner) field.owner = owner;
 
   return field;
 }
 
-/**
- * 数值字段的「进度」——给界面画进度条用。
- *
- * 返回 { n, total, percent }，percent 是 0~100 的整数。
- * 算不出来就返回 null（调用方据此不画条）：
- *   · 不是数值字段 / 没有范围
- *   · 值里没有可用的数字
- * 分母的选取：优先用值里写的（60/100 就是 100），
- * 没有就用字段的 max —— 这样裸数字 60 也能画出条来。
- */
+/** 数值字段的进度（percent 0~100），算不出来返回 null —— 调用方据此不画条。
+ *  分母优先用值里写的（60/100 就是 100），没有就用字段的 max。 */
 function fieldProgress(value, field) {
   const f = field || {};
   if (f.type !== 'meter') return null;
@@ -182,8 +131,6 @@ function fieldProgress(value, field) {
   const parsed = parseNumericValue(value);
   if (!parsed) return null;
 
-  // 分母优先用值里写的（60/100 就是 100），没有就用字段的 max ——
-  // 这样面板里存的是裸数字 60 时也能画出条来。
   const total = parsed.total !== null ? parsed.total : Number.isFinite(f.max) ? f.max : null;
   if (total === null) return null;
 
@@ -196,15 +143,8 @@ function fieldProgress(value, field) {
   return { n: parsed.n, total, percent };
 }
 
-/**
- * 把字段按分组分桶，顺序保留。
- *
- * 返回 [{ id, title, fields }]。`id` 空串那一桶是「没分组的」，永远排在最后 ——
- * 不然零散字段会插在命名面板中间，看着像掉出来了。
- *
- * 分组是按**字段第一次出现的顺序**排的（不是字母序），这样界面上组的次序
- * 跟着你填的顺序走，符合直觉。
- */
+/** 按 group 分桶，返回 [{ id, title, fields }]，次序按字段第一次出现的顺序。
+ *  id 空串那桶（没分组的）永远排最后 —— 不然零散字段会插在命名面板中间。 */
 function groupPanelFields(fields) {
   const list = Array.isArray(fields) ? fields : [];
   const order = [];
@@ -260,19 +200,13 @@ function describePanelField(field) {
 
   if (f.hint) parts.push(f.hint);
 
-  // ⚠️ 这里**不要**给静态字段补「只在变化时输出」这类说明：
-  //   · 语义上重复 —— formatPanelForPrompt 的静态规则段已经统一交代过
-  //     「只要剧情里发生了变化就必须输出那行新值」，逐字段再说一遍纯属啰嗦；
-  //   · **措辞打架** ——「没变化就省略」把判断权交给模型，模型自判「没变」就
-  //     整行省掉，正是「状态卡不更新」的成因之一。留着它等于同时给两条
-  //     互相拆台的指令（上面刚说「必须输出」，下面就说「可以省略」）。
-  // 动态字段同理不额外说 —— 保持默认的「每轮照抄」，别把提示词撑长。
+  // ⚠️ 不要给静态字段补「只在变化时输出」这类说明：会和上面的「必须输出」措辞打架，
+  //    模型自判「没变」就整行省掉，正是「状态卡不更新」的成因之一。
 
   return parts.join('；');
 }
 
-// 只导出调用方真正用得到的接口；范围解析 / 夹取是内部实现，
-// 渲染层通过 core/panel-fields.js 按需取用。
+// 渲染层通过 core/panel-fields.js 按需取用内部实现。
 const PanelFields = {
   clampFieldValue,
   normalizePanelField,
@@ -283,7 +217,6 @@ const PanelFields = {
   trimNumber
 };
 
-// 主进程：标准 CommonJS 导出
 if (typeof module !== 'undefined' && module.exports) module.exports = PanelFields;
-// 渲染层：<script> 加载时挂到 window 上（上面注释里说明了为什么不能 import）
+// 渲染层：<script> 加载时挂到 window（浏览器没有具名导出，不能 import）
 if (typeof window !== 'undefined') window.PanelFields = PanelFields;

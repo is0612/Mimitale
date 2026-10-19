@@ -1,49 +1,16 @@
 'use strict';
 
-// ============================================================================
-//  main/data-dir.js —— 「用户数据放哪」只在这里决定一次
-//
-//  会话 / 角色 / 世界书 / 预设 / 配置默认写在**程序旁边的 `data\`**，
-//  而不是 `%APPDATA%\Mimitale`：拷给别人时整个文件夹一起走，用户也找得到
-//  自己的角色卡；数据散在系统盘、换机器就丢。
-//
-//  默认位置：
-//     · 打包后   → exe 同级的 data\
-//     · 免安装   → package.json 所在的那个文件夹（`electron .` 跑的就是它）
-//  整个文件夹拷走 = 数据跟着走，卸载删文件夹即可。
-//
-//  ⚠️ 只搬「用户的数据文件」（见 DATA_FILES）。**Chromium 自己的 profile
-//     （Cache / GPUCache / Local Storage / Preferences / Local State …）不搬** ——
-//     那些是缓存，不是用户内容，留在系统默认位置最稳：程序被装在
-//     `C:\Program Files` 这类只读目录里时，Chromium 照样起得来。
-//
-//  解析顺序（先命中先用）：
-//    ① `app.getPath('userData')` 被**显式改过** → 用它
-//       （测试工具的 `app.setPath('userData', 临时目录)`、命令行的 --user-data-dir
-//        都属于这一类：调用方已经明确指定了位置，别自作聪明覆盖它）
-//    ② 环境变量 `MIMITALE_DATA_DIR` → 用它（绿色版 / U 盘 / 放到别的盘）
-//    ③ 程序旁边的 `data\` → 默认
-//    ④ 兜底：系统默认的 `%APPDATA%\Mimitale`
-//       ③ 建不出来或写不进去时（只读介质、装在 Program Files 下、权限策略…）
-//       自动退到这儿 —— **宁可数据回 C 盘，也不能让程序因为搬数据而起不来**。
-//
-//  从老位置搬到新位置时会**拷贝**一次（只拷不删，老文件留着当保险）；
-//  而且只在新位置一个数据文件都没有时才做，免得盖掉用户后来的改动。
-// ============================================================================
+//  main/data-dir.js —— 「用户数据放哪」只在这里决定一次：默认是程序旁边的 data\（便携）。
+//  ⚠️ 只搬 DATA_FILES 里的用户数据，Chromium 的 Cache / profile 不搬 —— 装在只读目录里也能起得来。
+//  顺序：显式改过的 userData → MIMITALE_DATA_DIR → 程序旁 data\ → 回退 %APPDATA%（宁可回 C 盘也不能起不来）。
 
 const { app } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
-/** 程序旁边那个数据目录的名字 */
 const DATA_DIR_NAME = 'data';
 
-/**
- * 哪些才算「用户的数据」。
- *
- * 这张表同时被三处用：搬家、判断新位置是不是空的、诊断工具。
- * 加新的数据文件时记得同步加一行（`xxx.json.backup` 由后缀循环自动带上）。
- */
+/** 哪些才算「用户的数据」：搬家、判空、诊断三处共用；加新数据文件时记得同步加一行（.backup 由后缀循环带上）。 */
 const DATA_FILES = [
   'config.json',
   'conversations.json',
@@ -56,15 +23,12 @@ const DATA_FILES = [
 let cachedDir = null;
 let cachedInfo = null;
 
-/** Electron 自己算出来的默认 userData（`%APPDATA%\<应用名>`） */
+/** Electron 默认的 userData（%APPDATA%\<应用名>） */
 function defaultUserDataDir() {
   return path.join(app.getPath('appData'), app.getName());
 }
 
-/**
- * userData 被显式改过吗？
- * 改过就说明调用方（测试 / --user-data-dir）已经指定了位置，一切以它为准。
- */
+/** userData 被显式改过（测试 / --user-data-dir）就以它为准 */
 function userDataWasOverridden() {
   try {
     return path.resolve(app.getPath('userData')) !== path.resolve(defaultUserDataDir());
@@ -83,20 +47,13 @@ function appFolder() {
   return app.getAppPath();
 }
 
-/** 程序旁边的 data 目录（默认位置） */
+/** 程序旁边的 data 目录 */
 function portableDataDir() {
   return path.join(appFolder(), DATA_DIR_NAME);
 }
 
-/**
- * 探一下「这个进程到底能不能往这个目录里写字」。
- *
- * 为什么要真写一个文件：`existsSync` 只能证明**读**得通。有一类环境
- * （沙箱 / 权限策略）是「目录存在、能列、能读，但一个文件都建不出来」——
- * 那时所有保存都会失败，而只看 `existsSync` 会以为一切正常。
- *
- * 只建一个随机名的空文件再删掉，不留痕迹。返回 { ok, error }。
- */
+/** 探目录能不能写。⚠️ 必须真写一个文件：existsSync 只证明读得通，沙箱 / 权限策略下
+ *  常见「目录在、能列、能读，但建不出文件」，只看 existsSync 会以为一切正常。 */
 function probeDirWritable(dir) {
   const probe = path.join(dir, `.mimitale-write-probe-${process.pid}-${Date.now().toString(36)}`);
   try {
@@ -108,13 +65,13 @@ function probeDirWritable(dir) {
     try {
       fs.unlinkSync(probe);
     } catch (cleanupErr) {
-      /* 没建出来 / 删不掉都无所谓 */
+      /* 删不掉也无所谓 */
     }
     return { ok: false, error: err.message };
   }
 }
 
-/** 新目录里有没有数据文件（有一个就算「不是空的」） */
+/** 新目录里有没有数据文件（有一个就算非空） */
 function hasAnyDataFile(dir) {
   return DATA_FILES.some((name) => {
     try {
@@ -125,17 +82,13 @@ function hasAnyDataFile(dir) {
   });
 }
 
-/**
- * 把老位置的数据搬到新位置。**只拷不删**，而且只在新位置为空时动手。
- *
- * 只拷不删的理由：用户的数据没有「搬完就安全」这回事 —— 万一新位置那张盘
- * 后来坏了/被清了，C 盘还留着一份可以捞。代价只是几 KB 到几 MB 的重复。
- */
+/** 把老位置的数据拷到新位置。⚠️ 只拷不删（新位置那张盘坏了还能捞回），
+ *  且只在新位置一个数据文件都没有时才动手，免得盖掉用户后来的改动。 */
 function migrateFromLegacy(toDir) {
   const legacy = defaultUserDataDir();
   if (path.resolve(legacy) === path.resolve(toDir)) return 0;
   if (!fs.existsSync(legacy)) return 0;
-  // 新位置已经有数据 → 用户在那边用过了，别拿老的盖上去
+  // 新位置已有数据 → 别再拿老的盖上去
   if (hasAnyDataFile(toDir)) return 0;
 
   let copied = 0;
@@ -155,19 +108,8 @@ function migrateFromLegacy(toDir) {
   return copied;
 }
 
-// ---------------------------------------------------------------------------
-//  数据目录里那份「使用说明.txt」
-//
-//  这个文件夹里只有几个 .json，用户点开只会一脸茫然（「这些是什么？能删吗？」）。
-//  所以每次启动顺手放一份人话说明进去。
-//
-//  ⚠️ 必须是程序自己生成，不能只在仓库里放一个文件：`data/` 整个在 .gitignore 里
-//     （那是用户的数据），clone / 拷贝代码的时候不会带上它 —— 靠人工放的话，
-//     别人拿到手的 data\ 里就什么都没有。
-//
-//  ⚠️ 编码：**UTF-8 带 BOM**。Windows 记事本对不带 BOM 的 UTF-8 中文识别得时好时坏
-//     （老版本会按 ANSI/GBK 解，中文全成乱码），所以直接用 BOM 换确定性。
-// ---------------------------------------------------------------------------
+// 数据目录里的「使用说明.txt」：⚠️ 必须程序生成（data/ 在 .gitignore 里，不会随代码带上），
+// 且必须 UTF-8 带 BOM —— Windows 记事本对无 BOM 的 UTF-8 中文会按 ANSI/GBK 解、全乱码。
 
 const README_FILE_NAME = '使用说明.txt';
 
@@ -217,17 +159,13 @@ function dataDirReadmeText() {
   );
 }
 
-/**
- * 确保数据目录里有一份说明。**失败只记日志** —— 它只是给人看的，
- * 绝不能因为它写不进去就影响程序启动或保存。
- * 内容没变就不动文件（免得每次启动都刷新 mtime）。
- */
+/** 确保数据目录里有一份说明。⚠️ 失败只记日志，绝不能影响启动或保存；
+ *  内容没变就不写（免得每次启动都刷新 mtime）。 */
 function ensureDataDirReadme(dir) {
   const file = path.join(dir, README_FILE_NAME);
   const text = dataDirReadmeText();
   try {
-    // 兜底那条路（退回 %APPDATA%）此时目录可能还不存在 —— 自己建出来，
-    // 不然说明写不进去，而这个目录后面本来也要被数据写入用到。
+    // 兜底路径下目录可能还不存在，先建出来（后面写数据也要用）
     fs.mkdirSync(dir, { recursive: true });
     if (fs.existsSync(file)) {
       try {
@@ -244,10 +182,7 @@ function ensureDataDirReadme(dir) {
   }
 }
 
-/**
- * 决定数据目录放哪。不缓存、不写说明 —— 缓存和说明都由 dataDir() 负责。
- * 返回 { dir, info }。
- */
+/** 决定数据目录放哪，返回 { dir, info }（不缓存、不写说明） */
 function resolveDataDir() {
   // ① 调用方显式改过 userData（测试 / --user-data-dir）
   if (userDataWasOverridden()) {
@@ -290,12 +225,8 @@ function resolveDataDir() {
   };
 }
 
-/**
- * 当前生效的数据目录（懒加载 + 缓存；第一次调用时决定、搬一次家、放一份说明）。
- *
- * ⚠️ 必须在**任何读写数据文件之前**调用才算数。store.js 的 dataFile() 是
- *    每次调用时才取目录，所以模块加载顺序不影响正确性。
- */
+/** 当前生效的数据目录（懒加载 + 缓存；首次调用时决定、搬一次家、放一份说明）。
+ *  ⚠️ 必须在任何读写数据文件之前调用才算数（store.js 的 dataFile() 是调用时才取目录）。 */
 function dataDir() {
   if (cachedDir) return cachedDir;
 
@@ -303,7 +234,7 @@ function dataDir() {
   cachedDir = dir;
   cachedInfo = { dir, ...info };
 
-  // 顺手放一份人话说明（失败不影响任何功能）
+  // 顺手放一份说明（失败不影响任何功能）
   ensureDataDirReadme(dir);
 
   return cachedDir;
@@ -319,7 +250,7 @@ function dataDirInfo() {
   };
 }
 
-/** 只在测试里用：忘掉缓存，下次重新解析（改了环境变量后想立刻生效时） */
+/** 只在测试里用：忘掉缓存，下次重新解析 */
 function resetDataDirCache() {
   cachedDir = null;
   cachedInfo = null;

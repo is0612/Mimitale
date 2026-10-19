@@ -1,15 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  data/conversations.js —— 会话的「出生」：新建一个、或从某条消息分出一条
-//
-//  只做纯逻辑（拼出一个会话对象、塞进 state、落盘），不碰 DOM、不重绘 ——
-//  那个会话长什么样、放哪一行，是 views/ 的事。
-//
-//  「分支」刻意做成「另开一个会话、把前 N 条原样复制过去」而不是真正的消息树：
-//  当前会话一个字节都不动，走岔了随时切回来，两边还能并排对比（侧栏里就是两条）。
-//  简单得多，也不会因为一次误操作丢掉整条线。
-// ============================================================================
+// data/conversations.js —— 会话的「出生」：新建一个、或从某条消息分出一条
+// 只做纯逻辑（拼对象、塞进 state、落盘），不碰 DOM、不重绘 —— 长什么样、放哪一行是 views/ 的事。
+// 「分支」= 另开一个会话、把前 N 条原样复制过去，不是真正的消息树：当前会话一个字节都不动。
 
 import { state } from '../core/state.js';
 import { uid, now } from '../core/util.js';
@@ -24,11 +17,7 @@ import {
 import { persistConversations } from './persist.js';
 
 /**
- * 新建一个会话并（默认）切过去。
- *
- * 不继承上一个会话的角色：「＋ 新对话」建出来的就是「还没选角色」的空白会话
- * （删光会话后的兜底也走这里）。要跟某个角色聊，由角色列表页的「聊天」
- * 建会话后经 applyCharacterChoice 把角色绑上。
+ * 新建一个会话并（默认）切过去。⚠️ 不继承上一个会话的角色：建出来就是「还没选角色」的空白会话，绑角色走 applyCharacterChoice。
  */
 export function createConvo(activate) {
   const convo = {
@@ -38,36 +27,22 @@ export function createConvo(activate) {
     updatedAt: now(),
     messages: [],
     characterId: null,
-    // 会话自己绑的世界书（「进入世界」走这里）。
-    // 另有「角色自带的世界书」——那条路走 character.worldbookIds，
-    // 两者由 effectiveWorldbookIds 决定用谁：会话绑了就只用会话的。
+    // 会话自己绑的世界书（「进入世界」走这里）；另有「角色自带的世界书」走 character.worldbookIds，两者由 effectiveWorldbookIds 决定用谁。
     worldbookIds: [],
-    // 会话绑的「预设」（叠在对话上的一层指令）—— **可以挂多条**，正文依次拼进提示词。
-    //   · null（默认）= 没手动配过 → 自动带上所有勾了「可全局」的预设
-    //   · []          = 手动配成「一条都不用」→ 真的不注入，不回落全局
-    //   · ['pr…']     = 手动选了这几条
-    // 被删掉 / 停用的 id 在 effectiveDialoguePresets 里静默跳过。
+    // 会话绑的预设（可挂多条）：null = 没配过 → 自动带所有「可全局」的；[] = 显式一条都不用 → 真不注入、不回落全局。
     dialoguePresetIds: null,
-    // 状态面板：fields 是出现过的字段顺序，panel 是当前值。
-    // panelDefs 是字段的类型/范围/变化规则（可选，老会话没有这个键也照常工作）。
-    // panelManual 记「哪些字段是玩家手动改过的」—— AI 每轮会重发状态栏，
-    // 不记的话手改的值下一轮就被顶掉（可选，老会话没有也照常工作）。
-    // 世界模型开局通常是空的，第一条带面板的回复会自动填上。
+    // 状态面板：fields = 字段顺序，panel = 当前值，panelDefs = 类型/范围/变化规则（可选）。
+    // ⚠️ panelManual 记「哪些字段是玩家手动改过的」—— AI 每轮重发状态栏，不记的话手改的值下轮就被顶掉。
     panel: {},
     panelFields: [],
     panelDefs: {},
     panelManual: {},
-    // 剧情选项：options 是这一轮模型给的可点选项（点完就清），
-    // optionsSpec 是「每轮给几个 + 额外要求」。
-    // 新会话出生时是 null（还没绑角色、也还没进世界）；**绑角色卡 / 进世界时**
-    // 由 data/suggestions.js 的 optionsSpecFromCharacter() 填上 —— 没在卡上
-    // 配过的角色默认就是「开、4 条」，只有卡上明确写了 false 才是 null（不开）。
+    // 剧情选项：options = 这轮的可点选项（点完就清），optionsSpec = 每轮给几个 + 额外要求。
+    // 新会话是 null；绑角色 / 进世界时由 optionsSpecFromCharacter() 填（没配过的角色默认「开、4 条」）。
     options: [],
     optionsSpec: null,
-    // 视角设置：叙述模式（标准/内心描写/上帝视角）、推进节奏、GM 模式
-    // ⚠️ 纯聊天（「＋ 新对话」）**用不上**这两个档 —— 提示词里不注入、视角弹窗里也不显示
-    //    （见 data/messages.js 文件头）。但这里照旧写上默认值：
-    //    这个会话万一被切成 GM 模式，默认档直接可用，不用再补一次字段。
+    // 视角设置：叙述模式、推进节奏、GM 模式。
+    // ⚠️ 纯聊天用不上这两个档（见 data/messages.js 文件头），但仍写默认值：万一被切成 GM 模式，默认档直接可用。
     narrationMode: DEFAULT_NARRATION_MODE,
     // 默认「一步一步」：不这样的话模型会一口气把整场戏演完，玩家只剩看的份
     paceMode: DEFAULT_PACE_MODE,
@@ -81,10 +56,7 @@ export function createConvo(activate) {
   return convo;
 }
 
-/**
- * 从某条消息分出一条新线的「骨架」：前 cut 条消息及其戏本身的东西照搬过去。
- * 只拼对象、不落盘、不切会话 —— 那两个动作由调用方按界面需要决定。
- */
+/** 从某条消息分出一条新线的「骨架」：前 cut 条消息及其戏本身的东西照搬过去。只拼对象、不落盘、不切会话 */
 export function branchSkeleton(convo, cut) {
   return {
     id: uid(),
@@ -100,9 +72,7 @@ export function branchSkeleton(convo, cut) {
       return ids === null ? null : [...ids];
     })(),
     gmMode: convo.gmMode === true,
-    // 视角设置也要照搬：不照搬的话，从「上帝视角 + 快节奏」分出来的新线
-    // 会悄悄变回「标准 + 一步一步」—— 提示词变了、顶栏的档位标签也没了，
-    // 而且不报任何错。
+    // ⚠️ 视角设置也要照搬：不照搬的话，从「上帝视角 + 快节奏」分出来的新线会悄悄变回「标准 + 一步一步」，且不报任何错。
     narrationMode: convoNarrationMode(convo),
     paceMode: convoPaceMode(convo),
     player: convo.player ? { ...convo.player } : null,
@@ -116,8 +86,7 @@ export function branchSkeleton(convo, cut) {
     optionsSpec: convo.optionsSpec ? { ...convo.optionsSpec } : null,
     options: [],
     messages: JSON.parse(JSON.stringify(convo.messages.slice(0, cut))),
-    // 摘要不搬：它压缩的是「最早那批消息」，而新会话里这批消息是原样留着的，
-    // 搬过去等于同一段内容被记两遍。新线从零开始攒记忆。
+    // 摘要不搬：它压的是「最早那批消息」，而新会话里这批是原样留着的，搬过去等于同一段被记两遍。
     summaries: [],
     checkpoints: []
   };

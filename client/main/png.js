@@ -1,25 +1,13 @@
 'use strict';
 
-// ============================================================================
-//  main/png.js —— 酒馆 PNG 角色卡里那点「元数据藏在图片里」的活
-//
-//  酒馆（SillyTavern）的角色卡其实是一张 PNG：卡数据 base64 之后塞在 PNG 的
-//  文本块里，关键字 chara（v2）或 ccv3（v3）。所以导入要会读，导出要会写。
-//
-//  三种文本块都认（见 readTextChunk 上面的注释）：标准里给了 tEXt / zTXt / iTXt，
-//  不同工具写的位置不一样，只认 tEXt 会遇到「明明是张卡却导入不出来」。
-//  导出仍然写 tEXt —— 那是各家都认的最小公约数。
-//
-//  独立成模块的原因和 main/characters.js 一样：tools/smoke-test.js 要 require 它，
-//  这样「导出 → 再导入」的往返能跑**同一份真代码**，而不是测试里自己糊一套。
-// ============================================================================
+// 酒馆 PNG 角色卡的元数据读写：卡数据 base64 后塞在 PNG 文本块里（chara = v2 / ccv3 = v3）。
+// ⚠️ 三种文本块都要认（tEXt / zTXt / iTXt）：工具各有偏好，只认 tEXt 会「明明是张卡却导入不出来」；导出仍写 tEXt。
 
 const zlib = require('zlib');
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-// 解压后的文本块上限。卡里那段是 JSON（最多几 MB），给 8MB 的余量；
-// 超过就是别人塞进来的压缩炸弹，直接当读不出来处理
+// 超过上限就当是别人塞进来的压缩炸弹，直接当读不出来处理
 const MAX_TEXT_BYTES = 8 * 1024 * 1024;
 
 // PNG 每个数据块末尾跟一个 CRC32（对「块类型 + 数据」算）。标准查表实现
@@ -45,11 +33,8 @@ function isPng(buffer) {
   return Buffer.isBuffer(buffer) && buffer.length >= 8 && buffer.subarray(0, 8).equals(PNG_SIGNATURE);
 }
 
-/**
- * 往 PNG 里插一个 tEXt 块。
- * 位置放在 IHDR 之后 —— 规范允许放在任何块之间，但紧挨头部最不容易踩到别人的解析器。
- * 不是合法 PNG 就原样返回：宁可导出一张没有数据的图，也不要写出个坏文件。
- */
+/** 往 PNG 里插一个 tEXt 块，位置放在 IHDR 之后 —— 紧挨头部最不容易踩到别人的解析器。
+ *  不是合法 PNG 就原样返回：宁可导出一张没有数据的图，也不要写出个坏文件。 */
 function pngWithTextChunk(png, keyword, text) {
   if (!isPng(png)) return png;
 
@@ -74,10 +59,7 @@ function pngWithTextChunk(png, keyword, text) {
   return Buffer.concat([png.subarray(0, insertAt), chunk, png.subarray(insertAt)]);
 }
 
-/**
- * 解压一个 zlib 流。坏数据 / 超过上限都返回 null —— 文本块只是「可选元数据」，
- * 解不开最多少读一份信息，不该把整个导入流程炸掉。
- */
+/** 解压一个 zlib 流；坏数据 / 超过上限都返回 null —— 解不开最多少读一份信息，不该炸掉整个导入。 */
 function inflateText(buffer) {
   try {
     return zlib.inflateSync(buffer, { maxOutputLength: MAX_TEXT_BYTES });
@@ -86,16 +68,9 @@ function inflateText(buffer) {
   }
 }
 
-/**
- * 把一个文本块拆成 { keyword, text }。三种块的布局：
- *
- *   tEXt  关键字 \0 明文                               Latin-1
- *   zTXt  关键字 \0 压缩方法(1) zlib 压缩数据           Latin-1
- *   iTXt  关键字 \0 压缩标志(1) 压缩方法(1) \0
- *         语言标签 \0 翻译后的关键字 \0 文本            UTF-8（可压缩）
- *
- * 认不出来（够长却没有分隔符、解压失败）返回 null。
- */
+/** 把一个文本块拆成 { keyword, text }：tEXt = 关键字\0明文（Latin-1）；zTXt = 关键字\0压缩方法(1)+zlib 数据；
+ *  iTXt = 关键字\0压缩标志(1)压缩方法(1)\0语言标签\0翻译后的关键字\0文本（UTF-8，可压缩）。
+ *  认不出来（没有分隔符、解压失败）返回 null。 */
 function decodeTextChunk(type, chunk) {
   const head = chunk.indexOf(0);
   if (head <= 0) return null; // 没有关键字分隔符，或者关键字是空的
@@ -133,11 +108,8 @@ function decodeTextChunk(type, chunk) {
   return null;
 }
 
-/**
- * 读一个文本块的值（找不到就返回 null）。
- * tEXt / zTXt / iTXt 都看：官方规范里三种都合法，出图工具各有偏好，
- * 只认 tEXt 的话一张正常的卡会读成「图里没有卡数据」。
- */
+/** 读一个文本块的值（找不到返回 null）。⚠️ tEXt / zTXt / iTXt 都看：出图工具各有偏好，
+ *  只认 tEXt 的话一张正常的卡会读成「图里没有卡数据」。 */
 function readTextChunk(buffer, wantedKeyword) {
   if (!isPng(buffer)) return null;
 
@@ -163,12 +135,8 @@ function readTextChunk(buffer, wantedKeyword) {
   return null;
 }
 
-/**
- * 从 PNG 里读出角色卡数据。ccv3（v3）优先于老的 chara（v2）。
- * 解析不出对象就返回 null —— 调用方据此报「这张图里没有卡数据」。
- */
+/** 从 PNG 里读出角色卡数据。ccv3（v3）优先于老的 chara（v2）；解析不出对象返回 null。 */
 function parseCharacterCardPng(buffer) {
-  // ccv3 是 v3 卡，优先于老的 chara
   const charaText = readTextChunk(buffer, 'ccv3') || readTextChunk(buffer, 'chara');
   if (!charaText) return null;
 

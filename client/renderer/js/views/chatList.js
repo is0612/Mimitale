@@ -1,15 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  views/chatList.js —— 左侧会话列表 + 右上角的模型切换
-//
-//  两样「会话级别的选择器」放在一起：
-//    · 左侧列一个会话一行（点了切过去，悬停浮出 × 删除）
-//    · 右上角下拉框选这个会话用哪个服务商/模型
-//  另外「绑定角色」也在这儿 —— 它本质上和切模型是同一类事（改当前会话用谁）。
-//  角色由角色列表页卡片上的「聊天」触发，这里保留 applyCharacterChoice 入口
-//  （含自动插开场白、自动起标题）。
-// ============================================================================
+// 左侧会话列表 + 右上角的模型切换。
+// 「绑定角色」也在这儿：它本质和切模型是同一类事（改当前会话用谁）。
 
 import { state } from '../core/state.js';
 import { el } from '../core/dom.js';
@@ -41,15 +33,11 @@ function storyPreview(convo) {
 export function renderConvoList() {
   clear(el.convoList);
 
-  // 侧栏不做搜索：会话本来就不多；真要做就做成全局的（标题 + 正文），
-  // 别只搜标题又留一个「搜不到内容」的错觉。
   const list = Array.isArray(state.conversations) ? state.conversations : [];
 
-  // 分区标题：平时就是「最近会话」
   if (el.convoCap) el.convoCap.textContent = `故事记录 · ${list.length}`;
 
   if (!list.length) {
-    // 这两条内联样式是「空状态」专属的，没有别的用处（真要认真做该进样式表）
     const empty = h('div', {
       class: 'convo-title',
       text: '（还没有会话）'
@@ -82,8 +70,6 @@ export function renderConvoList() {
           onclick: () => switchConvo(convo.id)
         },
         convoAvatar(convo),
-        // 一行：名字 + 时间（设计稿的写法）。
-        // 「跟谁聊」头像已经在说，「什么时候」放右端 —— 一屏能多放两个会话。
         h('span', { class: 'convo-story-text' },
           h('span', { class: 'convo-title', text: label, title: label }),
           h('small', { class: 'convo-preview', text: storyPreview(convo) })),
@@ -105,14 +91,7 @@ export function renderConvoList() {
   renderRailAvatar();
 }
 
-/**
- * 收起态图标轨最下面那颗：**当前会话**是谁（稿子屏 2 最底下那个 20px 方角图）。
- *
- * 展开态里它是 `display:none` —— 展开态「我在哪个会话」由列表的选中态说，
- * 不需要再说第二遍。
- * ⚠️ 复用 convoAvatar() 的产物（同一套 entityTone）—— 否则同一个人
- *    在列表里是绿的、在图标轨里变成主色，又会出现「同一个人两个颜色」。
- */
+/** ⚠️ 复用 convoAvatar() 的产物（同一套 entityTone）：否则同一个人列表里绿的、图标轨里变主色。 */
 function renderRailAvatar() {
   const host = el.railAvatar;
   if (!host) return;
@@ -134,12 +113,7 @@ function renderRailAvatar() {
   else host.textContent = node.textContent;
 }
 
-/**
- * 会话条目左边那个小圆头像：一眼看出这一条是跟谁聊的。
- *   绑了角色   → 角色头像，没传头像就取名字首字
- *   世界书会话 → 世界书名首字（浅色底，和角色区分开）
- *   都不是     → 一个中性小点，纯占位，保持每条都对齐
- */
+/** 条目左边的小圆头像：绑了角色 → 角色头像；世界书会话 → 书名首字（方角）；都没有 → 会话标题首字（中性色）。 */
 function convoAvatar(convo) {
   const char = convo.characterId ? characterById(convo.characterId) : null;
   if (char) {
@@ -155,8 +129,6 @@ function convoAvatar(convo) {
   const wbId = convoWorldbookIds(convo)[0] || '';
   const wb = wbId ? worldbookById(wbId) : null;
   if (wb) {
-    // 世界书会话的头像是**方的**（设计稿 .ava.book）—— 形状本身就是分类，
-    // 不用再挂标签去区分「跟角色聊」和「在书里玩」。
     return h('span', {
       class: `convo-avatar book ${entityTone(wb.id, wb.name)}`,
       text: String(wb.name || '').slice(0, 1) || '世',
@@ -164,8 +136,6 @@ function convoAvatar(convo) {
     });
   }
 
-  // 没有角色 / 世界书时显示**会话标题首字**，走中性色，
-  // 不跟有角色的那几条抢注意力；标题为空时兜底「·」。
   const title = String(convo.title || '').trim();
   return h('span', {
     class: 'convo-avatar plain',
@@ -174,23 +144,14 @@ function convoAvatar(convo) {
   });
 }
 
-/**
- * 会话条目右端那个时间（设计稿的写法，看的是**日历位置**不是时长）：
- *   今天   → `14:03`（给时刻比给「3 小时前」更好定位）
- *   昨天   → 「昨天」
- *   七天内 → 「周三」
- *   更早   → `10-08`
- *
- * 列表右端要的是「哪天聊的」，不是「过去多少小时」。
- */
+/** 条目右端的时间看**日历位置**不是时长：今天 `14:03` / 昨天 / 周三（七天内）/ `10-08`。 */
 function convoTimeLabel(ts) {
   const t = Number(ts);
   if (!Number.isFinite(t) || t <= 0) return '';
   const d = new Date(t);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  // 用 Date 构造器做「减一天 / 减六天」，不要直接减 86400000：
-  // 夏令时切换那天一天不是 24 小时，减固定毫秒会把「昨天」判错。
+  // ⚠️ 减天数走 Date 构造器，不要减 86400000：夏令时那天不是 24 小时，「昨天」会判错。
   const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1).getTime();
   const startOfSixDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime();
   if (t >= startOfToday) {
@@ -210,9 +171,7 @@ function modelChoiceValue() {
   return `${endpoint.provider.id}::${endpoint.model}`;
 }
 
-/** 选项行右边的勾。没选中的行也占着这块位置（CSS 里 opacity:0），文字不会左右跳。
- *  ⚠️ SVG 得走 createElementNS —— build.js 的 h() 是 createElement，
- *  建出来的只是「名叫 svg 的普通元素」，根本不画。 */
+/** ⚠️ SVG 必须走 createElementNS：h() 是 createElement，建出来只是「名叫 svg 的普通元素」，根本不画。 */
 function checkIcon() {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
@@ -239,15 +198,8 @@ function modelGroupLabel(p) {
 let lastModelSwitchSignature = null;
 
 /**
- * 右上角切换模型：按钮上写当前模型，点开是一个按服务商分组的弹层。
- *
- * 原生 <select> 的**列表**由系统画（直角、系统蓝高亮、系统字体），CSS 碰不到 ——
- * 跟这套「大圆角 + 柔和阴影」不搭，所以用和「⋯」共用的 .menu-pop 弹层。
- * 开合逻辑在 ui/modelMenu.js，这里只负责铺内容。
- *
- * 这个函数挂在刷新总线上，**发一条消息、点一下状态卡都会把它喊一遍**。
- * 所以先算一个「内容指纹」，没变就直接返回 —— 否则每次重绘都要把整棵列表树
- * 拆了重建（连带还得自己存还 scrollTop），纯属白干。
+ * 右上角切换模型（开合逻辑在 ui/modelMenu.js，这里只铺内容）。
+ * ⚠️ 挂在刷新总线上（发消息、点状态卡都会喊一遍）：先算内容指纹，没变就直接返回。
  */
 export function renderModelSwitch() {
   const trigger = el.modelSwitch;
@@ -260,8 +212,7 @@ export function renderModelSwitch() {
   const active = modelChoiceValue();
   const scrollTop = menu.scrollTop;
 
-  // 指纹要盖住**所有会影响输出的东西**：当前选中、每个分组的标题（含「未填 Key」）、
-  // 每组下面的模型列表。分组标题直接用最终文案，省得漏掉 isBridgeProvider 那种判断。
+  // 指纹要盖住所有影响输出的东西（当前选中 + 分组标题 + 每组模型列表）；标题直接用最终文案。
   const signature = [
     active,
     list.map((p) => `${p.id}~${modelGroupLabel(p)}~${asArray(p.models).join(',')}`).join('|')
@@ -269,7 +220,6 @@ export function renderModelSwitch() {
   if (signature === lastModelSwitchSignature) return;
   lastModelSwitchSignature = signature;
 
-  // 按钮上那行字：选了模型就写模型名，没选就写「选择模型」/「未配置模型」
   if (label) {
     label.textContent = endpoint && endpoint.model
       ? endpoint.model
@@ -282,7 +232,6 @@ export function renderModelSwitch() {
   clear(menu);
 
   if (!list.length) {
-    // 一个服务商都没有：按钮收成一块「提示」，弹层里说清楚去哪儿配
     menu.appendChild(h('div', { class: 'model-menu-empty', text: '还没有配置模型服务 —— 点左下角「设置」' }));
     trigger.disabled = true;
     closeModelMenu();
@@ -320,13 +269,7 @@ export function renderModelSwitch() {
   menu.scrollTop = scrollTop;
 }
 
-/**
- * 一张卡的开场白候选：主开场白（firstMes）排最前，后面接备选开场白。
- *
- * 按文本去重 —— 作者的 `first_mes` 和 `alternate_greetings[0]` 经常一字不差
- * （复制粘贴留下的），不去重的话列表里会出现两条一模一样的，用户会以为点错了。
- * 两级都裁掉两端空白：卡里的开场白常以空行开头，留着预览第一屏是空的。
- */
+/** ⚠️ 按文本去重：作者常把 first_mes 和 alternate_greetings[0] 写成一字不差，不去重会有两条一样的。 */
 function greetingChoices(character) {
   const list = [];
   const seen = new Set();
@@ -339,11 +282,7 @@ function greetingChoices(character) {
   return list;
 }
 
-/**
- * 让用户从这张卡的开场白里挑一条。
- *
- * @returns {Promise<number>} 选中的下标；取消 / Esc / 点背景 → -1（表示「不插开场白」）
- */
+/** @returns {Promise<number>} 选中的下标；取消 / Esc / 点背景 → -1（= 不插开场白）。 */
 async function pickGreeting(name, greetings) {
   const who = String(name || '').trim() || '这个角色';
   const index = await pickFromList({
@@ -364,32 +303,25 @@ export async function applyCharacterChoice(characterId) {
 
   const previous = characterById(convo.characterId); // 用来判断标题是不是自动生成的
 
-  // 自动插入的开场白会带 greeting 标记。
-  // 只有「会话里一条消息都没有」时才插 —— 调用方（角色列表页的「聊天」）
-  // 给的都是刚建好的空会话，所以这里不用担心覆盖掉真实对话。
+  // 只有「会话里一条消息都没有」时才插开场白
   if (!Array.isArray(convo.messages)) convo.messages = [];
   const untouched = convo.messages.length === 0;
 
   convo.characterId = next.id;
   convo.updatedAt = now();
 
-  // 角色卡上声明过「属性」和「身份四项」就种进状态面板 —— AI 第一轮就知道
-  // 这个角色是谁、要维护哪些字段，不用等它自己碰巧输出一个「【金币】：100」
-  // （漏了身份那四项时，模型不知道年龄，会把 16 岁写成 21 岁）
+  // 卡上声明过属性 / 身份四项就种进状态面板：漏了身份四项，模型不知道年龄（会把 16 岁写成 21 岁）
   seedIdentity(convo, next.name, next.id);
   seedPanelFromCharacters(convo, [next]);
 
-  // 剧情选项：角色卡上的配置跟着这个会话生效。用的是**复制**而不是引用 ——
-  // 之后改角色卡不该悄悄改掉正在进行的这一局。
+  // ⚠️ 用**复制**而不是引用：之后改角色卡不该悄悄改掉正在进行的这一局。
   // 卡上没配过的（老卡、导入的卡）按默认来：开、4 条；只有卡上明确写了 false 才不开。
   convo.optionsSpec = optionsSpecFromCharacter(next);
   if (!convo.optionsSpec) convo.options = [];
 
   if (untouched) {
-    // 空对话绑上带开场白的角色时，自动把开场白放进去，省得每次手动开个头。
-    // 卡上带多条时（语料实测 424/1341 张卡带，单卡最多 29 条）先让用户挑一条 ——
-    // 那些不是冗余，是同一个场景的**不同入场剧本**（比如「男性开场 / 女性开场 /
-    // NTR 开场」），永远只进第一条等于把一张卡当四分之一张用。
+    // ⚠️ 多条开场白（语料里 424/1341 张卡都有）先让用户挑：那是同一个场景的不同入场剧本，
+    //    永远只进第一条等于把一张卡当四分之一张用。
     const greetings = greetingChoices(next);
     let pick = 0;
     if (greetings.length > 1) {
@@ -443,7 +375,6 @@ export function applyModelChoice(value) {
     convo.updatedAt = now();
   }
 
-  // 顺便设为新会话的默认值
   state.settings = state.settings || {};
   state.settings.activeProviderId = providerId;
   state.settings.activeModel = model;
@@ -451,8 +382,7 @@ export function applyModelChoice(value) {
   renderHeader();
   // 自绘的按钮 + 弹层不会自己显示选中项，按钮文字和列表勾都得重画。
   renderModelSwitch();
-  // 「默认人设」是按模型存的，换了模型，气泡上的名字和空状态标题都要跟着换 ——
-  // 所以顺带把消息区重画一次（上面已经确认不在流式状态，重画是安全的）。
+  // 「默认人设」按模型存，换模型气泡名字 / 空状态标题要跟着换；上面已确认不在流式，重画安全。
   renderAll();
   persistConversations(0);
 

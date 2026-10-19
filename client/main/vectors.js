@@ -1,13 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  main/vectors.js —— 语义检索用的向量小工具
-//
-//  三件事：向量怎么存（Float32 ↔ base64）、怎么比（余弦相似度）、怎么挑（topK + 阈值）。
-//
-//  纯计算，不碰网络也不碰文件 —— 这样 tools/smoke-test.js 能 require 同一份代码来测，
-//  而不是在测试里另写一套相似度算法（那种测法测不出真实现算错了）。
-// ============================================================================
+// 语义检索用的向量小工具：怎么存（Float32 ↔ base64）、怎么比（余弦相似度）、怎么挑（topK + 阈值）。
+// 纯计算，不碰网络也不碰文件 —— tools/smoke-test.js 能 require 同一份代码来测。
 
 const crypto = require('node:crypto');
 
@@ -16,11 +10,7 @@ function hashText(text) {
   return crypto.createHash('sha1').update(String(text == null ? '' : text), 'utf8').digest('hex');
 }
 
-/**
- * 向量存成 base64 的 Float32。
- * 1536 维按 JSON 数字存大概 20KB，按 Float32 是 6KB —— 存几百条差距很明显，
- * 而 conversations.json / vectors.json 都是每次改动整份重写的。
- */
+/** 向量存成 base64 的 Float32：1536 维按 JSON 数字存要 20KB，Float32 只要 6KB —— 存几百条差距很明显。 */
 function encodeVector(values) {
   const array = values instanceof Float32Array ? values : Float32Array.from(values || []);
   return Buffer.from(array.buffer, array.byteOffset, array.byteLength).toString('base64');
@@ -33,11 +23,7 @@ function decodeVector(text) {
   return new Float32Array(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength));
 }
 
-/**
- * 余弦相似度。
- * 用余弦而不是欧氏距离，是因为这样**不用管向量归没归一化** ——
- * 有的服务商返回的是归一化过的，有的不是，各家不一样。
- */
+/** 余弦相似度。用余弦而不是欧氏距离，是因为不用管向量归没归一化 —— 各家服务商不一样。 */
 function cosineSimilarity(a, b) {
   if (!a || !b || !a.length || a.length !== b.length) return 0;
 
@@ -53,24 +39,15 @@ function cosineSimilarity(a, b) {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-/**
- * 按相似度挑前 K 个。
- *
- *   candidates  [{ key, vector, ... }]
- *   exclude     要跳过的 key（比如最近几条消息 —— 它们本来就会进上下文，捞回来是浪费）
- *   minScore    低于这个分一律不要
- *
- * 阈值这道闸很重要：语义检索最怕「硬凑」——不管相不相关都塞几条进来，
- * 结果上下文被一堆沾不上边的东西污染，比不检索还差。
- */
+/** 按相似度挑前 K 个；exclude 里的 key 跳过（比如最近几条消息，它们本来就会进上下文）。
+ *  ⚠️ minScore 阈值这道闸很重要：语义检索最怕「硬凑」，沾不上边的东西进上下文比不检索还差。 */
 function rankBySimilarity(queryVector, candidates, options) {
   const opts = options || {};
   const topK = Math.max(1, Math.floor(Number(opts.topK) || 4));
   const minScore = Number.isFinite(Number(opts.minScore)) ? Number(opts.minScore) : 0.3;
   const exclude = opts.exclude instanceof Set ? opts.exclude : new Set(opts.exclude || []);
 
-  // 只维护当前 top K。长会话里候选会越来越多，而 K 通常很小 ——
-  // 每命中一个就全量排序是浪费。
+  // 只维护当前 top K：长会话里候选越来越多而 K 很小，每命中一个就全量排序是浪费。
   const heap = [];
   const isWorse = (a, b) => a.score < b.score || (a.score === b.score && a.index > b.index);
   const swap = (a, b) => {
@@ -121,17 +98,8 @@ function rankBySimilarity(queryVector, candidates, options) {
     .map(({ item, score }) => ({ ...item, score }));
 }
 
-/**
- * 收集语义检索的候选文本。
- *
- * 纯函数（不读文件），输入是已经读出来的会话和世界书 —— 这样测试能直接喂数据进来，
- * 而不用去建一堆临时文件。真正的文件读取留在 main.js 里。
- *
- *   messages      这个会话的全部消息
- *   recentCount   末尾几条要跳过（它们本来就会进上下文，捞回来是白占位置）
- *   books         世界书列表
- *   worldbookIds  这个会话绑定了哪几本
- */
+/** 收集语义检索的候选文本。纯函数（不读文件），输入是已读出的会话和世界书 —— 测试能直接喂数据。
+ *  recentCount 末尾几条要跳过：它们本来就会进上下文，捞回来是白占位置。 */
 function collectCandidates(options) {
   const opts = options || {};
   const out = [];
@@ -139,9 +107,8 @@ function collectCandidates(options) {
   const messages = Array.isArray(opts.messages) ? opts.messages : [];
   const skip = Math.max(0, Math.floor(Number(opts.recentCount) || 0));
 
-  // 先把「可用的消息」挑出来，再按 skip 切尾巴。
-  // 不能直接对原始数组 slice —— 数组里还有 error 消息和空白消息（生成失败就会留一条），
-  // 直接切的话跳过的那几条会偏，结果「最近的内容」被当成往事捞回来。
+  // ⚠️ 先挑出可用消息再按 skip 切尾巴：直接对原始数组 slice 会被 error / 空白消息带偏，
+  //    结果「最近的内容」被当成往事捞回来。
   const usable = messages.filter(
     (m) => m && (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
   );

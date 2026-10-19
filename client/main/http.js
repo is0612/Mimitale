@@ -1,11 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  main/http.js —— 大模型 HTTP 请求：用 Node 自带模块，不依赖任何第三方库
-//
-//  包含：端点地址的拼接与清洗、通用 JSON 请求、二进制下载、
-//  流式对话（SSE 逐块解析），以及把网络/HTTP 错误翻译成人话。
-// ============================================================================
+// 大模型 HTTP 请求：用 Node 自带模块，不依赖第三方库。
+// 端点拼接与清洗、JSON 请求、二进制下载、SSE 流式对话，以及把网络 / HTTP 错误翻译成人话。
 
 const https = require('node:https');
 const http = require('node:http');
@@ -17,8 +13,7 @@ function buildHeaders(settings) {
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'text/event-stream',
-    // 显式带 User-Agent：部分服务商前面挂了 WAF，对没有 UA 的请求会直接拒绝
-    // （返回 403 / 406 之类的网关错误），而不是返回接口本身的错误码。
+    // ⚠️ 显式带 User-Agent：部分服务商前面的 WAF 对没有 UA 的请求直接拒绝（403 / 406），而不是接口错误码。
     'User-Agent': 'Mimitale/1.0 (+https://github.com/ls546280821/Mimitale)'
   };
   if (settings.apiKey) {
@@ -27,16 +22,8 @@ function buildHeaders(settings) {
   return headers;
 }
 
-/**
- * 把接口地址末尾多余的端点路径去掉。
- *
- * 用户很容易把完整端点当成「接口地址」填进来（比如直接粘官方文档里的
- * `.../v4/images/generations`），那样再拼一次就变成
- * `.../v4/images/generations/images/generations`，接口直接 404。
- *
- * 只认下面这几个我们自己也拼的端点路径 —— 不做「猜」的匹配，
- * 免得把正常的路径吃掉（比如 `/v4`、`/api` 都原样保留）。
- */
+/** 剥掉接口地址末尾多余的端点路径：用户常把完整端点当接口地址粘进来，再拼一次就 404。
+ *  只认自己也会拼的那几个后缀，不做「猜」的匹配 —— 免得吃掉 /v4、/api 这类正常路径。 */
 const ENDPOINT_SUFFIXES = [
   '/chat/completions',
   '/images/generations',
@@ -73,8 +60,7 @@ function embeddingsUrl(baseUrl) {
   return `${normalizeBaseUrl(baseUrl)}/embeddings`;
 }
 
-// 本机酒馆桥接服务（D:\TavernAI\tavern-ai\bridge）的端点：
-// 不是 OpenAI 兼容协议，聊天走 /chat_with_image，健康检查走 /health。
+// 本机酒馆桥接不是 OpenAI 兼容协议：聊天走 /chat_with_image，健康检查走 /health。
 function bridgeChatUrl(baseUrl) {
   return `${normalizeBaseUrl(baseUrl)}/chat_with_image`;
 }
@@ -97,13 +83,8 @@ function portOf(target) {
 const MAX_DOWNLOAD_BYTES = 40 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
 
-/**
- * 下一个二进制文件（生图接口有时直接给链接）。
- * 和 requestJson 一个路子，只是把响应体当 Buffer 收着，不当 JSON 解析。
- *
- * 三道闸：重定向最多跟 5 跳（防环）；Location 可以是相对地址；
- * 响应体超过上限就掐断（防一个超大响应把主进程内存吃光）。
- */
+/** 下载二进制文件（生图接口有时直接给链接），响应体当 Buffer 收着。
+ *  三道闸：重定向最多跟 5 跳（防环）、Location 可以是相对地址、超过 40MB 就掐断。 */
 function downloadBinary(url, timeoutMs = 120000, redirectsLeft = MAX_REDIRECTS) {
   return new Promise((resolve, reject) => {
     let target;
@@ -129,7 +110,7 @@ function downloadBinary(url, timeoutMs = 120000, redirectsLeft = MAX_REDIRECTS) 
       },
       (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          // 已交给下一跳处理；旧响应体断流不能覆盖下一跳的结果。
+          // 已交给下一跳处理：旧响应体的断流不能覆盖下一跳的结果。
           res.on('error', () => {});
           res.resume(); // 3xx 的响应体不要，但得读掉，不然这条连接一直挂着
           if (redirectsLeft <= 0) {
@@ -248,8 +229,7 @@ function requestJson({ url, method = 'GET', headers = {}, body = null, timeoutMs
 }
 
 function describeHttpError(status, text) {
-  // 保留足够长的响应体：网关/WAF 返回的 HTML 错误页往往很长，
-  // 截太短就只剩「HTTP 406」这种没信息量的提示，排查不了问题。
+  // 保留足够长的响应体：网关 / WAF 的 HTML 错误页往往很长，截太短就排查不了。
   const raw = String(text || '').trim();
   const snippet = raw.length > 1500 ? `${raw.slice(0, 1500)}…` : raw;
 
@@ -284,13 +264,8 @@ function normalizeNetworkError(err) {
   return (err && err.message) || '未知网络错误。';
 }
 
-/**
- * 把服务商各写各的「思考 token」归一到 usage.reasoning_tokens。
- *
- * OpenAI / DeepSeek 把它放在 completion_tokens_details.reasoning_tokens，
- * 也有服务商直接给顶层 reasoning_tokens —— 上层只想认一个字段，
- * 分家的事在这里收口（界面要在消息上标「思考花了多少」，取错地方就是空白）。
- */
+/** 把服务商各写各的「思考 token」归一到 usage.reasoning_tokens：有的放在
+ *  completion_tokens_details，有的直接给顶层 —— 取错地方界面上就是空白。 */
 function normalizeUsage(usage) {
   if (!usage || typeof usage !== 'object') return usage;
   if (!Number.isFinite(Number(usage.reasoning_tokens))) {
@@ -301,20 +276,9 @@ function normalizeUsage(usage) {
   return usage;
 }
 
-/**
- * 流式对话：SSE 逐块解析，通过 onDelta 回调把增量文本交出去。
- * 返回 { content, reasoning, usage, finishReason }。
- *
- * finishReason 是服务商给的**权威收尾信号**，务必带上：
- *   · 'length' —— 撞到 max_tokens 上限被截断（真截断）
- *   · 'stop'   —— 模型自己写完了（哪怕正文是空的，也说明不是被截断）
- * 少了它，上层只能靠「正文为空 + 有思考」猜，猜错就会把「模型没落笔」
- * 说成「额度用光」，让人白白去调 max_tokens（而调大往往没用）。
- *
- * onRequest(body, url)：请求**真正发出去之前**回调一次，把最终的 body 和地址交出去
- * （界面上的「请求记录」靠它）。放在这个函数里是因为只有这里才权威 ——
- * 让上层各自照着重拼一遍，参数一多迟早走样。
- */
+/** 流式对话：SSE 逐块解析，通过 onDelta 交出增量，返回 { content, reasoning, usage, finishReason }。
+ *  ⚠️ finishReason 是权威收尾信号（'length' 真截断 / 'stop' 模型自己写完），少了上层只能靠「正文为空」猜，
+ *     猜错就会把「模型没落笔」说成「额度用光」。onRequest 在请求真正发出前回调一次。 */
 function streamChat({ settings, messages, onDelta, onReasoning, signal, onRequest, deadlineMs = 300000, progressTimeoutMs = 60000 }) {
   return new Promise((resolve, reject) => {
     let deadlineTimer = null;
@@ -505,19 +469,9 @@ function streamChat({ settings, messages, onDelta, onReasoning, signal, onReques
   });
 }
 
-/**
- * 本机酒馆桥接的聊天请求：POST /chat_with_image，非流式，一次返回全文。
- *
- * 和 streamChat 的区别：
- *   · 免 API Key；
- *   · 响应是单个 JSON { text, image, draw_reason }，不是 SSE；
- *   · image 是 base64 PNG（可能为 null = 本轮没出图）；
- *   · 出图要把文字模型踢出显存再拉图像模型，一轮可能 30~40 秒，
- *     所以超时给得很宽（默认 300 秒）。
- *
- * 返回 { content, image, drawReason }。image 是拼好 data: 前缀的 dataURL，
- * 没出图时是 null —— 上层拿它判断「这次有没有图」。
- */
+/** 本机桥接聊天：POST /chat_with_image，非流式，一次返回全文，免 API Key。
+ *  响应是单个 JSON { text, image, draw_reason }；image 是 base64 PNG（null = 本轮没出图）。
+ *  出图要卸文字模型再拉图像模型，一轮可能 30~40 秒，所以超时给得宽（默认 300 秒）。 */
 function bridgeChat({ settings, messages, characterContext, noImage, signal, timeoutMs = 300000 }) {
   return new Promise((resolve, reject) => {
     let target;
@@ -535,9 +489,8 @@ function bridgeChat({ settings, messages, characterContext, noImage, signal, tim
       temperature: Number(settings.temperature),
       max_tokens: Math.max(1, Number(settings.maxTokens) || 8192)
     };
-    // 只要文字：改打桥接的 /chat 端点 —— 那条不做出图判定，省掉「判断该不该画」
-    // 那一步（命中出图时整轮要多等几十秒，还要卸模型腾显存）。
-    // /chat 也不认画风预设这些字段，所以只在要出图的路径上带。
+    // 只要文字就改打 /chat：那条不做出图判定，省掉「判断该不该画」那一步。
+    // /chat 不认画风预设这些字段，只在要出图的路径上带。
     if (noImage === true) {
       target.pathname = '/chat';
     } else {
@@ -620,15 +573,8 @@ function bridgeChat({ settings, messages, characterContext, noImage, signal, tim
   });
 }
 
-/**
- * 本机桥接的「只出图」请求：POST /draw。
- *
- * 给「配图」按钮用：输入一段已经写好的文字（比如某条 AI 回复），
- * 直接把它翻译成图像提示词并出图，不经过文字模型（不会重写内容）。
- *
- * 返回 { dataUrl, drawReason, promptUsed }。dataUrl 是拼好 data: 前缀的
- * dataURL，没出图时是 null。
- */
+/** 本机桥接「只出图」：POST /draw，把已写好的文字翻译成图像提示词并出图，不经过文字模型。
+ *  返回 { dataUrl, drawReason, promptUsed }；没出图时 dataUrl 是 null。 */
 function bridgeDraw({ baseUrl, text, characterContext, preset, timeoutMs = 300000 }) {
   return new Promise((resolve, reject) => {
     let target;

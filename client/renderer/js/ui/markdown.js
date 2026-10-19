@@ -1,10 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  ui/markdown.js —— 极简 Markdown 渲染
-//  先整体转义 HTML，再按块级/行内规则替换，所以内容是安全的。
-//  这个模块不依赖任何别的东西，可以单独拿去测。
-// ============================================================================
+// ui/markdown.js —— 极简 Markdown 渲染
+// ⚠️ 先整体转义 HTML，再按块级/行内规则替换，所以内容是安全的
 
 export function esc(text) {
   return String(text)
@@ -12,22 +9,12 @@ export function esc(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    // 单引号也转掉：现在生成的属性都用双引号，所以它不是「当前」的口子，
-    // 而是「以后谁写个 attr='…' 就立刻变成口子」。成本为零，一起关了。
+    // 单引号也转掉：现在生成的属性都用双引号，但以后谁写个 attr='…' 就立刻变成口子
     .replace(/'/g, '&#39;');
 }
 
 /**
- * 「【心理】」「【旁白】」这两个标记**单独占一行**、内容写在下一段 —— 这是模型
- * 最常见的写法（它把标记当成小标题）。这里先把它折成同行写法（`【心理】内容`），
- * 后面的块级判断就只用管一种形状。
- *
- * 为什么必须折：只认同行写法时，标记单独一行会匹配上「标记 + 空内容」，
- * 于是渲染出一个**空块**，而真正的内容成了普通段落 —— 用户看到的就是
- * 「选了内心描写 / 上帝视角，心理和旁白却一点样式都没有」（2026-10-08 报的）。
- *
- * 顺手处理两个边界：标记后面什么都没有（模型忘了写）→ 整行丢掉，不留空块；
- * 下一个又是标记 → 前面那个空标记丢掉。
+ * 标记**单独占一行**时折成同行写法，块级判断就只用管一种形状。⚠️ 不折的话会渲染出空块、真正的内容成了普通段落，样式全丢。
  */
 const SOLO_MARKER_RE = /^【(心理|内心|心声|旁白|上帝视角|全知)】$/;
 
@@ -61,32 +48,22 @@ export function renderInline(text) {
     codes.push(code);
     return `\u0000C${codes.length - 1}\u0000`;
   });
-  // 链接文字里也可能嵌了行内代码 —— 那部分不在 out 上，得单独还原一次，
-  // 否则链接会显示成字面量 \u0000C0\u0000
+  // 链接文字里也可能嵌了行内代码 —— 那部分不在 out 上，得单独还原一次
   const withCodes = (s) => s.replace(/\u0000C(\d+)\u0000/g, (_m, i) => `<code>${codes[Number(i)]}</code>`);
 
-  // 强调。两条踩过的边界：
-  //  · 捕获组**不能禁止 `*`** —— 否则 `**这句话的 *重点* 部分**` 整条匹配不上，
-  //    外层 `**` 会原样露出来。先匹配外侧、里层交给下一步的斜体规则。
-  //  · 开闭标记旁边必须是**非空白** —— 否则 `伤害 = 攻击 * 2 * 倍率` 会被当成斜体。
-  //    角色卡里写数值公式很常见，这个误判一眼就能看见。
+  // ⚠️ 捕获组不能禁止 `*`（否则嵌套那条整条匹配不上，外层 `**` 原样露出）；开闭标记旁边必须非空白（否则 `攻击 * 2 * 倍率` 成斜体）
   out = out.replace(/\*\*\*(?!\s)([^\n]+?)(?<!\s)\*\*\*/g, '<strong><em>$1</em></strong>');
   out = out.replace(/\*\*(?!\s)([^\n]+?)(?<!\s)\*\*/g, '<strong>$1</strong>');
   out = out.replace(/(^|[^*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\*)/g, '$1<em>$2</em>');
   out = out.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
 
-  // ==高亮== —— 比加粗更重的一档：加粗 + 主题色 + 一点底色。
-  // 长段落的对话容易看累，靠它把「关键的那一句」拎出来。
-  // 用 == 是 Markdown 高亮的通行写法（Obsidian / Typora 都认），模型也更容易照做。
   out = out.replace(/==([^=\n]+)==/g, '<mark class="msg-em">$1</mark>');
 
   // 链接 / 图片：只放行 http/https 和 data:image，其他一律当普通文字
   const links = [];
   out = out
     .replace(/(!?)\[([^\]\n]+)\]\((https?:\/\/[^\s)]+|data:image\/[^\s)]+)\)/g, (_m, bang, label, href) => {
-      // 图片只对 data:image 生效。页面 CSP 的 img-src 是 'self' data:，
-      // 外链图片根本加载不出来 —— 渲染成 <img> 只会得到一个破图标，
-      // 那种情况退化成链接，至少不会多出一个孤零零的 `!`。
+      // ⚠️ 图片只对 data:image 生效：CSP 的 img-src 是 'self' data:，外链图渲染成 <img> 只会得个破图标
       const isImage = !!bang && /^data:image\//.test(href);
       links.push(
         isImage
@@ -126,7 +103,6 @@ export function renderMarkdown(source, options) {
   });
 
   // 2. 逐行处理块级元素
-  // joinSoloMarkers：先把「【心理】单独一行」折成同行写法（见上面那段注释）
   const lines = joinSoloMarkers(esc(withoutFences).split('\n'));
   const out = [];
   let listType = null;
@@ -159,9 +135,7 @@ export function renderMarkdown(source, options) {
       continue;
     }
 
-    // 表格：表头行 + 分隔行（|---|---|）+ 若干数据行。
-    // 样式其实早就在 style.css 的 `.bubble table` 那一组里等着了，只是一直没有生成代码 ——
-    // 模型很爱给表格，之前竖线和 |---| 都是原样显示出来的。
+    // 表格：表头行 + 分隔行（|---|---|）+ 若干数据行
     if (isTableRow(trimmed) && i + 1 < lines.length) {
       const sep = lines[i + 1].trim();
       if (/^\|[\s:|-]+\|$/.test(sep) && sep.includes('-')) {
@@ -229,10 +203,7 @@ export function renderMarkdown(source, options) {
 
     closeList();
 
-    // 心理描写：以标记开头的整段单独成块，渲染成弱化的旁白样式。
-    // 标记本身不显示 —— 有样式就不需要文字标记占位了。
-    // 只认「段落以标记开头」，所以正文里提到「【心理】」这三个字不会被误伤；
-    // 流式生成时半截标记（「【心」）也匹配不上，不会闪。
+    // ⚠️ 只认「段落以标记开头」：正文里提到「【心理】」不误伤，流式半截标记（「【心」）也匹配不上；标记本身不显示
     const inner = trimmed.match(/^【(心理|内心|心声)】\s*(.*)$/);
     if (inner) {
       out.push(`<p class="msg-inner">${renderInline(inner[2])}</p>`);

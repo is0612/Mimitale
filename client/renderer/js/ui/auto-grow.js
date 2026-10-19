@@ -1,87 +1,24 @@
 'use strict';
 
-// ============================================================================
-//  ui/auto-grow.js —— 文本框自动长高 + 拖拽高度记忆
-//
-//  给「填内容有时很多」的文本框用（角色描述 / 性格 / 场景 / 开场白 / 示例对话）。
-//  目的是把两件事一起解决：
-//    · 内容多的时候框太矮，只能看到一小截 → 输入时自动长高
-//    · 内容少的时候框占地方，一屏放不下几项 → 自动缩回去
-//
-//  设计上的几个取舍：
-//
-//  1) **长高有上限，而且刻意压得很低**。不限的话，一段几千字的描述会把整个
-//     表单顶到屏幕外，反而更难用（想改下面的字段得滚半天）。所以这里的
-//     取舍是：**表单总长是常数**，塞不下的内容由浏览器自己的滚动条在**框内**滚。
-//     160px 约七行字：扫一眼「大概写了多少」够用，往下滚也不至于太碎。
-//
-//     ⚠️ 两件事，动之前先看清楚：
-//     · 2026-10-16 撤掉了「放大编辑」浮层（字段行那颗 ↗ 按钮），少了一个出口。
-//     · **角色编辑页那五个框不受这里管**：V2 重组版（2026-10-16）给它们**按字段分别**
-//       写了 min-height（style.css 里 `#c-desc { min-height: 264px }` 那五行）。
-//       GROW_MAX(160) 比那些 min-height 都小，naturalHeight 会算成
-//       `max(minimum, min(GROW_MAX, maxHeight)) = minimum` —— 也就是「高度恒等于
-//       CSS 里写的那个值，装不下的内容在框内滚」。这是有意的：五栏同屏，表单总长要是常数。
-//       GROW_MAX 现在管的是**别处**调 attachAutoGrow 的框（备选开场白、世界书条目…）。
-//
-//  2) **手动拖过之后就不再自动长高**。用户在 `resize: vertical` 的框上拖过高度，
-//     说明「我就要这么高」，这时候内容再多也不该擅自改回去。否则会出现
-//     「每敲一个字框都跳一下」的怪事。所以拖拽会自动记一次「已锁定」。
-//
-//  3) 高度**只在编辑弹窗打开的这一段时间里有效**，不落盘。它属于「此刻怎么摆」，
-//     不是角色数据的一部分 —— 写进角色卡会把用户的存档弄脏。
-//     但连续编辑时应当记住（见 rememberHeight）。
-//
-//  4) 单靠 `input` 事件不够：**程序回填**（打开编辑器往框里塞值）不走 input，
-//     所以打开时得显式调一次 syncAutoGrowAll。
-//
-//  ⚠️ 2026-10-16 起这里的框**都是组件**（`<m-textarea>`）。宿主只占位，
-//  描边 / 内边距 / min-height / 要写的高度全在里层那颗原生框上 ——
-//  所以「量」和「写」都必须过 `controlOf()`（见下面它的注释）。
-//
-//  ⚠️ 两个坑：① 别给这些框加 CSS transition:height（过渡会让高度停在初始值）；
-//  ② 量高度必须在元素可见之后（display:none 的 scrollHeight 是 0，量到下限）。
-// ============================================================================
+// ui/auto-grow.js —— 文本框自动长高 + 拖拽高度记忆
+// ⚠️ 组件化后「量」和「写」都必须过 controlOf()：宿主只占位，描边 / 内边距 / 高度都在里层原生框上。
+// 长高上限 GROW_MAX，塞不下的交给框内滚动（表单总长恒定）；拖过之后锁定，不再自动长高。
 
-// 自动长高的上限（px）。压得低是刻意的：表单总长要恒定，塞不下的交给框内滚动。
+// 自动长高上限（px）：刻意压低，表单总长恒定，塞不下的交给框内滚动。
 const GROW_MAX = 160;
-// 每次重算的最小高度（px）。太矮的话一行都没有，看着像坏了。
+// 每次重算的最小高度（px）：太矮的话一行都没有，看着像坏了。
 const GROW_MIN = 84;
 
 /**
- * 「该量、该写高度的那颗元素」—— 组件化之后，**它不是传进来的那个**。
- *
- * `<m-textarea>` = 宿主 + 里面一颗原生 `<textarea>`。宿主只管占位与布局，
- * 描边 / 内边距 / min-height / 以及这里要写的高度**全在里层那颗上**。
- * 拿宿主量 scrollHeight 会拿到「当前渲染出来的高度」而不是内容高度，
- * 写上去的 `style.height` 也压不到里层那颗 —— 症状是**不报错、框就是不长高**
- * （2026-10-16 迁多行框时踩到）。
- *
- * 口径：节点上带 `control`（= 本库组件的里层控件）就用它，否则原样返回。
- * ⚠️ 调用方传进来的仍然是**宿主**（`el.c.desc` 这种，id / dataset 都挂在宿主上），
- * 只有「量 / 写高度」这两件事要落到里层 —— 别在调用点各自 `node.control` 一次，
- * 那样漏一处就又变成静默失效。
- */
+ * 「该量、该写高度的那颗元素」—— 组件化后不是传进来的那个：宿主只占位，高度全在里层原生框上。
+ * ⚠️ 拿宿主量 scrollHeight 拿到的是渲染高度，写 style.height 也压不到里层 —— 不报错，框就是不长高。 */
 export function controlOf(node) {
   return node && node.control ? node.control : node;
 }
 
 /**
- * 量一次文本框内容需要多高。
- *
- * 做法：把 height 设成 'auto' 再读 scrollHeight —— 这是唯一可靠的办法。
- * 直接读 scrollHeight 会拿到**当前高度下**的滚动高度，框已经很高时
- * 它就不长了（经典的自增长踩坑点）。
- *
- * ⚠️ 但只把 height 设成 'auto' **不够**：`<textarea rows="5">` 上的 rows
- * 是一个 HTML 属性而不是 CSS，height:auto 会退回 rows 撑出来的高度（五行），
- * 于是「只有一行字」的框也被量成五行高。所以量之前先把 rows 摘掉、
- * 量完再按原值装回去 —— 这样 scrollHeight 才是纯内容高度。
- *
- * box-sizing 要考虑：通用规则里是 border-box（style.css 的控件段），
- * 那 scrollHeight 不含边框，所以要补上上下边框。用 getComputedStyle 读，
- * 不写死 —— 免得以后改了边框宽度这里就对不上。
- */
+ * 量一次内容需要多高：height 先设 auto 再读 scrollHeight（直接读拿到的是当前高度下的滚动高度）。
+ * ⚠️ 还要先摘掉 rows：height:auto 会退回 rows 撑出的行数；border-box 下要补上下边框。 */
 function measureHeight(el) {
   const box = controlOf(el);
   const prevH = box.style.height;
@@ -98,14 +35,7 @@ function measureHeight(el) {
   return scroll + border;
 }
 
-/**
- * 这个框「按内容应该多高」：先量内容，再夹进 [下限, 上限]。
- *
- * 下限取 `max(GROW_MIN, CSS min-height)` —— 所以**角色编辑页那五个框的高度
- * 其实是 CSS 说了算**（它们的 min-height 都 ≥ GROW_MIN）。
- * 上限取 `max(下限, min(GROW_MAX, CSS max-height))`：地板高过 GROW_MAX 的框
- * 上下限重合，就成了刚性框。
- */
+/** 按内容应有多高：量内容后夹进 [max(GROW_MIN, CSS min-height), max(下限, min(GROW_MAX, CSS max-height))]。 */
 function naturalHeight(el) {
   const style = window.getComputedStyle(controlOf(el));
   const minimum = Math.max(GROW_MIN, parseFloat(style.minHeight) || 0);
@@ -113,11 +43,7 @@ function naturalHeight(el) {
   return Math.min(maximum, Math.max(minimum, measureHeight(el)));
 }
 
-/**
- * 按内容调整一个文本框的高度。
- * 已经「锁定」（用户手动拖过）的框直接跳过。
- * 内部用，不对外导出 —— 外面要的是 attachAutoGrow。
- */
+/** 按内容调整高度；已锁定（手动拖过）的框直接跳过。内部用，外面用 attachAutoGrow。 */
 function autoGrow(el) {
   const box = controlOf(el);
   if (!el || el.dataset.growLocked === '1' || !box.getClientRects().length) return;
@@ -129,13 +55,7 @@ function autoGrow(el) {
 }
 
 /**
- * 给一个文本框接上自动增高。
- *
- * @param {HTMLTextAreaElement} el
- * @param {object} [opts]
- * @param {string} [opts.key]  高度记忆的键（重开编辑器时沿用上次拖的高度）；
- *                             不传就不记忆。建议用「字段名」而不是角色 id，
- *                             这样它是「习惯」而不是「某张卡的数据」。
+ * 给文本框接上自动增高。opts.key = 高度记忆的键（建议用字段名，不传就不记忆）。
  */
 export function attachAutoGrow(el, opts) {
   if (!el || el.dataset.autoGrow === '1') return;
@@ -143,7 +63,7 @@ export function attachAutoGrow(el, opts) {
 
   const key = opts && opts.key ? String(opts.key) : '';
 
-  // 先按上次拖过的位置恢复（如果有），没有就走内容自适应
+  // 先按上次拖过的位置恢复，没有就走内容自适应
   const saved = heightOf(key);
   if (saved) {
     controlOf(el).style.height = `${saved}px`;
@@ -151,14 +71,11 @@ export function attachAutoGrow(el, opts) {
   }
 
   el.addEventListener('input', () => {
-    // 用户开始打字 = 从这一刻起由内容说了算，
-    // 除非他之前手动拖过（拖过的框不再自动长高）
+    // 用户开始打字 = 从这一刻起由内容说了算（手动拖过的框除外）
     autoGrow(el);
   });
 
-  // 拖拽结束（鼠标松开）时记下来：既要记住高度，也要锁定不再自动长高。
-  // 用 mouseup 而不是 resize —— 没有 resize 事件可用，而拖拽结束
-  // 唯一能观察到的信号就是鼠标松开。
+  // 拖拽结束用 mouseup 而不是 resize：没有 resize 事件可用，能观察到的信号就是鼠标松开。
   el.addEventListener('mouseup', () => {
     const box = controlOf(el);
     const h = Math.round(box.getBoundingClientRect().height);
@@ -176,13 +93,8 @@ export function attachAutoGrow(el, opts) {
 }
 
 /**
- * 重算一批文本框的高度（忽略锁定）。
- * 用在「打开编辑器、程序回填了值」之后 —— 回填不走 input 事件，得显式来一次。
- *
- * ⚠️ 调用时机必须在元素**可见之后**：`display: none` 的元素 scrollHeight 是 0，
- * 这时候量出来永远是下限（84px）。编辑器就是栽在这上面 ——
- * 原来在填表单时同步，而那一刻弹窗还没摘掉 .hidden。
- */
+ * 重算一批文本框的高度（忽略锁定）。程序回填不走 input，所以打开编辑器后要显式来一次。
+ * ⚠️ 必须在元素可见之后调：display:none 的 scrollHeight 是 0，量出来永远是下限 84px。 */
 export function syncAutoGrowAll(list) {
   for (const el of list || []) {
     if (!el) continue;
@@ -193,16 +105,8 @@ export function syncAutoGrowAll(list) {
 }
 
 /**
- * 「这个框上次拖到多高」—— 只活在内存里，不落盘。
- *
- * 为什么不写进角色卡：高度是「此刻怎么摆」，不是角色设定。
- * 写进去会变成导出卡里的垃圾字段（而且用户换了显示器就全不对了）。
- * 为什么要记：连续编辑时，拖好的高度不该每开一次弹窗就丢。
- *
- * key 用**字段名**（charform:desc）而不是角色 id —— 记忆是「我习惯把示例对话
- * 拖这么高」，属于习惯而不是某张卡的数据，所以不做「换角色就清掉」这回事。
- * 上限 40 条，够用；超出就整体清空（比搞 LRU 简单，边界情况也不值得）。
- */
+ * 「这个框上次拖到多高」—— 只活在内存里，不落盘（高度不是角色设定，写进卡里会变成垃圾字段）。
+ * key 用字段名（charform:desc），记忆属于「习惯」；上限 40 条，超出整体清空（不做 LRU）。 */
 const heightStore = new Map();
 const HEIGHT_STORE_MAX = 40;
 

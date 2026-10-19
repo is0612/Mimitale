@@ -1,34 +1,17 @@
 'use strict';
 
-// ============================================================================
-//  tools/test-pet-store.js —— 桌宠数据层 + 发言解析的专项测试
-//
-//  为什么单独一个文件：桌宠的数据层（main/pet-store.js）和「把回复切成几句」
-//  那套解析（main/pet-brain.js）全是**纯逻辑 + 落盘**，不需要开窗口、不需要真模型。
-//  这类东西塞进冒烟测试不划算（冒烟要起 Electron + 跑完整套，一分多钟），
-//  而这个测试**一秒内**跑完，改完随手就能跑。
-//
-//  跑法：
-//    node tools/test-pet-store.js
-//
-//  ⚠️ 数据目录指向一个 mkdtemp 出来的临时目录（走 MIMITALE_DATA_DIR），
-//     **绝不会碰到真实用户数据** —— 项目里出过一次「拿真实 userData 做实测，
-//     把 conversations.json 整个覆盖成 {\"test\":1}」的事故，别再犯。
-//
-//  ⚠️ 要用 `electron` 模块，但这里没有 Electron 运行时，所以先往 require 缓存里
-//     塞一个假的。真实环境里这几个 API 的行为由 Electron 保证，这里只需要它别炸。
-// ============================================================================
+// tools/test-pet-store.js —— 桌宠数据层 + 发言解析的纯逻辑测试；跑法：node tools/test-pet-store.js
+// ⚠️ 数据目录指向 mkdtemp 出来的临时目录（MIMITALE_DATA_DIR），绝不会碰到真实用户数据
+// ⚠️ 没有 Electron 运行时：先往 require 缓存里塞一个假 electron，这里只需要它别炸
 
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const Module = require('node:module');
 
-// ---- 1. 造一个临时数据目录，并把它告诉 main/data-dir.js ----
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mimitale-pet-'));
 process.env.MIMITALE_DATA_DIR = tmpRoot;
 
-// ---- 2. 假的 electron ----
 const fakeAppData = path.join(tmpRoot, '__appdata');
 const fakeElectron = {
   app: {
@@ -58,7 +41,6 @@ Module._load = function patched(request, parent, isMain) {
 const petStore = require('../main/pet-store.js');
 const petBrain = require('../main/pet-brain.js');
 
-// ---- 3. 一个极简的断言器（照项目里其他专项测试的口径：认失败数） ----
 let passed = 0;
 const failures = [];
 
@@ -108,11 +90,7 @@ eq(
   '默认三个空闲小动作全开'
 );
 
-// 2026-10-10 用户：「桌宠的动作也做到设置里」。做的是「空闲小动作」那三个勾 ——
-// ⚠️ 这里最重要的**不是**「能存下来」，而是**空数组不能被兜回默认**：
-//    三个勾全取消 = 「我要它安静待着」，这是个正当的选择。归一化时一旦写成
-//    `value.length ? value : 默认`，用户取消最后一个勾、存盘再读回来就又是全集，
-//    表现是「设置看着生效了、重启又回来了」。
+// ⚠️ 空数组不能被兜回默认：三个勾全取消 = 我要它安静待着，兜回全集就是「设置看着生效、重启又回来」
 eq(
   petStore.normalizePetConfig({ pets: [{ gestureEnabled: [] }] }).pets[0].gestureEnabled,
   [],
@@ -138,8 +116,7 @@ ok(
   'KNOWN_GESTURES 导出了（设置页和渲染层都照着它对齐）'
 );
 
-// 第一版的 png 立绘配置会被**迁移**成默认 rig —— 不能留一个指向不存在目录的 skin，
-// 那样宠物只会剩一个「形象没加载出来」占位框（老用户升级时会踩到）。
+// 老的 png 配置必须迁移成默认 rig：留一个指向不存在目录的 skin = 占位框
 eq(
   petStore.normalizePetConfig({
     pets: [{ look: { kind: 'png', source: 'assets', skin: 'default', file: 'x.png' } }]
@@ -148,9 +125,7 @@ eq(
   '老配置里的 png 形象迁移成默认 rig 大肥鱼'
 );
 
-// 2026-10-10 蓝白猫形象包从 assets/pet/ 移出：配置里还存着 'cat' 的老用户
-// 也必须被迁移，否则升级上来就是一个占位框（比 png 那条更容易踩到，因为它
-// 看起来是「合法」的 rig 配置）。
+// 存着 'cat' 的老配置也要迁移（它看起来是合法的 rig 配置，比 png 那条更容易踩到）
 eq(
   petStore.normalizePetConfig({
     pets: [{ look: { kind: 'rig', source: 'assets', skin: 'cat' } }]
@@ -295,19 +270,16 @@ const PET = 'pet1';
   ok(Array.isArray(exported['长期记忆']), '导出的 JSON 里带着长期记忆');
   ok(typeof exported['折叠摘要'] === 'string', '导出的 JSON 里带着折叠摘要');
 
-  // 保留摘要地重置
   await petStore.clearPetMemory(PET, true);
   eq(petStore.petMemoryItems(PET).length, 0, '重置后条目清零');
   ok(petStore.petMemoryDigest(PET).length > 0, '重置保留折叠摘要');
 
-  // 连摘要一起清
   await petStore.clearPetMemory(PET, false);
   eq(petStore.petMemoryDigest(PET), '', '清空后摘要也没了');
 
   // -------------------------------------------------------------------------
   section('并发保存：读改写必须整段排队');
-  // 「先读再排队写」的写法下，并发调用各自拿旧快照，后写的会把前一次整份盖回去。
-  // 桌宠真实会遇到：设置页一次改两个字段、说完话连追两条记忆。
+  // 「先读再排队写」的写法下，并发调用各自拿旧快照，后写的会把前一次整份盖回去
 
   await Promise.all([
     petStore.patchPet(PET, { speakEveryTurns: 7 }),
@@ -330,9 +302,7 @@ const PET = 'pet1';
 
   // -------------------------------------------------------------------------
   section('温度：留空 = 跟随全局，不能变成 0');
-  // Number(null) === 0，所以「空值判断」必须在 Number() 之前做。
-  // 漏了这一步，界面上清空温度会变成「显式请求 temperature=0」，
-  // 模型会从跟随全局设置变成死板复读。
+  // Number(null) === 0：空值判断必须在 Number() 之前，否则清空温度 = 显式请求 temperature=0
 
   eq(petStore.normalizePetConfig({ pets: [{ temperature: null }] }).pets[0].temperature, null, 'null 温度保持跟随全局');
   eq(petStore.normalizePetConfig({ pets: [{ temperature: '' }] }).pets[0].temperature, null, '空字符串温度保持跟随全局');
@@ -345,9 +315,7 @@ const PET = 'pet1';
 
   // -------------------------------------------------------------------------
   section('形象名：下拉里显示的必须就是真去读的目录名');
-  // 这里原先用 safeId 收（只认 ASCII，非法**直接回落 'pet1'**）再强制小写，
-  // 于是「下拉里有蓝猫 / MyCat，选中却去读 assets/pet/pet1 或 mycat」——
-  // 界面显示得出来、实际读不到，属于查不出原因的静默错位。
+  // 下拉显示的名字必须就是真去读的目录名：强制小写 / 回落 pet1 = 「显示得出、读不到」的静默错位
   const skinOf = (look) => petStore.normalizePetConfig({ pets: [{ look }] }).pets[0].look.skin;
 
   eq(skinOf({ kind: 'rig', skin: '蓝猫' }), '蓝猫', '中文目录名原样保留（不再被换成 pet1）');
@@ -370,24 +338,17 @@ const PET = 'pet1';
   petStore.writePersona(PET, '我是测试用的人格');
   eq(petStore.readPersona(PET), '我是测试用的人格', '写进去的能读回来');
 
-  // ---- 切形象 → 人格跟着换 ----
-  // 这是需求的核心：人格跟形象绑定，换形象要换一套人格，互不干扰。
-  // ⚠️ patchPet 是异步的（走 queueMutation），**必须 await** ——
-  //    不然下面的 readPersona 读到的还是切换前的形象。
+  // ⚠️ patchPet 是异步的（走 queueMutation），必须 await：不然下面读到的还是切换前的形象
   await petStore.patchPet(PET, { look: { kind: 'rig', source: 'assets', skin: 'anotherpet' } });
   const other = petStore.readPersona(PET);
   ok(other.includes('蓝自'), '切到新形象时拿到的是**该形象**的人格（首次 = 内置默认）');
   ok(!other.includes('我是测试用的人格'), '旧形象的人格不会串到新形象上');
   ok(fs.existsSync(path.join(personaDir, 'assets-anotherpet.md')), '新形象有自己的文件');
 
-  // 切回去，旧人格还在
   await petStore.patchPet(PET, { look: { kind: 'rig', source: 'assets', skin: 'whale' } });
   eq(petStore.readPersona(PET), '我是测试用的人格', '切回原形象，之前改过的人格原样还在');
 
-  // ---- 老文件迁移：从「按 petId 存」升上来时不能把用户写的性格弄丢 ----
-  // 场景：老用户只有 persona/<petId>.md，没有按形象分的那种文件。
-  // 这里用一只独立的宠物 id 来验（不污染上面 PET 的状态）——
-  // 先给它播种一次默认人格，再把那份默认内容改写成「用户手写」的样子。
+  // 老格式是 persona/<petId>.md；用独立的宠物 id 验，不污染上面 PET 的状态
   const legacyPet = 'legacyPet';
   const legacyFile = path.join(personaDir, `${legacyPet}.md`);
   petStore.readPersona(legacyPet);                       // 播种：此时会写成 assets-whale.md
@@ -398,9 +359,7 @@ const PET = 'pet1';
   eq(migrated, '这是老用户手写的人格', '老 persona/<petId>.md 会被迁移成当前形象的人格（不丢）');
   eq(petStore.readPersona(legacyPet), '这是老用户手写的人格', '迁移后落盘了，再读还是它');
 
-  // ---- 老文件内容就是内置默认时，不值得迁移 ----
-  // ⚠️ 拿「真实的内置默认」不能靠读某个文件 —— 上一段测试改过 assets-whale.md。
-  //    干净做法：把该形象文件删掉、读一次，这次返回的就是刚播种的默认内容。
+  // ⚠️ 拿「真实的内置默认」不能靠读文件（上一段改过 assets-whale.md）：删掉再读，拿到的是刚播种的默认
   const legacyPet2 = 'legacyPet2';
   fs.rmSync(path.join(personaDir, 'assets-whale.md'), { force: true });
   const defaultText = petStore.readPersona(legacyPet2);          // 播种 → 拿到真·默认
@@ -439,17 +398,14 @@ const PET = 'pet1';
   eq(same, 2, '删不存在的 id 不报错、条目数不变');
   eq(petStore.petMemoryItems(PET).map((m) => m.text), ['第一条', '第三条'], '内容也没被动过');
 
-  // 空 id 直接拒绝
   eq(await petStore.deletePetMemoryItem(PET, ''), 2, '空 itemId 直接返回当前条数');
 
   // -------------------------------------------------------------------------
   section('默认值：长期记忆保留 50 条');
 
   eq(petStore.normalizePetConfig(null).pets[0].memoryMaxItems, 50, '新配置默认保留 50 条');
-  // 上限的合法区间没变，只是默认值变了
   ok(petStore.MEMORY_MAX_ITEMS_MIN === 0 && petStore.MEMORY_MAX_ITEMS_MAX === 200,
     '记忆上限区间仍是 0~200（只改了默认值，没改区间）');
-  // 显式给了值就听用户的（不迁移老配置的 30）
   eq(petStore.normalizePetConfig({ pets: [{ memoryMaxItems: 30 }] }).pets[0].memoryMaxItems, 30,
     '老配置里显式写的 30 原样保留（改默认 ≠ 改现状）');
 

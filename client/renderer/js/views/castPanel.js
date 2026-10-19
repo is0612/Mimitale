@@ -1,20 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  views/castPanel.js —— 右侧常驻的「在场角色」面板
-//
-//  它和「入口条 + 左下浮动卡」**并存**，三样各管一段：
-//    · 入口条（panelUi.js）：消息区上面那一行头像，点开状态卡
-//    · 浮动卡（stateCard.js）：拖到任意位置的大卡，看立绘用
-//    · 这一栏：常驻在右边，一眼扫完「都有谁、各自几个数」
-//  所以这里**只读不写**，也不做编辑 —— 要改数值走状态卡（点一块就开）。
-//
-//  名单跟入口条共用 panelCastForDisplay()：普通聊天不列「我」，
-//  只列真的持有字段的人。
-//
-//  ⚠️ 脚注那两行「世界书 · 书名 / N 条已触发」是设计稿指定的位置；
-//     顶栏只放「第 N 轮 · 用量」。
-// ============================================================================
+//  views/castPanel.js —— 右侧常驻的「在场角色」面板，只读不写；改数值走状态卡。
+//  与入口条（panelUi.js）、浮动卡（stateCard.js）并存，三样各管一段。
+//  ⚠️ 脚注「世界书 · 书名 / N 条已触发」是设计稿指定的位置；顶栏只放「第 N 轮 · 用量」。
 
 import { el } from '../core/dom.js';
 import { activeConvo } from '../core/util.js';
@@ -38,15 +26,10 @@ import {
 import { onRefresh, refreshAll } from './refresh.js';
 import { openStateCard } from './stateCard.js';
 
-/** 每块最多列几个字段：稿子三张卡分别是 3 / 3 / 2 个字段（好感·警觉·心境 / 好感·好奇·心境 /
- *  好感·态度），所以额度是 3 —— 取 2 的话两颗 meter 就把额度吃光，
- *  「心境 / 态度」这种文本字段永远显示不出来。想全看还是点开卡片。 */
+/** 每块最多 3 个字段：取 2 的话两颗 meter 就把额度吃光，文本字段永远显示不出来。 */
 const MAX_FIELDS = 3;
 
-/** 某一个 owner 名下的字段，**有值的排前面**（空字段排在后面容易被额度截掉）；
- *  同为「有值」时**数值条（meter）排在文本前面** —— 稿子的三张卡都是这个顺序
- *  （好感 / 警觉两条 meter 在前，心境 / 态度这类文字在后）；右栏的用途就是
- *  「一眼扫完各自几个数」，数字该先露出来。sort 是稳定的，组内仍按定义顺序。 */
+/** 有值的排前面；同为有值时 meter 排在文本前面。sort 是稳定的，组内仍按定义顺序。 */
 function ownerFields(convo, owner) {
   const panel = convoPanel(convo);
   const keys = convoPanelFields(convo).filter((key) => panelFieldOwner(convo, key) === owner);
@@ -68,11 +51,8 @@ function fieldValueText(convo, key) {
   return text || '—';
 }
 
-/** 带范围的数值字段（meter）在值下面再给一条 3px 的进度条。
- *
- *  ⚠️ 这里**不能**自己 `Number(panel[key])` 算百分比：meter 的值存的是
- *  `"63/100"` 这种「当前/上限」字符串，`Number("63/100")` 是 NaN，进度条会
- *  每条都画不出来。必须和状态卡共用 `fieldProgress`（它会解析斜杠）。 */
+/** meter 的进度条。
+ *  ⚠️ 必须和状态卡共用 fieldProgress：值是 `"63/100"` 这种字符串，`Number()` 是 NaN。 */
 function meterBar(convo, key) {
   const def = convoPanelDef(convo, key);
   if (!def || def.type !== 'meter') return null;
@@ -82,7 +62,7 @@ function meterBar(convo, key) {
 
   const bar = h('div', { class: 'cast-meter' });
   const fill = h('div', { class: 'cast-meter-fill' });
-  // 宽度只能算完再写，h() 的 style 参数只能吃整串 —— 这里直接设属性更清楚
+  // h() 的 style 只能吃整串，宽度算完直接设属性
   fill.style.width = `${progress.percent}%`;
   bar.appendChild(fill);
   return bar;
@@ -110,9 +90,7 @@ function cardFor(convo, ent, allowLoose) {
   else avatar.textContent = ent.owner === 'player' ? '我' : String(ent.name || '?').slice(0, 1);
   head.appendChild(avatar);
 
-  // 名字 + 身份**两行**（稿子 d-rightrail：`谢临舟` / `掌柜 · 在场`）。
-  // ⚠️ 角色卡里没有「身份」这个字段，所以第二行只放得到在场关系（你 / 在场）。
-  //    为凑稿子去造一个字段是另一件事 —— 真要做先动角色卡契约。
+  // ⚠️ 第二行只放得到在场关系（你 / 在场）：角色卡里没有「身份」这个字段。
   const id = h('div', { class: 'cast-card-id' });
   id.appendChild(h('span', { class: 'cast-card-name', text: ent.name }));
   id.appendChild(
@@ -131,8 +109,7 @@ function cardFor(convo, ent, allowLoose) {
     for (const key of keys) {
       const row = h('div', { class: 'cast-field' });
       row.appendChild(h('span', { class: 'cast-field-name', text: panelFieldName(key) }));
-      // 数值字段的进度条和数值**同一行**（稿子：`好感 ▬▬▬▬ 62`）——
-      // 排成下面单独一行会把每块卡片撑高一截，且和稿子对不上。
+      // 进度条和数值同一行：排成单独一行会把卡片撑高一截。
       const bar = meterBar(convo, key);
       if (bar) row.appendChild(bar);
       row.appendChild(h('span', { class: 'cast-field-value', text: fieldValueText(convo, key) }));
@@ -173,15 +150,13 @@ export function renderCastPanel() {
   const convo = activeConvo();
   const entities = convo ? panelCastForDisplay(convo) : [];
   const books = convo ? convoWorldbookIds(convo).map((id) => worldbookById(id)).filter(Boolean) : [];
-  // 角色自带的世界书：会话没绑书时生效的就是它 —— 脚注必须标出来源，
-  // 否则「这本书是哪来的」在界面上根本看不出来。
+  // 脚注必须标出来源（会话绑的 / 角色自带的），否则看不出这本书是哪来的。
   const character = convo ? characterForConvo(convo) : null;
   const charBooks =
     character && Array.isArray(character.worldbookIds)
       ? character.worldbookIds.map((id) => worldbookById(id)).filter(Boolean)
       : [];
 
-  // 有角色、世界书或场景信息时显示。
   const scene = currentScene(convo);
   const show = !!convo && (entities.length > 0 || books.length > 0 || charBooks.length > 0 || scene.length > 0);
   panel.classList.toggle('hidden', !show);
@@ -235,10 +210,8 @@ export function renderCastPanel() {
     }
   }
 
-  // 「N 条已触发」：稿子脚注那颗绿字。
-  // ⚠️ 它要跑一趟主进程（worldbooks:preview 是按关键词现场扫的），所以是**异步**的。
-  //    先把这一格清空，避免上一个会话的数字挂在新的会话上；
-  //    回来之后再用 token 确认「这仍然是最新那次查询」——切会话快的时候会有迟到的响应。
+  // ⚠️ 这一格是异步的：先清空，免得上一个会话的数字挂在新的会话上；
+  //    回来后用 token 确认仍是最新的那次查询 —— 切会话快时会有迟到的响应。
   renderHitCount(convo, books.length > 0 || charBooks.length > 0);
 }
 
@@ -254,8 +227,7 @@ function renderHitCount(convo, hasBook) {
   worldbookHitCount(convo)
     .then((n) => {
       if (token !== hitToken) return;
-      // 0 和「数不出来」要分开说：前者是关键词没命中（值得去改关键词），
-      // 后者是这一趟没问到（别拿它误导人）。
+      // 0（关键词没命中）和 null（这趟没问到）要分开说，别拿后者误导人。
       node.textContent = n == null ? '' : n > 0 ? `${n} 条已触发` : '本轮没触发';
     })
     .catch(() => {

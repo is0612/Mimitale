@@ -1,31 +1,17 @@
 'use strict';
 
-// ============================================================================
-//  main/worldbook-match.js —— 世界书的匹配引擎
-//
-//  「这些话里有没有命中某条设定」这件事全在这里。搬出来独立成模块的原因，
-//  和 main/characters.js / main/png.js 一样：tools/smoke-test.js 要 require 同一份代码，
-//  这样递归扫描、副关键词、概率这些逻辑测的是真实现，而不是测试里另写一遍。
-//
-//  这里只做**纯匹配**，不认识文件、不认识 IPC —— 条目从哪来由调用方决定。
-// ============================================================================
+// 世界书的匹配引擎：只做纯匹配，不认识文件、不认识 IPC —— 条目从哪来由调用方决定。
+// 独立成模块供 tools/smoke-test.js require 同一份代码（和 characters.js / png.js 同理）。
 
-/**
- * 关键词是否命中。
- * 中日韩文字没有空格分词，只能做子串匹配（酒馆自己也建议这时关掉全词匹配）；
- * 纯拉丁字母的关键词才用词边界，避免 king 命中 liking。
- */
+/** 中日韩文字没有空格分词，只能子串匹配；纯拉丁关键词才用词边界，避免 king 命中 liking。 */
 const CJK_RE = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/;
 
 function escapeRegExp(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/**
- * 编译过的关键词正则缓存。
- * 匹配是每轮对每个条目每个关键词都跑的，不缓存的话每句话都要重新编译几百次正则。
- * 用户改关键词时字符串会变，键自然失配，所以不用担心缓存过期。
- */
+/** 缓存编译过的正则：匹配每轮对每个条目每个关键词都跑，不缓存就要重新编译几百次。
+ *  用户改关键词时字符串会变，键自然失配，不用担心过期。 */
 const keywordRegexCache = new Map();
 const MAX_KEYWORD_REGEX_CACHE = 4000;
 
@@ -141,21 +127,9 @@ function entryMatches(entry, haystack, probabilityCache) {
   return true;
 }
 
-/**
- * 扫描文本，返回命中的条目。
- *
- * **递归扫描**（酒馆叫 Recursive Scanning）：
- *   命中一条**勾了「递归」**的条目之后，把它的正文也并进扫描文本再扫一遍 ——
- *   于是它正文里提到的词能触发别的条目，一路连锁下去。比如提到「翁法罗斯」
- *   命中总览，总览里写着「十二泰坦」「火种」，递归就把这两条也带出来了。
- *
- * 代价是 token：每多一层就多塞几条设定进来。所以有两道闸：
- *   · 只有 `recursive === true` 的条目才会往下带（导入时按 ST 语义缺省为可递归）
- *   · 最多连锁 recursiveDepth 层
- *
- * 返回 { hits, rounds, recursiveCount } —— 后两个给「预览命中」显示用，
- * 让用户看得见「这一轮有几条是连锁带进来的」。
- */
+/** 扫描文本返回命中条目。**递归扫描**：命中一条勾了递归的条目后，把它的正文并进扫描文本再扫一遍，连锁下去。
+ *  代价是 token，所以只有 `recursive === true` 的条目才往下带，且最多 recursiveDepth 层。
+ *  返回 { hits, rounds, recursiveCount } —— 后两个给「预览命中」显示用。 */
 function matchWorldbookEntries(entries, scanText, options) {
   const opts = options || {};
   const chainLimit = Math.max(0, Math.min(5, Math.floor(Number(opts.recursiveDepth) || 0)));
@@ -200,11 +174,7 @@ function matchWorldbookEntries(entries, scanText, options) {
   return { hits, rounds, recursiveCount };
 }
 
-// 命中条目拼成注入块。
-//
-// 两种抬头是**刻意分开**的：模型对抬头最敏感，而这两块的性质不同 ——
-//   · 关键词条目 = 「这一轮聊到才相关」的参考资料（早读早有用，紧跟人设之后）
-//   · 常驻条目   = 「每一轮都成立」的设定与规则（要靠得近才会被照做）
+// ⚠️ 两种抬头刻意分开：模型对抬头最敏感 —— 关键词条目是「这一轮才相关」，常驻条目是「每一轮都成立」。
 const WORLDBOOK_HEADER = '[世界设定]\n以下资料与当前对话相关，请自然地运用，不要直接复述：';
 const WORLDBOOK_DEEP_HEADER =
   '[世界设定 · 常驻]\n以下是这个世界每一轮都成立的设定与规则，请始终遵守，不要直接复述：';
@@ -215,20 +185,9 @@ function formatWorldbookSection(hits, header) {
   return `${header || WORLDBOOK_HEADER}\n\n${lines.join('\n\n')}`;
 }
 
-/**
- * 把命中条目拆成两块注入文本：
- *   section     —— 带关键词命中的那批，照旧紧跟人设之后（调用的位置见 messages.js 第 2 步）
- *   deepSection —— 常驻条目（`constant === true`）单独一块，由渲染层送到更靠近**生成位置**的地方
- *
- * 为什么要拆：社区作者把「不许代写玩家」「输出格式」「状态栏每轮必须写」这类**规则**做成常驻
- * 条目，在酒馆里可以放到 `at depth`（贴近生成位置）。如果不拆，整块世界书钉在人设之后，
- * 往后还有检索 / 摘要 / 示例对话 / 几十轮历史 / 面板…… 几万 token 之后模型早忘了，
- * 于是**同一张卡在我们这儿的约束力弱于酒馆**。拆开之后，常驻条目能落到离落笔只剩几条消息的位置。
- *
- * 判据只认 `constant === true`，**不是**「keys 为空」：`entryMatches` 里
- * `anyKeywordHit(haystack, [], e)` 恒为 false，所以不带关键词又没勾常驻的条目
- * 根本不会命中，不会走到这里来。
- */
+/** 把命中条目拆成两块：section（关键词命中，紧跟人设之后）、deepSection（常驻条目，送到贴近生成位置）。
+ *  常驻条目多是规则类，钉在人设之后几万 token 就失去约束力，所以要拆。
+ *  ⚠️ 判据只认 `constant === true`，不是「keys 为空」：不带关键词又没勾常驻的条目根本不会命中。 */
 function formatWorldbookSections(hits) {
   const list = Array.isArray(hits) ? hits : [];
   const constant = list.filter((e) => e && e.constant === true);

@@ -1,16 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  views/composer.js —— 输入区与「发送/重新生成」这条链路
-//
-//  从「按回车」到「回复写完」的全部过程都在这里：
-//    发送 → 组装提示词（世界书 + RAG 召回）→ 开流 → 收完定稿 → 后台摘要。
-//  外加三个跟它绑在一起的动作：就地编辑一条消息、「继续」、换候选（swipe）。
-//
-//  流式分片的接收端不在这里 —— 那是入口层的全局监听（api.onChunk），
-//  它要把增量写进消息区的节点，用的是 views/stream.js 的绘制器。
-//  这里负责的是「什么时候开始 / 结束」，也就是 setStreaming 那对开关。
-// ============================================================================
+// views/composer.js —— 输入区与「发送 / 重新生成 / 继续 / 换候选」链路
+// 这里管「什么时候开始、什么时候结束」；流式分片的接收端在入口层（api.onChunk）。
 
 import { CONFIG } from '../core/config.js';
 import { api } from '../core/api.js';
@@ -19,9 +10,8 @@ import { el } from '../core/dom.js';
 import { activeConvo, uid, now } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { h, button, clear } from '../ui/build.js';
-// 「该量/该写高度的那颗」：组件（<m-textarea>）要落到里层那颗原生框上
+// 该量/该写高度的那颗：组件（<m-textarea>）要落到里层那颗原生框上
 import { controlOf } from '../ui/auto-grow.js';
-// 组件库：就地编辑那条消息用工厂建多行框（见 components/index.js）
 import { mTextarea, mButton } from '../components/index.js';
 import { persistConversations } from '../data/persist.js';
 import { ensureConvoEndpoint, isBridgeProvider } from '../data/providers.js';
@@ -72,10 +62,8 @@ function setStreaming(on) {
   el.btnSend.disabled = on;
 }
 
-/** 输入框跟着内容长高（上限见 CONFIG.MAX_INPUT_HEIGHT）
- *  `el.input` 是 `<m-textarea>` 的**宿主**：量高度、写高度都得落到里层那颗原生框上
- *  （过 controlOf）—— 对宿主写 style.height 是写在一个不画描边的空盒子上，
- *  量 scrollHeight 也只会拿到「现在渲染出来的高度」，症状是**不报错但框永远不长高**。 */
+/** 输入框跟着内容长高；el.input 是 <m-textarea> 宿主，量/写高度都要过 controlOf 落到原生框 */
+// 对宿主写 style.height 无效，症状是不报错但框永远不长高。
 export function autoGrowInput() {
   const box = controlOf(el.input);
   box.style.height = 'auto';
@@ -83,14 +71,7 @@ export function autoGrowInput() {
 }
 
 /**
- * 发一条消息。
- *
- * **返回值**：真的发出去了返回 true，任何早退路径返回 false。
- * 调用方（发送按钮 / 回车）必须**先看返回值再清空输入框** —— 早退路径包括：
- *   · 没配模型服务 / 没填 API Key（全新安装第一条「你好」就是这么没的）
- *   · 正在生成中（输入框在流式期间并没有禁用，回车照样进得来）
- *   · 空消息（只按了个回车）
- * 对照：待发的图片是**校验之后**才清的，所以图还在、字没了 —— 那种不一致最难解释。
+ * 发一条消息；真发出返回 true，任何早退路径返回 false，调用方必须先看返回值再清空输入框。
  */
 export async function sendMessage(text) {
   const content = String(text || '').trim();
@@ -134,17 +115,13 @@ export async function sendMessage(text) {
   return true;
 }
 
-/** 上面那个返回值对应的「刚发出去的文字」，给清空输入框时做比对用 */
+/** 清空输入框时用来比对「刚发出去的文字」 */
 export function sentTextOf(text) {
   return String(text || '').trim();
 }
 
 /**
- * 一条消息真的发出去之后，把输入框清掉。
- *
- * 只在「框里现在还是刚才发出去的那段文字」时才清：发消息中间隔着几个 await
- * （世界书匹配 / 语义检索），用户完全可能在这期间又打了一段新的 ——
- * 那种情况下他新打的字不能被别人清掉。
+ * 发出后清空输入框；只在框里仍是刚发的那段文字时才清（中间用户可能又打了新字）。
  */
 export function clearInputAfterSend(sentText) {
   if (el.input.value.trim() !== String(sentText || '').trim()) return;
@@ -152,10 +129,7 @@ export function clearInputAfterSend(sentText) {
   autoGrowInput();
 }
 
-/**
- * 就地编辑一条消息：把气泡内容换成 textarea，保存/取消。
- * 直接改原文，改完接着聊 —— 不用「删除 → 重发」，重发会换一整条新回复。
- */
+/** 就地编辑一条消息：气泡换成 textarea，保存/取消；直接改原文，不用删除重发 */
 export function editMessage(index) {
   const convo = activeConvo();
   if (!convo || state.streaming) return;
@@ -169,9 +143,7 @@ export function editMessage(index) {
 
   const original = String(message.content || '');
 
-  // 这个框是就地建/就地扔的，用工厂形态。
-  //    `.msg-edit-box` 留在宿主持布局，观感那条规则跟着改成 `.msg-edit-box > textarea`。
-  //    keydown / value / focus / setSelectionRange 这几样都由组件代理或冒泡，调用点不用改。
+  // 就地建/就地扔的多行框用工厂形态；class 留在宿主上，keydown/value/focus 由组件代理
   const textarea = mTextarea({
     class: 'msg-edit-box',
     spellcheck: 'false',
@@ -181,8 +153,7 @@ export function editMessage(index) {
 
   const finish = (save) => {
     if (save) {
-      // 流式已经开始了、或者这条消息已经被删了 —— 这次编辑不能再落地。
-      // 重绘一次把编辑框收掉，别让用户对着一个按了没反应的框。
+      // 流式已开始、或这条消息已被删 —— 这次编辑不能再落地，重绘把编辑框收掉
       if (state.streaming || !convo.messages.includes(message)) {
         renderAll({ forceScroll: false });
         return;
@@ -195,8 +166,7 @@ export function editMessage(index) {
       }
       if (next !== message.content) invalidateSummariesForEdit(convo, message);
       message.content = next;
-      // 这条要是正好是「某一条候选」，改动要落回它那个槽里，
-      // 否则切走再切回来就变回老样子了
+      // 改的是某条候选时，改动要落回它那个槽，否则切走再切回就变回老样子了
       if (Array.isArray(message.variants) && Number.isFinite(message.variantIndex)) {
         message.variants[message.variantIndex] = next;
       }
@@ -210,7 +180,6 @@ export function editMessage(index) {
       persistConversations(0);
       showToast('已保存', 'ok');
     }
-    // 保存或取消都靠重绘来收拾现场
     renderAll({ forceScroll: false });
   };
 
@@ -232,12 +201,9 @@ export function editMessage(index) {
   node.appendChild(h('div', { class: 'msg-edit-actions' }, save, cancel));
 
   textarea.focus();
-  // 光标放到末尾，接着改最顺手
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
-  // 编辑框比原来的气泡高，展开后可能把「保存 / 取消」顶到视口外面去。
-  // 注意要滚**整个内容块**（node）：只滚 textarea 的话，它自己已经完整可见了，
-  // scrollIntoView 按规范就该什么都不做 —— 被切掉的其实是它下面那行按钮。
+  // 要滚整个内容块 node：只滚 textarea 时它已完整可见，被切掉的是下面那行按钮
   node.scrollIntoView({ block: 'nearest' });
 }
 
@@ -245,16 +211,12 @@ export function editMessage(index) {
 const CONTINUE_NUDGE = '（接着你上一条回复继续往下写。不要重复已经写过的内容，也不要重新开头。）';
 
 /**
- * 正文撞到上限被截断时，最多自动接着写几次。
- *
- * 为什么定成「有限次」：每续一次就再花一次钱，而「继续」按钮本来就摆在那条消
- * 息上 —— 真要一直写下去，用户自己按更合适。这里只兜掉最烦的那一下。
+ * 撞上限最多自动接着写几次：再续就再花钱，剩下的交给消息上那颗「继续」。
  */
 const MAX_AUTO_CONTINUE = 2;
 
 /**
- * 思考挤掉正文时，自动重试附在提示词末尾的引导（只进这一次请求，不存会话）。
- * 同时约束思考只写几句，避免模型再长篇思考一轮把额度花光。
+ * 只思考没落笔时自动重试的引导：要求直接写正文、思考最多两三句（只进本次请求）。
  */
 const REASONING_RETRY_NUDGE =
   '（你上一条回复只输出了思考过程，正文一个字都没写出来。不要再展开推演，思考最多两三句，' +
@@ -266,17 +228,8 @@ function reasoningTokensOf(usage) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-/**
- * 让**最后一条**助手消息接着往下写 ——「继续」和「截断自动续写」共用这一段。
- *
- * 不新建消息是这里的关键：每个 requestId 绑定这条助手消息，增量直接接在原文后面。
- *
- * 刻意不抛异常，返回 { ok, usage, finishReason, error } —— 好让调用方自己决定
- * 是弹提示（用户手动点「继续」）还是静默降级（自动续写失败时不必打扰用户）。
- *
- * ⚠️ `worldbook` 是 `matchWorldbookSections()` 的返回值 `{ section, deepSection }`
- *    （**不是**一个字符串），原样透传给 buildApiMessages 就行 —— 两块缺一不可。
- */
+// 让最后一条助手消息接着往下写（「继续」和截断自动续写共用）；不新建消息，增量接在原文后面。
+// ⚠️ worldbook 是 matchWorldbookSections() 返回的 { section, deepSection }，不是字符串，原样透传。
 async function extendAssistantMessage(convo, endpoint, worldbook, ragSection, nudge, opts) {
   const last = convo.messages[convo.messages.length - 1];
   if (!last || last.role !== 'assistant') return { ok: false, error: '没有可续写的回复' };
@@ -303,19 +256,12 @@ async function extendAssistantMessage(convo, endpoint, worldbook, ragSection, nu
       return { ok: false, error: (response && response.error) || '调用失败' };
     }
     if (response.usage) state.usage = response.usage;
-    // 以新的收尾信号为准：救回来了是 'stop'，调用方据此决定还要不要再续。
-    //
-    // 例外是**补问状态表**（keepFinishReason）：那是一次附加的补救请求，不是
-    // 正文的续写 —— 让它的收尾信号覆盖过来，会把「正文其实已经写完了」说成
-    // 「撞上限还没写完」，界面上就多挂一条误导的截断说明。
+    // 以新的收尾信号为准；补问状态表（keepFinishReason）例外 —— 它不是正文续写，别覆盖正文的收尾信号
     if (response.finishReason && !(opts && opts.keepFinishReason)) last.finishReason = response.finishReason;
 
-    // 有的服务商不推流式分片，直接给全文 —— 那种情况分片处理器一次都没跑过，
-    // 这里补一次追加（正文没变就说明没收到过分片）
+    // 服务商不推流式分片时用整段返回兜底（正文没变说明没收到过分片）
     if (String(last.content || '') === before && String(response.content || '').trim()) {
-      // 和 main.js 的分片处理器同一个道理：旧正文末尾那行往往是状态行 /
-      // 剧情选项行（末尾没有换行），直接接上去会让新正文的头一行和它黏成一条，
-      // 显示时整行被当状态行剥掉 —— 续写的头一行就没了。先补一个换行隔开。
+      // 旧正文末尾常是状态行/选项行（无换行），直接接会让新正文头一行黏上去被剥掉，先补换行
       const sep = before && !before.endsWith('\n') && !String(response.content).startsWith('\n') ? '\n' : '';
       last.content = before + sep + response.content;
     }
@@ -326,13 +272,7 @@ async function extendAssistantMessage(convo, endpoint, worldbook, ragSection, nu
   }
 }
 
-/**
- * 这一轮的回复里有没有写状态表？
- *
- * 判据是「出现了本会话已知的字段行」（【字段名】：值）—— 拿已知字段名去比，
- * 而不是随便一个【】就算数：正文里本来就常有【提示】这类方括号引用。
- * 本局压根没有状态字段时算「写了」（没有要维护的东西）。
- */
+/** 这一轮有没有写状态表：按本会话已知字段行【名】：值判断，不是随便一个【】就算 */
 function panelWrittenIn(convo, text) {
   const known = new Set(convoFieldDisplayNames(convo));
   if (!known.size) return true;
@@ -345,15 +285,7 @@ function panelWrittenIn(convo, text) {
 }
 
 /**
- * 正文写完了，但整轮没提状态表 → 补问一句，把状态表接到同一条回复后面。
- *
- * 为什么值得单独兜一下：状态表是「每轮维护」的东西，模型偶尔会整段丢掉
- * （实测约四分之一的回合，尤其「我明天要出差几天」这种没有明显状态变化的输入）。
- * 丢掉就等于状态卡停在上一轮的值上 —— 用户看到的是「角色状态不跟着剧情走」。
- *
- * 只补一次、失败就算了：下一轮还有机会，不能在这里把用户卡住。
- * 走 extendAssistantMessage 是为了复用「分片直接追加到最后一条消息」那条路 ——
- * 界面上的字接着往外长，不会突然换掉一整条回复。
+ * 整轮没提状态表 → 补问一次，把状态表接到同一条回复后面；只补一次，失败就算了。
  */
 async function ensurePanelWritten(convo, endpoint, worldbook, ragSection, assistant) {
   if (!convoPanelFields(convo).length) return false;
@@ -368,9 +300,7 @@ async function ensurePanelWritten(convo, endpoint, worldbook, ragSection, assist
   return res.ok && String(assistant.content || '') !== before;
 }
 
-/**
- * 「继续」：让模型接着最后一条回复往下写（回复被 maxTokens 截断时用）。
- */
+/** 「继续」：让模型接着最后一条回复往下写（回复被 maxTokens 截断时用） */
 export async function continueLastMessage() {
   const convo = activeConvo();
   if (!convo) return;
@@ -402,8 +332,7 @@ export async function continueLastMessage() {
 
     const res = await extendAssistantMessage(convo, endpoint, worldbook, ragSection, CONTINUE_NUDGE);
     if (!res.ok) throw new Error(res.error);
-    // 续写也可能整轮不提状态表 —— 尤其是「只思考没落笔」之后点继续的那条路径：
-    // 它绕开了 requestCompletion 里的补问分支，不补的话状态卡就一直停在旧值上。
+    // 续写也可能整轮不提状态表（这条路径绕开了 requestCompletion 的补问），要补一次
     await ensurePanelWritten(convo, endpoint, worldbook, ragSection, last);
   } catch (err) {
     showToast((err && err.message) || '继续失败', 'error');
@@ -426,11 +355,7 @@ export async function continueLastMessage() {
 }
 
 /**
- * 正文被截断时自动接着写（「设置 → 行为 → 截断后自动续写」可关）。
- *
- * 只在**已经有正文**的前提下接 —— 一个字都没写出来的情况走的是「自动重试」那条
- * 分支（见 requestCompletion），两边不重叠。
- * 返回 { rounds, reasoningTokens }：续了几轮、这几轮的思考量合计。
+ * 正文被截断时自动接着写（「设置 → 行为 → 截断后自动续写」可关）；返回 { rounds, reasoningTokens }。
  */
 async function autoContinueTruncated(convo, index, endpoint, worldbook, ragSection) {
   const out = { rounds: 0, reasoningTokens: 0 };
@@ -445,9 +370,7 @@ async function autoContinueTruncated(convo, index, endpoint, worldbook, ragSecti
     }
     out.rounds += 1;
 
-    // 第一轮流式跑起来之后，「正在思考」那行早被正文顶掉了 —— 这里补一条明确的
-    // 进度说明。挂在气泡上、不挂 .msg-content 里：流式绘制只重写 .msg-content
-    // 的 innerHTML，兄弟节点不会被冲掉。
+    // 补一条续写进度说明；挂气泡上而非 .msg-content（流式只重写 innerHTML）
     const node = el.messages.querySelector(`.msg[data-index="${index}"] .msg-content`);
     const bubble = node ? node.parentElement : null;
     if (bubble && !tip) {
@@ -467,11 +390,7 @@ async function autoContinueTruncated(convo, index, endpoint, worldbook, ragSecti
 }
 
 /**
- * 调一次模型，把回复流式写进界面。
- *
- * options.variants：已有的候选列表。传了就是「重新生成」——
- * 新生成的那条会作为一个**新候选**接在后面，老的留着可以左右翻，
- * 而不是把老的直接扔掉。
+ * 调一次模型，把回复流式写进界面；options.variants 有值即「重新生成」，新回复作为新候选接在后面。
  */
 async function requestCompletion(convo, options) {
   // 已经在生成中就别再进来 —— 先判这个，避免 ensureConvoEndpoint 顺手改会话
@@ -489,9 +408,7 @@ async function requestCompletion(convo, options) {
   let waitingTimer = null;
 
   try {
-    // 世界书在渲染层匹配（和 buildApiMessages 同一个进程，省一次往返）。
-    // 不要求「消息数 ≥ 3」：世界模型的第一个回合也要拿到设定，
-    // 而开场引导往往正是最需要世界书的时候。匹配本身是本地纯计算。
+    // 世界书在渲染层匹配（本地纯计算，省一次 IPC）；第一回合也要拿到设定
     const { worldbook, ragSection } = await prepareCompletion(convo);
 
     if (preparationStopped) return;
@@ -507,8 +424,7 @@ async function requestCompletion(convo, options) {
       model: endpoint.model,
       providerId: endpoint.provider.id
     };
-    // 重新生成：把老候选接在前面，新的那条占一个空位先显示「正在思考」。
-    // 先占位是为了让「2/3」这种计数在流式过程中就是对的。
+    // 重新生成：老候选接在前面，新的一条先占位，让「2/3」计数在流式中也正确
     const seeded = options && Array.isArray(options.variants) ? options.variants.filter((v) => String(v || '').trim()) : null;
     if (seeded && seeded.length) {
       assistant.variants = [...seeded, ''];
@@ -564,16 +480,8 @@ async function requestCompletion(convo, options) {
     // 主进程可能会把模型名规范化，以它返回的为准
     if (response.model) assistant.model = response.model;
 
-    // 落盘 / 上屏的正文以「攒起来的流式分片」为准（onChunk 一路追加进 assistant.content），
-    // 只有一片都没攒到时才用整段返回值兜底。
-    //
-    // ⚠️ 别写成 `assistant.content = response.content || assistant.content` ——
-    //    那是「响应体优先」，会把已经攒好的分片**覆盖**掉。而且这里必须认「没攒到」
-    //    这种情况：分片是主进程 send 过来的异步消息，完全可能比 invoke 的回执后到
-    //    （回执先到、finally 里 state.requestId 就清了，随后到达的分片会被
-    //    main.js 的 `requestId !== state.requestId` 直接丢掉）。那样正文就是空的，
-    //    气泡会一直停在「正在思考」。续写那条路径（extendAssistantMessage）本来就是
-    //    这么兜的，这里跟上，别让主路径比它脆。
+    // 正文以攒起来的流式分片为准（onChunk 追加进 assistant.content），一片都没攒到才用整段返回兜底。
+    // ⚠️ 别写成 response.content || assistant.content（会覆盖分片）；分片可能比回执后到被丢，必须兜「没攒到」。
     if (!String(assistant.content || '').trim() && String(response.content || '').trim()) {
       assistant.content = response.content;
     }
@@ -581,21 +489,16 @@ async function requestCompletion(convo, options) {
       assistant.reasoning = response.reasoning;
     }
 
-    // 本机桥接：出图是夹在对话响应里一起回来的（base64 PNG 或 null）。
-    // 有图就压一档挂到这条消息上，气泡会自动显示。
+    // 本机桥接的出图夹在对话响应里（base64 PNG 或 null），有图就压一档挂到这条消息上
     if (response.image) {
       await attachGeneratedImage(assistant, response.image, response.model);
     }
 
-    // 收尾信号与用量都记在这条消息上，方便事后核对「思考吃了多少 / 上限有没有生效」：
-    //   · finishReason === 'length' 是服务商权威的「撞上限被截断」信号。光看
-    //     「正文为空 + 有思考」只能猜 —— 模型也可能只是思考完自己没落笔，
-    //     或者服务商按模型自己的上限截断（那种情况调大 max_tokens 根本没用）。
-    //   · usage 留着，事后才算得清思考吃了多少、上限到底有没有生效。
+    // finishReason === 'length' 是服务商权威的「撞上限」信号；只凭「正文为空 + 有思考」只能猜。
+    // usage 留着，事后才核得清思考吃了多少、上限有没有生效。
     assistant.finishReason = response.finishReason || '';
     assistant.usage = response.usage || null;
-    // 思考量跨请求累加：「思考把额度吃光」时，第一轮的量才是元凶，
-    // 只留最后一次的 usage 会把它漏掉。
+    // 思考量跨请求累加：第一轮的量才是元凶，只留最后一次 usage 会漏
     let reasoningTokens = reasoningTokensOf(response.usage);
 
     if (!assistant.content && !assistant.reasoning) {
@@ -605,11 +508,7 @@ async function requestCompletion(convo, options) {
     const truncated = assistant.finishReason === 'length';
     const contentEmpty = !String(assistant.content || '').trim();
 
-    // 情形一：只有思考、正文一个字都没写。
-    // 推理模型（如 deepseek-flash）有时会把 max_tokens 全花在思考过程上，
-    // 正文还没开始就被截断 —— 结果只有「思考过程」、没有正文。
-    // 先自动重试一次：明确要求它直接写正文。用户不需要知道这茬，
-    // 比让他自己去点「继续」强得多。重试也失败才退回提示文案。
+    // 情形一：只有思考、正文没写（推理模型会把 max_tokens 全花在思考上）；先自动重试一次要求直接写正文
     if (contentEmpty && String(assistant.reasoning || '').trim()) {
       const reasoningBefore = String(assistant.reasoning || '');
 
@@ -636,21 +535,17 @@ async function requestCompletion(convo, options) {
       if (retry && retry.ok === true) {
         if (retry.usage) state.usage = retry.usage;
         reasoningTokens += reasoningTokensOf(retry.usage);
-        // 流式分片已经直接写进 assistant.content（onChunk 按 requestId 追加到
-        // 最后一条消息）；只有服务商没推分片时才用整段返回兜底。
+        // 分片已直接写进 assistant.content；服务商没推分片时才用整段返回兜底
         if (!String(assistant.content || '').trim() && String(retry.content || '').trim()) {
           assistant.content = retry.content;
         }
-        // 第一次的思考保留在前面，重试的思考（如果有）接在后面
         assistant.reasoning = reasoningBefore + String(retry.reasoning || '');
-        // 重试也可能又撞上限 —— 以重试的信号为准
         if (retry.finishReason) assistant.finishReason = retry.finishReason;
       }
 
-      // 重试也没救回来：才留提示文案。措辞要区分「真被截断」和「模型没落笔」。
+      // 重试也没救回来才留提示文案，措辞区分「真截断」和「没落笔」
       if (!String(assistant.content || '').trim()) {
-        // 这里不用再挂 truncated 标记：上面这段提示文字本身就是给用户看的说明，
-        // 界面再叠一行「被截断了」是重复的。
+        // 不再挂 truncated 标记：这段提示本身就是给用户看的说明
         assistant.content =
           assistant.finishReason === 'length'
             ? '（模型只输出了思考过程，正文被截断了 —— 这一次的思考确实把「回复上限」用光了。）\n\n' +
@@ -660,34 +555,24 @@ async function requestCompletion(convo, options) {
               '点下面这条消息的「继续」，通常就能把它逼出来。';
       }
     } else if (!contentEmpty && truncated) {
-      // 情形二：正文写了一半撞上限（典型：状态栏写到一半断掉，看到一条残缺的回复）。
-      // 自动接着写 —— 省掉手点「继续」，但**只续有限次**（见 MAX_AUTO_CONTINUE）：
-      // 每续一次都要再花一次钱，撞满就停下挂标记，剩下的交给用户按「继续」。
+      // 情形二：正文写一半撞上限；自动续写有限次（见 MAX_AUTO_CONTINUE），撞满就停
       const cont = await autoContinueTruncated(convo, index, endpoint, worldbook, ragSection);
       assistant.autoContinued = cont.rounds;
       reasoningTokens += cont.reasoningTokens;
-      // 状态表在正文末尾，撞上限时**最先被截掉的就是它** —— 续写把正文救回来之后，
-      // 状态表往往还是缺的。这里照样走一次补问（续写里带了就自动跳过，不重复请求）。
+      // 状态表在末尾最先被截掉；续写救回正文后照样补问一次（续写里带了会自动跳过）
       await ensurePanelWritten(convo, endpoint, worldbook, ragSection, assistant);
     } else if (!contentEmpty) {
-      // 情形三：正文好好地写完了，但整轮一个状态字段都没提。
-      // 状态卡"不跟着剧情走"最常见的就是这种 —— 不是程序没接住，是模型压根没写。
-      // 补问一次（见 ensurePanelWritten 里的取舍），多半能把状态表要回来。
+      // 情形三：正文写完了但整轮没提状态字段；补问一次，多半能要回来
       await ensurePanelWritten(convo, endpoint, worldbook, ragSection, assistant);
     }
 
     if (reasoningTokens > 0) assistant.reasoningTokens = reasoningTokens;
 
-    // 「这条被截断过」的标记。两种情形都算：
-    //   · 收尾信号仍然是 'length' —— 真残缺了；
-    //   · 自动续写救回来了（信号已变 'stop'，但 autoContinued > 0）—— 中间确实断过，
-    //     值得给一行轻说明（文案见 chatMessages.js，语气不是「快去点继续」）。
-    // 正文为空的那条走的是上面的提示文案，不叠这个标记（重复）。
+    // 「这条被截断过」：收尾信号仍是 'length'，或自动续写救回过（autoContinued > 0）；空正文不叠这个标记
     if (!contentEmpty && (assistant.finishReason === 'length' || Number(assistant.autoContinued) > 0)) {
       assistant.truncated = true;
     }
 
-    // 定稿：把这一轮的结果写回它那个候选槽
     if (Array.isArray(assistant.variants)) {
       assistant.variants[assistant.variantIndex] = assistant.content;
     }
@@ -719,48 +604,32 @@ async function requestCompletion(convo, options) {
     state.requestId = null;
     state.requestTarget = null;
     convo.updatedAt = now();
-    // 回复写完了，从里面抽出状态栏存到会话上 —— 下一轮由程序权威注入，
-    // 不再依赖模型去抄历史（历史会被 maxTurns 截断）。
+    // 抽出状态栏存到会话上，下一轮由程序权威注入（历史会被 maxTurns 截断）
     syncConvoPanel(convo);
     syncConvoOptions(convo);
-    // 剧情要是把你的名字改了，消息标签和 {{user}} 也得跟着改
+    // 剧情改了你的名字，消息标签和 {{user}} 要跟着改
     syncPlayerNameFromPanel(convo);
     renderAll({ forceScroll: true });
     persistConversations();
     el.input.focus();
 
-    // 攒够未压缩的对话就后台压一段摘要。
-    // 放在最后、不 await：压缩要额外调一次模型，不该让你等它。
+    // 攒够未压缩对话就后台压摘要；不 await，压缩要额外调一次模型
     maybeSummarize(convo).catch((err) => console.error('后台摘要失败', err));
 
-    // 桌宠：这一轮角色回复完了，问它要不要插一句。
-    //
-    // 判断条件看着绕，其实就两条：
-    //   · `convo.messages.includes(assistant)` —— 这条回复**还在**会话里。
-    //     出错/被停止那两条路会把它 splice 掉（见上面 catch），宠物不该对一条
-    //     已经不存在的回复发表意见。用这个判断就不用去改 try 的结构加标志位。
-    //   · 正文非空 —— 空回复没什么好点评的。
-    //
-    // 同样不 await：宠物说话是**额外一次模型调用**，绝不能让你等它。
-    // 该不该说话（轮数够不够 / 静音 / 暂停）全在 maybePetAutoSpeak 里判，
-    // 这里不做任何拦截 —— 那些规则只有一处，改的时候不会漏。
+    // 桌宠：回复还在会话里且正文非空才问它要不要插一句（出错/被停止那条已 splice 掉）。
+    // 不 await —— 这是额外一次模型调用；轮数/静音等规则全在 maybePetAutoSpeak 里。
     if (convo.messages.includes(assistant) && String(assistant.content || '').trim()) {
       maybePetAutoSpeak().catch((err) => console.error('桌宠自动发言失败', err));
     }
   }
 }
 
-/**
- * 重新生成：删掉这条之后的全部内容，再问一次。
- *
- * 老的那条**不扔** —— 它作为一个候选留着，生成完可以用
- * 「‹ 2/3 ›」翻回去。写了一大段舍不得删、只想再抽一次的时候很有用。
- */
+/** 重新生成：删掉这条之后的内容再问一次；老回复作为候选留着，可用「‹ 2/3 ›」翻回 */
 export function regenerateFrom(index) {
   const convo = activeConvo();
   if (!convo || state.streaming) return;
 
-  // 这一轮已有的候选。第一次重新生成时，当前正文就是第一个候选。
+  // 第一次重新生成时，当前正文就是第一个候选
   const target = convo.messages[index];
   let existing = null;
   if (target && target.role === 'assistant' && String(target.content || '').trim()) {
@@ -781,11 +650,7 @@ export function regenerateFrom(index) {
   requestCompletion(convo, existing ? { variants: existing } : undefined);
 }
 
-/**
- * 换一条候选（swipe）。
- * content 是「当前显示的那条」，改它就等于换了一条 —— 历史、复制、导出
- * 读的都是 content，所以其它地方一行都不用动。
- */
+/** 换候选（swipe）：改 content 就等于换了一条，历史/复制/导出都读 content */
 export function switchVariant(index, delta) {
   const convo = activeConvo();
   if (!convo || state.streaming) return;

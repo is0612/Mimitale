@@ -1,44 +1,23 @@
 'use strict';
 
-// ============================================================================
-//  main/worldbook-parse.js —— 世界书的归一化与「形状识别」
-//
-//  导入角色卡的逻辑要能单独测，所以从 Electron 入口抽出来：
-//  这段如果夹在 registerIpc() 的闭包里，只有走真实的文件对话框才能跑到 ——
-//  「卡里内嵌的世界书被丢掉」和「导出时 character_book 写死 null」这类问题
-//  就没法自动化覆盖。
-//
-//  这里只做纯解析：给一块数据，返回内部格式。不碰磁盘、不生成 id
-//  （id 由调用方给，因为主进程和导入链路生成方式不同）。
-//
-//  ⚠️ normalizeWorldbook 是**白名单式**的（和 normalizeCharacter 一个道理）：
-//  加字段时记得同步这里，否则就是静默丢失。
-// ============================================================================
+//  main/worldbook-parse.js —— 世界书的归一化与形状识别（纯解析：不碰磁盘、不生成 id）。
+//  ⚠️ normalizeWorldbook 是白名单式的：加字段时记得同步，否则静默丢失。
 
-// 单个世界书的条目数上限。匹配是每轮同步跑的，上万条会让每句话都卡一下。
+// 条目数上限：匹配每轮同步跑，上万条会让每句话都卡一下。
 const MAX_WORLDBOOK_ENTRIES = 5000;
 // 一条注入内容的最大长度，防止畸形文件把上下文撑爆
 const MAX_WORLDBOOK_CONTENT = 20000;
-// 每个条目的关键词数量上限
 const MAX_WORLDBOOK_KEYS = 200;
-// 每本世界书里能装多少个「角色副本」。副本自带头像（base64），所以不能不限量。
+// 角色副本上限：副本自带头像（base64），不能不限量
 const MAX_WORLDBOOK_CHARACTERS = 50;
-// 导入外部文件时更严一点：外部文件里的 cast 没见过用户，先按这个数收进来，
-// 真嫌少可以再手动加（自己库里那 50 的上限不变）。
+// 导入外部文件用更严的副本数上限（自己库里仍是 50）
 const MAX_IMPORTED_WORLDBOOK_CHARACTERS = 30;
-// 世界书开场白的上限
 const MAX_WORLDBOOK_OPENING = 4000;
-// 世界书封面（dataURL）的字符数上限。
-//
-// ⚠️ 比角色的 MAX_AVATAR_CHARS（1800 万）**严得多**，这是刻意的：
-//    · 封面是可有可无的装饰图，不是角色卡那种「一张卡就靠这张立绘」；
-//    · worldbooks.json 是**整库覆盖写** —— 改一个字就要重写整个文件，
-//      一本 3MB 的封面乘几十本，每次保存都卡一下。
-//    渲染层那边压到 800 宽（≈200KB 的 webp），这个上限留了 20 倍余量，
-//    正常路径永远碰不到，只拦畸形文件。
+// 封面（dataURL）字符上限。⚠️ 比角色的 1800 万严得多：worldbooks.json 是整库覆盖写，
+// 几 MB 封面乘几十本会让每次保存都卡；渲染层已压到 ~200KB，20 倍余量只拦畸形文件。
 const MAX_WORLDBOOK_COVER = 4000000;
 
-/** 把一条 entry 的不同写法（ST 的 key/keys、constant、order…）统一成内部格式 */
+/** 把一条 entry 的不同写法（ST 的 key/keys、constant…）归一化成内部格式 */
 function normalizeWorldbookEntry(raw) {
   const r = raw && typeof raw === 'object' ? raw : {};
   const ext = r.extensions && typeof r.extensions === 'object' ? r.extensions : {};
@@ -57,10 +36,10 @@ function normalizeWorldbookEntry(raw) {
 
   const keys = pickKeys(r.keys, r.key);
   const secondaryKeys = pickKeys(r.secondaryKeys, r.secondary_keys ?? r.keysecondary);
-  // ST 可以保留旧副关键词但关闭 selective；缺省时按“有副关键词即启用”兼容旧内部数据。
+  // ST 可保留副关键词但关闭 selective；缺省按「有副关键词即启用」
   const selective = typeof r.selective === 'boolean' ? r.selective : secondaryKeys.length > 0;
   const content = str(r.content, MAX_WORLDBOOK_CONTENT);
-  // 内容为空、又没有任何关键词的条目没有任何作用，直接丢掉
+  // 无内容且无关键词的条目直接丢掉
   if (!content.trim() && !keys.length) return null;
 
   // ST 数值枚举顺序与编辑器选项顺序不同；内部仍保存可读名称。
@@ -76,21 +55,10 @@ function normalizeWorldbookEntry(raw) {
   let order = Number(r.order ?? r.insertion_order);
   if (!Number.isFinite(order)) order = 100;
 
-  // 酒馆新版本用 enabled，老版本/部分导出工具用 disable（true = 停用）。
-  // 两个都认，否则导入老世界书时停用的条目会全部复活。
+  // 酒馆新版用 enabled、旧版/部分导出工具用 disable（true = 停用）；都认，否则旧书停用条目会全部复活。
   const enabled = typeof r.enabled === 'boolean' ? r.enabled : r.disable === true ? false : true;
-  // 「正文继续触发别的条目」这件事按**酒馆的语义**归一化。
-  //
-  // ST 把两个方向分开存（官方文档「Recursive scanning」一节的三选项）：
-  //   preventRecursion  —— 「Prevent further recursion」：激活后**不再触发别人**
-  //   excludeRecursion  —— 「Non-recursable」：**不能被别人触发**
-  // 两个字段都是**限制项**，都靠勾选打开 → 缺省即 false，也就是「不限制、可参与」。
-  // 所以这里的默认是「可递归」，与 ST 一致。
-  //
-  // 代价控制在**全局那道闸**上：递归深度（见 main/providers.js 的
-  // DEFAULT_SETTINGS.worldbookRecursiveDepth，默认 1 = 只带一层）。
-  // ⚠️ 条目级默认必须是「可递归」：改成默认关等于把 ST 的语义改掉，
-  //    「导出再导回来」和「导入别人的书」两个方向都会和酒馆对不上。
+  // 递归按酒馆语义：preventRecursion / excludeRecursion 都是限制项、缺省 false。
+  // ⚠️ 条目级默认必须「可递归」否则和 ST 对不上；深度由全局 wordbookRecursiveDepth（默认 1）控制。
   const preventRecursion = r.preventRecursion ?? r.prevent_recursion ?? ext.preventRecursion ?? ext.prevent_recursion;
   const recursive = typeof r.recursive === 'boolean'
     ? r.recursive
@@ -100,7 +68,7 @@ function normalizeWorldbookEntry(raw) {
 
   return {
     id: typeof r.id === 'string' && r.id ? r.id : `e${Math.random().toString(36).slice(2, 10)}`,
-    // comment 是酒馆里的条目备注；没有就退回首关键词，方便在界面里认出来
+    // comment 是酒馆的条目备注；没有就退回首关键词
     title: str(r.title || r.comment, 200).trim() || keys[0] || '未命名条目',
     keys,
     secondaryKeys,
@@ -108,11 +76,11 @@ function normalizeWorldbookEntry(raw) {
     selectiveLogic,
     content,
     order,
-    // 蓝圈：无条件注入，不需要关键词
+    // 蓝圈：无条件注入
     constant: r.constant === true || r.strategy === 'constant',
-    // 内部开关：这条命中后，正文也参与下一轮扫描（见上面 preventRecursion 的映射说明）
+    // 命中后正文也参与下一轮扫描
     recursive,
-    // ST 的 excludeRecursion 只禁止条目作为递归目标，不能反向替代 recursive。
+    // excludeRecursion 只禁止作为递归目标，不能替代 recursive
     excludeRecursion: r.excludeRecursion === true
       || r.exclude_recursion === true
       || ext.excludeRecursion === true
@@ -131,32 +99,21 @@ function normalizeWorldbookEntry(raw) {
   };
 }
 
-/** 世界书的条目列表：可能是数组，也可能是酒馆导出时那种以索引为键的对象 */
+/** 世界书条目列表：可能是数组，也可能是酒馆导出时以索引为键的对象 */
 function worldbookEntryList(raw) {
   if (Array.isArray(raw)) return raw;
   if (!raw || typeof raw !== 'object') return [];
 
   const values = Object.values(raw);
-  // 对象形式：{ "0": {...}, "1": {...} }。
-  // 只认「所有值都是对象」的情况，免得把单个 entry 误当成一本书。
+  // 对象形式 { "0": {...} }：只认「所有值都是对象」，免得把单个 entry 误当一本书
   if (values.length && values.every((v) => v && typeof v === 'object' && !Array.isArray(v))) {
     return values;
   }
   return [];
 }
 
-/**
- * 把世界书（数组或带 entries 的对象）整理成内部格式。
- *
- * 两个依赖都由调用方注入，因为这个模块不碰磁盘、也不认主进程的其它类型：
- *   · makeId              —— 怎么发世界书 id（主进程和导入链路规则不同）
- *   · normalizeCharacters —— 书里「角色副本」的归一化器（就是 characters.js 那个）。
- *                            不传就当没有副本（只有测试里的假链路会这样）。
- *   · maxCharacters       —— 这次最多收几个副本（缺省 MAX_WORLDBOOK_CHARACTERS）。
- *                            导入外部文件时传更小的数，见 MAX_IMPORTED_WORLDBOOK_CHARACTERS。
- *
- * ⚠️ 白名单式：加字段时两个都得同步，否则静默丢失。
- */
+/** 世界书（数组或带 entries 的对象）→ 内部格式。
+ *  ⚠️ 白名单式：加字段时创建与导出两处都要同步，否则静默丢失。 */
 function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxCharacters) {
   const r = raw && typeof raw === 'object' ? raw : {};
   const own = r.extensions && r.extensions.mimitale || {};
@@ -172,12 +129,8 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
     if (entries.length >= MAX_WORLDBOOK_ENTRIES) break;
   }
 
-  // 书里的角色是「独立副本」：从角色库加进来时复制一份，之后两边各改各的，
-  // 单独跟角色库里的那个角色聊天不会影响这里。
-  //
-  // 导入外部世界书（比如带 5 个 NPC 的那种）时，导入链路**必须**注入
-  // normalizeCharacters，否则这些副本会被静默丢掉 —— 书导进来了、条目都在，
-  // 就是 NPC 一个都不在场。见 main/import-files.js。
+  // 书里的角色是独立副本（从角色库复制，之后两边各改各的）。
+  // ⚠️ 导入外部世界书必须注入 normalizeCharacters，否则副本被静默丢掉（书进来了、NPC 全不在）。
   const characters = [];
   if (typeof normalizeCharacters === 'function') {
     const rawChars = Array.isArray(r.characters) ? r.characters : Array.isArray(own.characters) ? own.characters : [];
@@ -193,10 +146,8 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
   }
 
   const opening = r.opening ?? own.opening;
-  // 封面：dataURL，列表卡片上铺满整卡的那张 2:3 竖版图。
-  // 两个位置都认（和 opening 一个道理）：独立世界书导出时在顶层，
-  // 角色卡内嵌书（character_book）那边塞在 extensions.mimitale 里。
-  // 校验和角色头像同规矩：必须是 data:image/ 开头，超限就当没有。
+  // 封面：dataURL，两个位置都认（独立书在顶层，内嵌书在 extensions.mimitale）。
+  // 必须是 data:image/ 开头，超限就当没有。
   const rawCover = r.cover ?? own.cover;
   const cover = typeof rawCover === 'string' && rawCover.startsWith('data:image/') && rawCover.length <= MAX_WORLDBOOK_COVER
     ? rawCover
@@ -205,9 +156,9 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
   return {
     id: id || genId(),
     name: name.slice(0, 120),
-    // 进这个世界时自动作为第一条消息；留空则由界面那边让模型现生成一段开局
+    // 进世界时的第一条消息；留空则由界面让模型现生成
     opening: typeof opening === 'string' ? opening.slice(0, MAX_WORLDBOOK_OPENING) : '',
-    // 没有封面就是空串 —— 卡片那边据此退回「世」字占位块
+    // 空串 = 无封面，卡片那边退回「世」字占位块
     cover,
     entries,
     characters,
@@ -216,11 +167,8 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
   };
 }
 
-/**
- * 角色卡里内嵌的世界书。
- * ST 导出角色卡时会把「角色绑定的世界书」一起塞进 character_book。
- * 内嵌的那份同样可能带 characters（我们自己导出的卡就带），所以两个注入项照传。
- */
+/** 角色卡里内嵌的世界书：ST 导出时把绑定的书塞进 character_book；
+ *  内嵌那份也可能带 characters（我们自己导的卡就带），两个注入项照传。 */
 function worldbookFromCharacterBook(raw, characterName, makeId, opts) {
   if (!raw || typeof raw !== 'object') return null;
   const o = opts || {};
@@ -231,19 +179,13 @@ function worldbookFromCharacterBook(raw, characterName, makeId, opts) {
     o.normalizeCharacters,
     o.maxCharacters
   );
-  // 一个条目都没有就没必要存一份空世界书
   if (!book.entries.length) return null;
   return book;
 }
 
-/**
- * 把单独的 lorebook 文件（`{entries:[...]}` 或裸数组）转成世界书。
- *
- * opts.normalizeCharacters 是**必须传**的（导入链路见 main/import-files.js）：
- * 不传的话书里那份 `characters`（世界书自带的 NPC）会被静默丢掉 ——
- * 表现是「书导进来了、条目都在，进世界却发现一个 NPC 都没有」。
- * maxCharacters 缺省 50；导入外部文件时传 MAX_IMPORTED_WORLDBOOK_CHARACTERS。
- */
+/** 单独的 lorebook 文件（{entries:[...]} 或裸数组）→ 世界书。
+ *  ⚠️ 导入链路必须传 opts.normalizeCharacters，否则书里的 characters 会被静默丢掉，
+ *  表现是「书导进来了、条目都在，进世界却发现一个 NPC 都没有」。 */
 function worldbookFromLorebook(raw, fallbackName, makeId, opts) {
   if (!raw || typeof raw !== 'object') return null;
   const o = opts || {};
@@ -252,22 +194,16 @@ function worldbookFromLorebook(raw, fallbackName, makeId, opts) {
   return book;
 }
 
-/**
- * 这个 JSON 看起来是「独立的世界书文件」，而不是角色卡吗？
- *
- * 必须单独判断：酒馆导出的世界书同样带 name / description，
- * 而 characterFromCard 只要看到 name 或 description 就认定是角色卡 ——
- * 结果整本书被导入成一个空角色，几十条条目被静默丢掉。
- * 顶层有 entries、又没有角色卡专属字段的，按世界书处理。
- */
+/** 这个 JSON 是「独立世界书」而不是角色卡吗？
+ *  ⚠️ 必须单独判断：酒馆世界书也带 name/description，characterFromCard 见到 name 就认成角色卡，
+ *  整本书会被导入成一个空角色。顶层有 entries、且无角色卡专属字段的按世界书处理。 */
 function looksLikeLorebook(card) {
   if (!card || typeof card !== 'object' || Array.isArray(card)) return false;
   if (!card.entries) return false;
   return !card.first_mes && !card.char_name && !card.personality && !card.mes_example;
 }
 
-// 只导出外部真正要用的。normalizeWorldbookEntry / worldbookEntryList 是
-// 这个文件的内部步骤，导出去只会让人以为别处可以直接调它们。
+// 只导出外部真正要用的，内部步骤（normalizeWorldbookEntry / worldbookEntryList）不外露
 module.exports = {
   MAX_WORLDBOOK_ENTRIES,
   MAX_WORLDBOOK_CHARACTERS,

@@ -1,24 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  tools/test-settings-migration.js —— 设置结构迁移（config.json 的 v1 → v2）
-//
-//  为什么要有这份测试：`DEFAULT_SETTINGS` **只对「磁盘上缺这个键」生效**。
-//  而每次 saveSettings 都会把 normalizeSettings 的整份结果落盘 ——
-//  也就是说老用户的 config.json 里每个键都是显式写着的，**光改默认值对他们无效**。
-//  这个坑真踩过：把 worldbookRecursiveDepth 的默认值改成 0，老配置里那个 3 纹丝不动。
-//  所以需要版本号 + 一次性迁移，而迁移这种东西最容易「看着对、其实没生效」——
-//  第一版实现就踩了：迁移写在字段归一化**之前**，被后面「从 raw 重算」那段又改回 3。
-//  下面的用例把「值真的变了」和「通知真的发出去了」都钉住。
-//
-//  跑法： node --test tools/test-settings-migration.js
-//        （或 node tools/test-settings-migration.js —— 两种都行）
-//
-//  ⚠️ main/providers.js 会 require ./store.js，而 store.js 需要 electron 的
-//     app / safeStorage。这里没有 Electron 运行时，所以先往 require 缓存里塞个假的
-//     （口径与 tools/test-pet-store.js 一致）。迁移用例只用 normalizeSettings 这个纯函数；
-//     最后两条 saveSettings 用例会写盘，但写的是 tmpRoot 下的假 userData，不碰真实数据。
-// ============================================================================
+// tools/test-settings-migration.js —— 设置结构迁移（config.json 的 v1 → v2）；跑法：node --test tools/test-settings-migration.js
+// ⚠️ DEFAULT_SETTINGS 只对「磁盘上缺这个键」生效（每次保存都把整份归一化结果落盘），老配置只能靠版本号 + 一次性迁移
+// ⚠️ 无 Electron 运行时：先往 require 缓存里塞个假 electron；写盘落在 tmpRoot 的假 userData，不碰真实数据
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const path = require('node:path');
@@ -50,8 +34,7 @@ const { normalizeSettings, takeSettingsNotices, DEFAULT_SETTINGS, saveSettings, 
 // 假 electron 的 userData 指在 tmpRoot 里，data-dir.js 会当成「显式改过」直接用它 —— 不碰真实数据
 const { dataFile } = require('../main/store.js');
 
-// 一份「旧结构」的配置：有 providers（不然会走旧版扁平配置分支，那不是这里要测的），
-// 深度是当初的默认值 3，且**没有** settingsVersion。
+// 必须有 providers，不然会走旧版扁平配置分支（那不是这里要测的）；且不写 settingsVersion
 const legacy = (depth) => ({
   providers: [{ id: 'p1', name: '测试', baseUrl: 'https://a', apiKey: '', models: ['m'] }],
   activeProviderId: 'p1',
@@ -62,7 +45,7 @@ const legacy = (depth) => ({
 test('旧配置（无版本号）+ 深度为旧默认值 3 → 收敛到新的默认值', () => {
   takeSettingsNotices(); // 清空，避免上一条用例的残留
   const out = normalizeSettings(legacy(3));
-  // 目标值不写死：迁移的语义就是「旧默认值 → 新默认值」，写死会在下次改默认值时对不上。
+  // 目标值不写死：迁移的语义是「旧默认值 → 新默认值」，写死会在下次改默认值时对不上
   assert.equal(out.worldbookRecursiveDepth, DEFAULT_SETTINGS.worldbookRecursiveDepth, '值必须真的被改掉');
   assert.equal(DEFAULT_SETTINGS.worldbookRecursiveDepth, 1, '当前的新默认值是 1（只带一层）');
   assert.equal(out.settingsVersion, 2, '版本号要抬到 2，迁移只做一次');
@@ -108,28 +91,16 @@ test('全新安装（没有任何配置）：用默认值，且不产生迁移�
   assert.deepEqual(takeSettingsNotices(), [], '全新安装没什么好告知的');
 });
 
-// ---------------------------------------------------------------------------
-//  界面主题 / 配色方案的默认值
-//
-//  2026-10-12 把出厂默认从「白天 + 草莓奶昔」改成「夜间 + 琥珀灯」。
-//  这两个值的坑和 worldbookRecursiveDepth 一模一样：**光改默认值对老配置无效** ——
-//  每次 saveSettings 都会把整份归一化结果落盘，所以老 config.json 里
-//  theme / accent 都是显式写着的（"light" / "pink"），默认值碰不到它们。
-//  所以下面把「新装拿到啥」和「老配置保持啥」**分开**钉住 ——
-//  混在一条用例里测，哪一半坏了都看不出来（而且会误以为改默认值就万事大吉）。
-// ---------------------------------------------------------------------------
+// 新装拿到啥 / 老配置保持啥要分开钉：混在一条用例里，哪一半坏了都看不出来
 test('全新安装：默认是夜间 + 琥珀灯', () => {
   const out = normalizeSettings({});
   assert.equal(out.theme, 'dark', '新装默认夜间');
   assert.equal(out.accent, 'amber', '新装默认琥珀灯');
 
-  // 顺带钉住 DEFAULT_SETTINGS 本身 —— 它不只是「补缺键用的表」：
-  // main/window.js 直接拿 theme / accent 当**首屏窗口底色**，
-  // 写错就是「深色应用启动先闪一下白底 / 粉底」。
+  // DEFAULT_SETTINGS 不只是补缺键的表：window.js 拿它当首屏窗口底色，写错 = 深色应用启动先闪白底
   assert.equal(DEFAULT_SETTINGS.theme, 'dark', 'DEFAULT_SETTINGS 必须是真实的出厂默认');
   assert.equal(DEFAULT_SETTINGS.accent, 'amber', 'DEFAULT_SETTINGS 必须和 ACCENTS[0] 一致');
-  // 「默认配色 = ACCENTS 第一项」这条约定被好几处 fallback 依赖（window.js / preload.js），
-  // 别让它们各写各的。
+  // 「默认配色 = ACCENTS 第一项」被好几处 fallback 依赖（window.js / preload.js），别让它们各写各的
   assert.equal(DEFAULT_SETTINGS.accent, ACCENTS[0], '默认配色就是 ACCENTS 的第一项');
 });
 
@@ -137,10 +108,7 @@ test('老配置写着 light / pink → 明暗原样保留；下线的配色退�
   takeSettingsNotices();
   const out = normalizeSettings({ ...legacy(1), theme: 'light', accent: 'pink' });
   assert.equal(out.theme, 'light', '老用户选的白天不能被新默认值改掉');
-  // ⚠️ 这条 2026-10-15 改过：pink / blue / matcha 三套配色已下线，
-  //    老配置里存着的名字渲染不出来了，只能在归一化时退回 ACCENTS[0]。
-  //    和上面那半条的区别是：theme 只是**改了默认值**（用户的选择仍然有效），
-  //    accent「pink」是**这个值本身没了** —— 留着它等于留一个渲染不出来的状态。
+  // ⚠️ 和 theme 那半条不同：theme 只是改了默认值（用户选择仍有效），pink 是**这个值本身没了**
   assert.equal(out.accent, DEFAULT_SETTINGS.accent, '下线的配色退回默认那套');
   assert.deepEqual(takeSettingsNotices(), [], '改默认值 / 退配色都不是「迁移」，不该发通知');
 });
@@ -157,9 +125,7 @@ test('accent 只认白名单里的配色，认不出来就退回默认那套', (
   for (const a of ACCENTS) {
     assert.equal(normalizeSettings({ accent: a }).accent, a, `${a} 是合法配色`);
   }
-  // 只剩琥珀一套（2026-10-15 下线了 pink / blue / matcha）。
-  // 这条断言是**故意钉住数量**的：加回一套配色时它会红，逼着同时补
-  // style.css 的 token 块 + window.js 的 WINDOW_BG + 这里的用例。
+  // 故意钉住数量：加回一套配色时这条会红，逼着同时补 style.css 的 token 块 + window.js 的 WINDOW_BG
   assert.equal(ACCENTS.length, 1, '现在只剩一套配色');
   assert.deepEqual(ACCENTS, ['amber'], '剩下的那套是琥珀灯，且它是默认（ACCENTS[0]）');
   for (const dead of ['pink', 'blue', 'matcha']) {
@@ -194,9 +160,7 @@ test('saveSettings：写盘失败要让调用方知道（返回被拒绝的 Prom
 
 test('API Key 解不开时不再把密文当 Key（换电脑 / 换 Windows 账号）', () => {
   const { decryptApiKey } = require('../main/store.js');
-  // 假 safeStorage：真实现只认自己写出来的 blob，别的输入一律抛。
-  // 这里用前缀模拟 —— BLOB: 是「本机写出来的」，FAIL 是「本机解不开的」（换账号/换机器），
-  // 其余（比如有人拿明文十六进制当 base64 塞进来）真实现也会抛。
+  // 真 safeStorage 只认自己写出来的 blob，别的输入一律抛；这里用前缀模拟（BLOB: 能解 / FAIL 解不开）
   fakeElectron.safeStorage.isEncryptionAvailable = () => true;
   fakeElectron.safeStorage.decryptString = (buf) => {
     const text = buf.toString('utf8');
@@ -223,9 +187,7 @@ test('API Key 解不开时不再把密文当 Key（换电脑 / 换 Windows 账�
 });
 
 test('saveSettings: concurrent patches preserve both changes', async () => {
-  // ⚠️ 两个 patch 必须改**不同的键**，accents 只剩一套（拼不出两个合法 accent），
-  //    所以第二个键换成 sendOnEnter —— 这条用例测的是「串行队列不丢改动」，
-  //    具体哪个键无关。
+  // ⚠️ 两个 patch 必须改不同的键（只剩一套 accent，拼不出两个合法值）；测的是串行队列不丢改动
   await saveSettings({ theme: 'light', sendOnEnter: true });
   await Promise.all([saveSettings({ theme: 'dark' }), saveSettings({ sendOnEnter: false })]);
   const saved = JSON.parse(fs.readFileSync(dataFile('config.json'), 'utf8'));

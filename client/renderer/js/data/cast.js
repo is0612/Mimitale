@@ -1,17 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  data/cast.js —— 「谁在说话」和「这个世界有哪些人」
-//
-//  只做一件事：把一条会话 + 角色库/世界书读成「谁是谁」。全是纯读，不写。
-//
-//  为什么要单独一层：同一个口径至少有三处要用 ——
-//    · 提示词组装（data/messages.js）：{{user}} 填谁、助手那侧算谁
-//    · 界面标签（views/messageList.js）：气泡上写什么名字
-//    · 导出（views/exports.js）：Markdown 里的说话人
-//  口径分散的后果是「气泡上写世界名、提示词里写角色名」这种对不上的情况，
-//  而且很难发现 —— 所以沉到 data 层，谁都不用认识谁。
-// ============================================================================
+// 「谁在说话」：把会话 + 角色库/世界书读成「谁是谁」，纯读不写。
+// 口径只在这里维护（提示词、气泡标签、导出共用），否则各处会互相打架。
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
@@ -29,38 +19,18 @@ import {
 import { convoPanelFields, panelFieldOwner } from './panel.js';
 import { isGmMode } from './narration.js';
 
-/** {{user}} 的替换值（默认名；世界会话用玩家角色名覆盖） */
 export function userName() {
   return '你';
 }
 
-/**
- * 「纯聊天」= 既没绑角色卡、也不是世界（GM）模式 —— 就是**跟模型聊天**。
- *
- * 这是「新对话」和「角色卡对话 / 世界」的分界线，**一个口径两处要用**：
- *   · data/messages.js      —— 决定要不要注入「扮演那一套」（规则 / 世界书 / 面板 /
- *                              剧情选项 / 表情 / 视角设置）
- *   · views/perspectiveUi.js、views/header.js —— 决定视角弹窗里哪些控件该出现
- *
- * ⚠️ 两边各判各的就会出现「界面上有这个开关、提示词里却不认」的错位 ——
- *    2026-10-08 修过的「叙述模式能选却不生效」就是那么来的。所以判定收在这一处。
- *
- * 纯读，不改 convo。
- */
+/** 纯聊天 = 没绑卡也不是 GM。判定只此一处：messages 和视角弹窗都来问它。
+ *  ⚠️ 两边各判各的会出现「界面上有开关、提示词里却不认」的错位。 */
 export function isPlainChatConvo(convo) {
   return !characterForConvo(convo) && !isGmMode(convo);
 }
 
-/**
- * 「默认人设」是按**模型**各存一份的，所以先要确定用哪一份。
- *
- * 口径：会话自己用的模型优先（每个会话都记着自己的模型），没有会话
- * （比如空状态页）才退回设置里的当前模型。都没配就返回空串 —— 调用方
- * 拿空串去查表，查不到自然落到内置默认。
- *
- * 纯读，不改 convo —— 别在这儿调 ensureConvoEndpoint()：那会就地补全会话对象，
- * 而这一层（data/cast.js）只做「把数据读成谁是谁」，不该产生副作用。
- */
+// 默认人设按模型各存一份：会话自己的模型优先，没有会话才退回设置里的当前模型。
+// 纯读，别在这儿补全会话对象 —— data 层不产生副作用。
 function assistantModelKey(convo) {
   const own = convo && String(convo.model || '').trim();
   if (own) return own;
@@ -68,7 +38,6 @@ function assistantModelKey(convo) {
   return String(s.activeModel || '').trim();
 }
 
-/** 某个模型的默认人设条目（没配过就是 null） */
 function assistantPersonaEntry(convo) {
   const s = state.settings || {};
   const map = s.assistantPersonas;
@@ -77,38 +46,19 @@ function assistantPersonaEntry(convo) {
   return entry && typeof entry === 'object' ? entry : null;
 }
 
-/**
- * 通用助手的名字 —— 没绑定角色卡的会话里，AI 那一侧是谁。
- * 按会话当前用的模型取「默认人设」那一份。
- *
- * **没写名字就是空串**：这里不兜任何内置假名，空名字怎么显示由上层自己决定
- * —— 气泡和导出用「AI」，空状态标题则干脆不提名字（「开始聊天吧～」）。
- */
+/** 通用助手的名字（按会话当前模型取默认人设）；没写名字就是空串，不兜内置假名 */
 export function assistantName(convo) {
   const entry = assistantPersonaEntry(convo);
   return String((entry && entry.name) || '').trim();
 }
 
-/**
- * 通用助手的设定正文，同样是按模型取。
- * 空串是**正常状态**：这个模型没配人设 = 不扮演任何角色，跟以前一样。
- */
+/** 通用助手的设定正文；空串是正常状态（这个模型没配人设 = 不扮演） */
 export function assistantPersona(convo) {
   const entry = assistantPersonaEntry(convo);
   return String((entry && entry.persona) || '').trim();
 }
 
-/**
- * 这次请求实际要注入哪些世界书。
- *
- * 规则（会话优先，且不合并）：
- *   · 会话绑了世界书（含「进入世界」）→ 只用会话的，角色自带的一律不带入。
- *     一条会话只有一个世界观，不会出现两套设定互相打架。
- *   · 会话没绑 → 才用角色自带的那几本（前提是这张卡的开关是开的）。
- *
- * 角色的开关（worldbookEnabled）关掉后，两种情况都不带入 ——
- * 这样无论单独聊天、还是被绑进某个世界当角色，这张卡都是干净的。
- */
+// 实际注入哪些世界书：会话绑了就只用会话的，没绑才用角色自带的（开关要开）。
 export function effectiveWorldbookIds(convo) {
   const convoIds = convoWorldbookIds(convo);
   if (convoIds.length) return convoIds;
@@ -120,20 +70,11 @@ export function effectiveWorldbookIds(convo) {
   return asArray(character.worldbookIds);
 }
 
-/** 世界书两块注入文本的空值 —— 调用方拿到的形状永远一致，不用各自判空 */
+/** 世界书两块注入文本的空值：调用方拿到的形状永远一致 */
 const EMPTY_WORLDBOOK = { section: '', deepSection: '' };
 
-/**
- * 按当前对话正文去世界书里匹配设定，返回**两块**能直接注入的文本：
- *   section     —— 关键词命中的那批（「这一轮聊到才相关」的参考资料）
- *   deepSection —— 常驻条目（「每一轮都成立」的规则），由 messages.js 送到靠近生成位置的地方
- *
- * 为什么要分两块：见 main/worldbook-match.js 的 `formatWorldbookSections` 注释。
- * 调用方**必须把两块都传给 `buildApiMessages`** —— 只传 section 的话常驻条目就丢了
- * （表现是「导入的卡那些规则一条都不生效」，而且不会报错）。
- *
- * 匹配失败**不抛错**：世界书挂了不该拦住正常聊天，返回两个空串就行。
- */
+// 匹配世界书，返回 { section, deepSection }。⚠️ 调用方必须两块都传给 buildApiMessages，
+// 只传 section 常驻条目就丢了（表现是卡里的规则一条都不生效，且不报错）。
 export async function matchWorldbookSections(convo) {
   const allIds = [...new Set(effectiveWorldbookIds(convo))];
   if (!allIds.length) return { ...EMPTY_WORLDBOOK };
@@ -154,23 +95,14 @@ export async function matchWorldbookSections(convo) {
       deepSection: (result && result.deepSection) || ''
     };
   } catch (err) {
-    // 世界书匹配失败不该拦住正常聊天
+    // 世界书挂了不该拦住正常聊天
     console.error('世界书匹配失败', err);
     return { ...EMPTY_WORLDBOOK };
   }
 }
 
-/**
- * 这一轮世界书会命中几条 —— 右栏脚注那颗「N 条已触发」用的。
- *
- * 和 matchWorldbookSections 走**同一套扫描口径**（同几个 id、同样的扫描深度和递归深度），
- * 区别只是它把 `hits` 的长度取出来，而不是拼成注入文本。
- * ⚠️ 之前 castPanel.js 的注释写着「previewWorldbook 回不到命中了几条」——
- *    那句是错的：主进程 `worldbooks:preview` 的返回值里一直有 `hits` 和 `total`
- *    （见 main/ipc.js 的 return），只是取的人只用了 section。
- *
- * 匹配失败**不抛错**：世界书挂了不该把右栏脚注搞没，返回 null 表示「这次没数出来」。
- */
+// 这一轮命中几条（右栏脚注用）：和 matchWorldbookSections 同一套扫描口径，取 hits.length。
+// 失败返回 null，不抛错。
 export async function worldbookHitCount(convo) {
   const allIds = [...new Set(effectiveWorldbookIds(convo))];
   if (!allIds.length) return 0;
@@ -201,16 +133,12 @@ export function convoPlayer(convo) {
   const name = String(p.name || '').trim();
   const profile = String(p.profile || '').trim();
   // ⚠️ characterId 必须带出去：panelEntities 要靠它找玩家挑的那张卡（立绘 / 表情）。
-  //    只回 name/profile 的话，那条「优先角色库那张卡」的分支永远拿不到 id。
   const characterId = typeof p.characterId === 'string' ? p.characterId.trim() : '';
   if (!name && !profile && !characterId) return null;
   return { name, profile, characterId };
 }
 
-/**
- * 把一段文本里的 {{char}}/{{user}}/<BOT>/<USER> 统一替换成玩家名 ——
- * 挑一张卡当自己时，这些宏都指玩家本人。纯函数，只读不改。
- */
+/** 把 {{char}}/{{user}}/<BOT>/<USER> 都换成玩家名（挑一张卡当自己时，这些宏都指本人） */
 function substituteSelf(text, name) {
   const who = String(name || '').trim() || '你';
   return String(text)
@@ -220,20 +148,14 @@ function substituteSelf(text, name) {
     .replace(/<USER>/gi, () => who);
 }
 
-/**
- * 把玩家角色设定里的宏统一替换成玩家名，拼成能直接注入的文本。纯函数，只读不改。
- */
+/** 玩家角色设定里的宏换成玩家名，拼成可注入的文本（纯函数） */
 export function playerProfileForPrompt(convo) {
   const player = convoPlayer(convo);
   if (!player || !player.profile) return '';
   return substituteSelf(player.profile, player.name || convoUserName(convo));
 }
 
-/**
- * 把一张角色卡拼成「玩家角色」的设定文本：描述 + 性格都带上。
- * 开场背景（scenario）不带 —— 那是「这张卡当 NPC」的场景预设，不是「我是谁」。
- * 「挑一张卡当自己」时用它预填设定框（填完还能改）。
- */
+// 把角色卡拼成「玩家角色」设定：描述 + 性格。不带 scenario —— 那是「这张卡当 NPC」的场景。
 export function playerProfileFromCharacter(character) {
   if (!character) return '';
   const name = String(character.name || '').trim() || '你';
@@ -251,12 +173,7 @@ export function convoUserName(convo) {
   return player && player.name ? player.name : userName();
 }
 
-/**
- * 按 id 找一张角色卡 —— 先查角色库，再查本会话绑定的世界书里的「本书角色」。
- *
- * 状态面板字段的 owner 存的是「卡 id」：单角色聊天存角色库那张卡、玩世界书存
- * 世界书里那份副本。两种都要能找回名字和头像，所以查找要覆盖两处。
- */
+// 按 id 找卡：先角色库，再本会话世界书里的副本（面板 owner 存的就是这两类 id）。
 export function findCardById(convo, id) {
   const target = String(id || '').trim();
   if (!target) return null;
@@ -274,23 +191,11 @@ export function findCardById(convo, id) {
   return null;
 }
 
-/**
- * 场景（世界本身）的 owner 标识 —— 已停用。老数据里读到 'scene' 按「无主」处理，
- * 别再新增。常量只保留用于兼容。
- */
+// 已停用的场景 owner：老数据读到 'scene' 按无主处理，别再新增。
 const SCENE_OWNER = 'scene';
 
-/**
- * 本局有状态的每个人：我（玩家，永远第一）+ 要显示状态的角色卡。
- * 单角色聊天绑的卡永远显示；世界书副本只有 showInPanel === true 才显示
- * （属性照旧种进面板，只是不显示）。AI 现编的 NPC 没有卡，不列。
- * 返回 [{ owner, kind, name, avatar, card }]，owner 直接喂给 openStateCard。
- * card 是这张卡本身（找不到就是 null），给状态卡取形象图 / 表情图用。
- *
- * 这是**数据层**的全量名单：提示词注入（data/messages.js）和状态卡排序
- * （views/stateCard.js）用它，玩家字段照常生效。
- * 入口条那条横幅别直接用它 —— 走 panelCastForDisplay（普通聊天不显示「我」）。
- */
+// 本局有状态的每个人：玩家永远第一，其余是要显示的角色卡（世界书副本看 showInPanel）。
+// card 给状态卡取立绘/表情；入口条别直接用，走 panelCastForDisplay。
 export function panelEntities(convo) {
   if (!convo) return [];
 
@@ -298,10 +203,7 @@ export function panelEntities(convo) {
   const seen = new Set();
 
   const player = convoPlayer(convo);
-  // 「我」的那张卡：优先玩家挑的角色库卡（convo.player.characterId）；
-  // 挑的是世界书副本当自己时那里是空的 —— 这时按**名字**在本会话绑定的书里
-  // 找回那个同名副本（就是玩家本人，见 data/panel.js 的 mergePlayerOwnedFields）。
-  // 不这么兜的话，「我」这张卡拿不到卡对象 → 状态卡没有立绘、没有表情图。
+  // 「我」的卡：优先玩家挑的角色库卡；挑的是世界书副本时按名字在本会话书里找回。
   let playerCard = player && player.characterId ? characterById(player.characterId) : null;
   if (!playerCard && player) {
     const playerName = convoUserName(convo);
@@ -325,17 +227,13 @@ export function panelEntities(convo) {
   });
   seen.add('player');
 
-  // 单卡会话绑的那张卡：不管开关，永远显示（TA 就是这局的主角）。
-  // ⚠️ 不能拿「玩家有没有设身份」当条件 —— 开聊时挑了一张卡当自己之后，
-  //    玩家一有身份，绑定的那个角色就会掉进 showsInPanel（默认 false）被过滤掉，
-  //    入口条只剩「我」，那个角色的状态卡再也点不开。
-  //    进世界的会话 characterId 为空，这里自然拿不到。
+  // 单卡会话绑的卡永远显示。⚠️ 不能拿「玩家有没有设身份」当条件 —— 否则它会掉进
+  // showsInPanel（默认 false）被过滤，入口条只剩「我」。
   const soloCardId = convo.characterId ? String(convo.characterId) : '';
 
   for (const name of convoPanelFields(convo)) {
     const owner = panelFieldOwner(convo, name);
-    // 无主字段不归任何人（正常情况下扫描收尾时已经并给主角或丢掉了，
-    // 这里只是兜底：读到老数据里的 'scene' 也当无主跳过，不再冒出一个入口）
+    // 无主字段不归任何人（老数据里的 'scene' 也当无主跳过）。
     if (!owner || owner === SCENE_OWNER) continue;
     if (seen.has(owner)) continue;
 
@@ -356,14 +254,7 @@ export function panelEntities(convo) {
   return out;
 }
 
-/**
- * 「在场角色」入口条要显示的人（panelEntities 的显示版）。
- *
- * 「我」只在**玩世界书**的会话里出现 —— 普通聊天（绑角色 / 空白会话）里
- * 玩家状态不占一个头像；这样一来只剩「我」的会话名单为空，
- * 入口条整条收掉（panelUi 按空名单隐藏横幅）。
- * 普通聊天里想给「我」加状态，点自己消息的头像照样能开那张卡。
- */
+// 入口条显示名单：「我」只在玩世界书的会话里出现，普通聊天里不占头像。
 export function panelCastForDisplay(convo) {
   if (!convo) return [];
   const entities = panelEntities(convo);
@@ -371,12 +262,7 @@ export function panelCastForDisplay(convo) {
   return entities.filter((e) => e.owner !== 'player');
 }
 
-/**
- * 助手那一侧显示成谁：
- *   · 绑了角色卡 → 角色名
- *   · 进了世界 → 世界名（那个世界里的所有 NPC 都算它说的）
- *   · 都没有 → 通用助手，用设置里「默认人设」那个名字
- */
+// 助手那侧显示成谁：绑卡 → 角色名；进世界 → 世界名；否则 → 默认人设的名字。
 export function speakerName(convo) {
   // GM 模式没有「某个人」：世界名优先于会话上可能残留的绑定卡。
   if (!isGmMode(convo)) {
@@ -396,24 +282,14 @@ export function speakerName(convo) {
 const MAX_CAST_CHARS = 3000;
 const MAX_CAST_PER_NPC = 160;
 
-/**
- * 书里的某个角色副本是不是「玩家本人」。
- *
- * 玩家用某张卡「进入世界」时，那张卡（或同名角色）可能也在书里当 NPC ——
- * 副本名字和玩家名撞了，GM 名单里就冒出两个同名的人。判断只认名字：
- * 副本名字和玩家名一样，就视为玩家本人、不当 NPC。纯函数，只读传入的 convo。
- */
+// 副本是不是玩家本人：只按名字判定，同名的副本不当 NPC，否则 GM 名单出现两个同名。
 export function isPlayerCharacterCopy(convo, character) {
   if (!convo || !character) return false;
   const playerName = convoUserName(convo);
   return String(character.name || '').trim() === playerName;
 }
 
-/**
- * 「这个世界的人」：把书里的角色副本列给 GM（每轮注入，有长度上限）。
- * 与玩家同名的副本（玩家用某卡进世界）标成「玩家扮演」，不当 NPC 罗列，
- * 否则 GM 名单里会冒出两个同名、分不清谁是谁。
- */
+// 「这个世界的人」：把书里的副本列给 GM（有长度上限）；与玩家同名的副本标成玩家扮演。
 export function worldbookCast(convo) {
   const books = convoWorldbookIds(convo)
     .map((id) => worldbookById(id))
@@ -422,8 +298,7 @@ export function worldbookCast(convo) {
   if (!cast.length) return '';
 
   const playerName = convoUserName(convo);
-  // 先算清「真正的 NPC 总数」：玩家本人的同名副本不算 NPC。
-  // 不先扣掉它的话，超预算时那句「还有 N 人没列出」会把玩家自己也算进去。
+  // 先扣掉玩家本人的同名副本，否则「还有 N 人」会把玩家自己算进去。
   const npcTotal = cast.filter((c) => !isPlayerCharacterCopy(convo, c)).length;
 
   const lines = [];
@@ -431,7 +306,6 @@ export function worldbookCast(convo) {
   let npcCount = 0;
 
   for (const c of cast) {
-    // 与玩家同名的副本 = 玩家本人，不是 NPC：跳过，别让 GM 当成另一个人来演
     if (isPlayerCharacterCopy(convo, c)) continue;
     npcCount += 1;
 
@@ -442,7 +316,6 @@ export function worldbookCast(convo) {
     const line = `- ${c.name}：${bits.slice(0, MAX_CAST_PER_NPC) || '（没写设定）'}`;
 
     if (total + line.length > MAX_CAST_CHARS) {
-      // 当前这条 + 后面还没处理的，都算「没列出」
       const remaining = npcTotal - npcCount + 1;
       lines.push(`- （还有 ${remaining} 人没列出）`);
       break;

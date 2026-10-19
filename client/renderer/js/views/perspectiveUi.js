@@ -1,17 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  views/perspectiveUi.js —— 视角设置弹窗
-//
-//  几样东西：叙述模式（标准 / 内心描写 / 上帝视角）、推进节奏（一步一步 …）、
-//  GM 模式、以及**预设**（叠在对话上的一层指令）。它们改变的是「模型看这个
-//  世界的视角」，最终都只是往系统提示词里拼一段文本（规则文本在 data/narration.js，
-//  预设那段的组装在 data/messages.js 的 dialoguePresetSection）。
-//
-//  交互是「改动即时生效 + 即时落盘」—— 没有保存按钮，所以每次 change 都要
-//  顺手刷新头部（头部那行 Meta 会显示偏离默认的视角标签）。
-//  这里 import header.js 是单向的：header 只依赖数据层，不认识任何视图。
-// ============================================================================
+//  views/perspectiveUi.js —— 视角设置弹窗（叙述模式 / 推进节奏 / GM / 预设），最终只往系统提示词拼一段文本。
+//  改动即时生效 + 即时落盘，没有保存按钮，所以每次 change 都要顺手刷新头部。
+//  单向 import header.js（header 只依赖数据层，不认识任何视图）。
 
 import { el } from '../core/dom.js';
 import { now, activeConvo } from '../core/util.js';
@@ -35,16 +26,7 @@ import {
 import { isPlainChatConvo } from '../data/cast.js';
 import { renderHeader } from './header.js';
 
-/**
- * 铺预设勾选列表。
- *
- * 三种状态要分清 —— 这是这个功能最容易做错的地方：
- *   · 会话 `dialoguePresetIds` 是 null → 「还没手动配过」，勾选状态**照全局预设**预勾上，
- *     但只要用户动一下任何一格，就转成「手动配过」（落成数组），从此按他自己的来。
- *   · 是数组 → 手动配过，勾选状态就照它显示。
- *   · 绑着的预设被删掉/停用了 → 不再出现在列表里（静默跳过），
- *     但宁可让用户看见「有一条没了」，所以在下面留一行提示。
- */
+/** 铺预设勾选列表。⚠️ `dialoguePresetIds` 为 null = 没手动配过（照全局预勾），动一格即转手动；已删 / 停用的 id 静默跳过，只留一行提示。 */
 function fillPresetList(convo) {
   if (!el.pPresetList) return;
   clear(el.pPresetList);
@@ -61,7 +43,6 @@ function fillPresetList(convo) {
   const auto = picked === null;
   const checked = new Set(auto ? globalDialoguePresets().map((p) => p.id) : picked);
 
-  // 被删/停用、但仍然挂在会话上的 id：留一行提示，别让用户以为「自己明明设过」
   const alive = new Set(list.map((p) => p.id));
   const goneIds = auto ? [] : picked.filter((id) => !alive.has(id));
 
@@ -83,7 +64,6 @@ function fillPresetList(convo) {
     el.pPresetList.appendChild(row);
   }
 
-  // 「跟随全局」/「已手动配置」的状态说明 —— 用户得知道自己现在处在哪一档
   const note = h('span', {
     class: `preset-pick-state${auto ? '' : ' is-manual'}`,
     text: auto
@@ -101,13 +81,7 @@ function fillPresetList(convo) {
   }
 }
 
-/**
- * 一动手就转成「手动配过」：读现有勾选状态写回会话。
- *
- * ⚠️ 这个监听器**只在 initPerspectiveUi 里绑一次**（事件委托挂在容器上）。
- *    别挪回 fillPresetList：那个函数每开一次弹窗都跑一遍，监听器一次叠一个，
- *    开过 N 次之后点一下勾选会连着存 N 次盘。
- */
+/** 一动手就转成「手动配过」。⚠️ 只在 initPerspectiveUi 里绑一次；挪回 fillPresetList 会开 N 次弹窗后点一下存 N 次盘。 */
 function commitPresetChoice() {
   const convo = activeConvo();
   if (!convo) return;
@@ -115,8 +89,7 @@ function commitPresetChoice() {
   const boxes = Array.from(el.pPresetList.querySelectorAll('.preset-pick-box'));
   const ids = boxes.filter((box) => box.checked).map((box) => box.getAttribute('data-preset-id'));
 
-  // 保留那些「已删/已停用」的 id —— 它们是用户当初的选择，
-  // 万一预设只是临时停用，重新启用时还能回来
+  // 保留已删 / 已停用的 id：预设只是临时停用时，重新启用还能回来
   const alive = new Set(selectableDialoguePresets().map((p) => p.id));
   const kept = convoDialoguePresetIds(convo) || [];
   const goneIds = kept.filter((id) => !alive.has(id));
@@ -148,11 +121,8 @@ function openPerspectiveModal() {
     return;
   }
 
-  // 纯聊天（没绑角色卡、也不是世界模式）= 就是跟模型聊天，**没有「演」这回事**。
-  // 所以叙述模式和推进节奏这两组在这里直接不出现 —— 提示词里也不注入它们
-  // （见 data/messages.js 文件头）。
-  // ⚠️ 藏起来不是“眼不见为净”：留着才是 bug —— 能选、能存、顶栏还显示标签，
-  //    对模型却一个字都不影响。
+  // ⚠️ 纯聊天（没绑角色卡、也不是世界模式）没有叙述模式 / 推进节奏这回事：
+  //    留着才是 bug —— 能选、能存、顶栏还显示标签，对模型却一个字都不影响。
   const plain = isPlainChatConvo(convo);
 
   el.pNarration.value = convoNarrationMode(convo);
@@ -165,11 +135,7 @@ function openPerspectiveModal() {
   el.perspectiveModal.classList.remove('hidden');
 }
 
-/**
- * 把某个控件所在的**整组**（`label.field`）显示 / 隐藏。
- *
- * 找容器用 closest，不在 index.html 上加新 id —— 分组只是视觉上的，DOM 结构不用动。
- */
+/** 显示 / 隐藏控件所在的**整组**（`label.field`）。 */
 function setFieldVisible(input, visible) {
   const field = input && typeof input.closest === 'function' ? input.closest('.field') : null;
   if (field) field.classList.toggle('hidden', !visible);

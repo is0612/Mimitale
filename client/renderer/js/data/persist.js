@@ -1,13 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  data/persist.js —— 把内存里的数据写回磁盘
-//  会话是防抖保存；角色库 / 世界书是两个文件，但主进程允许一次写入带上两者，
-//  所以走 persistLibrary() 一起落盘。
-//
-//  三个入口都在写角色库（角色编辑器、世界书编辑器里的副本、两条导入链路），
-//  所以 persistCharacters / persistLibrary 沉在这儿，谁都不用认识谁。
-// ============================================================================
+// data/persist.js —— 把内存里的数据写回磁盘
+// 会话防抖保存；角色库 / 世界书是两个文件，但主进程允许一次写入带上两者，所以走 persistLibrary() 一起落盘。
+// 三个入口都在写角色库，所以 persistCharacters / persistLibrary 沉在这儿。
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
@@ -18,18 +13,7 @@ import { characters, worldbooks, dialoguePresets } from './library.js';
 let saveTimer = null;
 
 /**
- * 写盘失败后**隔一会儿自动再试一次**。
- *
- * 主进程那套退避重试（30·70·150·250ms，合计约 0.5 秒）只覆盖几百毫秒：
- * 索引 / 同步盘 / 杀软扫描这类**真的**瞬时占用，占上几百毫秒到一两秒都算正常。
- * 只靠它的话，偶尔一次失败就会直接顶到用户面前，用户多半不知道刚才那下没生效。
- *
- * 这里补的是**更晚的那一次**：绝大多数时候用户完全无感，只有两次都失败才会看到
- * 提示、界面才会回滚。调用方拿到的语义不变：
- *   resolve = 真的写进去了；reject = 两次都没成，可以按失败处理了。
- *
- * ⚠️ 传进来的是个**取数据的函数**而不是现成的 payload —— 重试那一下要带上
- *    「重试这一刻」的最新状态，而不是 1.2 秒前那份快照。
+ * 写盘失败后隔 1.2 秒自动再试一次（主进程退避重试只覆盖约 0.5 秒）：resolve = 真写进去了，reject = 两次都没成。⚠️ 传进来的是**取数据的函数**而不是现成 payload —— 重试要带「重试这一刻」的最新状态。
  */
 const WRITE_RETRY_DELAY_MS = 1200;
 
@@ -44,18 +28,7 @@ async function writeWithOneLateRetry(writeOnce) {
 }
 
 /**
- * 同一个文件（key）的写入**串起来**，永远不并发。
- *
- * ⚠️ 为什么非串不可：persistConversations 的防抖只管「什么时候**开始**写」。
- *    前一次还飞在路上时又触发一次，两次写就并发 —— 主进程那边排队，
- *    可**先发出的那次反而可能后落盘**（它在主进程内部还有退避重试，最多再等 0.5 秒）。
- *    结果：磁盘上是旧快照，刚改的那一下没了。
- *    实测最容易踩的两处：改状态栏（persistConversations(0)）紧接着回复结束保存；
- *    以及关窗口那次保存（beforeunload）被还在飞的上一次盖掉。
- *
- * ⚠️ 队尾必须自己把异常吃掉（.then 的两个处理函数都要写）：一次失败会把链
- *    永久钉在 rejected，之后每次保存都直接跳过 —— 和 main/store.js 的
- *    writeQueue 是同一个坑，那边有长注释。
+ * 同一个 key 的写入串起来，永远不并发。⚠️ 防抖只管「何时开始写」，并发时先发出的那次可能后落盘、留下旧快照；队尾必须自己吃掉异常（.then 两个处理函数都要写），否则链永久钉在 rejected、之后每次保存都被跳过。
  */
 const writeChains = new Map(); // key → 队尾 Promise
 
@@ -73,16 +46,7 @@ function queueWrite(key, call) {
 }
 
 /**
- * 写盘失败时统一的说法。
- *
- * ⚠️ 不要一口咬定「文件可能被杀软临时占用或带了只读属性」—— 真正常见的失败是
- *    **权限判定**：错误原文长这样 `EPERM: ... open '...characters.json.tmp'`，
- *    重试 0.5 秒 + 1.2 秒之后照样失败。常见原因是进程被降成低完整性
- *    （见 main/store.js 文件头），跟 ACL / 只读属性无关。猜错原因会把人支去
- *    关杀软、改只读属性，全是白费功夫。
- *
- *    所以这里把**真正的错误原文**带出来，只对确凿的错误码给提示。
- *    只有真撞上 ENOSPC 才说磁盘满（角色卡头像是内嵌 base64，几十张卡确实吃得掉空间）。
+ * 写盘失败时统一的说法。⚠️ 别归咎杀软 / 只读属性：真正常见的是**权限判定**（EPERM，进程被降成低完整性，见 main/store.js 文件头），所以带出真正的错误原文、只对确凿的错误码给提示。
  */
 function writeFailedText(what, err) {
   const msg = String((err && err.message) || '');
@@ -112,11 +76,7 @@ export function persistConversations(delay) {
 }
 
 /**
- * 世界书是否成功从磁盘读进来了。
- *
- * 读失败时**必须记住** —— 否则之后随便存一次角色，就会把 worldbooks.json
- * 覆盖成空文件。这个标志和 persistLibrary 一起放在这儿，是因为
- * 「读没读到」和「能不能写」是同一个约束的两面，分开就有人会忘了检查。
+ * 世界书是否成功读进来了。⚠️ 读失败时必须记住：否则随便存一次角色就会把 worldbooks.json 覆盖成空文件。
  */
 let worldbooksLoaded = false;
 
@@ -125,12 +85,7 @@ export function markWorldbooksLoaded() {
   worldbooksLoaded = true;
 }
 
-/**
- * 预设是否成功从磁盘读进来了。
- *
- * 和 worldbooksLoaded 同一个道理：读失败时**必须记住**，
- * 否则之后随便存一次角色/世界书，就会把 presets.json 覆盖成空文件。
- */
+/** 同 worldbooksLoaded：⚠️ 读失败时必须记住，否则存一次角色 / 世界书就会把 presets.json 写空 */
 let presetsLoaded = false;
 
 /** 启动时读到预设后调用（读失败就别调，见上） */
@@ -138,10 +93,7 @@ export function markPresetsLoaded() {
   presetsLoaded = true;
 }
 
-/**
- * 把当前预设写回磁盘（单独一个文件，不受角色 / 世界书影响）。
- * immediate = true 时立刻写，不等下一帧。
- */
+/** 把当前预设写回磁盘（单独一个文件，不受角色 / 世界书影响）；immediate = true 时立刻写、不等下一帧 */
 export function persistPresets(immediate) {
   // 没读进来就什么都别写：写下去等于把文件清空
   if (!presetsLoaded) {
@@ -166,14 +118,7 @@ export function persistPresets(immediate) {
 }
 
 /**
- * 把当前角色库写回磁盘。**返回是否真的写成功了**（调用方靠它决定要不要报「已保存」）。
- *
- * 角色和世界书分开存两个文件，主进程允许一次请求同时带上 worldbooks；
- * 但只在世界书确实读进来了时才带 —— 否则「存一次角色」会把 worldbooks.json 写空。
- *
- * immediate = true 时立刻写、不等下一帧（关闭窗口前那种必须落地的场景）。
- * 那条路走的是 ipcRenderer.send，没有回执，只能尽力而为 ——
- * 反正关窗口时也来不及让用户看提示了。
+ * 把角色库写回磁盘，**返回是否真的写成功了**（调用方靠它决定要不要报「已保存」）。⚠️ 只在 worldbooksLoaded 时才带 worldbooks，否则「存一次角色」会把 worldbooks.json 写空；immediate 走 ipcRenderer.send、没有回执。
  */
 export function persistCharacters(immediate) {
   const buildPayload = () => {
@@ -196,13 +141,7 @@ export function persistCharacters(immediate) {
     });
 }
 
-/**
- * 把当前角色库 + 世界书写回磁盘。
- * 角色卡和世界书是两个文件，主进程允许一次写入同时带上两者。
- * 返回是否成功 —— 绑定这类操作失败时界面要回滚，不能假装成功。
- *
- * 三头都在用（世界书编辑器、角色编辑器、导入），所以沉在数据层。
- */
+/** 把角色库 + 世界书写回磁盘（两个文件，主进程允许一次写入带上两者）；返回是否成功 —— 绑定失败时界面要回滚，不能假装成功 */
 export async function persistLibrary() {
   // 世界书没读进来就什么都别写：写下去等于把文件清空
   if (!worldbooksLoaded) {

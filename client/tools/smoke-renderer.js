@@ -897,13 +897,12 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   //    `button({ class: ... })` 现渲染的（不带 variant 就不生成 .btn 底座，见
   //    ui/build.js 文件头那条「图标按钮不套组件」的边界）。「解散这一组」已迁
   //    m-button —— 它不再带 `.btn-danger`，断言里按 `#c-attr-group-edit m-button` 找。
-  // 2026-10-19 下半场：导出从「左栏铺满」搬回页头右上；左栏底部换成了「保存 / 返回 / 删除」。
-  // 原来那两条「左栏导出铺满栏宽 / 文字靠左」测的是 rail-foot 的排版规则，现在对象变了。
+  // 导出和「返回」并排待在左栏底部（1+2+1：保存独占一行，导出·返回并排，删除殿后）
   const exportBtn = byId('btn-export-char');
   check(
-    '「导出」在页头右上（不在左栏底部）',
-    !!exportBtn && !!exportBtn.closest('.page-actions') && !exportBtn.closest('#char-rail-foot'),
-    exportBtn ? (exportBtn.closest('.page-actions') ? '在页头' : '不在页头') : '按钮不存在'
+    '「导出」在左栏底部（和「返回」并排）',
+    !!exportBtn && !!exportBtn.closest('#char-rail-foot') && !!exportBtn.closest('.char-rail-pair'),
+    exportBtn ? (exportBtn.closest('.char-rail-pair') ? '在左栏并排' : '不在左栏并排') : '按钮不存在'
   );
   const railSave = byId('btn-save-char');
   check(
@@ -8832,8 +8831,16 @@ await scenario('角色：表情图按回复关键词切换', async () => {
     !!byId('char-expr-list') && !!byId('char-expr-list').closest('#char-section-expressions')
   );
   check('还没加表情时有一句提示', /还没有表情图/.test(byId('char-expr-list').textContent));
+  {
+    const empty = byId('char-expr-list').querySelector('.char-expr-empty');
+    check(
+      '空状态横跨整行（grid-column 1 / -1，不缩在第一格）',
+      !!empty && getComputedStyle(empty).gridColumn.includes('-1'),
+      empty ? getComputedStyle(empty).gridColumn : '没有空状态节点'
+    );
+  }
   click('#btn-add-expr');
-  await waitFor('多了一行表情', () => $$('#char-expr-list .char-expr-row').length === 1);
+  await waitFor('多了一行表情', () => $$('#char-expr-list .char-expr-card').length === 1);
   check(
     '左栏分区导航的「表情图」跟着显示 1',
     byId('char-section-tab-expressions').querySelector('.char-section-count').textContent === '1',
@@ -8992,15 +8999,67 @@ await scenario('角色：表情图批量导入、默认脸与 emo 标签', async
   click('#btn-batch-expr');
   await waitFor(
     '六张里导进五张（末张「羞怯」和英文的 shy 撞同一个情绪键，被跳过）',
-    () => $$('#char-expr-list .char-expr-row').length === 5
+    () => $$('#char-expr-list .char-expr-card').length === 5
   );
 
-  const rows = () => $$('#char-expr-list .char-expr-row');
+  const rows = () => $$('#char-expr-list .char-expr-card');
   const thumbOk = rows().every((r) => {
     const img = r.querySelector('.char-expr-thumb img');
     return !!img && img.naturalWidth === 640 && img.naturalHeight === 640;
   });
   check('批量导入的图都按 1:1 裁过（640×640）', thumbOk);
+
+  // --- 网格布局的新特性（2026-10-19 从「一条一行」改成 auto-fill 网格） ---
+  {
+    const cs = getComputedStyle(byId('char-expr-list'));
+    const nCols = (cs.gridTemplateColumns || '').split(' ').filter(Boolean).length;
+    check(
+      '表情列表是网格（多列，不是一条一行）',
+      cs.display === 'grid' && nCols >= 2,
+      `${cs.display} / ${cs.gridTemplateColumns}`
+    );
+  }
+  {
+    const thumb = rows()[0].querySelector('.char-expr-thumb');
+    check(
+      '缩略图区是 1:1（立绘不会被拉扁）',
+      !!thumb && getComputedStyle(thumb).aspectRatio.replace(/\s/g, '') === '1/1',
+      thumb ? getComputedStyle(thumb).aspectRatio : '没有缩略图'
+    );
+  }
+  {
+    const zoom = rows()[0].querySelector('.char-expr-zoom');
+    check(
+      '放大镜默认藏起来（hover 才浮出）',
+      !!zoom && getComputedStyle(zoom).opacity === '0',
+      zoom ? getComputedStyle(zoom).opacity : '没有放大镜'
+    );
+  }
+  {
+    const del = rows()[0].querySelector('.char-expr-del');
+    check(
+      '删除按钮默认也藏起来（hover 才浮出）',
+      !!del && getComputedStyle(del).opacity === '0',
+      del ? getComputedStyle(del).opacity : '没有删除按钮'
+    );
+  }
+  {
+    const def = rows()[0].querySelector('.char-expr-default');
+    check(
+      '默认脸按钮常显（不跟 hover）',
+      !!def && parseFloat(getComputedStyle(def).opacity) > 0.5,
+      def ? getComputedStyle(def).opacity : '没有默认脸按钮'
+    );
+  }
+  // 放大镜点开的是灯箱，不是裁剪层（缩略图是 <button>，套进去点放大镜会连带弹裁剪）
+  {
+    const zoom = rows()[0].querySelector('.char-expr-zoom');
+    click(zoom);
+    await waitFor('点放大镜打开了灯箱', () => !!byId('lightbox'));
+    check('点放大镜没弹裁剪层', !byId('crop-layer'));
+    click('#lightbox-close');
+    await waitFor('灯箱关掉了', () => !byId('lightbox'));
+  }
 
   const names = $$('#char-expr-list .char-expr-name').map((i) => i.value);
   check(

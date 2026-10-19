@@ -1,13 +1,6 @@
 'use strict';
 
-// ============================================================================
-//  main/ipc.js —— IPC 通道注册：界面通过这里调用主进程能力
-//
-//  每个 handler 只做参数转发 + 一点点编排，真正的实现分别在：
-//    main/store.js      数据落盘与读取
-//    main/providers.js  设置与服务商
-//    main/http.js       大模型请求
-//    main/window.js     窗口
+// main/ipc.js —— IPC 通道注册：界面通过这里调用主进程能力（实现分散在 store / providers / http / window）
 // ============================================================================
 
 const { ipcMain, shell, clipboard, dialog } = require('electron');
@@ -57,33 +50,28 @@ const {
   bridgeHealth
 } = require('./http.js');
 const { getMainWindow, sendToRenderer } = require('./window.js');
-// 数据目录在哪、能不能写 —— 都归 main/data-dir.js 管（默认是程序旁边的 data\）
+// 数据目录（默认是程序旁边的 data\）归 main/data-dir.js 管
 const { dataDir, dataDirInfo, probeDirWritable } = require('./data-dir.js');
 
-// 关键词命中判定、递归扫描这些纯逻辑都在 main/worldbook-match.js 里。
+// 关键词命中判定与递归扫描在 main/worldbook-match.js
 const { matchWorldbookEntries, formatWorldbookSections } = require('./worldbook-match.js');
 const { parseImportFile } = require('./card-import.js');
 const { importFiles, MAX_IMPORT_BYTES } = require('./import-files.js');
-// 外部世界书里那份 `characters`（世界书自带的 NPC）要过一遍角色归一化器 ——
-// 不注入的话它会被静默丢掉，见 main/import-files.js 的注释。
+// 世界书自带的 NPC 也要过角色归一化器，否则会被静默丢掉
 const { normalizeCharacter } = require('./characters.js');
-// 预设导入时要过一遍**落盘用的**那个归一化器 —— 导进来的东西当场就是内部形状，
-// 界面不用再认一遍「别人分享的格式」。
+// 预设导入用落盘时那份归一化器，导进来就是内部形状
 const { normalizePreset } = require('./presets.js');
 // 角色卡要能导出成「酒馆 PNG 卡」—— 卡数据 base64 后塞进 PNG 的 tEXt 块。
 const { pngWithTextChunk } = require('./png.js');
-// 记忆检索的向量与排序，纯函数，同样为了可测而独立成模块。
+// 记忆检索的向量编解码与排序（纯函数，独立成模块便于测试）
 const { encodeVector, decodeVector, rankBySimilarity, collectCandidates } = require('./vectors.js');
 // 「这一轮到底发出去了什么」—— 只存内存的环形缓冲，见 main/request-log.js
 const { recordRequest, listRequests, clearRequests, MAX_ENTRIES: MAX_LOGGED_REQUESTS } = require('./request-log.js');
 // 桌宠：通道注册在这里，实现都在 main/pet-*.js（窗口 / 数据 / 发言）
 const { registerPetIpc } = require('./pet-ipc.js');
 
-// 「停止生成」：按 requestId 各管各的。
-// ⚠️ 不要退回单个 activeController：后台摘要、剧情选项、AI 生成角色、世界开局、
-//    聊天流会互相掐 —— 回复刚完就发下一句会掐掉后台摘要（还记一次失败），
-//    聊天流式期间点「AI 生成」或它的「中止」会把聊天回复掐掉删掉。
-//    桌宠那边同理（pet-brain.js）。
+// 「停止生成」按 requestId 各管各的。
+// ⚠️ 不能退回单个 activeController：后台摘要 / 剧情选项 / AI 生成 / 聊天流会互相掐断（桌宠同理）。
 const activeControllers = new Map(); // requestId → AbortController
 
 // 允许当头像的图片格式（扩展名 → MIME）
@@ -96,20 +84,12 @@ const IMAGE_MIME = {
   '.bmp': 'image/bmp'
 };
 
-// 一次最多补多少条向量。第一次开语义检索时长对话可能有几百条要索引，
-// 一次全塞进一个请求既慢又容易被接口限流 —— 分几轮补齐就行
+// 一次最多补 32 条向量（分几轮补，一次全塞既慢又容易被限流）
 const MAX_EMBED_PER_CALL = 32;
 // 一次请求最多多少条文本（查询 + 补索引共用）
 const MAX_EMBED_INPUTS = 64;
 
-// ---------------------------------------------------------------------------
-//  文件选择框的「上次位置」
-//
-//  系统弹框不带 defaultPath 时，每次都会回到默认目录，用户得反复点进文件夹。
-//  这里把上一次选中的目录记下来，下次弹框作为 defaultPath 传进去。目录存在
-//  数据目录里的 dialog-state.json，重开 App 也还在。
-//  导入 / 选图 / 保存共用同一份记忆 —— 「上次在哪，这次就从哪开」最符合直觉。
-// ---------------------------------------------------------------------------
+// --- 文件选择框的「上次位置」：记在 dialog-state.json，下次作为 defaultPath ---
 
 let lastDialogDir = '';
 let lastDialogDirLoaded = false;
@@ -147,18 +127,12 @@ function rememberDialogDir(chosenPath) {
   rememberChosenDir(chosenPath ? path.dirname(chosenPath) : '');
 }
 
-/**
- * 记住「选中的目录本身」。
- *
- * saveFile 那条拿到的是一整条文件路径，取它的 dirname；批量导出拿到的是目录 ——
- * 两种入口共用同一份记忆，所以拆出这一层，别在调用处 `path.join(dir, '_')` 地绕。
- */
+/** 记住「选中的目录本身」：saveFile 传来的是文件路径（取 dirname），批量导出传目录 */
 function rememberChosenDir(dir) {
   if (!dir || dir === lastDialogDir || !isUsableDir(dir)) return;
   lastDialogDir = dir;
   lastDialogDirLoaded = true;
-  // 落盘失败只影响「下次记不住」，不影响本次结果 —— 但 Promise 必须接住，
-  // 否则会变成 unhandled rejection。
+  // 落盘失败只影响「下次记不住」，但 Promise 必须接住，否则会变成 unhandled rejection
   writeJson(dialogStateFile(), { lastDir: dir }).catch((err) => {
     console.warn('[ipc] 记录文件对话框位置失败（不影响本次操作）:', err.message);
   });
@@ -234,17 +208,7 @@ function ragCandidates(request) {
 }
 
 /**
- * 注册「关窗口前的最后一次保存」通道。
- *
- * 走同步写入（immediate）：程序马上要退出了，排队等微任务可能来不及。
- * 因为不需要回执，走的是 ipcMain.on 而不是 handle —— 代价是**回调里抛出去的异常
- * 没有调用方能接**，会直接变成主进程的 uncaughtException，Electron 于是弹一个
- * 原生「A JavaScript error occurred in the main process」框，把 JS 堆栈糊在用户脸上，
- * 还得点「确定」。关个窗口弹出这个，看着像程序崩了。
- *
- * 所以这里必须自己兜住：写不进去就写不进去，控制台留一行日志就够。
- * 真正的失败原因（写不进去：低完整性 / 沙箱限制，或者真的瞬时占用）已经在 store.js 里
- * warn 过一遍了。
+ * 关窗口前的最后一次保存：同步写（immediate），走 ipcMain.on。⚠️ 回调抛异常没人接，会弹 Electron 原生错误框，必须自己兜住。
  */
 function registerSyncSave(channel, save) {
   ipcMain.on(channel, (_event, payload) => {
@@ -257,20 +221,7 @@ function registerSyncSave(channel, save) {
 }
 
 /**
- * 用资源管理器打开一个目录。返回 null = 成功，返回字符串 = 错误原因。
- *
- * ⚠️ **别改回 shell.openPath。** 它在这台机器上时成时败 —— 实测同一个进程里：
- *    打开 `C:\Users\...\AppData\Roaming\Electron` 返回 ""（成功）、
- *    打开同级的 `...\Roaming\Mimitale` 返回 "Failed to open path"；
- *    两个目录的 ACL / 属性 / 重解析点查下来**完全一样**，连单独调一次
- *    `...\Roaming` 自己都会失败。也就是说不稳定在系统层（ShellExecuteEx
- *    到 shell 关联那一段），不是路径或权限的问题。
- *    更要命的是：它失败时会**弹一个 Windows 系统错误框**
- *    （「Windows 无法访问指定设备、路径或文件」，标题是 electron.exe），
- *    用户看着像程序崩了，而我们连成没成都拿不到（返回值被丢掉了）。
- *
- * 直接 CreateProcess 起 explorer.exe 是可靠的（实测能打开），
- * 而且完全在我们自己手里：失败有 error 事件，也不会弹系统框。
+ * 用资源管理器打开目录；返回 null = 成功，字符串 = 错误原因。⚠️ 别改回 shell.openPath：实测时成时败，失败还会弹系统框。
  */
 function openFolderInExplorer(dir) {
   return new Promise((resolve) => {
@@ -303,17 +254,13 @@ function openFolderInExplorer(dir) {
 function registerIpc() {
   ipcMain.handle('settings:get', () => {
     const settings = loadSettings();
-    // notices：设置迁移的「一次性告知」。取走即清空，所以只有界面启动那一次拉取能拿到，
-    // 由 renderer/main.js 弹成 toast —— 迁移动过用户的设置，不能只在日志里说。
+    // notices 取走即清空，只有界面启动那一次拉取拿得到（迁移改过用户设置，不能只在日志里说）
     return { settings, models: COMMON_MODELS, presets: PROVIDER_PRESETS, notices: takeSettingsNotices() };
   });
 
   ipcMain.handle('settings:save', (_event, patch) => saveSettings(patch));
 
-  /**
-   * 「测试连接」和「拉取模型」都可能拿界面上还没保存的内容来试，
-   * 所以这里优先用传进来的 provider 对象，其次才用已保存的设置。
-   */
+  /** 优先用传进来的 provider（界面上还没保存的内容），其次才用已保存的设置 */
   function providerFromPayload(payload) {
     const p = payload || {};
     if (p.provider && typeof p.provider === 'object') {
@@ -323,9 +270,7 @@ function registerIpc() {
   }
 
   /**
-   * 拉取某个服务商可用的模型名。
-   * 桥接没有 /models，改从 /health 取当前文字模型；其余走 OpenAI 兼容的 /models。
-   * 返回 { models, health }（health 只有桥接有，用来显示两个引擎的状态）。
+   * 桥接没有 /models，改从 /health 取当前文字模型；其余走 OpenAI 兼容的 /models。返回 { models, health }。
    */
   async function fetchProviderModels(provider) {
     if (isBridgeProvider(provider)) {
@@ -412,8 +357,7 @@ function registerIpc() {
   registerSyncSave('worldbooks:save-sync', saveWorldbooks);
 
   // --- 预设 ---
-  // 对话层面叠上去的一层指令。和角色库、世界书同级：各自一个文件，
-  // 靠「会话绑定了哪几条」决定生效（convo.dialoguePresetIds，可多条）。
+  // 叠在对话上的一层指令，各自一个文件，靠 convo.dialoguePresetIds 决定生效（可多条）
 
   ipcMain.handle('presets:get', () => loadPresets());
 
@@ -422,12 +366,7 @@ function registerIpc() {
   registerSyncSave('presets:save-sync', savePresets);
 
   /**
-   * 导入预设：弹文件框、读 JSON、过归一化后返回，**不落盘**。
-   * 收不收、收哪几条由界面决定 —— 用户取消时盘上一点都不会变。
-   *
-   * 一个文件里可能是**一条**预设，也可能是**一整个数组**（导出的就是这种）。
-   * 两种都认，所以先探形状再归一化。归一化器是落盘时用的同一份，
-   * 这样「别人分享的预设」在导进来的时候就已经被整理成内部形状了。
+   * 导入预设：弹框、读 JSON、归一化后返回，不落盘；单条 / 数组 / { presets } 三种形态都认。
    */
   ipcMain.handle('presets:import', async () => {
     const result = await dialog.showOpenDialog(getMainWindow(), {
@@ -479,8 +418,7 @@ function registerIpc() {
         }
 
         for (const item of items) {
-          // ⚠️ 导入时**不带 id**：id 是对内唯一的，撞了会把已有的预设顶掉。
-          //    由界面那边重新发一批（和角色卡导入同一套做法）。
+          // ⚠️ 导入时不带 id：撞了会顶掉已有预设，由界面重新发一批
           const preset = normalizePreset(item);
           if (!preset) continue;
           preset.id = undefined;
@@ -495,10 +433,7 @@ function registerIpc() {
   });
 
   /**
-   * 世界书预览：按当前会话的近期消息跑一遍匹配，返回命中的条目。
-   * 作用域是「会话绑定的 + 角色绑定的」两批合起来 —— 会话级在前，
-   * 和酒馆的 Chat Lore 一个思路：会话自己选的设定优先于角色自带的。
-   * 界面用它显示「这一轮会注入哪些设定」，也方便排查关键词写没写对。
+   * 世界书预览：按当前会话的近期消息跑一遍匹配，返回命中的条目（界面用来显示这一轮会注入哪些设定）。
    */
   ipcMain.handle('worldbooks:preview', (_event, payload) => {
     const request = payload || {};
@@ -517,11 +452,7 @@ function registerIpc() {
       .map((m) => String(m.content))
       .join('\n');
 
-    // 要注入哪些书，完全由渲染层传进来的 id 决定 —— 这里不做任何「按角色自动带上」的判断。
-    // 渲染层的 effectiveWorldbookIds 负责算出这批 id：
-    //   · 会话绑了世界书（含「进入世界」）→ 只用会话的
-    //   · 会话没绑 → 才用角色自带的那几本（前提是那张卡的开关是开的）
-    // 也就是说，角色库里的角色单独聊天**是会**注入设定的。
+    // 注入哪些书完全由渲染层传来的 id 决定（effectiveWorldbookIds 负责算），这里不做「按角色自动带上」的判断
     const convoIds = Array.isArray(request.worldbookIds) ? request.worldbookIds : [];
     const entries = worldbookEntriesByIds(convoIds);
 
@@ -530,8 +461,7 @@ function registerIpc() {
     });
     const hits = result.hits;
 
-    // section = 关键词命中的那批（紧跟人设之后）；deepSection = 常驻条目（每轮都成立，
-    // 由渲染层送到更靠近生成位置的地方）。拆块的道理见 worldbook-match.js 的注释。
+    // section = 关键词命中的那批（紧跟人设之后）；deepSection = 常驻条目（送到更靠近生成位置的地方）
     return {
       total: entries.length,
       scanDepth,
@@ -550,12 +480,7 @@ function registerIpc() {
   });
 
   /**
-   * 导入角色卡 / 世界书：弹出文件选择框，把选中的 PNG / JSON 解析出来返回。
-   * 这里只解析不落盘 —— 由界面决定要不要收下，用户取消时什么都不会变。
-   *
-   * 「一个文件是什么」的判断和归一化都在 main/card-import.js 里，
-   * 抽出去是为了能单独测 —— 这段如果埋在闭包和文件对话框之间，
-   * 「卡里内嵌的世界书被丢掉」这类问题就没法自动化覆盖。
+   * 导入角色卡 / 世界书：弹框解析 PNG / JSON 后返回，不落盘（格式判断与归一化在 main/card-import.js）。
    */
   ipcMain.handle('characters:import', async () => {
     const result = await dialog.showOpenDialog(getMainWindow(), {
@@ -580,7 +505,7 @@ function registerIpc() {
       readFile: (file) => fs.readFileSync(file),
       parseImportFile,
       makeWorldbookId: newWorldbookId,
-      // 书里带的 NPC 也要收进来（导出的世界书再导回来是一个闭环）
+      // 世界书里带的 NPC 也要一起收
       normalizeCharacters: (raw) => normalizeCharacter(raw, 'json'),
       // 和主进程别处保持一致：单文件 12MB
       maxBytes: MAX_IMPORT_BYTES
@@ -589,15 +514,10 @@ function registerIpc() {
     return { canceled: false, ...imported };
   });
 
-  // 最近一次批量选图选中的路径。images:read 只认这一批 ——
-  // 不让渲染层借这条通道去读盘上任意文件。
+  // images:read 只认这一批路径 —— 不让渲染层借这条通道去读盘上任意文件
   let pickedImagePaths = new Set();
 
-  /**
-   * 选一张本地图片当头像。
-   * 页面被 CSP 挡着读不了文件，所以由主进程弹系统文件框、读文件、
-   * 转成 dataURL 再交给界面 —— CSP 里 img-src 已经放行了 data:。
-   */
+  /** 选一张本地图当头像：CSP 挡着页面读文件，所以由主进程读成 dataURL（img-src 已放行 data:） */
   ipcMain.handle('images:pick', async (_event, options) => {
     const opts = options || {};
     const result = await dialog.showOpenDialog(getMainWindow(), {
@@ -624,9 +544,7 @@ function registerIpc() {
   });
 
   /**
-   * 一次选多张图（或者整个文件夹），只回路径、不回内容 ——
-   * 一套情绪差分动辄二十几张，一次把内容全塞回来会顶爆 IPC。
-   * 界面拿到路径后逐张走 images:read 读，读完一张压一张。
+   * 一次选多张图（或整个文件夹），只回路径不回内容 —— 一套差分二十几张，全塞回来会顶爆 IPC。
    */
   ipcMain.handle('images:pick-many', async (_event, options) => {
     const opts = options || {};
@@ -674,7 +592,7 @@ function registerIpc() {
       paths = result.filePaths.slice();
     }
 
-    // 记下来：images:read 只认这批路径，防止渲染层拿着这个通道读任意文件
+    // images:read 只认这批路径（防止渲染层读任意文件）
     pickedImagePaths = new Set(paths);
     return { canceled: false, files: paths.map((p) => ({ path: p, name: path.basename(p) })) };
   });
@@ -725,8 +643,7 @@ function registerIpc() {
       return { ok: false, requestId, error: '还没有配置模型服务，请点左下角「设置」添加。' };
     }
 
-    // 预设（会话级）里填过的采样参数覆盖全局设置。没填的项保持原样 ——
-    // 渲染层只把「确实设过」的那几项传上来，所以这里是白名单式的逐项覆盖。
+    // 会话预设填过的采样参数逐项覆盖全局（渲染层只传「确实设过」的项）
     const sampling = request.sampling && typeof request.sampling === 'object' ? request.sampling : null;
     if (sampling) {
       if (Number.isFinite(sampling.temperature)) endpoint.temperature = sampling.temperature;
@@ -754,9 +671,7 @@ function registerIpc() {
           settings: endpoint,
           messages,
           characterContext: request.characterContext,
-          // 生成角色这类「只要文字」的场景传 noImage：桥接默认会按正文语义
-          // 判断该不该配图，命中就要卸文字模型、出图、再把模型热回来 ——
-          // 白等几十秒还占显存。字段缺省时照旧。
+          // noImage：只要文字的场景传它，否则桥接可能卸模型出图再热回来，白等几十秒还占显存
           noImage: request.noImage === true,
           signal
         });
@@ -774,8 +689,7 @@ function registerIpc() {
         settings: endpoint,
         messages,
         signal,
-        // 留一份「发出去的原文」（顶栏「⋯」→ 请求记录）。
-        // 回调由 http.js 在拼好 body 之后触发，所以这份就是服务端收到的原样内容。
+        // 留一份发出去的原文（http.js 在拼好 body 后回调，即服务端收到的原样内容）
         onRequest: (body, url) =>
           recordRequest({
             requestId,
@@ -804,10 +718,7 @@ function registerIpc() {
   });
 
   /**
-   * 请求记录：把最近几次**实际发出去**的请求读给界面看。
-   *
-   * 只读内存（main/request-log.js），所以随时可清、也不涉及任何落盘。
-   * 它不是配置项，不进 settings；重启就空 —— 界面上的文案也如实这么写。
+   * 最近几次实际发出去的请求：只读内存（main/request-log.js），不进 settings，重启就空。
    */
   ipcMain.handle('chat:requests', () => ({
     entries: listRequests(),
@@ -825,10 +736,7 @@ function registerIpc() {
   });
 
   /**
-   * 导出文件。渲染层把两种形态都准备好，**由用户选的后缀决定写哪一种**：
-   *   · text              文本（.json / .md 用，按 utf8 写）
-   *   · base64 + pngText  二进制（.png 用；pngText 会先作为 tEXt 块插进去）
-   * 这样「导出角色卡」只需要一个按钮。
+   * 导出文件：由用户选的后缀决定写 text（utf8）还是 base64（.png，pngText 先插成 tEXt 块）。
    */
   ipcMain.handle('util:saveFile', async (_event, payload) => {
     const request = payload || {};
@@ -860,13 +768,7 @@ function registerIpc() {
   });
 
   /**
-   * 批量导出：选一个目录，把一组文件逐个写进去。
-   *
-   * 和 util:saveFile 的差别是**只弹一次框** —— 二三十张卡一张一个保存框没法用。
-   * 同一个目录里重名的（两个都叫「女仆」）自动加序号，既不覆盖已有的，也不静默丢。
-   *
-   * 只支持文本（角色卡 / 世界书都是 JSON）；留着 base64 分支是为了以后能批量导 PNG。
-   * 部分失败**不整体回滚**：写出去的文件留在盘上，界面按 written / failed 报数。
+   * 批量导出：只弹一次框，重名自动加序号。部分失败不回滚，界面按 written / failed 报数。
    */
   ipcMain.handle('util:saveFiles', async (_event, payload) => {
     const request = payload || {};
@@ -924,12 +826,7 @@ function registerIpc() {
   });
 
   /**
-   * 语义检索（RAG）。
-   *
-   * 流程：收集候选（较早的消息 + 绑定的世界书条目）→ 补齐缺的向量（增量、每次最多
-   * MAX_EMBED_PER_CALL 条）→ 给查询算向量 → 余弦排序取前 K 个 → 返回文本给渲染层注入。
-   *
-   * 只做「捞出来」，注入格式交给渲染层 —— 那边才知道该怎么措辞。
+   * 语义检索：收集候选 → 增量补向量 → 算查询向量 → 余弦排序取前 K；只负责捞出文本，注入格式交给渲染层。
    */
   ipcMain.handle('rag:recall', async (_event, payload) => {
     const request = payload || {};
@@ -997,10 +894,7 @@ function registerIpc() {
   });
 
   /**
-   * 用系统浏览器打开一个链接（搜索结果里的来源点进去就走这里）。
-   *
-   * 只放行 http / https：别的协议（file:、javascript: 之类）一律不开，
-   * 否则这条通道就成了任意启动器 —— 页面里塞什么就能拉起什么。
+   * 用系统浏览器打开链接。⚠️ 只放行 http / https，否则这条通道就成了任意启动器。
    */
   ipcMain.handle('util:openExternal', async (_event, url) => {
     const target = String(url || '').trim();
@@ -1014,11 +908,7 @@ function registerIpc() {
   });
 
   /**
-   * 生图。走 OpenAI 那套 /images/generations：
-   *   { model, prompt, n: 1, size, response_format: 'b64_json' } → { data: [{ b64_json }] }
-   *
-   * 它和聊天**既不是同一个端点、通常也不是同一个模型**，所以设置里单独指一组。
-   * 各家差异很大（通义万相那类是异步任务），这里只支持「同步返回图片」的这一套。
+   * 生图：走 OpenAI 的 /images/generations，只支持「同步返回图片」的服务商（和聊天是两套配置）。
    */
   ipcMain.handle('images:generate', async (_event, payload) => {
     const request = payload || {};
@@ -1038,9 +928,7 @@ function registerIpc() {
     const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
     if (endpoint.apiKey) headers.Authorization = `Bearer ${endpoint.apiKey}`;
 
-    // 少数服务商（智谱）的图片接口不认 OpenAI 的 response_format / n，
-    // 反而要求 quality。参数给错了它只回一句「API 调用参数有误」（错误码 1210），
-    // 所以这里按服务商裁剪参数，别把不认识的字段一起发过去。
+    // 智谱的图片接口不认 response_format / n，反而要求 quality；参数给错只回「参数有误」（错误码 1210）
     const isZhipuImage = /bigmodel\.cn/i.test(String(endpoint.baseUrl || ''));
     const imageBody = {
       model: endpoint.model,
@@ -1072,8 +960,7 @@ function registerIpc() {
         return { ok: true, dataUrl: `data:image/png;base64,${item.b64_json}`, model: endpoint.model };
       }
       if (item.url) {
-        // 有的服务商会无视 response_format 直接给链接。
-        // 渲染层 CSP 是 img-src 'self' data:，外链加载不了 —— 所以在主进程下载回来。
+        // 有的服务商无视 response_format 直接给链接；CSP 的 img-src 不含外链，所以在主进程下载回来
         const buffer = await downloadBinary(String(item.url));
         const mime = /\.jpe?g($|\?)/i.test(String(item.url)) ? 'image/jpeg' : 'image/png';
         return {
@@ -1089,10 +976,7 @@ function registerIpc() {
   });
 
   /**
-   * 本机桥接的「配图」：输入一段文字，直接调 /draw 出图。
-   *
-   * 和 images:generate 不同 —— 它走本机桥接（本地 ComfyUI），不是云生图。
-   * 给「配图」按钮在本机桥接会话下用：平时聊天纯文字，点按钮才出图。
+   * 本机桥接的「配图」：文字直接调 /draw 出图（走本地 ComfyUI，不是云生图）。
    */
   ipcMain.handle('bridge:draw', async (_event, payload) => {
     const request = payload || {};
@@ -1121,10 +1005,7 @@ function registerIpc() {
     }
   });
 
-  /**
-   * 本机桥接的出图进度查询：GET /draw/progress。
-   * 酒馆配图时轮询它，显示「采样到第几步」。
-   */
+  /** 本机桥接出图进度：GET /draw/progress（酒馆配图时轮询） */
   ipcMain.handle('bridge:drawProgress', async (_event, payload) => {
     const request = payload || {};
     const settings = loadSettings();
@@ -1139,10 +1020,8 @@ function registerIpc() {
   });
 
   ipcMain.handle('util:openPath', async (_event, which) => {
-    // 打开**真正的**数据目录（默认是程序旁边的 data\，见 main/data-dir.js）。
-    // ⚠️ 别改回 app.getPath('userData')：那是 Chromium 的 profile 目录
-    //    （缓存 / Local State / Preferences），用户的数据文件已经不在那儿了 ——
-    //    照着它打开，用户会看到一个没有自己角色卡的文件夹。
+    // 打开真正的数据目录（默认是程序旁边的 data\，见 main/data-dir.js）。
+    // ⚠️ 别改回 app.getPath('userData')：那是 Chromium profile，用户会看到一个没有角色卡的文件夹。
     const dir = dataDir();
     try {
       if (!fs.existsSync(dir)) {
@@ -1153,17 +1032,11 @@ function registerIpc() {
     }
 
     // 先探这个进程能不能往数据目录里写字。
-    //
-    // ⚠️ 「explorer.exe 起来了」**不等于**「文件夹真的打开了」：
-    //    被沙箱 / 权限限制住的进程照样能 spawn 出 explorer.exe（'spawn' 事件照常触发），
-    //    但那个 explorer 继承的是同一个受限令牌，请求递不到已经开着的资源管理器，
-    //    用户看到的就是「点了没反应」，而这边一路返回 ok —— 界面连句话都不会说。
-    //    所以顺手探一次写权限：探不通就把「打不开」和**为什么**一起说清楚。
+    // ⚠️ spawn 出 explorer.exe 不等于文件夹真的打开了：沙箱进程继承受限令牌，请求递不到已开的资源管理器，用户看到「没反应」这边却返回 ok。
     const writable = probeDirWritable(dir);
     const info = dataDirInfo();
 
-    // 返回值带上成败：失败时要把「打不开」和原因一起交回界面，
-    // 不能只递回一个路径、让用户对着 Windows 的弹框猜。
+    // 失败时要把「打不开」和原因一起交回界面，不能只递回一个路径让用户对着 Windows 弹框猜
     if (process.platform === 'win32') {
       const error = await openFolderInExplorer(dir);
       if (error) {
@@ -1195,9 +1068,7 @@ function registerIpc() {
     return error ? { ok: false, path: dir, info, error } : { ok: true, path: dir, info, writable: writable.ok };
   });
 
-  // 桌宠的通道单独一个模块（main/pet-ipc.js）：它是**一块独立的功能**，
-  // 有自己的窗口、自己的模型调用、自己的控制器，塞进来只会让这个文件更难读。
-  // 但它仍然是「在这里注册」，这条约定没变 —— 找 IPC 通道永远只有一个地方。
+  // 桌宠的通道在 main/pet-ipc.js（独立窗口 / 模型调用 / 控制器），但仍在这里统一注册
   registerPetIpc();
 }
 

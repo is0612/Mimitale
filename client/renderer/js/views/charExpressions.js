@@ -20,6 +20,8 @@ import { el } from '../core/dom.js';
 import { api } from '../core/api.js';
 import { showToast } from '../ui/toast.js';
 import { h, button, clear } from '../ui/build.js';
+import { iconHtml } from '../ui/icons.js';
+import { openLightbox } from '../ui/lightbox.js';
 import { pickAndCrop, cropTopToDataUrl } from '../ui/imageCrop.js';
 import { MAX_EXPRESSIONS } from '../data/expressions.js';
 // 组件库：表情行里的名称 / 触发词输入框（见 components/index.js）
@@ -309,17 +311,29 @@ const draft = () => {
   return Array.isArray(list) ? list : [];
 };
 
-/** 一条表情 = 缩略图（点击换图）+ 名称 + 触发词 + 删除 */
+/** 一条表情 = 一张图（点击换图）+ 名称 + 触发词 + 图角上的钮 */
 function buildExpressionRow(expr, index) {
   const thumb = h('button', {
     type: 'button',
     class: 'char-expr-thumb art-edge',
-    title: '点击上传这张表情的图',
+    title: expr.image ? '点击换一张图' : '点击上传这张表情的图',
     ariaLabel: `上传「${expr.name || '这条表情'}」的图`,
     onClick: () => pickExpressionImage(index)
   });
   if (expr.image) thumb.appendChild(h('img', { src: expr.image, alt: '' }));
   else thumb.appendChild(h('span', { class: 'char-avatar-empty', text: '点击上传' }));
+
+  // 放大镜：没图时点开是一块灰底，没意义
+  const zoom = expr.image
+    ? h('button', {
+      type: 'button',
+      class: 'char-expr-zoom',
+      title: '放大查看',
+      ariaLabel: `放大查看「${expr.name || '这条表情'}」`,
+      onClick: () => openLightbox(expr.image, { title: expr.name || '表情图' })
+    })
+    : null;
+  if (zoom) zoom.innerHTML = iconHtml('zoom-in');
 
   // 打字时**不重绘**（重绘会重建输入框、光标就跑了），直接写进草稿那一项。
   // 26px + xs 字号 = 组件的 size="xs"
@@ -339,7 +353,9 @@ function buildExpressionRow(expr, index) {
     class: 'char-expr-keys',
     size: 'xs',
     value: expr.keywords.join(', '),
-    placeholder: '触发词，逗号分隔（可不填）',
+    // 格子只有一百多 px 宽，占位文案长了会被截断
+    placeholder: '触发词，逗号分隔',
+    title: '回复里出现这些词时换成这张图。可以不填 —— 那就只认名称和 <emo> 标签',
     ariaLabel: '触发词'
   });
   keysInput.addEventListener('input', () => {
@@ -359,18 +375,19 @@ function buildExpressionRow(expr, index) {
     onClick: () => toggleDefaultExpression(index)
   });
 
+  const delBtn = button({
+    class: 'char-expr-del',
+    text: '✕',
+    title: '删掉这条表情',
+    onClick: () => removeExpression(index)
+  });
+
   return h(
     'div',
-    { class: 'char-expr-row' },
-    thumb,
-    h('div', { class: 'char-expr-fields' }, nameInput, keysInput),
-    defaultBtn,
-    button({
-      class: 'char-expr-del',
-      text: '✕',
-      title: '删掉这条表情',
-      onClick: () => removeExpression(index)
-    })
+    { class: `char-expr-card${expr.default ? ' is-default' : ''}` },
+    h('div', { class: 'char-expr-shot' }, thumb, zoom, delBtn, defaultBtn),
+    nameInput,
+    keysInput
   );
 }
 
@@ -416,7 +433,7 @@ function addExpression() {
   list.push({ name: '', keywords: [], image: '' });
   refresh();
   // 加完直接落在名称框上，省得再点一下
-  const input = el.charExprList && el.charExprList.querySelector('.char-expr-row:last-child .char-expr-name');
+  const input = el.charExprList && el.charExprList.querySelector('.char-expr-card:last-child .char-expr-name');
   if (input) input.focus();
 }
 
@@ -528,7 +545,7 @@ async function batchImportExpressions() {
   if (dupe) bits.push(`跳过 ${dupe} 张已有的`);
   if (failed) bits.push(`${failed} 张读不出来`);
   if (overflow) bits.push(`超出上限 ${overflow} 张没导`);
-  showToast(added ? `${bits.join('，')}。记得点「保存角色」` : bits.join('，'), added ? 'ok' : 'error');
+  showToast(added ? `${bits.join('，')}。记得点「保存」` : bits.join('，'), added ? 'ok' : 'error');
 }
 
 async function pickExpressionImage(index) {
@@ -561,7 +578,7 @@ async function pickExpressionImage(index) {
   if (!target) return;
   target.image = cropped;
   refresh();
-  showToast('表情图已换上，记得点「保存角色」', 'ok');
+  showToast('表情图已换上，记得点「保存」', 'ok');
 }
 
 // ---------------------------------------------------------------------------

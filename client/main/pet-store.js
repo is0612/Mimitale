@@ -1,28 +1,6 @@
 'use strict';
 
-// ============================================================================
-//  main/pet-store.js —— 桌宠的数据层：设置 / 长期记忆 / 人格
-//
-//  桌宠的数据**分两半**，这条边界不能糊：
-//
-//    assets/pet/         随软件分发的**只读**资源（rig 形象包）
-//      <name>/           model.json + tex/ 部件贴图（目录里有 model.json 即被认作形象）
-//
-//    <数据目录>/pet/      用户数据，**可写**
-//      config.json       桌宠设置（形状见下面的 DEFAULT_PET_CONFIG）
-//      persona/<source>-<skin>.md   人格设定（按形象分仓；唯一真源，md 方便手改 / 分享）
-//      memory/long_term.json   长期记忆条目，按 petId 分开存
-//      memory/summaries.json   记忆被挤出上限后折叠成的摘要
-//      skins/            用户自己导入的 rig 形象包
-//      cache/  logs/     缓存与日志
-//
-//  ⚠️ 形象**只有 rig 一种**，不要另加「一张静态立绘 PNG」的分支。
-//
-//  分开的好处：软件更新不会覆盖用户记忆和设置；换形象 / 加皮肤不用动代码；
-//  桌宠将来要成为软件整体形象时资源可以直接复用。
-//
-//  ⚠️ 数据目录不是 %APPDATA%（见 main/data-dir.js，默认是程序旁边的 data\），
-//     所以配置落在 `data/pet/config.json`。
+// main/pet-store.js —— 桌宠数据层：设置 / 人格 / 长期记忆（assets/pet 只读，data/pet 可写）
 // ============================================================================
 
 const path = require('node:path');
@@ -31,21 +9,9 @@ const fs = require('node:fs');
 const { dataDir } = require('./data-dir.js');
 const { loadJsonWithFallback, writeJson, writeJsonNow } = require('./store.js');
 
-// ---------------------------------------------------------------------------
-//  路径
-// ---------------------------------------------------------------------------
+// --- 路径 ---
 
-/**
- * 随软件分发的只读资源根目录。
- *
- * ⚠️ 用 `__dirname` 往上走，**别用 `app.getAppPath()`**。
- *    getAppPath() 给的是「这次启动的入口所在目录」：`electron .` 是工程根，
- *    而 `electron tools/pet/xxx.js` 是 `tools/pet/` —— 同一个工程、同一个文件，
- *    换个启动方式就找不着形象了（实际踩到过：写工具脚本截宠物窗口的图，
- *    形象一直是空的，还以为是 CSP 挡的）。
- *    这个模块永远在 `<工程根>/main/` 下，所以往上走一层一定对；
- *    打包后它在 asar 里，Electron 读文件时会透明处理。
- */
+/** 随软件分发的只读资源根目录。⚠️ 用 `__dirname` 往上走，别用 `app.getAppPath()`（它随启动方式变，会找不到形象） */
 function petAssetsDir() {
   return path.join(__dirname, '..', 'assets', 'pet');
 }
@@ -72,18 +38,7 @@ function petPersonaDir() {
 }
 
 /**
- * 人格文件按**形象**分仓，不按 petId。
- *
- * 理由：人格 = 这只小家伙的「性格」，而性格是**跟着形象走**的 ——
- * 切到另一张形象包（比如从大肥鱼切到别的小动物）时，人格理应跟着换；
- * 按 petId 分仓的话全项目只有一份人格，切了形象还是上一张的性格。
- *
- * 文件名用 `<source>-<skin>`（如 `assets-whale`、`user-mygirl`）：
- * 前面带上 source 是因为 assets 和 user 下可能**重名**，只存 skin 会串卡
- * —— 这和设置页那个形象下拉的 `source\0skin` 是同一个顾虑。
- *
- * ⚠️ 别只写 skin。也别用 safeId（那只认 [A-Za-z0-9_-] 且非法回落 'pet1'），
- *    形象名允许中文、大小写（见 safeSkinName）。
+ * 人格按形象分仓（`<source>-<skin>`）：只写 skin 会在重名时串卡；⚠️ 别用 safeId（非法回落 'pet1'），也别转小写。
  */
 function personaKeyOf(pet) {
   const look = (pet && pet.look) || {};
@@ -92,7 +47,7 @@ function personaKeyOf(pet) {
   return `${source}-${skin}`;
 }
 
-/** 按 petId 拿一只宠物（查不到返回 null）—— 人格的函数要拿它的 look */
+/** 按 petId 取宠物（查不到返回 null）；人格函数要靠它的 look */
 function petById(petId) {
   try {
     return findPet(loadPetConfig(), petId) || null;
@@ -109,16 +64,7 @@ function petPersonaFile(petId) {
   return path.join(petPersonaDir(), `${safe}.md`);
 }
 
-/**
- * 老的「按 petId 存」的那份人格文件路径（迁移用）。
- *
- * 迁移背景：人格从「按 petId」改成「按形象」之后，老用户已经改过的那份
- * `persona/<petId>.md` 不能就这么放着不管 —— 那等于把人家写好的性格弄丢了。
- * 所以第一次读某个形象的人格时，如果这个形象还没有自己的文件、
- * 而老的 `<petId>.md` 又存在且**不是默认内容**，就把它当作这个形象的人格。
- * 「不是默认内容」这个判断很关键：老文件里若只是当初自动写出去的默认文本，
- * 迁过去没意义（还不如让新形象各拿各的默认）。
- */
+/** 老的「按 petId 存」的人格文件路径（迁移用）：只有非空且不等于默认文本时才认领 */
 function legacyPersonaFile(petId) {
   return path.join(petPersonaDir(), `${safeId(petId)}.md`);
 }
@@ -137,12 +83,8 @@ function safeId(id) {
   return /^[A-Za-z0-9_-]{1,40}$/.test(raw) ? raw : 'pet1';
 }
 
-// ---------------------------------------------------------------------------
-//  默认设置
-//
-//  ⚠️ 这些键是**唯一真源**：设置页和右键菜单改的都是这里的东西。
-//     新增字段记得同时改 normalizePetConfig，否则读盘时会被丢掉。
-// ---------------------------------------------------------------------------
+// --- 默认设置 ---
+// ⚠️ 这些键是唯一真源：新增字段必须同时改 normalizePetConfig，否则读盘时会被丢掉
 
 /** 活跃度 / 句数的可调区间 —— 界面上也要按这个卡，别只在一边卡 */
 const SPEAK_EVERY_MIN = 1;
@@ -150,28 +92,18 @@ const SPEAK_EVERY_MAX = 50;
 const SPEAK_LINES_MIN = 1;
 const SPEAK_LINES_MAX = 5;
 
-/** 临时静音时长：1 小时（需求写死的，别改成可配——菜单文案也跟着它） */
+/** 临时静音时长 1 小时（写死的，菜单文案也跟着它） */
 const MUTE_DURATION_MS = 60 * 60 * 1000;
 
 const MEMORY_MAX_ITEMS_MIN = 0;
 const MEMORY_MAX_ITEMS_MAX = 200;
 
 /**
- * 空闲时会做的**小动作**（点头 / 摇头 / 招手）—— 这是「全集」。
- *
- * ⚠️ 这份列表必须和渲染层对得上：`renderer/pet/cat.js` 用这些 id 挑手势，
- *    `renderer/pet/cat-figure.js` 按 id 决定怎么动。**这里加一个、那边没实现，
- *    就会挑到一个渲染层不认识的手势 → 静止几秒**（不报错，只是呆呆站着）。
- *
- * 设置页里用户勾的就是这几项，存进 `pet.gestureEnabled`。
+ * 空闲小动作的全集（设置页勾的就是这几项）。⚠️ 必须和 renderer/pet 对齐，否则会挑到不认识的手势 → 静止几秒。
  */
 const KNOWN_GESTURES = ['nod', 'shake', 'wave'];
 
-/**
- * 默认 / 兜底形象（assets/pet/<名字>/）。
- *
- * 换成新形象：放好目录，把这里改成新名字即可；渲染引擎（renderer/pet/cat*.js）不跟着换。
- */
+/** 默认形象（assets/pet/<名字>/）；换形象只改这里，渲染引擎不用动 */
 const DEFAULT_SKIN = 'whale';
 
 const DEFAULT_PERSONA = `你是「蓝自」，一只住在人家桌面上的小家伙。
@@ -196,21 +128,14 @@ const DEFAULT_PERSONA = `你是「蓝自」，一只住在人家桌面上的小�
 `;
 
 /**
- * 一只桌宠的默认形状。
- * 形象只有一种：**rig 动态形象**（部件贴图 + model.json，由 renderer/pet 的
- * rig.js + cat.js + cat-figure.js 渲染）。默认是内置形象（assets/pet/<DEFAULT_SKIN>）。
- *
- * ⚠️ 文件名里的 cat 是**引擎**的名字（这套状态机最初为蓝白猫写），不是形象。
- *
- * ⚠️ rig 资产缺失时宠物页面显示「形象没加载出来」占位，不回退静态图。
+ * 一只桌宠的默认形状。⚠️ 文件名里的 cat 是引擎名不是形象；rig 资产缺失时显示占位框，不回退静态图。
  */
 function defaultPet(id) {
   return {
     id,
     name: '蓝自',
     // --- 长什么样 ---
-    // 只认 rig（部件贴图 + 变形器动画，走 renderer/pet/rig.js）。
-    // 结构里留着 kind 是为了以后加 'sprite' / 'live2d' 时只加分支、不动上层。
+    // 只认 rig（部件贴图 + 变形器动画，走 renderer/pet/rig.js）
     look: {
       kind: 'rig',
       source: 'assets', // 'assets' = 随软件分发；'user' = 用户自己导入的，在 data/pet/skins
@@ -228,11 +153,7 @@ function defaultPet(id) {
     speakLines: 3, // 每次说几句
     mutedUntil: 0, // 临时静音到什么时候（时间戳，0 = 没静音）
     // --- 动作 ---
-    // 空闲时会随机做哪些小动作（点头 / 摇头 / 招手）。
-    // ⚠️ 这里存的是**开启**的那几个，不是「关掉的」—— 空数组是一个有意义的值：
-    //    「一个都不做 = 安静地待着」。所以归一化时**不能**把空数组兜回默认全集。
-    // ⚠️ 只管「自己待着时的小动作」。点它一下的反应、说话时的点头是**交互反馈**，
-    //    不受这个开关管（关掉动作的宠物被点了还是该有反应）。
+    // ⚠️ 存的是**开启**的那几个（空数组 = 一个都不做，归一化不能兜回全集）；点击 / 说话时的反馈不受这个开关管
     gestureEnabled: [...KNOWN_GESTURES],
     // --- 模型 ---
     useMainModel: true, // 默认跟随软件主模型
@@ -242,26 +163,21 @@ function defaultPet(id) {
     style: '', // 回复风格补充（拼进 prompt 的最后一层）
     // --- 记忆 ---
     memoryMaxItems: 50, // 长期记忆保留多少条
-    // ⚠️ 改这个默认值**不会**动老用户已存的值 —— 用户可能自己调过，
-    //    硬盖会覆盖他的选择。想统一只能另写一次迁移。
-    // --- 多只（现在只有一只，但结构不写死）---
+    // ⚠️ 改这个默认值不会动老用户已存的值（他可能自己调过），要统一只能另写迁移
+    // --- 多只 ---
     createdAt: Date.now()
   };
 }
 
 const DEFAULT_PET_CONFIG = {
   version: 1,
-  // 桌宠功能总开关（默认开）。关掉 = 宠物窗口不显示、也不再主动发言，
-  // 但设置和记忆都留着 —— 跟「隐藏」的区别是它还会顺手关掉窗口，
-  // 右键菜单里的「退出桌宠」走的就是这个。
+  // 总开关：关掉 = 不显示、不主动发言，但设置和记忆保留（右键「退出桌宠」走这里）
   enabled: true,
   activeId: 'pet1',
   pets: [defaultPet('pet1')]
 };
 
-// ---------------------------------------------------------------------------
-//  归一化
-// ---------------------------------------------------------------------------
+// --- 归一化 ---
 
 function clampInt(value, min, max, fallback) {
   const n = Number(value);
@@ -270,17 +186,7 @@ function clampInt(value, min, max, fallback) {
 }
 
 /**
- * 形象目录名怎么收。
- *
- * ⚠️ 别复用 safeId：那是给**宠物 id** 用的（要拿去拼 persona/memory 的文件名），
- *    只认 [A-Za-z0-9_-] 而且**非法就返回 'pet1'** —— 拿它收形象名会出这种查不出来的错位：
- *    下拉里明明有「蓝猫」，选中后却被存成 `pet1`，然后去找 assets/pet/pet1 显示占位框。
- *
- * ⚠️ 也别统一转小写：Linux 和区分大小写的 macOS 卷上，目录 `MyCat` 转成 `mycat`
- *    之后就再也找不到了（Windows 无所谓，但没理由只在这一个平台上对）。
- *
- * 这里只清洗「不能当目录名用」的东西（路径分隔符、通配符、`..`），其余原样保留 ——
- * 保证「下拉里列出的名字」和「真去读的目录名」永远是同一个。
+ * 形象目录名清洗。⚠️ 别复用 safeId（非法回落 'pet1'，会把「蓝猫」存成 pet1）；也别转小写（区分大小写的卷上找不到）。
  */
 function safeSkinName(name) {
   const raw = String(name == null ? '' : name)
@@ -292,11 +198,7 @@ function safeSkinName(name) {
 
 function normalizeLook(raw) {
   const look = raw && typeof raw === 'object' ? raw : {};
-  // 只认 rig。老配置里的 'png' 形象会被迁移成默认 rig（skin: DEFAULT_SKIN）：
-  // 留一个指向不存在目录的 skin，宠物只会剩下「形象没加载出来」占位框。
-  //
-  // ⚠️ 老配置里的 'cat' 也要迁移：这个形象包已经不在 assets/pet/ 里了，
-  //    见到 cat 就换成默认形象，否则升级用户会看到占位框。
+  // 只认 rig：老的 'png' / 'cat' 形象（目录已不存在）一律迁移成 DEFAULT_SKIN，否则只剩占位框
   const known = ['rig', 'sprite', 'live2d'].includes(look.kind);
   const rawSkin = known ? safeSkinName(look.skin || DEFAULT_SKIN) : DEFAULT_SKIN;
   return {
@@ -314,18 +216,7 @@ function normalizeTs(value) {
 }
 
 /**
- * 收「空闲小动作」那组开关。
- *
- * ⚠️ **缺字段**和**空数组**是两回事，别合并处理：
- *   - 老配置里根本没有 `gestureEnabled` → 用默认全集（升级上来的人不掉功能）；
- *   - 用户在设置页把三个勾全取消 → 存下来就是 `[]` → 必须原样保留成空数组
- *     （那是「我要它安静待着」，兜回全集等于设置不生效）。
- *   只要判断 `Array.isArray(v) ? … : 默认` 就自然分开了 —— 关键是**别对空数组用
- *   `|| 默认`**，`[] || x` 虽然是 `x`… 所以更不能写 `v || DEFAULT`（空数组是 truthy，
- *   这里其实安全，但写成显式的 Array.isArray 分支更不容易被后人改坏）。
- *
- * 只认 KNOWN_GESTURES 里的 id：手改配置塞进来的错名字会让渲染层挑到一个它不认识的
- * 手势（表现是「静止几秒」），不如在这里丢掉。
+ * ⚠️ 缺字段 ≠ 空数组：没有这个键 → 用默认全集；用户全取消 → 存下来是 []，必须原样保留。只认 KNOWN_GESTURES。
  */
 function normalizeGestureList(value, fallback) {
   if (!Array.isArray(value)) return [...fallback];
@@ -341,9 +232,7 @@ function normalizePet(raw, fallbackId) {
   const p = raw && typeof raw === 'object' ? raw : {};
   const base = defaultPet(fallbackId);
 
-  // 位置：**两个坐标都必须是有效数字**才算数。
-  // 只要判断「有没有 bounds 对象」就收下的话，手改坏的 {"x":"x","y":2} 会变成
-  // {x:0,y:2} 被当成「记住了位置」—— 宠物下次启动就摆到屏幕左上角去了。
+  // 位置：两个坐标都必须是有效数字才算数，否则手改坏的 {x:"x",y:2} 会被当成记住了位置、跑到屏幕左上角
   const rawBounds = p.bounds && typeof p.bounds === 'object' ? p.bounds : null;
   const boundsX = Number(rawBounds && rawBounds.x);
   const boundsY = Number(rawBounds && rawBounds.y);
@@ -410,9 +299,7 @@ function normalizePetConfig(raw) {
   return { version: 1, enabled: data.enabled !== false, activeId, pets };
 }
 
-// ---------------------------------------------------------------------------
-//  设置读写
-// ---------------------------------------------------------------------------
+// --- 设置读写 ---
 
 function loadPetConfig() {
   return normalizePetConfig(loadJsonWithFallback(petConfigFile()));
@@ -449,12 +336,7 @@ function savePetConfigNow(config) {
 }
 
 /**
- * 改**其中一只**的字段，别的原样带过。
- *
- * ⚠️ 读也必须排队内：先读再排队写的话，两个并发修改会各自拿着同一份旧快照，
- * 队列只保证「写的顺序」，后一次写会把前一次的字段整份盖回去（改频率 + 改句数
- * 只生效一个，就是这么来的）。`pet:update` 会同时改多个字段，撞上散步存位
- * 的防抖落盘就会真的发生。
+ * 改其中一只的字段。⚠️ 读也必须在队列内：先读再排队写会让两个并发修改各拿旧快照，后一次把前一次整份盖回去。
  */
 function patchPet(petId, patch) {
   return queueMutation(() => {
@@ -473,9 +355,7 @@ function findPet(config, petId) {
   return list.find((p) => p.id === petId) || list[0] || null;
 }
 
-// ---------------------------------------------------------------------------
-//  形象（只有 rig 一种）
-// ---------------------------------------------------------------------------
+// --- 形象（只有 rig 一种）---
 
 /** 贴图扩展名 → MIME。rig 形象包的 tex/*.png 读出来转 dataUrl 时要用 */
 const IMAGE_MIME = {
@@ -498,25 +378,12 @@ function statKey(file) {
   }
 }
 
-// ---------------------------------------------------------------------------
-//  rig 形象（部件贴图动画）
-//
-//  目录形状（与 Coopanion 形象包同构，pack_cat.py 产出）：
-//    assets/pet/<skin>/model.json   rig 数据（units / pivots / parts / feat / view）
-//    assets/pet/<skin>/tex/*.png    部件贴图（parts[].tex 同名）
-//    assets/pet/<skin>/feat/*.png   五官叠加层（feat[].tex 同名；可选，没有也不影响）
-//
-//  宠物页面 CSP 是 default-src 'none'（fetch 一律被拦），所以 model 和贴图
-//  都由这里读盘转成 JSON + dataUrl 推过去 —— 页面拿不到文件路径，只能这么给。
-// ---------------------------------------------------------------------------
+// --- rig 形象 ---
+//  assets/pet/<skin>/model.json + tex/ 贴图 + feat/ 五官（可选）；宠物页 CSP 是 default-src 'none'，所以读盘转成 JSON + dataUrl 推过去
 
 let rigCache = { key: '', pack: null };
 
-/**
- * 列出可用的 rig 形象包：扫 assets/pet/ 下所有带 model.json 的目录。
- * 这就是「换肤」的发现机制 —— 自己的角色放好目录就出现在这里，不用改代码。
- * 返回 [{ id, label, source, hasThumb }]，按 id 排序；失败返回 []。
- */
+/** 列出可用的 rig 形象包（扫带 model.json 的目录），按 id 排序；失败返回 [] */
 function listRigSkins() {
   const out = [];
   const push = (base, source) => {
@@ -543,8 +410,7 @@ function listRigSkins() {
         if (m) label = m[1].trim();
       } catch (err) { /* 没有 README 很常见 */ }
       out.push({
-        // 用**真实目录名**，不转小写：设置页拿它和 look.skin 比对、rigSkinDir 拿它拼路径，
-        // 转小写会让 MyCat 这类目录在区分大小写的文件系统上「列得出来、选不中」。
+        // 用真实目录名、不转小写：否则 MyCat 在区分大小写的系统上「列得出来、选不中」
         id: safeSkinName(name),
         label,
         source,
@@ -573,12 +439,7 @@ function rigSkinDir(look) {
   }
 }
 
-/**
- * 读出一个 rig 形象包（model + 贴图 dataUrl）。
- * 缺 model.json / 缺任何一张贴图 → 返回 null（宠物页面露出「形象没加载出来」占位）。
- * 返回的 key 供渲染层判断「数据变没变」：pet:state 每次都全量推，
- * 渲染层靠 key 跳过重复重建（GL 上下文重建不便宜）。
- */
+/** 读出 rig 形象包（model + 贴图 dataUrl）；缺 model 或任一贴图返回 null。key 供渲染层跳过重复重建（GL 重建不便宜） */
 function petRigPack(look) {
   const dir = rigSkinDir(look);
   if (!dir) return null;
@@ -624,9 +485,7 @@ function petRigPack(look) {
     }
   }
 
-  // 五官叠加层（feat）：贴图在 feat/ 子目录，key 仍取 tex 名（rig 用 part.tex 索引）。
-  // 这一层是**可选**的：老形象包 model.feat 是空对象；就算某张图缺了也只跳过该张、
-  // 不整包作废 —— 顶多少了眼睛，不至于整只猫画不出来。
+  // 五官层（feat/）可选：key 仍取 tex 名；某张缺了只跳过它，不整包作废
   for (const fdef of Object.values(model.feat || {})) {
     const name = String((fdef && fdef.tex) || '');
     if (!name) continue;
@@ -657,21 +516,12 @@ function petRigPack(look) {
   return pack;
 }
 
-// 换形象：往 assets/pet/<名字>/ 或 <数据目录>/pet/skins/<名字>/
-// 放一个带 model.json 的目录，就会被上面的 listRigSkins() 扫到并出现在下拉里。
+// 换形象：往 assets/pet/<名字>/ 或 data/pet/skins/<名字>/ 放一个带 model.json 的目录即可
 
-// ---------------------------------------------------------------------------
-//  人格
-// ---------------------------------------------------------------------------
+// --- 人格 ---
 
 /**
- * 读某只宠物**当前形象**的人格。
- *
- * 三条路，按顺序：
- *   ① 该形象已有自己的文件 → 直接读它。
- *   ② 该形象没有、但老的 `persona/<petId>.md` 存在且不是默认内容 → 迁移过来
- *      （老用户的性格不能因为这次改动弄丢），迁移就是「写一份给新形象 + 读它」。
- *   ③ 都没有 → 把内置那份写出去当起点，并返回它。
+ * 读当前形象的人格：① 自己的文件 → 直接用；② 老 `persona/<petId>.md` 非默认内容 → 迁移；③ 都没有 → 写内置默认。
  */
 function readPersona(petId) {
   const file = petPersonaFile(petId);
@@ -682,13 +532,10 @@ function readPersona(petId) {
   } catch (err) {
     existing = null; // 该形象还没有自己的文件
   }
-  // 空文件当「没有」处理：空的 persona 会让宠物变成没有性格的文字生成器。
-  // 读到空 / 纯空白就重新种一份默认，而不是把空串交给提示词。
+  // 空 / 纯空白当「没有」：空的 persona 会让宠物变成没有性格的文字生成器
   if (existing != null && existing.trim()) return existing;
 
-  // ② 迁移老文件：只在「内容确实是用户自己写的」时才迁。
-  //    判断口径是「非空 且 不等于内置默认」—— 老文件若就是当初自动写出去的默认文本，
-  //    迁过去毫无意义（新形象的默认本来就长一样），不迁反而更干净。
+  // ② 迁移老文件：只在「非空且不等于内置默认」时认领（默认文本迁过去没意义）
   let legacy = null;
   try {
     legacy = fs.readFileSync(legacyPersonaFile(petId), 'utf8');
@@ -721,17 +568,7 @@ function writePersona(petId, text) {
 }
 
 /**
- * 还原成内置人格（只还原**当前形象**那一份）。
- *
- * ⚠️ 别用「写一个空字符串」来实现「还原」：readPersona 读得到那个空文件，
- *    于是人格真的变成空的 —— 宠物会变成一段没有性格的文字生成器，
- *    而且用户完全不知道为什么。正解是把文件删掉，让 readPersona
- *    走「第一次跑」那条路重新写一份默认的出来。
- *
- * ⚠️ 删的是**当前形象**的文件（petPersonaFile 已按形象算路径）。
- *    这里要顺手把老的 `persona/<petId>.md` 一并删掉 —— 不删的话，
- *    下次 readPersona 会把它当成「值得迁移的老内容」又迁回来，
- *    用户会发现「点了还原，人格却回来了」。
+ * 还原成内置人格。⚠️ 别写空字符串（readPersona 会读到空文件），要删文件；⚠️ 老的 `persona/<petId>.md` 也要一并删。
  */
 function resetPersona(petId) {
   try {
@@ -747,21 +584,8 @@ function resetPersona(petId) {
   return readPersona(petId);
 }
 
-// ---------------------------------------------------------------------------
-//  长期记忆
-//
-//  形状（两个文件都按 petId 分仓，为的是以后养多只时记忆互不串）：
-//    long_term.json  { version, pets: { [id]: { items: [...] } } }
-//    summaries.json  { version, pets: { [id]: { digest, folded } } }
-//
-//  items 里每条：{ id, at, kind, text, convoTitle }
-//    kind = 'say'    桌宠自己说过的话 —— 用它防复读、也让它有连续性
-//         = 'event'  从对话里记下的事（模型在发言末尾用【记住】行给出来）
-//         = 'user'   用户偏好（界面手加的，或将来从设置里推出来的）
-//
-//  超出上限时**从最早的开始折叠**进 summaries 的 digest（本地拼接，不再调模型）——
-//  这样做的好处是「保留量可调」不会顺带把记忆整段丢掉，而且一次都不会多花钱。
-// ---------------------------------------------------------------------------
+// --- 长期记忆 ---
+//  long_term.json / summaries.json 按 petId 分仓；超出上限时从最早的开始折进 summaries 的 digest（本地拼接，不调模型）
 
 const MAX_MEMORY_TEXT = 300;
 const MEMORY_ITEM_KINDS = new Set(['say', 'event', 'user']);
@@ -796,10 +620,7 @@ function newMemoryId() {
   return `m${Date.now().toString(36)}${Math.floor(Math.random() * 900 + 100)}`;
 }
 
-/**
- * 追加一条记忆，并按上限折叠。
- * 返回写盘的 Promise。
- */
+/** 追加一条记忆并按上限折叠，返回写盘的 Promise */
 function appendPetMemory(petId, item, maxItems) {
   const id = safeId(petId);
 
@@ -807,8 +628,7 @@ function appendPetMemory(petId, item, maxItems) {
   const text = String((item && item.text) || '').trim().slice(0, MAX_MEMORY_TEXT);
   if (!text) return Promise.resolve(petMemoryItems(id));
 
-  // 读改写整段排队（理由同 patchPet）：桌宠说完话会连着追加「说过的一句」和
-  // 「记下的事」两条，两次调用各自读旧快照的话，前面那条会被整份覆盖掉。
+  // 读改写整段排队（同 patchPet）：说完话会连追加两条，各读旧快照会覆盖前一条
   return queueMutation(async () => {
     const store = loadMemoryStore();
     const bucket = store.pets[id] && typeof store.pets[id] === 'object' ? store.pets[id] : {};
@@ -822,9 +642,7 @@ function appendPetMemory(petId, item, maxItems) {
       convoTitle: String((item && item.convoTitle) || '').trim().slice(0, 60)
     });
 
-    // 超上限：把最早的那些折进摘要
-    // 兜底值要和 defaultPet().memoryMaxItems 保持一致，否则「参数没传」和
-    // 「用默认配置」两条路会得到不同的保留量（30 vs 50）。
+    // 超上限：把最早的折进摘要。兜底 50 必须和 defaultPet().memoryMaxItems 一致
     const limit = clampInt(maxItems, MEMORY_MAX_ITEMS_MIN, MEMORY_MAX_ITEMS_MAX, 50);
     let folded = [];
     if (limit === 0) {
@@ -841,8 +659,7 @@ function appendPetMemory(petId, item, maxItems) {
       const prev = summaries.pets[id] && typeof summaries.pets[id].digest === 'string'
         ? summaries.pets[id].digest
         : '';
-      // 折叠就是本地拼接，**不额外调模型** —— 记忆是后台动作，
-      // 让「超过上限」这个纯机械事件去偷偷花一次钱是不对的
+      // 折叠只是本地拼接，不额外调模型（超上限是机械事件，不该偷偷花钱）
       const joined = folded
         .map((m) => (m.kind === 'say' ? `${m.convoTitle || '某次对话'}：${m.text}` : m.text))
         .join('；');
@@ -861,14 +678,7 @@ function appendPetMemory(petId, item, maxItems) {
 }
 
 /**
- * 删掉**一条**长期记忆（界面每条右侧那个小垃圾桶）。
- *
- * ⚠️ 必须走 queueMutation：删除和「正在进行的追加」如果交错，
- *    删除读到的旧快照会把刚追加的那条写回去、或者反过来把删掉的复原。
- *    （clearPetMemory 用桶级 delete 避开了这个，但删单条只能读改写，绕不开。）
- *
- * 返回删除后的剩余条目数；itemId 不存在时不报错（可能刚被别处删过），
- * 只是条目数不变。
+ * 删一条长期记忆。⚠️ 必须走 queueMutation，否则旧快照会把删掉的写回去。返回剩余条目数，itemId 不存在不报错。
  */
 function deletePetMemoryItem(petId, itemId) {
   const id = safeId(petId);
@@ -888,7 +698,7 @@ function deletePetMemoryItem(petId, itemId) {
   });
 }
 
-/** 清空记忆（条目 + 摘要）。reset 只删条目、保留折叠摘要，clear 全清。 */
+/** 清空记忆；keepDigest = true 只删条目、保留折叠摘要 */
 function clearPetMemory(petId, keepDigest) {
   const id = safeId(petId);
   // 同样整段排队：清空与正在进行的追加如果交错，刚清掉的记忆会被旧快照写回来。
@@ -926,9 +736,7 @@ function exportPetMemory(petId) {
   );
 }
 
-// ---------------------------------------------------------------------------
-//  日志（排查用，只留最近一段）
-// ---------------------------------------------------------------------------
+// --- 日志（排查用，只留最近一段）---
 
 const MAX_LOG_BYTES = 256 * 1024;
 

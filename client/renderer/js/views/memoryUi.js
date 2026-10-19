@@ -1,25 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  views/memoryUi.js —— 记忆管理 + 存档点
-//
-//  「分段记忆摘要」（把较早的对话压成摘要、原文丢弃）和「存档点」（整段对话
-//  快照）在界面上是**同一个弹窗**：上面是摘要列表，下面是存档点列表。
-//  既然共用一个容器、互相触发重画，它们就必须住在一个文件里 ——
-//  拆成两个模块就是两个视图互相 import。
-//
-//  本模块 = 界面 + 面板上的动作：
-//    · 头部的记忆段数指示器（登记在刷新总线上）
-//    · 弹窗的开关与重画
-//    · 摘要的编辑 / 重新生成 / 删除 / 清空
-//    · 存档点的存 / 读 / 删
-//
-//  「什么时候该自动压一段」的调度在 views/summarize.js 的 maybeSummarize()，
-//  「手动压一段」按钮也由那边导出；本模块只负责弹窗和摘要 / 存档点的管理。
-//  摘要的参数、纯逻辑（区间计算 / 提示词 / 转录 / 请求）都在 data/memory.js，
-//  运行态（summarizingConvos / summaryFailures）也在那儿 —— 两头都能向下取，
-//  谁都不必认识谁。
-// ============================================================================
+// 这个视图负责「记忆管理」弹窗：上面的分段记忆摘要列表 + 下面的存档点列表（共用一个容器、互相触发重画）。
+// 只做界面与面板动作；「何时自动压一段」在 views/summarize.js，摘要的纯逻辑与运行态在 data/memory.js。
 
 import { state } from '../core/state.js';
 import { el } from '../core/dom.js';
@@ -27,7 +9,6 @@ import { uid, now, activeConvo } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, clear } from '../ui/build.js';
-// 组件库：就地编辑一段摘要用的多行框（见 components/index.js）
 import { mTextarea, mButton } from '../components/index.js';
 import { persistConversations } from '../data/persist.js';
 import { convoPanel, convoPanelDefs, convoPanelFields, normalizePanelDefs } from '../data/panel.js';
@@ -46,9 +27,7 @@ import {
 } from '../data/memory.js';
 import { onRefresh, refreshAll } from './refresh.js';
 
-// ---------------------------------------------------------------------------
-//  记忆指示器（头部那个小圆点 + 段数）
-// ---------------------------------------------------------------------------
+// --- 记忆指示器（头部那个小圆点 + 段数） ---
 
 let memoryEditingId = null; // 正在编辑的摘要段
 
@@ -63,9 +42,7 @@ export function renderMemoryIndicator() {
     : '较早的对话会自动压成摘要';
 }
 
-// ---------------------------------------------------------------------------
-//  弹窗开关
-// ---------------------------------------------------------------------------
+// --- 弹窗开关 ---
 
 function openMemoryModal() {
   const convo = activeConvo();
@@ -84,9 +61,7 @@ export function closeMemoryModal() {
   el.input.focus();
 }
 
-// ---------------------------------------------------------------------------
-//  摘要列表
-// ---------------------------------------------------------------------------
+// --- 摘要列表 ---
 
 export function renderMemoryModal() {
   const convo = activeConvo();
@@ -106,7 +81,7 @@ export function renderMemoryModal() {
   el.btnMemoryClear.disabled = list.length === 0;
   el.memoryFootHint.textContent = `「${convo.title || '新对话'}」的摘要只保存在你自己电脑上`;
 
-  // 存档点在下面那一节，跟摘要没关系 —— 得放在「没有摘要就 return」之前
+  // ⚠️ 必须放在「没有摘要就 return」之前：存档点在下面那一节，跟摘要没关系
   renderCheckpoints(convo);
 
   el.memoryList.textContent = '';
@@ -189,8 +164,7 @@ function buildMemoryCard(convo, seg, index, total) {
   body.className = 'memory-card-body';
 
   if (isEditing) {
-    // 就地编辑摘要用多行框组件；`.memory-edit-box` 留在宿主持布局，
-    // 观感规则落在里层 `> textarea` 上。
+    // .memory-edit-box 留在宿主持布局，观感规则落在里层 `> textarea` 上
     const box = mTextarea({
       class: 'memory-edit-box',
       value: String(seg.text || ''),
@@ -236,7 +210,6 @@ function buildMemoryCard(convo, seg, index, total) {
   return card;
 }
 
-/** 重新生成某一段（用它的原始消息区间） */
 async function regenerateSummary(convo, segmentId) {
   const list = convoSummaries(convo);
   const index = list.findIndex((s) => s.id === segmentId);
@@ -256,16 +229,12 @@ async function regenerateSummary(convo, segmentId) {
   }
 
   summarizingConvos.add(convo.id);
-  // 也挂上 summaryBusy（「压一段」那边还有 summarizingConvos 的并发闸兜着）。
-  // 这里不重画弹窗：点下去那颗按钮正显示「生成中…」，重画会把它冲掉；调用方结束后会重画。
+  // ⚠️ 这里不重画弹窗：那颗按钮正显示「生成中…」，重画会把状态冲掉（调用方结束后会重画）
   convo.summaryBusy = true;
   try {
-    // ⚠️ 和 summarize.js 用同一个口径：**从最早那条往后装**，别用 buildTranscript ——
-    //    它超长时砍的是**最早**的那几条。重新生成这段时若砍掉开头，摘要就只覆盖了
-    //    这一段的后半截，前半截原文又被这段的 end 挡在上下文外，等于静默丢了。
-    //    （这里只写回 target.text、不动 start/end，所以返回的 count 用不上。）
+    // ⚠️ 必须用 buildTranscriptFromStart（从最早那条往后装），别用 buildTranscript：它超长时砍的是最早几条，
+    //    会让这段摘要只覆盖后半截，前半截原文又被 end 挡在上下文外，等于静默丢消息
     const transcript = buildTranscriptFromStart(slice, charNameForSummary(convo)).text;
-    // 用「这段之前」的摘要当背景
     const previous = list
       .slice(0, index)
       .map((s) => String(s.text || ''))
@@ -301,10 +270,8 @@ async function deleteSummarySegment(convo, segmentId) {
   const seg = list[index];
   const later = list.length - index - 1;
 
-  // 摘要的 start/end 是连续区间，summarizedCount 又只取最大 end。
-  // 只删中间一段、把后面各段往前挪，会让被删段的原文继续被挡在上下文外，
-  // 而后面摘要的文字其实覆盖的是另一段原文 —— 等于静默丢消息。
-  // 所以删除目标段时，把它之后依赖它的摘要一起删掉，让原文真正从这段开始回到上下文。
+  // ⚠️ 删中间一段不能只把后面的往前挪：被删段的原文仍被挡在上下文外，后面的摘要覆盖的是另一段原文 = 静默丢消息。
+  //    所以删目标段时把它之后的摘要一起删掉
   const ok = await confirmDialog({
     title: '删除摘要',
     message: later
@@ -323,10 +290,6 @@ async function deleteSummarySegment(convo, segmentId) {
   showToast('摘要已删除，原文重新进入上下文');
 }
 
-/**
- * 清空全部摘要（弹窗右上角那颗红按钮）。
- * 全部删掉之后不用重排范围 —— 一段都不剩。
- */
 async function clearAllSummaries() {
   const convo = activeConvo();
   if (!convo) return;
@@ -352,19 +315,12 @@ async function clearAllSummaries() {
   showToast('摘要已清空，原文重新进入上下文');
 }
 
-// ---------------------------------------------------------------------------
-//  存档点
-//
-//  「想走另一条剧情线」有两个手段，区别在**代价**：
-//    · 分支：从某条消息另开一个会话，这个会话原样留着 —— 什么都不丢（在 main.js）
-//    · 存档点：在当前会话里存一份快照，读档 = 整个退回去 —— 存完之后聊的会没
-//  所以界面上必须把这点说清楚，不然用户会以为读档也能反悔。
-// ---------------------------------------------------------------------------
+// --- 存档点 ---
 
-// 存档点上限。每份都是一整段对话的副本，攒多了会把 conversations.json 撑大
+// ⚠️ 读档 = 整个退回去，存完之后聊的会没；「分支」才是什么都不丢 —— 界面必须说清，不然用户以为读档也能反悔
+// 上限：每份都是一整段对话的副本，攒多了会把 conversations.json 撑大
 const MAX_CHECKPOINTS = 12;
 
-/** 深拷一份存档点内容（消息 / 面板 / 面板字段定义 / 剧情选项 / 摘要 / 玩家角色） */
 function snapshotConvo(convo) {
   return {
     messages: JSON.parse(JSON.stringify(convo.messages || [])),
@@ -379,7 +335,6 @@ function snapshotConvo(convo) {
   };
 }
 
-/** 存一个档 */
 function saveCheckpoint() {
   const convo = activeConvo();
   if (!convo) return;
@@ -403,7 +358,6 @@ function saveCheckpoint() {
   showToast(`已存档（${name}）`, 'ok');
 }
 
-/** 读档：整个退回去。存完之后聊的内容会丢，所以先确认 */
 async function restoreCheckpoint(id) {
   const convo = activeConvo();
   if (!convo) return;
@@ -488,7 +442,6 @@ function renderCheckpoints(convo) {
           'div',
           { class: 'checkpoint-info' },
           h('div', { class: 'checkpoint-name', text: point.name }),
-          // 档名里已经写了条数，这里就只报时间，不重复
           h('div', { class: 'checkpoint-time', text: when })
         ),
         mButton({ variant: 'primary', size: 'sm', text: '读档', onClick: () => restoreCheckpoint(point.id) }),
@@ -498,9 +451,7 @@ function renderCheckpoints(convo) {
   }
 }
 
-// ---------------------------------------------------------------------------
-//  接线：事件绑定 + 登记刷新总线
-// ---------------------------------------------------------------------------
+// --- 接线：事件绑定 + 登记刷新总线 ---
 
 export function initMemoryUi() {
   el.btnMemory.addEventListener('click', openMemoryModal);

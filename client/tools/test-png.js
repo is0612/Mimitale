@@ -1,32 +1,15 @@
 'use strict';
 
-// ============================================================================
-//  tools/test-png.js —— PNG 角色卡「文字怎么藏进图里」的专项测试
-//
-//  为什么单独一个文件：main/png.js 是纯字节处理，开窗口跑冒烟完全没必要，
-//  这里**一秒内**跑完，改完随手能跑。（冒烟里也有一条「导出 → 再导入」的往返，
-//  那条验的是整条链路；这里验的是「各种块的形状」本身。)
-//
-//  跑法：
-//    node tools/test-png.js
-//  或走 npm：
-//    npm run test:png
-//
-//  ✅ **零数据隔离顾虑**：全程在内存里拼 Buffer，不落盘、不碰 userData。
-//     （那批 test-*.js 里有的需要 `MIMITALE_DATA_DIR`，这里压根不需要。）
-//
-//  为什么值得测：PNG 规范给了三种文本块，出图工具各有偏好 ——
-//  只认 tEXt 的话，别人用 zTXt / iTXt 写出来的卡会被读成「图里没有卡数据」。
-// ============================================================================
+// tools/test-png.js —— PNG 角色卡「文字怎么藏进图里」的专项测试；跑法：node tools/test-png.js（或 npm run test:png）
+// 冒烟里那条「导出 → 再导入」验的是整条链路，这里验的是「各种块的形状」本身
+// ⚠️ 全程在内存里拼 Buffer，不落盘、不碰 userData（不需要 MIMITALE_DATA_DIR）
 
 const zlib = require('node:zlib');
 
 const { crc32, isPng, pngWithTextChunk, readTextChunk, parseCharacterCardPng } =
   require('../main/png.js');
 
-// ---------------------------------------------------------------------------
-//  拼 PNG 的小工具（测试自己造夹具，不依赖仓库里的示例图 —— 那反而会更难读懂）
-// ---------------------------------------------------------------------------
+// 测试自己造夹具，不依赖仓库里的示例图
 
 const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -69,10 +52,7 @@ function zTXt(keyword, text) {
   ]));
 }
 
-/**
- * iTXt：关键字 \0 压缩标志(1) 压缩方法(1) \0 语言标签 \0 翻译后的关键字 \0 文本
- * 文本是 UTF-8，可压缩可不压缩。
- */
+/** iTXt：关键字 \0 压缩标志(1) 压缩方法(1) \0 语言标签 \0 译文 \0 文本（UTF-8，可压可不压） */
 function iTXt(keyword, text, opts = {}) {
   const { compress = true, lang = 'zh-CN', translated = '译文' } = opts;
   const body = Buffer.from(text, 'utf8');
@@ -112,9 +92,7 @@ function section(title) {
   console.log(`\n── ${title}`);
 }
 
-// ---------------------------------------------------------------------------
-//  夹具：一张「正常」的卡，带中文（顺带压住了 UTF-8 没解错这件事）
-// ---------------------------------------------------------------------------
+// 夹具带中文：顺带压住 UTF-8 没解错这件事
 
 const CARD = {
   name: '测试角色',
@@ -167,7 +145,6 @@ ok(
 
 section('块结构上的边角');
 
-// 中间夹一个跟本题无关的块，模拟真实的图
 const idat = chunk('IDAT', zlib.deflateSync(Buffer.from([0x00, 0x00])));
 ok(
   parseCharacterCardPng(png([idat, tEXt('Comment', 'x'), zTXt('ccv3', B64)])).name === '测试角色',
@@ -186,12 +163,10 @@ ok(
   parseCharacterCardPng(Buffer.concat([SIGNATURE, chunk('IHDR', IHDR), lying])) === null,
   '长度字段越界 -> 停（不读脏数据、不抛）'
 );
-// 没有关键字分隔符
 ok(
   parseCharacterCardPng(png([chunk('tEXt', Buffer.from('ccv3没有分隔符', 'latin1'))])) === null,
   '块里没有 \\0 分隔符 -> 跳过'
 );
-// iTXt 少了几段
 ok(
   parseCharacterCardPng(png([chunk('iTXt', Buffer.from('ccv3\0\0\0就到这了', 'latin1'))])) === null,
   'iTXt 结构不完整 -> null'
@@ -199,7 +174,6 @@ ok(
 
 section('坏数据不炸（这一节最要紧）');
 
-// 不是 zlib 流
 const badZip = chunk('zTXt', Buffer.concat([
   Buffer.from('ccv3', 'latin1'), Buffer.from([0, 0]), Buffer.from('我不是 zlib 数据')
 ]));

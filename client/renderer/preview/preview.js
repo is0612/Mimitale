@@ -1,23 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  renderer/preview/preview.js —— 组件盘的搭建脚本
-//
-//  这一页**不属于应用界面**：给人看组件长什么样，也给
-//  tools/shot-components.js 出图用（`node tools/shot-components.js`）。
-//  所以它把每个组件的**所有状态**都摆一遍：变体 × 尺寸、禁用、只读、有值、
-//  动态改文字 / 动态铺选项、程序化点击。
-//
-//  它同时是组件库的**用法样例** —— 通读时注意两件事：
-//    · 整份文件里**没有一处写边框 / 内边距 / 背景色 / 字号**
-//      （唯一的例外是 components.html 里那块 .pv-* 页面排版）
-//    · 用户要的东西只有两样：挑 `variant / size`，然后设属性 / 读 `.value`
-//
-//  为什么这里要 import ui/select.js 并调一次 initSelects()：
-//  下拉的**列表**（把系统那份换成自己那份）住在那层里，它接的是文档里任意原生
-//  <select>；组件里的原生 <select> 正好是其中一个 —— 于是「组件 + 自研列表」
-//  自动组合，组件里没有第二份弹层实现。
-// ============================================================================
+// preview/preview.js —— 组件盘搭建脚本（开发用，不属于应用界面，也给 tools/shot-components.js 出图）
+// ⚠️ 整份文件不写外观样式：用户要的只有挑 variant / size，然后设属性 / 读 .value
+// ⚠️ 必须 import ui/select.js 并调 initSelects()：组件里的原生 <select> 靠它接上自研列表
 
 import { h } from '../js/ui/build.js';
 import { defineComponents, mButton, mInput, mTextarea, mSelect } from '../js/components/index.js';
@@ -25,15 +10,13 @@ import { initSelects } from '../js/ui/select.js';
 import { fillSelect } from '../js/ui/controls.js';
 
 defineComponents();
-initSelects(); // 让组件里的原生 <select> 也吃上自研列表（见文件头）
+initSelects(); // 让组件里的原生 <select> 也接上自研列表
 
 const root = document.querySelector('.pv-root');
 const headHost = document.querySelector('.pv-head');
 if (!root || !headHost) throw new Error('组件盘缺少 .pv-root / .pv-head 容器（components.html 结构变了？）');
 
-// ---------------------------------------------------------------------------
-//  页面脚手架（.pv-* 只属于这一页）
-// ---------------------------------------------------------------------------
+// --- 页面脚手架（.pv-* 只属于这一页）---
 
 const logLines = [];
 const logBox = h('div', { class: 'pv-log' });
@@ -62,7 +45,7 @@ function line(label, ...nodes) {
   );
 }
 
-/** 每来一个事件就往日志里塞一行 —— 「组件有没有真的派发原生事件」一眼可见 */
+/** 往日志里塞一行 —— 「组件有没有真的派发原生事件」一眼可见 */
 function record(kind, text) {
   logLines.unshift(`${kind.padEnd(6)} ${text}`);
   logLines.length = Math.min(logLines.length, 60);
@@ -89,9 +72,7 @@ function wire(label, el, kinds = ['input', 'change']) {
   return el;
 }
 
-// ---------------------------------------------------------------------------
-//  按钮
-// ---------------------------------------------------------------------------
+// --- 按钮 ---
 
 let clicks = 0;
 const counter = mButton({
@@ -99,7 +80,7 @@ const counter = mButton({
   text: '点我 0 次',
   onClick: () => {
     clicks += 1;
-    // 改文字走 textContent —— 组件接管了它（原生 setter 会把里层按钮整个删掉）
+    // ⚠️ 改文字走 textContent —— 组件接管了它（原生 setter 会把里层按钮整个删掉）
     counter.textContent = `点我 ${clicks} 次`;
     record('click', 'm-button 被点，文字是用 textContent 改的');
   }
@@ -148,9 +129,7 @@ const buttons = card(
   line('block', mButton({ variant: 'primary', block: true, text: 'block 撑满一行' }))
 );
 
-// ---------------------------------------------------------------------------
-//  单行输入框
-// ---------------------------------------------------------------------------
+// --- 单行输入框 ---
 
 const inputs = card(
   '输入框 m-input',
@@ -165,9 +144,7 @@ const inputs = card(
   line('无障碍', ariaSample, ariaReadout)
 );
 
-// ---------------------------------------------------------------------------
-//  多行框
-// ---------------------------------------------------------------------------
+// --- 多行框 ---
 
 const textareas = card(
   '多行框 m-textarea',
@@ -179,13 +156,11 @@ const textareas = card(
   line('禁用', mTextarea({ rows: 2, value: '禁用', disabled: true }))
 );
 
-// ---------------------------------------------------------------------------
-//  下拉框
-// ---------------------------------------------------------------------------
+// --- 下拉框 ---
 
 function selectWithOptions(opts, items) {
   const el = mSelect(opts);
-  // 选项挂在宿主上，render 时会搬进里层那颗原生 <select>（= 声明式写法）
+  // ⚠️ 选项挂在宿主上，render 时会搬进里层那颗原生 <select>（= 声明式写法）
   for (const item of items) el.appendChild(h('option', { value: item.value, text: item.text }));
   return el;
 }
@@ -208,7 +183,7 @@ grouped.appendChild(
 );
 wire('m-select[分组]', grouped, ['change']);
 
-// 动态铺：走 ui/controls.js 的 fillSelect（它认 <m-select>，页面不用管里层那颗 select）
+// ⚠️ 动态铺走 ui/controls.js 的 fillSelect：它认 <m-select>，页面不用管里层那颗 select
 const dynamic = wire('m-select[动态]', mSelect({ 'aria-label': '动态铺选项' }), ['change']);
 fillSelect(dynamic, [
   { value: 'a', text: '甲（动态铺的）' },
@@ -234,9 +209,7 @@ const selects = card(
   line('禁用', selectWithOptions({ disabled: true, 'aria-label': '禁用' }, [{ value: '1', text: '禁用' }]))
 );
 
-// ---------------------------------------------------------------------------
-//  事件日志 + 值读出
-// ---------------------------------------------------------------------------
+// --- 事件日志 + 值读出 ---
 
 const inspect = card(
   '事件与值',
@@ -246,13 +219,11 @@ const inspect = card(
   line('当前值', valueBox)
 );
 
-// ---------------------------------------------------------------------------
-//  挂到页面上
-// ---------------------------------------------------------------------------
+// --- 挂到页面上 ---
 
 const theme = (mode) => document.documentElement.setAttribute('data-theme', mode);
 
-// 页头进 .pv-head（**不能**进 .pv-root：那是四栏 grid，页头会占掉第一格）
+// ⚠️ 页头进 .pv-head（不能进 .pv-root：那是四栏 grid，页头会占掉第一格）
 headHost.append(
   h(
     'div',
@@ -279,7 +250,7 @@ root.appendChild(textareas);
 root.appendChild(selects);
 root.appendChild(inspect);
 
-// 元素进文档之后才有的东西（里层原生控件是 connectedCallback 里建的）
+// ⚠️ 元素进文档之后才有的东西（里层原生控件是 connectedCallback 里建的）
 for (const fn of afterConnect) fn();
 renderValues();
 record('ready', '组件盘就绪 —— 点了什么、改了什么都会记在这里');

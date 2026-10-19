@@ -1,24 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  data/expressions.js —— 角色的「表情图」：按回复正文挑一张
-//
-//  一张卡可以带几张表情图（character.expressions，形状见 main/characters.js）：
-//    { name: '害羞', key: 'shy', keywords: ['脸红'], default: true, image: 'data:image/…' }
-//
-//  挑哪张，按优先级：
-//    ① 正文里的显式标签 <emo>shy</emo>（或 <emo>害羞</emo>）—— 模型点名要哪张
-//    ② 正文里的关键词：出现表情名或任一触发词
-//    ③ 都没命中 → 这张卡标了 default 的那张「默认脸」
-//    ④ 再没有 → 角色形象图
-//
-//  ①②是**扫最近几条助手消息**，从最新一条往回找，第一条命中的就走它 ——
-//  这样「这轮没写表情」时上一轮的表情会自然留着，不会每轮闪回默认图。
-//  多人在场时，还要求角色名出现在触发词 / 标签**前面一小段**里，
-//  否则「A 脸红了」会同时点亮所有人的脸红图。
-//
-//  纯读：只认传入的 convo / character，不写任何东西。
-// ============================================================================
+// data/expressions.js —— 角色的「表情图」：按回复正文挑一张（纯读，只认传入的 convo / character，形状见 main/characters.js）
+// 优先级：① <emo> 标签（情绪键或表情名）② 关键词命中 ③ 标了 default 的默认脸 ④ 角色形象图。
+// ⚠️ ①②扫最近几条助手消息、从最新往回找，第一条命中即走：这轮没写表情时上一轮的自然留着，不会每轮闪回默认图。
 
 import { characterPortrait } from './library.js';
 import { asArray } from '../core/util.js';
@@ -32,10 +16,7 @@ const MAX_SCAN_MESSAGES = 6;
 const NAME_WINDOW = 30;
 
 /**
- * 显式指定表情的标签：<emo>shy</emo>。
- * 括号里可以是「情绪键」（shy）也可以是「表情名」（害羞）。
- * 定成模块级的正则常量，是因为**渲染层剥它的时候要用同一个**（data/panel.js），
- * 两处各写一份迟早会对不上。
+ * 显式指定表情的标签 <emo>shy</emo>，括号里可以是情绪键也可以是表情名。⚠️ 定成模块级常量是因为渲染层剥它时用同一个（data/panel.js），两处各写一份迟早对不上。
  */
 export const EMO_TAG_RE = /<\s*emo\s*>\s*([^<>\n]{1,32}?)\s*<\s*\/\s*emo\s*>/gi;
 
@@ -70,14 +51,7 @@ export function expressionTriggers(expression) {
 }
 
 /**
- * 这条回复里说的「他」是什么表情。
- *
- * @param {object} convo
- * @param {object} character 角色卡（角色库的卡或世界书副本）
- * @param {string} characterName 显示用的名字
- * @param {boolean} allowLoose true = 不要求角色名挨着触发词
- *        （场上只有他一个人时用：正文里常直接写「她脸红了」，不带名字）
- * @returns {object|null} 命中的表情条目
+ * 这条回复里说的「他」是什么表情；allowLoose = 不要求角色名挨着触发词（场上只有他一人时用：正文常直接写「她脸红了」）。返回命中的表情条目或 null。
  */
 export function matchExpression(convo, character, characterName, allowLoose) {
   const entries = characterExpressions(character);
@@ -107,11 +81,7 @@ export function matchExpression(convo, character, characterName, allowLoose) {
 }
 
 /**
- * 状态卡上该显示哪张图。
- * 命中表情 → 表情图；没命中 → 标了默认脸的那张；都没有 → 角色形象
- * （没有形象时 library 会拿头像顶上）。
- *
- * @returns {{ src: string, label: string }} label 是表情名，落到形象图时为空串
+ * 状态卡上该显示哪张图：命中 → 表情图；没命中 → 默认脸；都没有 → 角色形象。返回 { src, label }，label 是表情名、落到形象图时为空串。
  */
 export function stateCardPhoto(convo, character, characterName, allowLoose) {
   const hit = matchExpression(convo, character, characterName, allowLoose);
@@ -123,10 +93,7 @@ export function stateCardPhoto(convo, character, characterName, allowLoose) {
   return { src: characterPortrait(character), label: '' };
 }
 
-/**
- * 正文里的 <emo> 标签：按情绪键（或表情名）取一条。
- * 写了多个标签时以**最后一个**为准 —— 和「最后提到的情绪算数」同一套判断。
- */
+/** 正文里的 <emo> 标签：按情绪键（或表情名）取一条；写了多个时以**最后一个**为准 */
 function fromTag(text, entries, characterName, allowLoose) {
   let hit = null;
 

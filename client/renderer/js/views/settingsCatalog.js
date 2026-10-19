@@ -1,20 +1,5 @@
-// ---------------------------------------------------------------------------
-//  内置目录兜底：服务商模型清单 + 生图尺寸规则
-//
-//  「服务商没提供模型列表接口时怎么办」这件事的完整实现。拉取模型走的是：
-//
-//      OpenAI 那套 GET /models
-//
-//  但不少国内服务商根本没有这个接口（智谱就是），请求会被网关拒掉（常见 406）。
-//  本模块的答案是不让用户卡在一个看不懂的错误码上 —— 改把已知模型直接填进表单。
-//  往表单里写字的那一步（applyCatalogModels）**不在这里**，留在 views/settings.js：
-//  它要用那边的 stashProviderForm() 和入口层注入的 refreshModelSwitch()。
-//
-//  导出的五个名字就是本模块对外的全部接口：
-//   · catalogForBaseUrl / imageCatalogModels  查有哪些内置模型
-//   · looksLikeUnsupportedModelList           判断失败原因是不是「这家没有这个接口」
-//   · preferImageModel / fillImageSizeOptions 把上面这些铺进设置界面
-// ---------------------------------------------------------------------------
+// 内置模型目录 + 生图尺寸规则：服务商没有 GET /models（常见 406）时的兜底。
+// 往表单里写字的那一步（applyCatalogModels）在 views/settings.js。
 
 import { el } from '../core/dom.js';
 import { h } from '../ui/build.js';
@@ -25,17 +10,9 @@ import { providerById } from '../data/providers.js';
 // ------------------------------ 模型目录 ------------------------------
 
 /**
- * 各服务商的已知模型目录。
- *
- * 按接口地址里的域名匹配，而不是按服务商名字 —— 名字用户可以随便改。
- *
- * ⚠️ 这份清单和 main/providers.js 的 PROVIDER_PRESETS **是两件事**：
- *    · PRESETS 是「第三方模型提供商」点开时一键填充的**起步值**（可以随便改）；
- *    · 这里是拉取失败时兜底填进去的**内置目录**（本质是「这家有哪些模型」的知识）。
- *    两边都只收国内平台（对不上时以 PRESETS 为准）。
- *
- * imageModels 是「生图」那一组能用的模型。文本模型不能拿来生图，
- * 选错了接口会报 404 —— 这个坑很容易踩，所以单独列出来。
+ * ⚠️ 按接口地址里的**域名**匹配，不按服务商名字（名字用户可以随便改）。
+ * ⚠️ 和 main/providers.js 的 PROVIDER_PRESETS 是两件事：那边是一键填充的起步值，这里是内置目录。
+ * imageModels 单列：文本模型不能拿来生图，选错接口报 404。
  */
 const MODEL_CATALOG = [
   {
@@ -46,8 +23,7 @@ const MODEL_CATALOG = [
     imageModels: ['wanx2.1-t2i-turbo', 'wanx2.1-t2i-plus', 'wanx-v1']
   },
   {
-    // ⚠️ 智谱没有 GET /models（网关直接 406），所以它**只能**靠这份目录填模型。
-    //    改了模型名一定要同步这里，否则用户点「拉取」永远拿不到东西。
+    // ⚠️ 智谱没有 GET /models（网关直接 406），只能靠这份目录；改模型名必须同步这里。
     match: /bigmodel\.cn/i,
     name: '智谱 GLM',
     note: '智谱不提供模型列表接口（会返回 406），这里的清单是内置的',
@@ -83,9 +59,6 @@ const MODEL_CATALOG = [
     models: ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M2.5'],
     imageModels: []
   }
-  // 没列进来的国内平台（豆包 / 硅基流动 / 百度千帆 / 阶跃星辰 / 讯飞星火 /
-  // 零一万物）都支持 GET /models，点一次「拉取可用模型」就是真实清单，
-  // 不需要内置兜底 —— 所以这里只留「拉不动」的（智谱）和预设里那几家。
 ];
 
 export function catalogForBaseUrl(baseUrl) {
@@ -102,18 +75,9 @@ export function imageCatalogModels(providerId) {
 }
 
 /**
- * 拉取失败时，判断是不是「这个服务商压根没有模型列表接口」。
- *
- * ⚠️ 这里只能看**状态码**，不能拿中文文案去模糊匹配：main/http.js 给 404 写的提示是
- *    「404 找不到接口：多半是「接口地址」写错了」，给 400 写的是「参数不被该服务商接受」——
- *    「找不到接口」「不被接受」这两个词都被下面的关键词撞上，于是**接口地址写错**
- *    也会被当成「这家没有模型列表接口」，弹一句成功语气的兜底提示，把人带到错误的方向。
- *
- *    哪些码算「这个端点不存在」：
- *      · 404 Not Found      —— 大部分兼容层没有 /models 就是这个
- *      · 405 / 501          —— 方法不允许 / 没实现
- *    刻意**不含** 400 / 406 / 401 / 403：那些是「地址对、但请求本身被拒」
- *    （Key 没权限、网关拦了），不是端点不存在，照实报错更有用。
+ * ⚠️ 只能看**状态码**，不能拿中文文案模糊匹配：404 / 400 的提示文案里「找不到接口」「不被接受」
+ *    会被下面的关键词撞上，接口地址写错也会被当成「这家没有模型列表接口」。
+ *    只认 404 / 405 / 501；不含 400 / 406 / 401 / 403 —— 那些是「地址对但请求被拒」，照实报错更有用。
  */
 export function looksLikeUnsupportedModelList(message) {
   const text = String(message || '');
@@ -123,17 +87,8 @@ export function looksLikeUnsupportedModelList(message) {
 // ------------------------------ 生图尺寸规则 ------------------------------
 
 /**
- * 各生图模型支持的图片尺寸。
- *
- * 这个必须按模型区分：两家都只认自己那份「推荐尺寸 + 自定义区间」，
- * 一律发 1024x1024 在只收固定档的模型上会被接口拒掉
- * （智谱错误码 1210「参数有误」）。参数照各自官方文档抄：
- *   · GLM-Image  推荐 7 档，自定义 512-2048、长宽均为 32 的整数倍
- *   · CogView-3  推荐 7 档，自定义 512-2048、长宽均被 16 整除，且总像素 ≤ 2^21
- *
- * ⚠️ glm-image 的自定义下限是 **512**，不是推荐尺寸里最小的 1024：
- *    512x512、800x800 这类合法尺寸不能被自家校验判成非法而悄悄换掉；
- *    1024x1024 本来就在 512-2048 内、也是 32 的倍数，不需要被「纠正」。
+ * 尺寸必须按模型区分：一律发 1024x1024 在只收固定档的模型上会被拒（智谱错误码 1210「参数有误」）。
+ * ⚠️ glm-image 的自定义下限是 **512**，不是推荐尺寸里最小的 1024 —— 512x512 是合法尺寸，不能被判成非法。
  */
 const MAX_CUSTOM_PIXELS = 2 ** 21; // CogView 的硬上限：总像素不超过 2^21
 
@@ -161,7 +116,6 @@ function imageSizeRule(model) {
   return IMAGE_SIZE_RULES.find((r) => r.match.test(name)) || null;
 }
 
-/** 某个生图模型可选的尺寸列表 */
 function sizesForImageModel(model) {
   const rule = imageSizeRule(model);
   return rule ? rule.sizes : DEFAULT_IMAGE_SIZES;
@@ -191,12 +145,8 @@ function isValidImageSize(model, size) {
 // ------------------------------ 铺进设置界面 ------------------------------
 
 /**
- * 生图模型优先选对的。
- *
- * 坑：provider.models 里通常全是文本模型，生图那一组下拉如果直接沿用，
- * 就会把 glm-5.3 这种文本模型发给 /images/generations，接口报 404。
- * 所以有内置生图目录时，主动切过去并说明原因；
- * 用户自己指定了生图模型（模型名看着像生图模型）就不抢。
+ * ⚠️ provider.models 里通常全是文本模型：生图下拉直接沿用会把文本模型发给 /images/generations，报 404。
+ * 有内置生图目录时主动切过去；用户自己选了看着像生图模型的不抢。
  */
 export function preferImageModel(provider) {
   if (!provider) return;
@@ -233,10 +183,7 @@ export function preferImageModel(provider) {
   );
 }
 
-/**
- * 按当前生图模型重建尺寸下拉，并尽量保留用户原来的选择。
- * 模型不认识时用通用尺寸，不拦着用户。
- */
+/** 按当前生图模型重建尺寸下拉，尽量保留用户原来的选择；模型不认识时用通用尺寸，不拦着。 */
 export function fillImageSizeOptions(model, current) {
   const select = el.s && el.s.imageSize;
   if (!select) return;
@@ -245,9 +192,7 @@ export function fillImageSizeOptions(model, current) {
   const wanted = String(current || '').trim();
   const items = sizes.map((size) => ({ value: size, text: size }));
 
-  // 已保存的尺寸不在这个模型的列表里，分两种：
-  //   · 非法（比如 glm-image 配 1024x1024）——切到默认值，别让它再撞一次
-  //   · 合法自定义尺寸 —— 补一项摆在列表后面，并且**选中它**（不静默改掉用户的选择）
+  // 已保存尺寸不在列表里分两种：非法 → 切默认值；合法自定义 → 补一项并选中（不静默改掉用户选择）。
   if (wanted && !sizes.includes(wanted) && !isValidImageSize(model, wanted)) {
     const fallback = sizes[0];
     fillSelect(select, items, { prefer: fallback });

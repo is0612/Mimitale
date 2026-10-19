@@ -1,39 +1,14 @@
 'use strict';
-// ============================================================================
-//  tools/test-store-lock.js —— main/store.js 落盘时「文件被临时锁住」的容错
-//
-//  背景（2026-10-08 星宝报的）：
-//    关窗口时弹「A JavaScript error occurred in the main process」，堆栈指向
-//      writeJsonNow (main/store.js) → EPERM: operation not permitted, copyfile
-//        '...\Mimitale\conversations.json' -> '...\Mimitale\conversations.json.backup'
-//    当时归因为「备份那一步撞上了 Windows 的瞬时文件锁（杀软 / 索引服务）」，结果把整个
-//    保存拖垮、还弹了个崩溃框。⚠️ 2026-10-10 定论：那个归因是**误诊** —— 真凶是进程被降成
-//    低完整性（见 main/store.js 开头那段），属于权限判定。但「备份失败绝不能拖垮主写入」
-//    这条规矩跟原因无关，照样要守，所以这份测试继续用 monkey-patch 把「文件被临时锁住 /
-//    只读」演出来，验的还是下面这四条容错。
-//
-//  这份测试用 monkey-patch fs 的方式把那几毫秒的锁演出来，盯住四条规矩：
-//    ① 备份失败**不能**拖垮主写入 —— 数据本身必须先落盘
-//    ② 瞬时锁要重试 —— 重试能过就别退化成「保存失败」
-//    ③ 备份不留半截文件 —— .backup 要么是旧的完整版，要么是新的完整版
-//    ④ 读兜底时「备份回填」失败，也得把已经读到的数据交出去
-//    ⑧（顺带）长会话读回来不能被截断
-//
-//  跑法（本机默认带 ELECTRON_RUN_AS_NODE，先 unset）：
-//    unset ELECTRON_RUN_AS_NODE
-//    ./node_modules/electron/dist/electron.exe --no-sandbox tools/test-store-lock.js
-//
-//  ⚠️ 全程在临时目录里跑，不碰真实的 %APPDATA%\Mimitale。
-// ============================================================================
+// tools/test-store-lock.js —— 落盘撞上文件锁的容错（monkey-patch fs 演出来）
+//   跑法：unset ELECTRON_RUN_AS_NODE; ./node_modules/electron/dist/electron.exe --no-sandbox tools/test-store-lock.js
+// ⚠️ 全程在临时目录里跑，不碰真实的 %APPDATA%\Mimitale
 
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { app } = require('electron');
 
-// 数据目录指到临时目录。⚠️ 必须在它被读之前设好：main/data-dir.js 的解析顺序里
-// 「userData 被显式改过」优先级最高，所以这一行就能让整个测试跑在临时目录里，
-// 而不是开发机真正的 data\（顺序表见 main/data-dir.js 顶部）。
+// ⚠️ 必须在 require store 之前设：data-dir.js 里「userData 被显式改过」优先级最高
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mimitale-store-lock-'));
 app.setPath('userData', tmpDir);
 
@@ -43,9 +18,6 @@ const convoFile = path.join(tmpDir, 'conversations.json');
 const convoBackup = convoFile + '.backup';
 const convoBackupTmp = convoBackup + '.tmp';
 
-// ---------------------------------------------------------------------------
-//  断言
-// ---------------------------------------------------------------------------
 let pass = 0;
 const failures = [];
 
@@ -63,9 +35,6 @@ function section(title) {
   console.log(`\n=== ${title} ===`);
 }
 
-// ---------------------------------------------------------------------------
-//  工具
-// ---------------------------------------------------------------------------
 
 /** 模拟 Windows 上那种瞬时文件锁 */
 function eperm() {
@@ -74,11 +43,7 @@ function eperm() {
   return err;
 }
 
-/**
- * 临时替换 fs 上的某个方法。
- * store.js 里是 `const fs = require('node:fs')`，拿到的是同一个模块对象 ——
- * 所以改 fs 的属性对它立刻生效。返回一个还原函数。
- */
+/** store.js 拿的是同一个 fs 模块对象，改属性立刻生效；返回还原函数 */
 function patchFs(name, wrap) {
   const original = fs[name];
   fs[name] = wrap(original);
@@ -99,19 +64,12 @@ function save(convo) {
   return store.saveConversations({ conversations: [convo], activeId: convo.id }, { immediate: true });
 }
 
-// ---------------------------------------------------------------------------
-//  ① 正常写入：主文件写成功
-// ---------------------------------------------------------------------------
 section('① 正常写入');
 save({ id: 'a', title: 'A', messages: [] });
 check('主文件写入成功', (readJson(convoFile) || {}).conversations?.[0]?.id === 'a');
 check('首次写入（主文件本来不存在）不产生备份', !fs.existsSync(convoBackup));
 check('没有留下 .tmp', !fs.existsSync(convoFile + '.tmp'));
 
-// ---------------------------------------------------------------------------
-//  ② 备份一直被锁（EPERM 常驻）—— 主写入必须照样成功
-//    这就是 2026-10-08 那次崩溃的直接修复点
-// ---------------------------------------------------------------------------
 section('② 备份失败不拖垮主写入（EPERM 常驻）');
 {
   const restore = patchFs('copyFileSync', () => () => {
@@ -131,9 +89,6 @@ section('② 备份失败不拖垮主写入（EPERM 常驻）');
   check('没有留下半截的 .backup.tmp', !fs.existsSync(convoBackupTmp));
 }
 
-// ---------------------------------------------------------------------------
-//  ③ 瞬时锁：copy 前两次 EPERM，第三次放行 —— 重试应该救回来
-// ---------------------------------------------------------------------------
 section('③ 瞬时锁重试（copy 前 2 次失败）');
 {
   let calls = 0;
@@ -154,10 +109,7 @@ section('③ 瞬时锁重试（copy 前 2 次失败）');
   check('备份被更新成上一版（b）', (readJson(convoBackup) || {}).conversations?.[0]?.id === 'b');
 }
 
-// ---------------------------------------------------------------------------
-//  ④ 主写入的 rename 撞锁也要重试（只对「写到 conversations.json」那次生效，
-//     免得误伤 tryBackup 里对 .backup 的 rename）
-// ---------------------------------------------------------------------------
+// 只对「写到 conversations.json」那次生效，免得误伤 tryBackup 里对 .backup 的 rename
 section('④ 主写入 rename 撞锁重试');
 {
   let locked = 0;
@@ -178,9 +130,6 @@ section('④ 主写入 rename 撞锁重试');
   check('没有留下 .tmp', !fs.existsSync(convoFile + '.tmp'));
 }
 
-// ---------------------------------------------------------------------------
-//  ⑤ 备份的 rename 一直失败 —— .backup 必须还是完整的旧版本，不能变半截
-// ---------------------------------------------------------------------------
 section('⑤ 备份失败时 .backup 不被写坏');
 {
   const before = readJson(convoBackup);
@@ -203,12 +152,8 @@ section('⑤ 备份失败时 .backup 不被写坏');
   check('中转的 .backup.tmp 被清理掉', !fs.existsSync(convoBackupTmp));
 }
 
-// ---------------------------------------------------------------------------
-//  ⑥ 读兜底：备份回填失败，也得把已经读到的数据交出去
-// ---------------------------------------------------------------------------
 section('⑥ 备份回填失败仍能读出数据');
 {
-  // 先把备份做成「好数据」，再把主文件写坏
   const good = { conversations: [{ id: 'backup-1', title: '来自备份', messages: [] }], activeId: 'backup-1' };
   fs.writeFileSync(convoBackup, JSON.stringify(good, null, 2), 'utf8');
   fs.writeFileSync(convoFile, '{ 这不是 JSON', 'utf8');
@@ -227,16 +172,9 @@ section('⑥ 备份回填失败仍能读出数据');
   check('读出来的就是备份那一条', loaded && loaded.conversations[0].id === 'backup-1');
 }
 
-// ---------------------------------------------------------------------------
-//  ⑦ 真实 EPERM（不靠 monkey-patch）：.backup 带只读属性
-//     这条路能把报错原文复刻出来 —— 报的是
-//      'EPERM: operation not permitted, copyfile ...'。
-//     ⚠️ 但「报错原文长得一样」≠「原因一样」：2026-10-08 弹的是同一句话，真凶却是
-//     **进程被降成低完整性**（见 main/store.js 开头那段），跟只读属性无关。
-// ---------------------------------------------------------------------------
+// ⚠️ 报错原文一样 ≠ 原因一样：EPERM 也可能是进程被降成低完整性（见 main/store.js 开头）
 section('⑦ .backup 带只读属性时的真实 EPERM');
 {
-  // 先把备份做成一份「健全的旧数据」，再把它锁成只读
   const oldData = { conversations: [{ id: 'old', title: '旧', messages: [] }], activeId: 'old' };
   fs.writeFileSync(convoBackup, JSON.stringify(oldData, null, 2), 'utf8');
   fs.chmodSync(convoBackup, 0o444);
@@ -255,11 +193,6 @@ section('⑦ .backup 带只读属性时的真实 EPERM');
   check('只读的备份保持原样（也就没被写坏）', (readJson(convoBackup) || {}).conversations?.[0]?.id === 'old');
 }
 
-// ---------------------------------------------------------------------------
-//  ⑧ 长会话读回来一条不少（不在这份测试的「锁」主题里，但它测的也是 store.js 落盘）
-//     以前 loadConversations 每次读都只留最后 200 条：多出来的下次保存就永久没了，
-//     而且摘要的 start/end 是按下标记的，砍掉头部会让覆盖点整体错位。
-// ---------------------------------------------------------------------------
 section('⑧ 长会话读回不截断');
 {
   const messages = Array.from({ length: 450 }, (_, i) => ({
@@ -271,8 +204,7 @@ section('⑧ 长会话读回不截断');
 
   const loaded = store.loadConversations();
   const convo = loaded.conversations.find((c) => c.id === 'long');
-  // ⚠️ 全用 ?.：截断回归时 messages[300] 是 undefined，直接 .content 会抛异常，
-  //    electron 主进程弹错误框卡住不退出 —— 失败要报出来，不能变成「挂起」。
+  // ⚠️ 全用 ?.：截断回归时 messages[300] 是 undefined，直接 .content 会抛异常，主进程弹框卡住不退出
   const msgs = (convo && convo.messages) || [];
   const end = convo?.summaries?.[0]?.end;
   check('450 条消息全部读回', msgs.length === 450, `实际 ${msgs.length} 条`);
@@ -280,9 +212,6 @@ section('⑧ 长会话读回不截断');
   check('摘要覆盖点对应的消息没变', msgs[end]?.content === '第 300 条');
 }
 
-// ---------------------------------------------------------------------------
-//  收尾
-// ---------------------------------------------------------------------------
 console.log('\n' + '='.repeat(60));
 if (failures.length) {
   console.log(`失败 ${failures.length} 条 / 通过 ${pass} 条`);

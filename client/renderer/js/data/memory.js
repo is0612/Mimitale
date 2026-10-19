@@ -1,18 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  data/memory.js —— 分段记忆摘要
-//
-//  问题：只把最近 maxTurns 轮发给模型，超出去的历史模型完全看不见。
-//  调大轮数就烧 token，调小就忘事 —— 这是个死结。
-//
-//  做法：把较早的对话按段压缩成摘要，摘要常驻上下文、原文丢弃。
-//  这样几十轮前的剧情还在，但 token 占用小得多。
-//  摘要由程序管理（和状态面板同一个思路：记忆不能交给模型自己维持）。
-//
-//  这里只放「怎么算区间、怎么写提示词、怎么调模型」——
-//  「什么时候该压、压完怎么通知界面」属于调度，那些要碰 DOM，留在 main.js。
-// ============================================================================
+// data/memory.js —— 分段记忆摘要：把较早的对话按段压成摘要常驻上下文、原文丢弃
+// 摘要由程序管理（和状态面板同一个思路：记忆不能交给模型自己维持）。
+// 这里只放「怎么算区间、怎么写提示词、怎么调模型」；「什么时候压、压完怎么通知界面」属调度，在 main.js。
 
 import { api } from '../core/api.js';
 import { uid, asArray } from '../core/util.js';
@@ -20,8 +10,7 @@ import { stripPanelLines } from './panel.js';
 import { ensureConvoEndpoint } from './providers.js';
 import { characterForConvo } from './library.js';
 
-// 未覆盖的消息达到这个数就压一段。一轮 = 一问一答 = 2 条，
-// 也就是大约每 12 轮压一段。
+// 未覆盖的消息达到这个数就压一段（一轮 = 一问一答 = 2 条，约每 12 轮压一段）
 const SUMMARY_TRIGGER_MESSAGES = 24;
 // 少于这个数不值得单独压一段
 const SUMMARY_MIN_MESSAGES = 12;
@@ -59,14 +48,7 @@ export function summarizedCount(convo) {
 }
 
 /**
- * 删掉 convo.messages[messageIndex] 之前调：把摘要的 start/end 跟着挪。
- *
- * 为什么必须挪：start/end 是 convoContextMessages 里的**下标**。删掉覆盖范围内
- * （或之前）的一条，后面的消息整体前移一格 —— 不挪的话，紧挨着覆盖点的那条
- * **从没被压缩过**的消息会滑进「已覆盖」区间，从此既不在摘要里、也不进上下文。
- *
- * 被删的那条本身不进上下文（错误提示 / 空占位）就什么都不用动。
- * 挪完缩成空的段直接丢掉（它覆盖的原文全删光了）。
+ * 删掉 convo.messages[messageIndex] 之前调：把摘要的 start/end 跟着挪（挪完缩成空的段丢掉）。⚠️ start/end 是 convoContextMessages 的下标，不挪的话紧邻覆盖点那条**没被压缩过**的消息会滑进「已覆盖」区间，从此既不进摘要也不进上下文。
  */
 export function shiftSummariesForRemoval(convo, messageIndex) {
   const list = convoSummaries(convo);
@@ -87,11 +69,7 @@ export function shiftSummariesForRemoval(convo, messageIndex) {
 }
 
 /**
- * 压缩请求回来、准备记覆盖范围之前调：[start, start+count) 还是不是当初送去压的那几条？
- *
- * 摘要要等模型几秒到几十秒，期间用户可以删消息（removeMessage 只拦流式中，不拦后台摘要）。
- * 删了的话 start 已经过期，照记就会把错位的那段标成「已覆盖」—— 和 shiftSummariesForRemoval
- * 防的是同一种吞消息。对不上就放弃这一段，下一轮按新的位置重压。
+ * 压缩请求回来、记覆盖范围之前调：[start, start+count) 还是不是当初送去压的那几条？⚠️ 摘要要等模型几秒到几十秒，期间用户可能删了消息、start 已过期 —— 对不上就放弃这一段，下轮按新位置重压。
  */
 export function summaryRangeIntact(convo, start, sent, count, snapshot) {
   if (summarizedCount(convo) !== start) return false;
@@ -142,11 +120,7 @@ export function formatSummaryForPrompt(convo) {
   );
 }
 
-/**
- * 摘要生成用的提示词。
- * 明确要求「只记事实、不要文学化」，因为摘要会一直占用上下文，
- * 写成抒情散文既费 token 又容易让模型把摘要当成剧情来续写。
- */
+/** 摘要提示词。⚠️ 明确要求「只记事实、不要文学化」—— 摘要常驻上下文，写成抒情散文既费 token 又容易被当成剧情续写 */
 function buildSummaryPrompt(previousSummary, transcriptText) {
   const parts = [
     '你在帮一个长篇角色扮演对话做剧情摘要。',
@@ -180,14 +154,7 @@ function transcriptLine(m, charName) {
 }
 
 /**
- * 给「往后压一段」用的原文：**从最早那条往后**装，装满为止。
- * 返回 { text, count } —— count 是真正写进原文的条数，摘要的 end 必须按它记。
- *
- * ⚠️ 必须**从头往后装**：如果从最后往前装，超长时砍掉的是最早的几条，
- *    而调用方却按整段 `slice.length` 记覆盖范围 —— 被砍掉的那几条既不在摘要里、
- *    又被当成「已压缩」挡在上下文外面，永久消失。长回复（每条两千多字）十几条就会撞上。
- *    所有调用点都走这个函数（summarize.js 的压一段 / memoryUi.js 的重新生成），
- *    从头装、按实际条数记，装不下的那几条留到下一段再压。
+ * 给「往后压一段」用的原文：**从最早那条往后**装，装满为止；返回 { text, count }，摘要的 end 必须按 count 记。⚠️ 从后往前装时超长砍掉的是最早几条，而调用方按 slice.length 记覆盖范围 —— 那几条既不在摘要里、又被挡在上下文外，永久消失。
  */
 export function buildTranscriptFromStart(messages, charName) {
   const lines = [];
@@ -206,9 +173,7 @@ export function buildTranscriptFromStart(messages, charName) {
 }
 
 /**
- * 需要压缩的消息区间。
- * 用「当前消息总数 - 已覆盖数」来算，而不是用固定下标 ——
- * 用户删掉中间某条消息后，消息数组会整体前移，固定下标会错位。
+ * 需要压缩的消息区间。⚠️ 用「总数 - 已覆盖数」算而不用固定下标 —— 用户删掉中间某条后数组整体前移，固定下标会错位。
  */
 export function pendingSummaryRange(convo) {
   const messages = convoContextMessages(convo);
@@ -218,13 +183,7 @@ export function pendingSummaryRange(convo) {
   return { messages, start, pending, covered };
 }
 
-/**
- * 摘要的「运行态」。
- *
- * 放在 data 层而不是某个视图里，是因为两头都要用它：后台调度（main.js 的
- * maybeSummarize）判断该不该压，记忆面板（views/memoryUi.js）判断有没有
- * 正在跑、好禁用按钮。谁都不必 import 谁。
- */
+/** 摘要的「运行态」：后台调度（main.js 的 maybeSummarize）判断该不该压，记忆面板（views/memoryUi.js）判断有没有在跑 */
 // 正在压缩的会话 id，防止同一会话并发触发
 export const summarizingConvos = new Set();
 // 会话 id -> 连续失败次数

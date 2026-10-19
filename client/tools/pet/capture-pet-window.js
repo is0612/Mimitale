@@ -1,43 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  tools/pet/capture-pet-window.js —— 真起一次宠物窗口，截图 + 收集页面报错
-//
-//  为什么需要它：桌宠的**展示**在一个独立 BrowserWindow 里，而冒烟测试的假后端
-//  起不了那个窗口（它只有 IPC 桩）。也就是说冒烟全绿**不代表宠物窗口能开起来** ——
-//  窗口参数写错（比如 transparent 忘了、置顶级别不对）、pet.js 一进来就抛异常，
-//  冒烟一条都测不到。这个脚本补的就是这一段。
-//
-//  它做的事：按真实路径注册宠物通道 → 建窗口 → 推一句让它说 → 截图。
-//  没有主窗口，所以「点菜单让主窗口跳设置」这类动作不会被触发。
-//
-//  跑法：
-//    ./node_modules/electron/dist/electron.exe --no-sandbox tools/pet/capture-pet-window.js
-//    ./node_modules/electron/dist/electron.exe --no-sandbox tools/pet/capture-pet-window.js --skin=whale
-//    ./node_modules/electron/dist/electron.exe --no-sandbox tools/pet/capture-pet-window.js --skin=whale --scale=1.6
-//  产物：
-//    tools/pet/pet-window.png            截图（**带 alpha 通道**，用能显示透明度的
-//                                        看图工具打开才看得出形状；Windows 照片查看器
-//                                        会把它当成白底，别据此判断「抠图坏了」）
-//
-//  ⚠️ 数据目录指向一个 mkdtemp 出来的临时目录（MIMITALE_DATA_DIR），
-//     所以它读写的 config / persona / memory 都落在临时目录里，**不碰你的真实数据**。
-//     形象资源仍然从工程里的 assets/pet/ 读（那是 app.getAppPath() 决定的）。
-//
-//  `--skin=<名字>` 会在那个临时数据目录里**预写一份 config**，把 look.skin 指到指定形象包。
-//  这是验证「新做的形象包」的唯一办法：走的是真 rig + 真 pet-store，model.json 里
-//  任何结构错误（box 朝向、parent 名字、view 越界）都会在这里变成空白或错位。
-//  不传就用工程默认的那个形象（当前是大肥鱼 whale）。
-//
-//  `--scale=<倍数>` 同上，用来验缩放：窗口尺寸 = 300×380 × 倍数。
-//  ⚠️ **气泡不跟缩放走**（2026-10-10 改）：宠物缩放只改窗口和宠物本体，
-//     气泡的字号/内边距/圆角/尾巴都是固定 px。所以别指望「放大截图里气泡也变大」，
-//     反过来这才是重点 —— 缩到 0.7× 时字必须还是画面上一样大、一样读得清。
-//     气泡只有左右边距造成的可用宽度会跟着窗口变窄。
-//
-//  `--lines=<句1|句2|句3>` 覆盖默认那三句示例话，用来验「长句在气泡里滚动」：
-//  固定字号之后，极小窗口更容易触发 max-height:30vh 的滚动分支，
-//  这是**取舍正确**的表现（滚动优于字小到看不清），得能亲眼看到它工作。
+// tools/pet/capture-pet-window.js —— 真起一次宠物窗口截图 + 收集页面报错；产物 tools/pet/pet-window.png
+//   跑法：./node_modules/electron/dist/electron.exe --no-sandbox tools/pet/capture-pet-window.js [--skin=whale --scale=1.6]
+// ⚠️ 数据在临时目录（不碰真实数据）；气泡不跟 --scale 走；截图带 alpha（照片查看器会显示成白底，别据此判断抠图坏了）
 
 const fs = require('node:fs');
 const os = require('node:os');
@@ -53,8 +18,7 @@ const SCALE = scaleArg ? Math.max(0.4, Math.min(2, Number(scaleArg.slice('--scal
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mimitale-pet-window-'));
 process.env.MIMITALE_DATA_DIR = tmpRoot;
-// 传了 --skin 或 --scale 就要预写一份 config（两个都走这里，别分成两条路，
-// 否则「只想改 scale 又不想指定形象」时得先知道默认形象叫什么）
+// 两个参数走同一条预写 config 的路：分开写的话「只想改 scale」还得先知道默认形象叫什么
 if (SKIN || SCALE !== 1) {
   fs.mkdirSync(path.join(tmpRoot, 'pet'), { recursive: true });
   const config = {
@@ -98,7 +62,7 @@ app.whenReady().then(async () => {
   win.showInactive();
   await new Promise((r) => setTimeout(r, 1500));
 
-  // 推一句让它说 —— 顺便验证气泡那条链路（逐句冒字）
+  // 顺便验证气泡那条链路（逐句冒字）
   const LINES = (() => {
     const a = process.argv.find((x) => x.startsWith('--lines='));
     if (!a) return ['这也太甜了吧。', '*尾巴摇起来* 我磕了。', '你倒是主动点啊。'];
@@ -111,15 +75,8 @@ app.whenReady().then(async () => {
   });
   await new Promise((r) => setTimeout(r, 2000));
 
-  // `--frames=N` 连拍 N 帧（默认 1）。
-  // 为什么要连拍：**pivots 对不对，静置永远看不出来** —— 只有让猫动起来
-  // （走路摆臂、头部视差、耳朵转、尾巴摇）才会暴露「某个部件拖着不该拖的东西」
-  // 或者「关节位置偏了」。间隔 1.2 秒，够它走几步。
-  // `--idle`：长拍「空闲时偶发小手势」的极限姿势。
-  // 为什么需要：手势（点头/摇头/招手）是 idle 下**14~34 秒随机**来一次的，
-  // 而且鼠标 5 秒不动猫就睡了、睡了就不做手势。所以要**定时轻微晃动鼠标**把它弄醒，
-  // 再长时间连拍，最后从所有帧里按「与中位帧的差异」挑出偏离最大的几张 ——
-  // 那几张就是各手势的极限姿势，用来检查关节处会不会露出没画的地方。
+  // 连拍：pivots 对不对静置看不出来，得动起来才暴露「某个部件拖着不该拖的东西」
+  // --idle：手势是 idle 下十来秒随机来一次，且鼠标不动猫会睡着，所以要定时轻晃鼠标把它弄醒
   const idleArg = process.argv.find((a) => a === '--idle');
   let idleTimer = null;
   if (idleArg) {
@@ -138,11 +95,7 @@ app.whenReady().then(async () => {
 
   const framesArg = process.argv.find((a) => a.startsWith('--frames='));
   const FRAMES = framesArg ? Math.max(1, parseInt(framesArg.slice('--frames='.length), 10) || 1) : 1;
-  // `--gap=<ms>` 覆盖连拍间隔（默认 1200ms —— 那是「走几步看关节」用的）。
-  // `--burst` = `--gap=60` 的快捷方式：**密集连拍**，专门看「抖多快」。
-  // 为什么需要：默认 1.2 秒一帧对「抖动」这种高频现象是**严重欠采样** ——
-  // 1Hz 的摆尾采下来每帧相位都不同、看着像随机乱摆，根本判断不了快慢。
-  // 要看清节奏就得按帧率量级采样（60ms ≈ 16fps，够数出一个周期里的相位变化）。
+  // --burst = --gap=60：1.2 秒一帧对「抖」是严重欠采样（每帧相位都不同，看着像随机乱摆）
   const burst = process.argv.includes('--burst');
   const gapArg = process.argv.find((a) => a.startsWith('--gap='));
   const GAP = burst ? 60 : (gapArg ? Math.max(16, parseInt(gapArg.slice('--gap='.length), 10) || 1200) : 1200);
@@ -155,10 +108,7 @@ app.whenReady().then(async () => {
   }
   if (idleTimer) clearInterval(idleTimer);
 
-  // `--probe-scroll`：把气泡滚动框的真实几何打出来。
-  // 为什么需要：气泡"切字/少显示一句"这类问题，**看截图只能猜是哪一行**，
-  // 而 scrollTop / clientHeight / 每行 offsetTop+offsetHeight 一摆出来，
-  // 「该不该滚、滚到哪、有没有半行」就是算术题了。
+  // 看截图只能猜是哪一行；把 scrollTop / clientHeight / 每行 offsetTop 摆出来就成了算术题
   if (process.argv.includes('--probe-scroll')) {
     const info = await win.webContents.executeJavaScript(`(() => {
       const box = document.getElementById('bubble-lines');
@@ -180,9 +130,7 @@ app.whenReady().then(async () => {
     }
   }
 
-  // `--probe-box`：把「气泡下沿 → 宠物实际站立位置」之间的空隙量出来。
-  // 为什么需要：窗口是透明的，「间隔」到底是气泡的 CSS 边距、还是 rig 画布的
-  // 空白留白，光看截图分不出来（两处都是透明像素）。这里把每个盒子的 rect 全打出来。
+  // 「间隔」到底是气泡边距还是 rig 画布的留白，光看截图分不出来（两处都是透明像素）
   if (process.argv.includes('--probe-box')) {
     const g = await win.webContents.executeJavaScript(`(() => {
       const r = (id) => {

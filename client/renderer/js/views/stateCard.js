@@ -1,27 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  views/stateCard.js —— 「状态卡」：浮在对话上的属性卡，可拖
-//
-//  一张卡 = 某个人（owner）的状态字段。owner 取值见 data/panel.js：
-//    · 'player'   —— 我自己（玩世界书时种的就是这个）
-//    · 角色卡 id  —— 某个角色（单角色聊天 / 世界书里的本书角色）
-//
-//  点入口条（views/panelUi.js）上的头像打开、或点消息区「我」的头像。
-//  展开的卡：标题下面铺一张角色图（表情图优先，见 data/expressions.js），再往下是字段。
-//  卡片默认只读（纯文本展示），点「编辑」才切成输入框。
-//  写入复用 data/panel.js 的 setPanelField / appendPanelFields，与游戏内改值走同一条落盘路径。
-//
-//  —— 为什么是浮动的 ——
-//  固定右栏会让对话区永久少 300px，而状态是「边聊边瞄一眼」的东西，
-//  钉在栏里不如浮在眼前。浮动的两个代价各自解决：
-//    · 开两张互相压 → layoutSideBySide 算一个并排落点（整卡宽 + 间距地铺开，
-//      多到一行装不下才换行），不再只错开 26px 叠着；
-//    · 盖住正文 → 卡片能拖（拖过之后位置记住），收起态只有一行标题。
-//  ⚠️ 不要再为了「不挡正文」把它改回固定栏。
-//
-//  位置 / 开合 / 编辑态都是「此刻怎么摆」，挂在模块里的 openCards 上，**不落盘**。
-// ============================================================================
+// 「状态卡」：浮在对话上的属性卡，可拖。一张卡 = 某个人（owner）的状态字段；位置 / 开合 /
+// 编辑态挂在 openCards 上，**不落盘**。⚠️ 必须浮动：固定右栏会让对话区永久少 300px。
 
 import { el } from '../core/dom.js';
 import { activeConvo, now } from '../core/util.js';
@@ -48,29 +28,22 @@ import { onRefresh, refreshAll } from './refresh.js';
 // 组件库：编辑行里的输入框（见 components/index.js）；hostOf 用来把里层 input 还原成宿主
 import { mInput, hostOf } from '../components/index.js';
 
-// 卡片尺寸常量。**定位和「并排铺开」都按这几个数算**，改宽度要一起改。
-// 320 而不是更窄：卡上要铺一张角色图，太窄的话图和右侧的字段列都挤。
+// 卡片尺寸常量：定位和「并排铺开」都按这几个数算，改宽度要一起改。320 是为了铺得下角色图。
 const CARD_W = 320;
 const CARD_GAP = 12;
 const EDGE = 20;      // 离对话列左右边缘至少留这么多
 const TOP = 130;      // 第一排的 y：正好落在入口条下面，不压住标题
-const ROW_STEP = 320; // 换行时往下错这么多（不是整屏 —— 上一排还露着一点）
+const ROW_STEP = 320; // 换行时往下错这么多（不是整屏，上一排还露着一点）
 
-// owner -> { open, editing, x, y, z, slot, moved }。开合 / 位置是「此刻怎么摆」，
-// 挂在模块里，不落盘（重开应用回到自动排布的落点）。
+// owner -> { open, editing, x, y, z, slot, moved }；只是「此刻怎么摆」，不落盘。
 const openCards = new Map();
 // 上面这批卡属于哪个会话 —— 换会话一律清掉（卡里的字段是那一局的）
 let cardsConvoId = null;
 // 拖动 / 点击时把卡片提到最前
 let topZ = 1;
 
-/**
- * 这张卡头上该铺哪张图。
- *
- * 有表情表就按最近几条助手回复挑一张（见 data/expressions.js）；挑不到就铺角色形象。
- * `allowLoose` 只在**场上就他一个角色**时开：正文里常直接写「她脸红了」不带名字，
- * 这时候还要求名字挨着触发词就什么都匹配不上；人多了就必须点名，免得一句话点亮好几张。
- */
+/** 这张卡头上该铺哪张图：有表情表就按最近几条助手回复挑，挑不到就铺角色形象。allowLoose
+ *  只在场上就他一个角色时开（正文常写「她脸红了」不带名字，多个人就必须点名）。 */
 function cardPhoto(convo, entity, charCount) {
   if (!entity || !entity.card) return { src: '', label: '' };
   const allowLoose = entity.kind === 'character' && charCount <= 1;
@@ -90,18 +63,10 @@ function syncCardsForConvo(convo) {
   openCards.clear();
 }
 
-// ---------------------------------------------------------------------------
-//  自动落点：并排铺开，不互相压
-// ---------------------------------------------------------------------------
+// 自动落点：并排铺开，不互相压
 
-/**
- * 一行的实际步进：取「现在场上最高的那张卡」+ 间距。
- *
- * ⚠️ 不能再写死成 ROW_STEP。卡片高度跟着字段多少走，右栏也一直在变可用宽度 ——
- * 一行只放得下一张时（右栏在场角色占了 264px 之后就是这么回事），
- * 写死的行距比卡片矮，两张卡就会**上下叠着压一起**。
- * 量不到（第一张卡）就退回默认值。
- */
+/** 一行的实际步进：取现在场上最高的那张卡 + 间距。⚠️ 不能写死成 ROW_STEP —— 卡片高度
+ *  跟着字段走，行距比卡片矮时两张卡会上下叠着压一起。量不到就退回默认值。 */
 function rowStep() {
   const host = el.stateCards;
   if (!host) return ROW_STEP;
@@ -113,13 +78,8 @@ function rowStep() {
   return Math.max(ROW_STEP, Math.round(tallest) + CARD_GAP);
 }
 
-/**
- * 第 index 张卡的落点。**整卡宽 + 间距**地横向铺开，一行装不下才换行。
- *
- * 「从右往左」铺：气泡是左对齐的，右边本来就是空的，卡片放右边最不挡字。
- *
- * @param {number} index 这张卡占的位（0 是第一张）
- */
+/** 第 index 张卡的落点：整卡宽 + 间距横向铺开，一行装不下才换行；从右往左铺（右边最不挡字）。
+ *  @param {number} index 这张卡占的位（0 是第一张） */
 function layoutSideBySide(index) {
   const host = el.stateCards;
   const w = host && host.clientWidth ? host.clientWidth : 900;
@@ -135,13 +95,8 @@ function layoutSideBySide(index) {
   return { x, y };
 }
 
-/**
- * 找一个**没人占**的位子。
- *
- * ⚠️ 不能直接用 `openCards.size` —— 关掉中间那张再开新的，size 会和已有卡撞号，
- * 两张卡就叠在同一个落点上（正是要修的那个毛病）。这里挑最小的空位，
- * 既不会撞，也不会让已有卡位移。
- */
+/** 找一个**没人占**的位子。⚠️ 不能直接用 `openCards.size` —— 关掉中间那张再开新的会撞号，
+ *  两张卡叠在同一个落点上。这里挑最小的空位，既不会撞，也不让已有卡位移。 */
 function nextSlot() {
   const used = new Set();
   for (const state of openCards.values()) used.add(state.slot);
@@ -212,9 +167,7 @@ function bringToFront(owner) {
   if (state) state.z = ++topZ;
 }
 
-// ---------------------------------------------------------------------------
-//  画三种行
-// ---------------------------------------------------------------------------
+// 画三种行
 
 /** 只读行：字段名 + 值（数值补进度条）。这是卡片的默认样子。 */
 function viewRow(convo, key) {
@@ -292,9 +245,8 @@ function addRow(convo, owner) {
       return;
     }
 
-    // 字段名在「同一个人身上」只能有一个；不同的人（不同 owner）可以各自有
-    // 同名字段（世界书里姐姐妹妹都有自己的「好感度」）。但在这个卡片里手动加
-    // 一个已被别人占用的名字，界面上会分不清是哪一份，所以还是拦下来并说清原因。
+    // 同一个人身上字段名唯一；不同 owner 可以有同名字段，但在这张卡里手动加一个别人占用的
+    // 名字会分不清是哪一份，所以拦下来并说清原因。
     const holders = convoPanelFields(convo).filter((key) => panelFieldName(key) === name);
     if (holders.some((key) => panelFieldOwner(convo, key) === owner)) {
       showToast(`这张卡里已经有「${name}」了`, 'error');
@@ -309,9 +261,7 @@ function addRow(convo, owner) {
     }
 
     appendPanelFields(convo, [{ name, value: '', owner }]);
-    // 加完把这个输入框清掉、并让它失焦 —— 免得「卡片重绘保护」把这次刷新挡掉
-    // （见 renderStateCards 里那条：值输入框有焦点时不重建），
-    // 也方便接着加下一个。
+    // 加完清空并失焦：否则「值输入框有焦点就不重建」的重绘保护会挡掉这次刷新。
     input.value = '';
     input.blur();
     persistConversations(0);
@@ -351,17 +301,10 @@ function removeField(convo, key) {
   refreshAll();
 }
 
-// ---------------------------------------------------------------------------
-//  拖动
-// ---------------------------------------------------------------------------
+// 拖动
 
-/**
- * 把卡片头部做成拖动把手。
- *
- * ⚠️ 拖动期间**只改 style.left/top，不重绘** —— 重绘会重建 DOM，
- * 指针捕获和这次拖动就断了（表现是"拖一下就脱手"）。
- * 松手才写回 state.x / state.y。
- */
+/** 把卡片头部做成拖动把手。⚠️ 拖动期间**只改 style.left/top，不重绘** —— 重绘会重建 DOM，
+ *  指针捕获和这次拖动就断了（表现是「拖一下就脱手」）。松手才写回 state.x / state.y。 */
 function wireDrag(card, head, state) {
   head.addEventListener('pointerdown', (event) => {
     // 卡片头部里的按钮（编辑 / 收起 / ✕）不参与拖动
@@ -400,9 +343,7 @@ function wireDrag(card, head, state) {
   });
 }
 
-// ---------------------------------------------------------------------------
-//  画卡片
-// ---------------------------------------------------------------------------
+// 画卡片
 
 function buildCard(convo, entity, state, charCount) {
   const owner = entity.owner;
@@ -422,8 +363,7 @@ function buildCard(convo, entity, state, charCount) {
     avatar.textContent = owner === 'player' ? '我' : String(name || '').slice(0, 1) || '?';
   }
 
-  // 头部的按钮随开合变：收起时只给「展开」，展开后才出现「编辑」和「收起」。
-  // 一共就三枚，收起态两枚 —— 浮卡宽度有限，再多名字就被挤成省略号了。
+  // 头部按钮随开合变：收起态两枚、展开三枚；浮卡宽度有限，再多名字就被挤成省略号。
   const headBits = [
     avatar,
     h('span', { class: 'sc-title', text: name, title: name }),
@@ -457,12 +397,10 @@ function buildCard(convo, entity, state, charCount) {
   // 头部就是拖动把手
   wireDrag(card, head, state);
 
-  // 收起的卡只有标题行 —— 图和字段连 DOM 都不生成。这样「同时看几张」不会互相
-  // 顶位置，也顺带解决了「展开几张之后剩下的看不见」。
+  // 收起时只画标题行，图和字段连 DOM 都不生成。
   if (!state.open) return card;
 
-  // 角色图：横铺在标题下面。表情命中时右下角挂个小标签写表情名，
-  // 让「为什么现在显示这张」一眼看得出来。
+  // 角色图横铺在标题下；表情命中时右下角挂标签写表情名。
   const photo = cardPhoto(convo, entity, charCount);
   if (photo.src) {
     const wrap = h('div', { class: 'sc-photo art-edge' }, h('img', { src: photo.src, alt: '' }));
@@ -480,9 +418,7 @@ function buildCard(convo, entity, state, charCount) {
       })
     );
   } else {
-    // 按分组铺（和面板同一套分组键，见 panel-fields.js 的 groupPanelFields）：
-    // 有分组的先给个小标题，没分组的直接铺 —— 角色字段搬过来之后，
-    // 「状态栏 / 关系 / 背包 / 身份」这层结构得跟着一起过来，不能丢。
+    // 按分组铺（和面板同一套分组键）；有分组的先给小标题，没分组的直接铺。
     const buckets = groupPanelFields(fields.map((name) => ({ name, group: panelFieldGroup(convo, name) })));
     for (const bucket of buckets) {
       if (bucket.id) {
@@ -498,14 +434,8 @@ function buildCard(convo, entity, state, charCount) {
   return card;
 }
 
-/**
- * 重画所有开着的卡。登记在刷新总线上（面板值变了、换会话了都要跟着更新）。
- *
- * 卡片里正有**值输入框**在编辑时不重建 DOM —— 否则每敲一个字都重建，
- * 光标和内容会被打断。
- * ⚠️ 只挡「值输入框」：底部那个「新字段名」框不算 —— 加完字段就得重绘把它显示出来，
- * 挡了会出现「点了添加、卡片没反应」。
- */
+/** 重画所有开着的卡（登记在刷新总线上）。卡片里正有**值输入框**在编辑时不重建 DOM，
+ *  否则每敲一个字都会断光标。⚠️ 只挡值输入框：底部「新字段名」框不挡，否则加完不显示。 */
 export function renderStateCards() {
   const host = el.stateCards;
   if (!host) return;
@@ -514,8 +444,7 @@ export function renderStateCards() {
   syncCardsForConvo(convo);
 
   const active = document.activeElement;
-  // 组件化之后焦点落在里层原生 input 上，而 sc-input / sc-new 类挂在宿主上 ——
-  // 只查 active.classList 会永远判 false，于是每敲一个字都可能被重绘打断。
+  // 组件化后焦点落在里层原生 input 上，类挂在宿主上；只查 active.classList 会永远判 false。
   const activeHost = hostOf(active);
   const typingValue =
     active &&
@@ -532,9 +461,7 @@ export function renderStateCards() {
     return;
   }
 
-  // 已经不在场的人（换绑角色 / 字段被清光）→ 收掉那张卡。
-  // ⚠️ 唯一的例外是「我」和「角色卡」本身要小心：player 永远在 panelEntities 里，
-  // 所以这里的判定只对角色卡生效，删掉一个角色的字段就会关掉它的卡（合理）。
+  // 已经不在场的人收掉那张卡。player 永远在 panelEntities 里，所以删角色字段就会关掉它的卡（合理）。
   const entities = panelEntities(convo);
   const live = new Set(entities.map((e) => e.owner));
   for (const owner of [...openCards.keys()]) {
@@ -545,11 +472,8 @@ export function renderStateCards() {
     return;
   }
 
-  // 铺的顺序一律按 panelEntities(convo)：玩家永远第一个，后面按本局的出场顺序。
-  // **不用 openCards 的插入顺序** —— 那样点了谁谁就跳到前面去，界面会显得在乱动。
-  // （落在哪一格是 state.slot 决定的，跟这里的 DOM 顺序无关，两者互不影响。）
-  // 场上「有几个角色卡」。只有一个人的时候，表情匹配可以不要求正文里点名
-  // （见 cardPhoto / data/expressions.js 的 allowLoose）。
+  // 铺的顺序按 panelEntities(convo)：玩家永远第一，后面按出场顺序。**不用 openCards 的插入
+  // 顺序** —— 那样点了谁谁就跳到前面。charCount 只有一个人时，表情匹配可以不要求点名。
   const charCount = entities.filter((e) => e.kind === 'character').length;
 
   for (const entity of entities) {

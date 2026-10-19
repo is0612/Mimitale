@@ -1,26 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  main/pet-brain.js —— 桌宠「说话」这件事：拼提示词、调模型、把回复切成几句
-//
-//  ────────────────────────────────────────────────────────────────────────
-//  ⚠️ 这个模块**绝不能**改成复用 ipcMain 的 `chat:send` 通道。
-//
-//  理由不是「代码重复」，而是两条链路的生命周期不同：
-//  ① 聊天通道的回调固定往 `chat:chunk` 推；宠物复用的话，它的字会混进
-//     角色的气泡里，用户会看到角色突然说了一句「哈哈你们俩好甜」。
-//  ② 角色可以在流式生成中途被停止 / 被下一条顶掉；宠物有自己的窗口、
-//     自己的隐藏 / 退出状态，不该被主界面的发送链路牵着走。
-//
-//  所以宠物走自己的 signal、自己的频道（pet:chunk / pet:say）——
-//  两条链路互不相识，这是设计上刻意留的距离，不是重复代码。
-//  ────────────────────────────────────────────────────────────────────────
-//
-//  另一个刻意的选择：**上下文不做成「把刚才那段对话再发一遍」**。
-//  发给模型的是「会话名 + 角色名 + 最近几条 + 主对话摘要 + 状态面板」这一小包，
-//  由主界面那边组装好递进来（renderer/js/data/petContext.js）。
-//  宠物看不到完整历史，也不需要 —— 它只要知道「刚才发生什么」就够插嘴了。
-// ============================================================================
+// 桌宠「说话」：拼提示词、调模型、把回复切成几句。
+// ⚠️ 绝不能改成复用 ipcMain 的 chat:send：那条链路固定往 chat:chunk 推，宠物的字会混进角色气泡；上下文是主界面递进来的一小包（renderer/js/data/petContext.js）。
 
 const { endpointFor, isBridgeProvider, loadSettings } = require('./providers.js');
 const { streamChat, bridgeChat } = require('./http.js');
@@ -34,24 +15,16 @@ const MAX_MEMORY_TEXT = 300;
 /** 最近说过几句要带上（防复读） */
 const RECENT_SAY_LIMIT = 5;
 
-// ---------------------------------------------------------------------------
-//  输出解析
-// ---------------------------------------------------------------------------
+// 输出解析
 
-/**
- * 模型可以另起一行写「【记住】：xxx」——
- * 用**和「剧情选项」同一套写法**（见 renderer/js/data/suggestions.js），
- * 因为项目里模型已经被训练出这个格式习惯了，不需要再教一遍。
- */
+/** 「【记住】：xxx」和「剧情选项」同一套写法（见 renderer/js/data/suggestions.js），模型已被训练出这个习惯。 */
 const REMEMBER_RE = /^[【\[]\s*记住\s*[】\]]\s*[：:]\s*(.+)$/;
 
 function cleanLine(raw) {
   let line = String(raw || '').trim();
   if (!line) return '';
-  // ⚠️ 这里的 `*` 只当「加粗/项目符号」处理，条件是它后面**跟着空格**。
-  //    绝不能写成 `^[-*•·]\s*` —— 那样会把 `*歪头*` 的开头那个星号也吃掉，
-  //    句子变成「歪头*」，渲染层（pet.js 的 *…* 正则）再也匹配不上，
-  //    宠物所有的动作都会原样显示成一串带星号的怪文字。
+  // ⚠️ `*` 只当加粗 / 项目符号处理，条件是后面跟着空格：写成 `^[-*•·]\s*` 会把 `*歪头*` 的开头星号吃掉，
+  //    渲染层（pet.js 的 *…* 正则）再也匹配不上，动作会原样显示成带星号的怪文字。
   line = line.replace(/^(?:[-•·]\s*|\*\s+)/, '');
   line = line.replace(/^\d+\s*[.、)）:：]\s*/, '');
   // 模型爱把整句包在引号里
@@ -61,14 +34,8 @@ function cleanLine(raw) {
   return line.trim();
 }
 
-/**
- * 把模型回复切成「几句」。
- *
- * 两层兜底，因为模型经常不听话：
- *   ① 换了行的 → 一行一句，直接取前 count 行；
- *   ② 写成一大段的 → 按句末标点切（这个很常见，尤其小模型）。
- * 两条都走一遍，谁切出来的句子多用谁 —— 目标是「用户要 3 句就真的有 3 句」。
- */
+/** 把回复切成几句：先按换行取，不够再按句末标点切 —— 模型常写成一大段。
+ *  谁切出来的句子多用谁，目标是「用户要 3 句就真的有 3 句」。 */
 function splitIntoLines(text, count) {
   const want = Math.max(1, Math.min(20, Math.round(Number(count) || 1)));
   const body = String(text || '')
@@ -93,9 +60,7 @@ function extractMemory(text) {
   return '';
 }
 
-// ---------------------------------------------------------------------------
-//  提示词
-// ---------------------------------------------------------------------------
+// 提示词
 
 function formatRecent(recent) {
   const list = Array.isArray(recent) ? recent : [];
@@ -192,18 +157,9 @@ function buildUserPrompt({ pet, request }) {
   return blocks.join('\n\n');
 }
 
-// ---------------------------------------------------------------------------
-//  端点选择（含回退）
-// ---------------------------------------------------------------------------
+// 端点选择（含回退）
 
-/**
- * 宠物说话可以用的端点，按优先级排。
- *
- * 第一条是「宠物自己指定的模型」（如果它没选跟随主模型），
- * **最后一定垫着主模型** —— 这就是需求里那句「主模型不可用要有回退方案」：
- * 单独给宠物指了一个模型、那个服务商挂了 / Key 失效了，宠物不该从此变哑巴，
- * 应该悄悄回退到主模型继续说话。
- */
+/** 宠物可用的端点，按优先级排。⚠️ 最后一定垫着主模型 —— 单独指定的那个挂了，宠物不该从此变哑巴。 */
 function petEndpoints(settings, pet) {
   const list = [];
   if (!pet.useMainModel) {
@@ -224,21 +180,9 @@ function endpointReady(settings, endpoint) {
   return !!endpoint.apiKey;
 }
 
-// ---------------------------------------------------------------------------
-//  生成
-// ---------------------------------------------------------------------------
+// 生成
 
-/**
- * 让桌宠说一次话。
- *
- * @param {object} options
- * @param {object} options.pet      这只桌宠的配置
- * @param {object} options.request  上下文（会话名 / 最近几条 / 摘要 / 状态），由主界面组装
- * @param {function} options.onDelta 流式回调用；**调用方负责把它接到 pet:chunk**
- * @param {AbortSignal} options.signal
- * @returns {Promise<{ok:boolean, lines?:string[], text?:string, memory?:string,
- *                    providerName?:string, model?:string, error?:string, tried?:number}>}
- */
+/** 让桌宠说一次话。onDelta 是流式回调 —— 调用方负责把它接到 pet:chunk。 */
 async function generatePetSpeech({ pet, request, onDelta, signal }) {
   if (!pet) return { ok: false, error: '没有可用的桌宠' };
 
@@ -260,8 +204,7 @@ async function generatePetSpeech({ pet, request, onDelta, signal }) {
 
   for (let index = 0; index < usable.length; index += 1) {
     const endpoint = usable[index];
-    // 采样参数：Pet 自己写死的温度优先，否则跟随全局。
-    // 温度给得比聊天略高一点是刻意的 —— 宠物要的是「有个性」，不是「准确」。
+    // 温度比聊天略高是刻意的：宠物要的是「有个性」，不是「准确」。
     const temperature = Number.isFinite(pet.temperature) ? pet.temperature : settings.temperature;
     const tuned = {
       ...endpoint,
@@ -277,8 +220,7 @@ async function generatePetSpeech({ pet, request, onDelta, signal }) {
       let text = '';
 
       if (bridge) {
-        // 桥接默认会按正文语义决定要不要出图，那要卸文字模型、出图、再把模型热回来 ——
-        // 宠物只说一句话，不值得等几十秒。noImage 直接跳过这段。
+        // 桥接默认会判定要不要出图（卸模型 + 出图 + 热回来），宠物只说一句话不值得等；noImage 跳过这段。
         const result = await bridgeChat({
           settings: tuned,
           messages,
@@ -292,8 +234,7 @@ async function generatePetSpeech({ pet, request, onDelta, signal }) {
           settings: tuned,
           messages,
           signal,
-          // 「请求记录」里也留一份 —— 宠物在花钱，用户得看得见。
-          // 记的是**最终 body**，所以打开请求记录能看到宠物那一份长什么样。
+          // 宠物也在花钱，请求记录里留一份（记的是最终 body）。
           onRequest: (body, url) => recordRequest({ requestId, providerName: `桌宠 · ${tuned.providerName}`, url, body }),
           onDelta: (delta) => {
             if (typeof onDelta === 'function') onDelta(delta);

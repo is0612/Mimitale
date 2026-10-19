@@ -1,26 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  renderer/pet/rig.js —— 部件贴图的网格变形渲染器（桌宠「动态形象」的画笔）
-//
-//  移植自 Coopanion 的 web/kit/rig.js（Pal-AI-Lab，AGPL-3.0，2026-10-10 取自
-//  main 分支 v0.1.19），渲染逻辑一行未改 —— 只换了宿主注释。
-//  ⚠️ 许可提醒：这个文件的原始版权是 AGPL-3.0。Mimitale 目前是个人自用软件
-//     没有触发分发义务；**将来若要开源 / 分发 Mimitale**，要么摘掉这套 rig
-//     换自研实现，要么整个项目转 AGPL —— 到时候先想清楚再动手。
-//
-//  它是什么：一个「小型 Live2D」——
-//    · 一个 part = 一张贴图铺在 rig 空间的一个 box 上，切成 quad 网格；
-//    · 每帧网格的静止点穿过这个 part 的**变形器链**（内层先动、父层后动）：
-//        rot  —— 绕 pivot 转 / 缩放 / 平移
-//        warp —— 一个矩形上的位移场 fn(u, v, x, y)，矩形外取最近边缘的值
-//    · 所有坐标都在同一套 rig 空间（逻辑坐标：x=128 在身体正下方，脚底 y=256）。
-//
-//  两个保命的工程细节（都是 Coopanion 踩过的坑，别删）：
-//    · preserveDrawingBuffer —— 猫的轮廓要用 canvas 像素做**鼠标穿透掩码**
-//      （pet.js 里 drawImage(this) 读 alpha），丢了 drawing buffer 就读出全 0。
-//    · WebGL1 降级 —— GLSL ES 1.00 且不用 VAO，老机器 WebGL2 被拒时照样跑。
-// ============================================================================
+// 部件贴图的网格变形渲染器（移植自 Coopanion web/kit/rig.js，AGPL-3.0，分发前先处理许可）。
+// ⚠️ preserveDrawingBuffer 必须开（掩码要读 alpha）；WebGL1 / GLSL ES 1.00、不用 VAO 做降级。
 
 const VS = `
 attribute vec2 aPos; attribute vec2 aUv;
@@ -56,15 +37,14 @@ export function createRig(canvas, model) {
   const attrs = { premultipliedAlpha: true, alpha: true, antialias: true, preserveDrawingBuffer: true };
   const gl = canvas.getContext('webgl2', attrs) || canvas.getContext('webgl', attrs);
   if (!gl) throw new Error('webgl unavailable');
-  // WebGL 1 builds mipmaps only for power-of-two sizes, and the textures are not
+  // WebGL1 只给 2 的幂尺寸生成 mipmap，贴图不是
   const pot = (n) => (n & (n - 1)) === 0;
   const gl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
   const canMip = (src) => gl2 || (pot(src.width) && pot(src.height));
   const defs = model.deformers;
   let view = model.view; // [x0, y0, x1, y1]
 
-  // the source each texture was uploaded from: a lost context takes the GL textures with it,
-  // so restoring means uploading them all again from what they came from
+  // 记录每张贴图的来源：上下文丢失会带走 GL 纹理，恢复时要照原样重新上传
   const textures = new Map(), sources = new Map();
   function upload(key, src) {
     if (disposed) return null;
@@ -83,12 +63,12 @@ export function createRig(canvas, model) {
     return t;
   }
 
-  // deformer chain per part, innermost first
+  // 每个 part 的变形器链，内层在前
   const chainOf = id => { const c = []; for (let d = id; d; d = defs[d].parent) c.push(d); return c; };
 
   let prog, loc, meshes = [];
   let shaders = [];
-  /** Builds every GL resource; called again on `webglcontextrestored`, where the old ones died with the context. */
+  /** 重建全部 GL 资源；webglcontextrestored 时旧资源已随上下文一起死了。 */
   function buildGL() {
     shaders = [shader(gl, gl.VERTEX_SHADER, VS), shader(gl, gl.FRAGMENT_SHADER, FS)];
     prog = gl.createProgram();
@@ -101,7 +81,7 @@ export function createRig(canvas, model) {
       uAlpha: gl.getUniformLocation(prog, 'uAlpha'), uTint: gl.getUniformLocation(prog, 'uTint'),
       uTex2: gl.getUniformLocation(prog, 'uTex2'), uMix: gl.getUniformLocation(prog, 'uMix'),
     };
-    // parts: rest grid, uv, index buffer; `uvBox` picks a sub-rect of the texture (atlas), default whole
+    // parts：静止网格、uv、索引缓冲；uvBox 可取贴图的子矩形（图集），默认整张
     meshes = model.parts.map(p => {
       const [nx, ny] = p.grid || [6, 6];
       const [x, y, w, h] = p.box;
@@ -134,9 +114,7 @@ export function createRig(canvas, model) {
     gl.enableVertexAttribArray(loc.aUv);
   }
 
-  // a lost context blanks the canvas; unless the loss is preventDefault-ed the browser never
-  // restores it, and it stays blank for good. On restoration every GL resource must be rebuilt
-  // and the textures uploaded again from their sources.
+  // 上下文丢失会清空画布，不 preventDefault 就永远不会恢复；恢复时所有 GL 资源重建、贴图重传。
   let lost = false;
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); lost = true; });
   canvas.addEventListener('webglcontextrestored', () => {
@@ -149,10 +127,8 @@ export function createRig(canvas, model) {
   buildGL();
 
   /**
-   * Frees every GL resource and kills the context. Without this the browser keeps the context
-   * alive until GC collects the canvas, and Chromium caps live contexts per page (~16): swapping
-   * figures back and forth could exhaust them and leave later mounts rendering nothing.
-   */
+   * 释放全部 GL 资源并杀掉上下文。⚠️ 不释放的话 Chromium 每页上下文上限（~16）会被攒满，
+   * 之后挂载全画空白。 */
   let disposed = false;
   function dispose() {
     if (disposed) return;
@@ -168,7 +144,7 @@ export function createRig(canvas, model) {
     }
   }
 
-  /** Moves a rest point through deformer `id` and its ancestors, with this frame's states. */
+  /** 把静止点穿过 deformer id 及其祖先，用这一帧的状态。 */
   function applyChain(chain, st, x, y) {
     for (const id of chain) {
       const d = defs[id], s = st[id];
@@ -233,7 +209,7 @@ export function createRig(canvas, model) {
 
   return {
     gl, upload, render, dispose,
-    /** Where a rest point lands this frame (for overlays and hit tests). */
+    /** 静止点这一帧落在哪里（叠加层和命中判断用） */
     point(deformer, st, x, y) { return applyChain(chainOf(deformer), st, x, y); },
     setView(v) { view = v; },
     get view() { return view; },

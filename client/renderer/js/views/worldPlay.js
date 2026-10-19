@@ -1,19 +1,7 @@
 'use strict';
 
-// ============================================================================
-//  views/worldPlay.js —— 「开始」按下之后的事
-//
-//  两条路共用同一个「你是谁」弹窗（本身在 views/player.js）：
-//    · 进世界 —— 建会话、把这个世界装上、开 GM、切到对话视图，
-//      书里没写开场白时让模型按设定现生成一段
-//    · 跟角色聊 —— 建会话、绑上这张卡、带上刚定好的身份
-//
-//  这里管的就是「按了开始之后」：谁来建会话、谁来种状态面板、谁来切视图。
-//
-//  开局那段用独立的 requestId 调接口，所以流式分片不会被聊天窗口的监听器接住 ——
-//  生成过程不会闪在界面里，写完才一次性落进去。生成期间空会话显示「正在生成开局…」，
-//  那个状态存在 views/chatMessages.js 里（setOpeningBusy）。
-// ============================================================================
+// 「开始」按下之后的事：谁来建会话、种状态面板、切视图（「进世界」/「跟角色聊」两条路）。
+// 开局那段用独立 requestId 调接口，流式分片不会被聊天窗口接住 —— 写完才一次性落进去。
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
@@ -35,10 +23,7 @@ import { renderAll } from './redraw.js';
 import { renderMessages, setOpeningBusy } from './chatMessages.js';
 import { applyCharacterChoice } from './chatList.js';
 
-/**
- * 把弹窗里填的身份落到会话上。
- * 名字和设定都留空 = 不设 —— 界面和提示词都回到默认的「你」。
- */
+/** 名字和设定都留空 = 不设：界面和提示词都回到默认的「你」。 */
 function applyPlayerIdentity(convo, draft) {
   if (!convo) return;
   // 选了卡但名字/设定都留空也是有效的身份 —— 不能把刚挑的卡丢掉。
@@ -49,10 +34,7 @@ function applyPlayerIdentity(convo, draft) {
   convo.updatedAt = now();
 }
 
-/**
- * 玩家弹窗那颗主按钮：按这次弹窗是为谁开的，分流到「进世界」或「开聊」。
- * 目标中途被删掉（getPlayerStart 返回 null）就直接关窗，不去猜。
- */
+/** 按这次弹窗为谁开分流到「进世界」或「开聊」；目标中途被删（getPlayerStart 返回 null）直接关窗。 */
 export function startPlayerFlow() {
   const start = getPlayerStart();
   if (!start) {
@@ -61,8 +43,7 @@ export function startPlayerFlow() {
   }
   if (start.kind === 'world') startWorldPlay(start.book);
   else {
-    // startCharacterChat 是 async（可能会等「选一条开场白」的弹窗）——
-    // 这里不接住 rejection 的话，失败会变成 unhandled rejection。
+    // ⚠️ startCharacterChat 是 async：不接住 rejection 会变成 unhandled rejection。
     startCharacterChat(start.character).catch((err) => {
       console.error('开始聊天失败', err);
       showToast((err && err.message) || '开始聊天失败', 'error');
@@ -70,10 +51,7 @@ export function startPlayerFlow() {
   }
 }
 
-/**
- * 「开始游玩」：建一个会话，把这个世界装上，并存下玩家自己的角色。
- * 世界模型本来就应该由 GM 叙述，所以顺手把 GM 模式打开。
- */
+/** 建会话、装上这个世界、存下玩家自己的角色；世界由 GM 叙述，所以顺手开 GM 模式。 */
 export function startWorldPlay(book) {
   if (!book) return;
 
@@ -85,29 +63,22 @@ export function startWorldPlay(book) {
   convo.title = book.name;
   convo.updatedAt = now();
 
-  // 你在这个世界里的身份。选了角色卡就记住是哪张（名字/设定仍以输入框为准，
-  // 因为选完还能改）。
+  // 选了角色卡就记住是哪张（名字 / 设定仍以输入框为准，选完还能改）
   applyPlayerIdentity(convo, draft);
   const pickedCard = draft.card;
 
-  // 剧情选项：**所有会话默认都开**，每轮 4 条。
-  //   · 选了一张卡当自己 → 按那张卡的配置来（卡上明确关掉的除外）；
-  //   · 没选卡（进世界时自己写的主角、或者干脆留空）→ 也给默认的 4 条。
-  // 用复制（和绑定角色卡那套一致），改卡不该悄悄改掉正在玩的这一局。
+  // ⚠️ 用复制（和绑卡那套一致）：改卡不该悄悄改掉正在玩的这一局。
+  // 没选卡（自己写的主角或留空）也给默认的 4 条。
   convo.optionsSpec = optionsSpecFromCharacter(pickedCard);
   if (!convo.optionsSpec) convo.options = [];
 
-  // 状态面板：先种「你自己」的身份和属性（主角的数值优先），再种本书角色的。
-  // 同名以先出现的为准，所以自己卡上的「金币」不会被书里的盖掉。
-  // 归属（owner）：你自己的身份和卡标成 'player'（在「我的状态」卡里看，
-  // 不挤在「当前状态」面板里）；书里角色的各归各的 id。
+  // ⚠️ 先种「你自己」再种书里角色：同名以先出现的为准，自己卡上的「金币」不会被书里的盖掉。
   seedIdentity(convo, draft.name, 'player');
   if (pickedCard) seedPanelFromCharacters(convo, [pickedCard], 'player');
   seedPanelFromCharacters(convo, worldbookCharacters(book));
 
-  // 挑的这张卡（或同名角色）可能也在这本书里当 NPC 副本 —— 副本名字和玩家名
-  // 撞上时把它名下的字段并回「我」，否则同一个人会占两张状态卡、属性存两份，
-  // 注入时还被拆成「角色名·字段名」的前缀。种完字段再并，把副本那份一起收掉。
+  // ⚠️ 种完字段再并：挑的卡可能也在书里当 NPC 副本，撞名时把副本那份收回来，
+  //    否则同一个人占两张状态卡、属性存两份。
   mergePlayerOwnedFields(convo);
 
   // 开场：书里写了就用书里的；没写就让模型按设定现生成一段
@@ -135,12 +106,7 @@ export function startWorldPlay(book) {
   if (!opening) generateWorldOpening(convo, book);
 }
 
-/**
- * 「开始聊天」：建会话并绑上这个角色。
- *
- * 身份要在绑卡**之前**落到会话上 —— 自动插入的开场白里，{{user}} 得用刚填的名字。
- * 选了角色卡当自己时，那张卡的身份和属性一并种进「我」那张状态卡。
- */
+/** ⚠️ 身份要在绑卡**之前**落到会话上：自动插入的开场白里 {{user}} 得用刚填的名字。 */
 async function startCharacterChat(character) {
   if (!character) return;
 
@@ -155,14 +121,11 @@ async function startCharacterChat(character) {
     seedPanelFromCharacters(convo, [draft.card], 'player');
   }
 
-  // 复用「绑定角色」那套：自动插入开场白、自动把会话标题起成角色名。
-  // ⚠️ 必须 await：卡上带多条开场白时，这一步会开「选一条开场白」的弹窗等着，
-  //    后面的 closePlayerModal / showView / el.input.focus 得等它选完再走 ——
-  //    否则底下的身份弹窗先关了、输入框还把焦点抢走，弹窗的键盘操作就废了。
+  // ⚠️ 必须 await：卡上多条开场白时这里会开「选一条开场白」的弹窗等着，后面的关窗 /
+  //    切视图 / 抢焦点得等它选完，否则底下的弹窗先关、焦点被抢走，弹窗的键盘操作就废了。
   await applyCharacterChoice(character.id);
 
-  // 绑定之后才并：单卡会话里挑一张卡当自己，而这张卡（或同名角色）正好
-  // 又是 TA 自带世界书里的副本 —— 同上，合并成「我」一份。
+  // 绑定之后才并：同上，把副本那份合并成「我」一份。
   mergePlayerOwnedFields(convo);
 
   closePlayerModal();
@@ -174,10 +137,7 @@ async function startCharacterChat(character) {
   el.input.focus();
 }
 
-/**
- * 点角色卡的「聊天」：先问一句「你是谁」，按了开始才建会话。
- * 身份是在开聊前定好的，所以中途不能换 —— 想换就另开一个会话。
- */
+/** 先问一句「你是谁」，按了开始才建会话；身份开聊前定好，中途不能换（想换就另开一个会话）。 */
 export function chatWithCharacter(id) {
   const character = characterById(id);
   if (!character) return;
@@ -190,12 +150,7 @@ export function chatWithCharacter(id) {
   openChatPlayerModal(id);
 }
 
-/**
- * 让模型按世界设定写一段开局场景，然后作为第一条消息放进会话。
- *
- * 用独立的 requestId 调接口，所以流式分片不会被聊天窗口的监听器接住 ——
- * 生成过程不会闪在界面里，写完才一次性落进去。
- */
+/** 让模型按世界设定写一段开局场景，作为第一条消息放进会话（独立 requestId，不进聊天窗口的流式监听）。 */
 async function generateWorldOpening(convo, book) {
   const endpoint = ensureConvoEndpoint(convo);
   if (!endpoint || !endpoint.provider.apiKey) {

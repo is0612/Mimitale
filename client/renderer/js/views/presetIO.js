@@ -1,19 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  views/presetIO.js —— 预设的导入 / 导出
-//
-//  导入：主进程弹文件框、读 JSON、过归一化（presets:import），**不落盘** ——
-//  收不收、收哪几条由这一层决定。导进来的 id 一律重发，否则两条同 id
-//  的预设会互相顶掉。
-//
-//  导出：直接把内容交给 util:saveFile 写盘。导出的形状是「一整份数组」，
-//  正好是我们自己 import 认得的三种形态之一（单条 / 数组 / {presets:[]}），
-//  所以导出的文件能被自己的导入原样吃回来。
-//
-//  落盘之后要重绘预设页：直接调 renderPresetPage()（本模块单向 import 它）；
-//  入口层还会通过 initPresetIo 注入 rerender()，用来刷新预设页以外的全局视图。
-// ============================================================================
+//  views/presetIO.js —— 预设的导入 / 导出。
+//  导入只做「读 JSON + 过归一化 + 重发 id」，不落盘 —— 收不收由这一层决定。
+//  导出写成「一整份数组」，正是自己 import 认得的三种形态之一，能原样吃回来。
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
@@ -30,27 +19,14 @@ let rerender = () => {};
 /** 导入时重发 id 用的自增序号：同一毫秒里连导几次也不会撞车 */
 let importSeq = 0;
 
-/**
- * 给导进来的一批预设重新发 id。
- *
- * 主进程那边已经把 id 清空了（导入时有意不带 id），所以这里不涉及
- * 「改写绑定」——预设不像角色那样被别的东西按 id 引用。
- * 但会话里可能会绑着**同名**的旧预设，这里不去动它：用户导进来的
- * 是「新的一条」，要不要替换是用户自己的事。
- */
+/** 给导进来的一批预设重发 id（主进程已清空 id，所以不涉及改写绑定）。 */
 function reissuePresetIds(list) {
   importSeq += 1;
   const stamp = `${Date.now().toString(36)}-${importSeq}`;
   return list.map((p, i) => ({ ...p, id: `pr${stamp}-${i}` }));
 }
 
-/**
- * 一份预设导出成文件时该长什么样。
- *
- * 导出**不带运行期字段**（id 是对内的、时间戳没意义），
- * 留 name / note / tags / content / entries / 采样参数 / enabled / global ——
- * 这些正是 normalizePreset 认的字段，导回来能完整还原。
- */
+/** 导出形状：不带 id / 时间戳，只留 normalizePreset 认的字段（导回来能完整还原）。 */
 function exportShape(preset) {
   const out = {
     name: preset.name,
@@ -76,17 +52,7 @@ function exportShape(preset) {
   return out;
 }
 
-/**
- * 预设导出的文件名。
- *
- * 禁止字符替换 / 截长 / 空名兜底都在 core/util.js 的 safeFileName 里（那份多一个
- * fallback 参数），这里只补预设自己的两条口径：**把连续空白压成一个空格**、
- * **空名兜底叫「预设」**。util 的注释写明「内部空白由调用方处理」，就是这个意思。
- *
- * ⚠️ 别再在本模块里定义一个同名函数：import 和函数声明同名是
- *    `Identifier 'safeFileName' has already been declared`，
- *    整个模块解析失败（预设的导入/导出会一起哑掉）。
- */
+/** 预设导出文件名（连续空白压成一个空格、空名兜底叫「预设」）。⚠️ 别在本模块再定义同名函数 —— import 与函数声明同名会让整个模块解析失败。 */
 const safePresetFileName = (name) => safeFileName(String(name || '').replace(/\s+/g, ' '), '预设');
 
 /** 按默认文件名导出，返回是否真的写了（用户取消 = false） */

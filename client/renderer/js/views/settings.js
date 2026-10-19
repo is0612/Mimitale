@@ -1,31 +1,5 @@
-// ---------------------------------------------------------------------------
-//  设置页（含服务商编辑 / 生图 / 语义检索 / 桌宠）
-//
-//  对外接口（入口层 / 其它视图在用，别改）：
-//   · openSettings() 切到这一屏，并记下来处；
-//   · leaveSettings() 回到进来之前那一屏（保存 / 返回 / Esc 都走它）；
-//   · expandSettingsSection(id) 切到某一组（桌宠右键菜单「查看记忆」用）。
-//  这三个都必须导出：composer / chatImages 在没配模型或生图时要把用户带进来；
-//  入口层的 Esc 判断链依赖 leaveSettings；桌宠右键菜单依赖 expandSettingsSection。
-//
-//  两处刻意的边界：
-//
-//   · 「保存设置后重绘消息」和「右上角的模型切换器」都留在入口层 ——
-//     前者是聊天区的活、后者读的是会话状态，本模块不认识它们，所以通过
-//     initSettings 注入（refreshModelSwitch / afterSettingsSave）。
-//     「对话头部」不在此列：views/header.js 只依赖 core / data，可以直接单向 import。
-//
-//   · 内容只在「进这一屏」时刷新，不参与整体重绘，所以不向刷新总线登记
-//     （和 views/perspectiveUi.js 一样，只做事件绑定）。
-//
-//  布局：左侧导航 + 右侧内容。分组导航在本文件下半段，样式在 style.css 的
-//  .settings-nav / .settings-shell。对外接口没变：id 还是那六个，
-//  expandSettingsSection 的语义从「拆开折叠卡」变成了「切到那一组」。
-//
-//  内置目录兜底（模型清单 / 生图尺寸规则）在 views/settingsCatalog.js ——
-//  本模块只 import 它导出的查询和「铺进界面」的动作。往「服务商表单」里写字的
-//  applyCatalogModels 留在本地：它要用这里的 stashProviderForm()。
-// ---------------------------------------------------------------------------
+// 设置页：左侧分组导航 + 右侧内容（服务商编辑 / 生成参数 / 生图 / 语义检索 / 桌宠 / 外观）。
+// 导出 openSettings / leaveSettings / expandSettingsSection；模型切换器与「保存后重绘消息」由入口层注入。
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
@@ -34,10 +8,9 @@ import { el } from '../core/dom.js';
 import { h, clear } from '../ui/build.js';
 // 下拉框铺选项的规范件（清空 → 铺 → 定值 → 空了就禁用）。见 ui/controls.js
 import { fillSelect } from '../ui/controls.js';
-// 桌宠区块（它自己不依赖本模块，单向 import，不成环）
+// 桌宠区块（单向 import，不成环）
 import { openPetSection } from './petSettings.js';
-// 外观那一组（从顶栏弹窗搬进本页，见 index.html 的 #sec-appearance）。
-// 同样单向：appearance.js 不认识本模块。
+// 外观那一组（见 index.html 的 #sec-appearance），同样单向 import
 import { renderAppearanceForm } from './appearance.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
@@ -60,17 +33,12 @@ let editingProviderId = null;
 let personaShownModel = '';
 
 /**
- * 进设置页之前停在哪一屏。保存 / 返回 / Esc 都回到它 ——
- * 别让它变成永远回聊天。
+ * 进设置页之前停在哪一屏：保存 / 返回 / Esc 都回到它，别让它变成永远回聊天。
  */
 let returnView = 'chat';
 
 // --- 入口层注入的重绘动作 ---
-// refreshModelSwitch()：右上角「当前模型」切换器（服务商 / 模型列表改了要重画）
-// afterSettingsSave()：保存后除了切换器，还得重绘消息 ——
-//   有些东西是**跟着设置走的**：日期分隔（showDate）、以及「配图」按钮要不要出现
-//   （配了生图才有）。不重绘的话会出现「配好了生图但消息上没有按钮」，
-//   非得切个会话才出来。
+// refreshModelSwitch()：模型切换器；afterSettingsSave()：保存后连带重绘消息（日期分隔、配图按钮跟着设置走）。
 let refreshModelSwitch = () => {};
 let afterSettingsSave = () => {};
 
@@ -105,8 +73,7 @@ export function initSettings(opts = {}) {
   // 换服务商 → 模型下拉跟着换（新服务商的列表里没有老模型，所以从第一个开始）
   el.s.imageProvider.addEventListener('change', () => {
     const provider = providerById(el.s.imageProvider.value);
-    // 并上内置生图模型：服务商的模型列表里往往只有文本模型，
-    // 不并的话用户在下拉里找不到 glm-image 这种能生图的模型
+    // 并上内置生图模型：服务商列表里往往只有文本模型，不并就选不到 glm-image
     fillModelSelect(
       el.s.imageModel,
       el.s.imageProvider.value,
@@ -149,8 +116,7 @@ export function initSettings(opts = {}) {
     if (event.target === el.personaModal) closePersonaDialog();
   });
 
-  // 分组导航：点左栏就切到那一组。
-  // 监听挂在**设置这一屏**上（不是 document）—— 这一屏是页面，事件不会跑到别处去。
+  // 分组导航：监听挂在**设置这一屏**上（不是 document），事件不会跑到别处去。
   el.viewSettings.addEventListener('click', (event) => {
     const nav = event.target.closest ? event.target.closest('.settings-nav-item') : null;
     if (!nav) return;
@@ -158,9 +124,7 @@ export function initSettings(opts = {}) {
     if (target) showSettingsSection(target);
   });
 
-  // 勾选框一动就重算头部那颗统计（「已开 3 / 8 项」）。
-  // 挂 change 而不是 click —— 用键盘空格切换同样要跟着更新。
-  // 只认设置这一屏里的勾选框，别去关心别处的。
+  // 勾选框一动就重算头部统计（「已开 3 / 8 项」）；挂 change 而不是 click，键盘空格也要跟着更新。
   el.viewSettings.addEventListener('change', (event) => {
     const target = event.target;
     if (target && target.matches && target.matches('input[type="checkbox"]')) renderSectionStats();
@@ -172,27 +136,13 @@ export function setEditingProvider(id) {
   editingProviderId = id || null;
 }
 
-// ---------------------------------------------------------------------------
-//  分组导航：大版块 = 一个分组，点左栏切到哪一组就只显示哪一组
-//
-//  为什么要有它：设置项越加越多（模型服务 / 生成参数 / 行为 / 生图 / 语义检索 /
-//  桌宠），一列铺下来要滚很久，还容易一扫而过找不到目标区块。改成「左导航 +
-//  右内容」之后，打开设置先看到的是一条目录，一屏就装完，跳转不用滚。
-//
-//  当前选中的是哪一组**不落盘**：那只是「刚才翻到哪了」，不值得为它动 config.json。
-//  但同一次运行里离开再进来会回到原样（currentSectionId）。
-// ---------------------------------------------------------------------------
+// 分组导航：一个版块 = 一组，点左栏只显示那一组。当前选中不落盘（只是「刚才翻到哪了」），
+// 但同一次运行里离开再进来会回到原样（currentSectionId）。
 
 /** 这次运行里选中哪一组（存 section 的 id）。默认第一组「模型服务」 */
 let currentSectionId = 'sec-models';
 
-/**
- * 切到某一组：左栏高亮那个按钮，右栏只显示对应的那张卡，其余隐藏，内容滚回顶部。
- *
- * 给「在桌宠右键菜单里点『查看记忆』→ 直接跳进设置页」用：那条路在入口层
- * （renderer/js/main.js）触发，它拿不到这里的 currentSectionId，只能反过来喊一声。
- * id 不认识（null / 拼错）就什么都不做，别把界面切到「一组都不显示」。
- */
+/** 切到某一组：左栏高亮、右栏只显示对应卡片、内容滚回顶部。id 不认识就什么都不做。 */
 export function showSettingsSection(id) {
   if (!id) return;
   const section = el.viewSettings.querySelector(`#${id}`);
@@ -203,8 +153,7 @@ export function showSettingsSection(id) {
   for (const item of el.viewSettings.querySelectorAll('.settings-nav-item')) {
     const on = item.getAttribute('data-target') === id;
     item.classList.toggle('active', on);
-    // aria-current 的合法值里没有「false」—— 不选中就是**没有**这个状态，
-    // 写 false 等于把无效值喂给读屏器。选中 = 'true'，未选中 = 移除。
+    // aria-current 的合法值里没有「false」：不选中就是**移除**这个属性，写 false 是无效值。
     if (on) item.setAttribute('aria-current', 'true');
     else item.removeAttribute('aria-current');
   }
@@ -217,12 +166,11 @@ export function showSettingsSection(id) {
   const content = el.viewSettings.querySelector('.settings-content');
   if (content) content.scrollTop = 0;
 
-  // 切到「外观」那一组时回填一次 —— 它读的是**内存里的设置**，不是上面那张表单：
-  // 不填的话，换过主题 / 明暗再回来，色盘还是上一次的颜色（加粗色默认跟随主题色）。
+  // 切到「外观」时回填一次：它读的是内存里的设置，不填会留着上一次的颜色。
   if (id === 'sec-appearance') renderAppearanceForm();
 }
 
-/** 兼容名：外部一直按这个名字喊，语义已从「展开折叠卡」变成「切到那一组」 */
+/** 兼容名：外部一直按这个名字调用，语义是「切到那一组」 */
 export function expandSettingsSection(id) {
   showSettingsSection(id);
 }
@@ -230,31 +178,14 @@ export function expandSettingsSection(id) {
 /** 切到设置页时按记下的那一组铺一遍（内容是进屏时刷的，这里只管选中态 / 显隐） */
 function syncSettingsSection() {
   showSettingsSection(currentSectionId || 'sec-models');
-  // 头部统计也一起算：这几个数字读的是**刚填好的**表单 / 服务商列表，
-  // 所以必须排在 fillSettingsForm 之后、切屏之后（见 openSettings 里的顺序）。
+  // 头部统计读的是刚填好的表单 / 服务商列表，必须排在 fillSettingsForm 和切屏之后。
   renderSectionStats();
 }
 
-// ---------------------------------------------------------------------------
-//  设置弹窗
-// ---------------------------------------------------------------------------
+// --- 设置表单 ---
 
-/**
- * 填一个「模型」下拉。
- *
- * 模型从哪来？就是对应服务商的「可用模型」那一份列表 —— 所以**选了服务商才知道有哪些能选**，
- * 换服务商得跟着重填。这也是聊天那边模型下拉的同一份数据。
- *
- * keepMissing：保存过的模型不在列表里时怎么办。
- *   · 打开设置时 true —— 补一个选项摆在那儿，免得一打开就被静默改掉
- *     （换了服务商、或者列表被人删过，都会出现这种情况）
- *   · 用户主动换服务商时 false —— 老服务商的模型名在新服务商这儿没有意义，直接选第一个
- *
- * catalogModels：可选，把内置目录里的模型也并进来（标注「内置」）。
- * 生图那一组用得上 —— 服务商的模型列表里通常只有文本模型，
- * 不并进来的话用户根本选不到 glm-image 这种生图模型。
- * 只在界面上多给几个选项，不会去改用户的服务商配置。
- */
+/** 填一个「模型」下拉：模型来自对应服务商的「可用模型」。keepMissing：保存过的模型不在列表里时
+ *  补一个选项（打开设置 true，主动换服务商 false）。catalogModels：可选，把内置目录模型并进来。 */
 function fillModelSelect(select, providerId, current, emptyHint, keepMissing = true, catalogModels = null) {
   const provider = providerById(providerId);
   const models = provider && Array.isArray(provider.models) ? provider.models.filter(Boolean) : [];
@@ -268,8 +199,7 @@ function fillModelSelect(select, providerId, current, emptyHint, keepMissing = t
   }
 
   const items = [];
-  // 存过的值不在列表里（既不在服务商配置、也不在目录）也保留，别让用户的选择凭空消失。
-  // 它要排在分组/列表**最前面**，所以直接摆在 items 头上（不包 group）。
+  // 存过的值不在列表里也保留，别让用户的选择凭空消失；它要排最前面，所以不包 group。
   if (keepMissing && value && !all.includes(value)) items.push({ value, text: `${value}（不在列表里）` });
   for (const model of models) items.push({ value: model, text: model });
   for (const model of extra) items.push({ value: model, text: `${model}（内置）` });
@@ -280,18 +210,8 @@ function fillModelSelect(select, providerId, current, emptyHint, keepMissing = t
 
 // ------------------------------ 默认人设 ------------------------------
 
-/**
- * 「默认人设」是按**模型名**存的，所以必须回答两个不同的问题：
- *
- *   1. 这份人设生效时会取哪一条？ → defaultAssistantModel()
- *      口径和 data/cast.js 完全一致：会话自己的模型优先（每个会话都记着自己的），
- *      没有会话（比如空状态页）才退回设置里的当前模型。
- *   2. 弹窗现在编辑的是哪一条？ → editingAssistantModel()
- *      = 弹窗顶部那个下拉框选中的模型。
- *
- * 这两个**刻意分开**：只取 1 当编辑对象的话，弹窗永远只有会话那一个模型的一份，
- * 想给另一个模型配人设就没有入口。
- */
+/** 「默认人设」按**模型名**存：这里算「生效时取哪一条」（会话自己的模型优先，没有会话
+ *  才退回当前模型）；弹窗正在编辑的是哪条由 editingAssistantModel() 另算。 */
 function defaultAssistantModel() {
   const convo = activeConvo();
   const own = convo && String(convo.model || '').trim();
@@ -305,13 +225,8 @@ function assistantPersonaMap(settings) {
   return map && typeof map === 'object' && !Array.isArray(map) ? map : {};
 }
 
-/**
- * 弹窗顶部那个「给哪个模型」下拉框的可选项 = 顶栏切换模型时能选到的那些，
- * 一个不多一个不少（同样按服务商分组），这样两处说的是同一件事。
- *
- * 另外把 want 塞进去：会话用着一个「已经在服务商列表里删掉、但历史会话还记着」的
- * 模型时，它也必须能选中 —— 否则下拉框会静默落到别的模型上，等于编辑错了对象。
- */
+/** 弹窗「给哪个模型」下拉的可选项 = 顶栏能选到的那些（按服务商分组）。want 是会话记着但
+ *  服务商列表里已删的模型，也必须能选中，否则会静默落到别的模型上。 */
 function fillPersonaModelOptions(want) {
   const select = el.persona.model;
   if (!select) return;
@@ -358,16 +273,8 @@ function editingAssistantModel() {
   return picked || defaultAssistantModel();
 }
 
-/**
- * 把「下拉框选中那个模型的人设」灌进弹窗字段，并刷新设置页里那行入口的摘要。
- *
- * 弹窗字段和设置表单其实是同一份草稿，所以打开设置、打开弹窗、关弹窗、换编辑对象
- * 这几处都要调它 —— 保证 settings / 弹窗字段 / 入口摘要三方说的是同一件事。
- * 关弹窗时调它 = 把没保存的改动丢掉，免得设置那边点「保存」时把它一起带走。
- *
- * target 传值 = 强制把编辑对象换成它（打开设置时用，让下拉框每次都回到当前在用的模型，
- * 而不是留着上次翻过的那个）。不传 = 沿用下拉框里已经选好的那个。
- */
+/** 把下拉框选中那个模型的人设灌进弹窗字段，并刷新设置页入口摘要。打开设置 / 打开弹窗 /
+ *  关弹窗 / 换编辑对象都要调；关弹窗时调 = 丢掉没保存的改动。target 传值则强制换对象。 */
 function syncPersonaFields(settings, target) {
   const source = settings || state.settings || {};
   fillPersonaModelOptions(target === undefined ? editingAssistantModel() : target);
@@ -377,8 +284,7 @@ function syncPersonaFields(settings, target) {
 
   el.persona.name.value = entry.name || '';
   el.persona.text.value = entry.persona || '';
-  // 记下字段里这份草稿属于谁：change 事件里下拉框已经是新值了，那时候再问
-  // 「编辑的是哪个模型」会问到新模型头上，脏检查就成了假阳性。
+  // 记下这份草稿属于谁：change 时下拉框已是新值，再问会问到新模型上，脏检查就成了假阳性。
   personaShownModel = model;
 
   updatePersonaHint(source);
@@ -403,8 +309,7 @@ function updatePersonaHint(settings) {
   const others = configured - (name || hasText ? 1 : 0);
   const tail = others > 0 ? ` · 另有 ${others} 个模型配过` : '';
 
-  // 再说一句生效范围：这份人设**只管**没绑角色卡、也没进世界的通用对话。
-  // 不写清楚会被当成对所有对话生效的全局设定（进世界时拿它跟世界书打架）。
+  // 说清生效范围：这份人设只管没绑角色卡、也没进世界的通用对话。
   el.assistantHint.textContent =
     (name || hasText
       ? `「${model}」已设置：${name || '（没写名字）'}`
@@ -449,8 +354,7 @@ async function switchPersonaModel() {
 }
 
 function openPersonaDialog() {
-  // 先把服务商表单收进内存：用户可能刚在「可用模型」里敲了一个新模型名，
-  // 还没点保存就想给它配人设 —— 不收的话下拉框里根本没有它。
+  // 先把服务商表单收进内存：用户可能刚敲了新模型名还没保存，不收下拉框里就没有它。
   stashProviderForm();
   syncPersonaFields();
   el.personaModal.classList.remove('hidden');
@@ -469,8 +373,7 @@ async function savePersonaDialog() {
     return;
   }
 
-  // 走和设置页同一条保存链路（白名单 / 归一化 / 重绘都在里面）。
-  // silent=true：不关设置页、不弹「设置已保存」，提示由这里给得更准。
+  // 走和设置页同一条保存链路（白名单 / 归一化 / 重绘都在里面）；silent=true 不关设置页、不弹「已保存」。
   const savedModel = personaShownModel || editingAssistantModel();
   const prev = state.settings;
   // 保存失败时别关弹窗：关了等于把用户刚写的草稿一起丢掉。
@@ -481,17 +384,8 @@ async function savePersonaDialog() {
   if (state.settings !== prev) showToast(`已保存「${savedModel}」的默认人设`, 'ok');
 }
 
-/**
- * 「套用聊天风格模板」要填进去的那段。
- *
- * 为什么需要它：默认对话这一侧，system 提示词**只有用户自己写的这一段**。
- * chat.deepseek.com 那种「友好、自然、有温度」的聊天感，来自官方预置的提示词 ——
- * 走 API 拿不到。用户不写清楚，模型就退回最原始的「完成模式」：
- * 只求信息直达、不做任何修饰，读起来像在填表格。
- *
- * 所以这段刻意只讲**说话方式**、不设定具体人格 —— 人格留给用户自己写（第一行那个空位），
- * 填进去之后随便改。「留空 = 通用助手」的原则不变，它只是个起点。
- */
+/** 「套用聊天风格模板」的正文：只讲说话方式、不设定人格。默认对话的 system 提示词只有
+ *  用户写的这段，不写清楚模型就退回「完成模式」，读起来像在填表格。 */
 const PERSONA_TEMPLATE = [
   '（在这里写「你是谁」：名字、性格、说话习惯 —— 想怎么设定都行。写完可以把这一行删掉。）',
   '',
@@ -503,12 +397,8 @@ const PERSONA_TEMPLATE = [
   '- 有不同意见就直说，不必一味附和；不确定就说不确定，别编。'
 ].join('\n');
 
-/**
- * 一键填入聊天风格模板。
- *
- * 已有内容时先问一句：直接盖掉用户写的字是**撤不回来**的
- * （程序改 textarea.value 会清掉浏览器自己的撤销栈，Ctrl+Z 也救不回）。
- */
+/** 一键填入聊天风格模板。已有内容时先问一句：直接盖掉撤不回来
+ *  （程序改 textarea.value 会清掉浏览器的撤销栈，Ctrl+Z 救不回）。 */
 async function applyPersonaTemplate() {
   if (String(el.persona.text.value || '').trim()) {
     const ok = await confirmDialog({
@@ -522,19 +412,15 @@ async function applyPersonaTemplate() {
 
   el.persona.text.value = PERSONA_TEMPLATE;
   el.persona.text.focus();
-  // 选中第一行那个空位：用户直接打字就把「在这里写你是谁」替换掉了，
-  // 不用先自己删一遍。选中范围在程序改 value 之后设，所以一定生效。
+  // 选中第一行空位，用户直接打字就替换掉占位文字；范围在改 value 之后设所以一定生效。
   el.persona.text.setSelectionRange(0, PERSONA_TEMPLATE.indexOf('\n'));
   showToast('模板已填入 —— 改完记得点「保存」', 'ok');
 }
 
 // ------------------------------ 填表单 ------------------------------
 
-/**
- * 读一个已保存的数字。
- * ⚠️ `Number(null)` / `Number('')` 都是 0，不能直接拿 `Number.isFinite(Number(v))`
- *    判断「有没有存过」—— 那会把 null 当成 0 填进表单。这里显式把空值当缺失。
- */
+/** 读一个已保存的数字。⚠️ `Number(null)` / `Number('')` 都是 0，不能直接用它判断「有没有存过」，
+ *  那会把 null 当成 0 填进表单；这里显式把空值当缺失。 */
 function savedNumber(value, fallback) {
   if (value === null || value === undefined || value === '') return fallback;
   const n = Number(value);
@@ -556,10 +442,8 @@ function fillSettingsForm(settings) {
   const turns = savedNumber(settings.maxTurns, 20);
   el.s.maxTurns.value = String(turns >= 1 ? Math.floor(turns) : 20);
 
-  // 默认人设：弹窗字段跟着设置表单一起刷新，这样「设置里点保存」读到的
-  // 永远是当前这一份 —— 用户从头到尾没开过弹窗，也不会把它清空。
-  // 名字留空是合法的（= 不提名字），所以原样回填、不替用户补。
-  // 每次都强制把编辑对象拨回「当前在用的那个模型」：上次翻看过的不算数。
+  // 弹窗字段跟着设置表单一起刷新，「设置里点保存」读到的才是当前这份；每次都把编辑对象
+  // 拨回当前在用的模型。名字留空合法（= 不提名字），原样回填、不替用户补。
   syncPersonaFields(settings, defaultAssistantModel());
 
   // 生图：下拉里放一个「不启用」+ 所有服务商
@@ -567,15 +451,13 @@ function fillSettingsForm(settings) {
     el.s.imageProvider,
     [
       { value: '', text: '（不启用生图）' },
-      // 本机桥接现在有独立的 /draw 接口（走本地 ComfyUI），可以选进生图；
-      // 配图时 renderer 会按「生图服务商是不是桥接」分流到 /draw 或 /images/generations
+      // 本机桥接有独立的 /draw（走本地 ComfyUI），可以选进生图；配图时按是不是桥接分流。
       ...providers().map((provider) => ({ value: provider.id, text: provider.name }))
     ],
     { prefer: providers().some((p) => p.id === settings.imageProviderId) ? settings.imageProviderId : '' }
   );
   el.s.imageModel.value = settings.imageModel || '';
-  // 生图模型下拉要并上内置目录 —— 服务商的模型列表里通常只有文本模型，
-  // 不并的话用户根本选不到 glm-image 这种生图模型
+  // 生图模型下拉同样要并上内置目录，否则选不到 glm-image
   fillModelSelect(
     el.s.imageModel,
     el.s.imageProvider.value,
@@ -630,12 +512,7 @@ function fillProviderForm() {
   el.btnDelProvider.disabled = providers().length <= 1;
 }
 
-/**
- * 一个服务商在卡片里显示的那行状态。
- *
- * 挑服务商时真正要判断的就是这三件事，所以直接写进卡片，
- * 别再塞进 title 里（触屏和键盘都读不到）。
- */
+/** 服务商卡片那行状态：挑服务商要判断的信息直接写进卡片，别塞 title（触屏和键盘读不到）。 */
 function providerMeta(p) {
   if (isBridgeProvider(p)) return '本地桥接 · 免 Key';
   const models = Array.isArray(p.models) ? p.models.filter(Boolean) : [];
@@ -705,13 +582,7 @@ function renderProviderTabs() {
   renderSectionStats();
 }
 
-/**
- * 分组头部那颗统计小胶囊。
- *
- * 只给「一眼能数出来」的几组填，填不出确切数字的就留空
- * （.section-stat:empty 会自己隐藏，不会留一道空缝）。
- * 数字的准头以「用户自己勾了几个 / 加了几家」为准，不做额外推断。
- */
+/** 分组头部那颗统计小胶囊：只给数得出来的组填，填不出就留空（.section-stat:empty 自己隐藏）。 */
 function renderSectionStats() {
   const set = (node, text) => {
     if (!node) return;
@@ -814,14 +685,12 @@ async function removeProvider() {
     state.settings.activeModel = asArray(next.models)[0] || '';
   }
 
-  // 关键：先把表单切到下一个服务商。
-  // 否则紧接着的 saveSettings → stashProviderForm 会拿被删服务商的旧表单值
-  // 覆盖掉幸存服务商的名称 / 地址 / API Key。
+  // 关键：先把表单切到下一个服务商，否则紧接着的 saveSettings → stashProviderForm 会拿
+  // 被删服务商的旧表单值覆盖掉幸存服务商的名称 / 地址 / API Key。
   renderProviderTabs();
   fillProviderForm();
 
-  // 写盘失败时 saveSettings 已经弹过错误；这里不能再说「已删除」，
-  // 而且内存里的删除也要退回去，保持界面和磁盘一致。
+  // 写盘失败时 saveSettings 已经弹过错误：这里不能再说「已删除」，内存里的删除也要退回去。
   if (!(await saveSettings(true))) {
     state.settings.providers = before.providers;
     state.settings.activeProviderId = before.activeProviderId;
@@ -836,18 +705,8 @@ async function removeProvider() {
 
 // ------------------------------ 保存 ------------------------------
 
-/**
- * 把数字输入框读成一个数。
- *
- * ⚠️ 不能只用 `Number(v)` + `isNaN` 兜底：**空输入框的 `Number('')` 是 0，不是 NaN**，
- *    于是所有 `isNaN(...) ? 默认值 : ...` 的分支全是死代码，清空输入框会静默变成：
- *    回复上限 → 被夹到 64（每条回复都被截断）、对话轮数 → 1（历史等于没了）、
- *    递归深度 → 0（递归关掉）、温度 → 0。界面重开还显示那个被夹过的值，
- *    用户根本不知道是自己手滑清空的。
- *
- * 空 / 写不出数 → 退回**原来存着的那个值**（比"悄悄改成默认值"更贴近直觉：
- * 「我没填」就当我没改），再没有才用 fallback 兜底。
- */
+/** 把数字输入框读成一个数。⚠️ 不能只用 `Number(v)` + isNaN 兜底：空输入的 `Number('')` 是 0，
+ *  清空会静默变成「回复上限 64 / 轮数 1 / 递归深度 0 / 温度 0」。空 → 退回原来存着的值。 */
 function numberFrom(input, fallback, min, max, integer) {
   const rawText = String((input && input.value) || '').trim();
   const raw = Number(rawText);
@@ -865,8 +724,7 @@ function readSettingsForm() {
     providers: providers(),
     activeProviderId: saved.activeProviderId,
     activeModel: saved.activeModel,
-    // 兜底用**原来存着的值**，不是硬编码的 8192：清空输入框 = 没改，
-    // 用常量兜底会把「磁盘上明明是 512」悄悄改成 8192。
+    // 兜底用**原来存着的值**而不是硬编码 8192：清空 = 没改，用常量兜底会把磁盘上的 512 悄悄改成 8192。
     temperature: numberFrom(
       el.s.temp,
       savedNumber(saved.temperature, 0.7),
@@ -913,8 +771,7 @@ function readSettingsForm() {
     ragEnabled: el.s.ragEnabled.checked,
     embeddingProviderId: el.s.embeddingProvider.value || '',
     embeddingModel: el.s.embeddingModel.value.trim(),
-    // 默认人设：只动**当前模型**那一条，别的模型的条目原样带回去。
-    // 名字和人设都清空 = 这个模型不要人设了，把那条删掉（别在 config.json 里留空壳）。
+    // 默认人设：只动**当前模型**那一条；名字和人设都清空 = 删掉这条，别在 config.json 里留空壳。
     assistantPersonas: (() => {
       const map = { ...assistantPersonaMap(state.settings) };
       const model = editingAssistantModel();
@@ -930,8 +787,7 @@ function readSettingsForm() {
 }
 
 export function openSettings() {
-  // 已经在这一屏了（比如又点了一下侧栏那颗「设置」）：**别重灌表单** ——
-  // 那会把没保存的改动当场冲掉。什么都不做即可。
+  // 已经在这一屏了：**别重灌表单**，那会把没保存的改动当场冲掉。什么都不做即可。
   if (currentViewName() === 'settings') return;
 
   // 记下来处：保存 / 返回 / Esc 都回到它
@@ -951,33 +807,22 @@ export function openSettings() {
   // 先把内容填好再切屏（反了的话，切过去那一瞬间显示的是上一次的旧值）
   showView('settings');
 
-  // 分组选中态要在这一屏可见之后再铺：非当前的组靠 CSS（display:none）收起来，
-  // 顺序反了会让「该显示的那一组」先按旧状态闪一下。
+  // 分组选中态要等这一屏可见后再铺，顺序反了会先按旧状态闪一下。
   syncSettingsSection();
 
-  // 桌宠区块要现拉一次状态（它改的是另一个窗口里的东西，不能拿旧快照画）。
-  // 不 await：切屏不该等一个 IPC 往返才完成，区块自己会随后填上。
+  // 桌宠区块要现拉状态（改的是另一个窗口里的东西）；不 await —— 切屏不该等 IPC 往返。
   openPetSection().catch((err) => console.error('桌宠区块加载失败', err));
 
-  // 外观那一组也回填一遍：它和上面那张表单不是一套数据（读的是 state.settings
-  // 里的 chatFontSize / chatBoldColor / chatBackground），进屏时得自己刷一次。
+  // 外观那一组也回填一遍：它读的是 state.settings 里的字号 / 加粗色 / 背景，不是上面那张表单。
   renderAppearanceForm();
 
-  // 焦点落在页头那颗「返回」上：键盘（Esc / Tab）有个明确的落点。
-  //
-  // ⚠️ **不要**去聚焦任何输入框：<input type="number"> 一获得焦点就**整段选中** ——
-  // 每次进设置，第一眼都是「温度 0.7」被高亮成一块蓝；而且那个框还可能在
-  // 没选中的分组里（display:none），更不该往里丢焦点。
+  // 焦点落在页头「返回」上。⚠️ **不要**聚焦任何输入框：<input type="number"> 一获得焦点
+  // 就整段选中，而且它可能还在 display:none 的分组里。
   if (el.btnBackSettings) el.btnBackSettings.focus();
 }
 
-/**
- * 离开设置页：回到进来之前那一屏。
- *
- * 保存 / 返回 / Esc 三条路都走它。
- * 只保证回到**视图**：进来之前要是正开着一个弹窗（比如从桌宠右键菜单跳进来时
- * 旁边还开着记忆弹窗），那个不管，它自己那套 Esc / 关闭按钮照旧。
- */
+/** 离开设置页，回到进来之前那一屏（保存 / 返回 / Esc 都走它）。
+ *  只保证回到视图：旁边开着的弹窗不管，它自己那套 Esc / 关闭按钮照旧。 */
 export function leaveSettings() {
   showView(returnView === 'settings' ? 'chat' : returnView);
 }
@@ -1004,20 +849,17 @@ async function saveSettings(silent) {
   }
 
   renderHeader();
-  // renderModelSwitch + renderMessages 都在入口层，一并交给它（见文件头）
+  // renderModelSwitch + renderMessages 都在入口层，一并交给它
   afterSettingsSave();
 
   return state.settings;
 }
 
-// ------------------------------ 内置目录兜底导入 ------------------------------
-// 目录数据和生图尺寸规则都在 views/settingsCatalog.js。这里只留**往服务商表单里
-// 写字**的那一步 —— 「拉取模型」失败、且失败原因像是「这家压根没有模型列表接口」
-// （常见 406）时，把已知模型填进来，别让用户卡在一个看不懂的错误码上。
+// 内置目录兜底：目录数据和尺寸规则在 views/settingsCatalog.js，这里只留「往服务商表单里写字」
+// 那一步 —— 拉取模型失败且像是「这家没有模型列表接口」（常见 406）时把已知模型填进来。
 
 /**
- * 把内置目录里的模型填进模型输入框。
- * replace=false 时只补空缺，不动用户已经写好的内容。
+ * 把内置目录里的模型填进模型输入框；replace=false 时只补空缺，不动用户已写好的内容。
  */
 function applyCatalogModels(catalog, replace) {
   if (!catalog) return 0;
@@ -1077,8 +919,7 @@ async function fetchModels() {
     stashProviderForm();
     refreshModelSwitch();
 
-    // 模型列表变了，生图 / 向量那两组下拉也要跟着刷新 ——
-    // 刚拉到的列表里可能正好有你要的画图模型
+    // 模型列表变了，生图 / 向量两组下拉也要跟着刷新
     fillModelSelect(
       el.s.imageModel,
       el.s.imageProvider.value,
@@ -1098,12 +939,8 @@ async function fetchModels() {
   } catch (err) {
     const message = (err && err.message) || '获取模型列表失败';
 
-    // 该服务商没有模型列表接口时（智谱就是），不要只丢一个 HTTP 错误码给用户，
-    // 直接把已知模型填上，让流程能继续走下去。
-    //
-    // ⚠️ 但要把**原始的报错**一起带上：404 既可能是「这家没有 /models」，
-    //    也可能是「接口地址写错了」。只报「不支持拉取模型列表」会把人往错误方向带，
-    //    不如让 HTTP 那句话一起露出来，地址到底对不对一眼能判断。
+    // 该服务商没有模型列表接口时（智谱就是），直接把已知模型填上，让流程能继续走。
+    // ⚠️ 但要把**原始报错**一起带上：404 也可能是地址写错，只报「不支持拉取」会带偏方向。
     const catalog = catalogForBaseUrl(provider.baseUrl);
     if (catalog && looksLikeUnsupportedModelList(message)) {
       const hasExisting = String(el.p.models.value || '').trim().length > 0;

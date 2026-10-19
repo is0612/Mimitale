@@ -1,31 +1,15 @@
 'use strict';
 
-// ============================================================================
-//  tools/test-ui-controls.js —— 控件层那几件「眼睛很难看出来」的纯逻辑
-//
-//  跑法： node --test tools/test-ui-controls.js
-//        （或 node tools/test-ui-controls.js）
-//
-//  为什么单独一份：ui/select.js 里真正容易错的不是 DOM，而是这几件事 ——
-//    · 一张卡的下拉是**按服务商分组**的（optgroup），组标题什么时候该露、
-//      什么时候该省（只有一个组还顶一行组名 = 白吃掉一行可见项）
-//    · 上下键走到头该停住还是绕回去、禁用项要不要跳过
-//    · 弹层摆哪：默认贴下面，下面装不下要翻到上面，两边都装不下要夹回视口内
-//    · 连着打字定位（原生下拉的肌肉记忆：同一个字母连按 = 在几行之间循环）
-//  这些错了只会表现成「列表位置怪怪的 / 少了一行 / 键盘跳过了某项」，
-//  盯着界面看很难稳定复现，所以在这里钉死。
-//
-//  ⚠️ 这里**不碰真界面**：全部是纯数据进、纯数据出。真正的开合/点击那一段
-//     由 tools/smoke-renderer.js 在真页面里点（那边才有点得到的 DOM）。
-// ============================================================================
+// tools/test-ui-controls.js —— 下拉控件那几件「眼睛看不出来」的纯逻辑（分组标题 / 上下键 / 弹层摆位 / 打字定位）
+//   跑法：node --test tools/test-ui-controls.js
+// ⚠️ 不碰真界面：纯数据进纯数据出；开合/点击那一段由 tools/smoke-renderer.js 在真页面里点
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-// ui/select.js 只 import ui/build.js，而 build.js 里的 document 调用都在函数体里，
-// 所以模块本身能在纯 node 下加载 —— 不用像 test-quick-phrases.js 那样塞假 document。
+// select.js 只 import build.js，而它的 document 调用都在函数体里，所以纯 node 下能直接加载
 const SELECT_URL = pathToFileURL(
   path.join(__dirname, '..', 'renderer', 'js', 'ui', 'select.js')
 ).href;
@@ -35,7 +19,7 @@ test.before(async () => {
   mod = await import(SELECT_URL);
 });
 
-// ---- 造假 DOM：readGroups 只认 tagName / children / value / textContent / disabled ----
+// 假 DOM 只需支持 readGroups 认的这几个字段
 const opt = (value, text, extra) => ({
   tagName: 'OPTION',
   value,
@@ -45,9 +29,6 @@ const opt = (value, text, extra) => ({
 });
 const grp = (label, children) => ({ tagName: 'OPTGROUP', label, children });
 
-// ---------------------------------------------------------------------------
-//  读选项
-// ---------------------------------------------------------------------------
 
 test('readGroups：没有 optgroup 的下拉 = 一组，组名空（不显示标题）', () => {
   const groups = mod.readGroups({ children: [opt('a', '甲'), opt('b', '乙')] });
@@ -78,9 +59,6 @@ test('readGroups：空下拉 / 没有 children 都给空数组，不抛错', () 
   assert.deepEqual(mod.readGroups(null), []);
 });
 
-// ---------------------------------------------------------------------------
-//  显示清单
-// ---------------------------------------------------------------------------
 
 test('buildRenderList：只有一个分组时不插组标题行', () => {
   const list = mod.buildRenderList([{ label: '甲', rows: [{ value: 'a', label: 'A' }] }]);
@@ -128,9 +106,6 @@ test('renderRows：组标题不是行（键盘不落在它上面）', () => {
   assert.deepEqual(rows.map((r) => r.value), ['a', 'b']);
 });
 
-// ---------------------------------------------------------------------------
-//  上下键
-// ---------------------------------------------------------------------------
 
 const three = [{}, {}, {}].map((_, i) => ({ value: String(i), label: String(i), disabled: false }));
 
@@ -180,9 +155,6 @@ test('firstEnabled / lastEnabled：只认可用的那一头', () => {
   assert.equal(mod.lastEnabled([]), -1);
 });
 
-// ---------------------------------------------------------------------------
-//  打字定位
-// ---------------------------------------------------------------------------
 
 const words = [
   { label: 'apple', disabled: false },
@@ -239,9 +211,6 @@ test('typeaheadQuery：超过 700ms 就重开一个词（= 同一个字母连按
   assert.deepEqual(mod.typeaheadQuery(first, 'b', 1700), { text: 'bb', at: 1700 });
 });
 
-// ---------------------------------------------------------------------------
-//  弹层位置
-// ---------------------------------------------------------------------------
 
 test('popoverWidth：不窄于触发器，也不窄于 140（64px 的属性下拉列表也得能读）', () => {
   assert.equal(mod.popoverWidth(64, 1000), 140);
@@ -302,13 +271,7 @@ test('placePopover：视口比最小宽度还窄时也不给出负坐标', () =>
   assert.ok(spot.top >= 8);
 });
 
-// ---------------------------------------------------------------------------
-//  控件规范件：ui/controls.js + ui/build.js 的 button
-//
-//  h() / controls.js 要 document.createElement，所以这里塞一个**只够用**的假
-//  DOM（不引 jsdom）。它只实现这几件事：setAttribute / getAttribute /
-//  appendChild / children / className / textContent / <select> 的 options。
-// ---------------------------------------------------------------------------
+// 塞一个只够用的假 DOM（不引 jsdom）：setAttribute / appendChild / className / <select> 的 options
 
 function makeFakeDocument() {
   const textNode = (text) => ({ nodeType: 3, textContent: String(text) });
@@ -333,8 +296,7 @@ function makeFakeDocument() {
         this.children.push(child);
         return child;
       },
-      // build.js 的 clear() 就是 `node.innerHTML = ''`，假 DOM 得认这一下，
-      // 否则「重铺之前先清空」根本测不出来（测试会假绿）
+      // 假 DOM 得认 innerHTML = ''（build.js 的 clear()）：不认的话「重铺之前先清空」会假绿
       get innerHTML() {
         return '';
       },
@@ -457,9 +419,6 @@ test('field：标签 + 控件 + 说明，默认两列（不加 field-stack）', 
 });
 
 test('field：stack / hint / icon 各自落到该落的地方', () => {
-  // 控件传什么都行（这条测的是 field 那套骨架）。多行框现在一律走组件
-  // （`mTextarea`，见 components/textarea.js）—— 原来这里用的 `controls.textarea()`
-  // 2026-10-16 已随迁移删掉（生产代码里零调用点，留着就是第二套实现）。
   const box = controls.field({
     label: '开场白',
     control: controls.input({}),
@@ -553,9 +512,7 @@ test('fillSelect：select 传 null 不抛错（拿不到节点时静默无害）
   assert.equal(controls.fillSelect(null, [{ value: 'a' }]), '');
 });
 
-// ---------------------------------------------------------------------------
-//  resolveSelect：铺选项要认得「原生 select」和「组件 m-select」两种
-// ---------------------------------------------------------------------------
+// 铺选项要认得「原生 select」和「组件 m-select」两种
 
 test('resolveSelect：原生 <select> 原样返回', () => {
   const native = { tagName: 'SELECT' };

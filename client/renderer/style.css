@@ -384,6 +384,8 @@ m-button.btn-new > .mi-btn__control {
 .char-portrait:focus-visible,
 .char-expr-thumb:focus-visible,
 .char-expr-default:focus-visible,
+.char-expr-zoom:focus-visible,
+.char-expr-del:focus-visible,
 .check > input[type="checkbox"]:focus-visible,
 .wb-cover-frame:focus-visible,
 .panel-all:focus-visible,
@@ -5185,30 +5187,51 @@ m-button.btn-new > .mi-btn__control:hover {
   padding: 4px 10px;
 }
 
+/* 表情墙：按可用宽度自动排，1440 下 5 列 */
 .char-expr-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+/* 空状态横跨整行；加 `.char-expr-list >` 前缀是为了不和共用那条 .char-expr-empty 撞成重复选择器 */
+.char-expr-list > .char-expr-empty {
+  grid-column: 1 / -1;
+}
+
+.char-expr-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--ce-line);
+  border-radius: var(--radius);
+  background: var(--bg-card);
 }
 
-
-.char-expr-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+/* 默认脸那格挑主色描边 */
+.char-expr-card.is-default {
+  border-color: var(--accent-border);
+  background: var(--accent-wash);
 }
 
-/* 缩略图：1:1，和状态卡上铺的那张同画幅 */
-.char-expr-thumb {
-  flex: 0 0 auto;
+/* ⚠️ 浮钮必须是缩略图的兄弟，不能塞进去：缩略图是 <button>，按钮套按钮不合法 */
+.char-expr-shot {
   position: relative;
-  width: 64px;
-  height: 64px;
-  padding: 0;
-  overflow: hidden;
+}
+
+/* 缩略图：1:1，铺满格子宽 */
+.char-expr-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  overflow: hidden;
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -5223,57 +5246,112 @@ m-button.btn-new > .mi-btn__control:hover {
 /* 1px 实边也是描边，但它是主色/边框色，在浅底差分的轮廓上几乎看不出来，
    所以再补一门 --art-edge（背景色在图片下面，不受影响）。 */
 
+/* 老卡里可能存着非 1:1 的图，铺满会拉扁，裁边；带前缀避开重复选择器 */
+.char-expr-card .char-expr-thumb img {
+  object-fit: cover;
+}
 
 .char-expr-thumb .char-avatar-empty {
   font-size: var(--fs-xs);
 }
 
-.char-expr-fields {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+/* --- 图上的三个浮钮 ---------------------------------------------------------
+   24px 深底白字（底图什么颜色都读得出来）。底座各写一份而不是合成共用选择器：
+   同一选择器出现两次会被 check-css 判重复。 */
 
-/* ⚠️ 带 [type="text"]（= (0,2,1)）：通用那条 input[type="text"] 是 (0,1,1)
-   且写在文件更后面，只写类名的话宽高会被它盖掉。 */
-/* ⚙ 已组件化（2026-10-16）：那两个输入框是 <m-input size="xs">，
-   26px / xs 字号 / 4px 8px 内边距全归组件；宽度由 .char-expr-fields 的
-   纵向 flex（默认 stretch）和组件外层的 width: 100% 负责，这里不用再写。 */
-
-.char-expr-del {
-  flex: 0 0 auto;
+/* 放大镜：右上角 */
+.char-expr-zoom {
+  position: absolute;
+  top: 6px;
+  right: 6px;
   width: 24px;
   height: 24px;
   padding: 0;
-  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
   border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-faint);
+  background: rgba(20, 16, 22, 0.55);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  /* 透明时不吃点击，否则点图换图会误触 */
+  pointer-events: none;
+  transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 删除：左上角 —— 和右上角的放大镜放对角 */
+.char-expr-shot .char-expr-del {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: rgba(20, 16, 22, 0.55);
+  color: #fff;
   font-size: var(--fs-xs);
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* hover 或键盘焦点才浮出来 */
+.char-expr-card:hover .char-expr-zoom,
+.char-expr-card:hover .char-expr-del,
+.char-expr-card .char-expr-zoom:focus-visible,
+.char-expr-card .char-expr-del:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
 
-/* 默认脸开关：☆ 空 / ★ 实。和删除按钮同尺寸，行里才不会高低不齐。
-   它是**单选** —— 点亮一条，别的自动熄掉（逻辑在 toggleDefaultExpression）。 */
-.char-expr-default {
-  flex: 0 0 auto;
+/* 压过共用那颗的浅粉底 —— 白图标会看不见 */
+.char-expr-shot .char-expr-zoom:hover {
+  background: var(--accent);
+}
+
+.char-expr-shot .char-expr-del:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* 默认脸开关常显：它是状态，藏了就看不出现在选的是哪张 */
+.char-expr-shot .char-expr-default {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
   width: 24px;
   height: 24px;
   padding: 0;
-  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
   border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-faint);
+  background: rgba(20, 16, 22, 0.45);
+  color: rgba(255, 255, 255, 0.82);
   font-size: var(--fs-sm);
   cursor: pointer;
 }
 
-.char-expr-default:hover {
-  background: var(--bg-side);
-  color: var(--text);
+.char-expr-shot .char-expr-default:hover {
+  background: rgba(20, 16, 22, 0.7);
+  color: #fff;
+}
+
+/* 选中态压过共用那条（浅粉底配主色字在图上会糊） */
+.char-expr-shot .char-expr-default.is-on {
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 
@@ -5411,15 +5489,8 @@ m-button.btn-new > .mi-btn__control:hover {
   margin-bottom: 0;
 }
 
-/* 左栏底部：保存角色 + 返回 + 删除角色（V2 从底部通栏搬进来的）。
-   margin-top:auto 把它钉在栏底，那块空白也就有了归属。
-
-   ⚠️ 这一块的高度是**紧的**：1440×900 下左栏原来刚好装得下（见上面 char-media-top
-   那条注释，「多 18px 就出滚动条」）。2026-10-19 往这里加「保存角色」、又加「返回」，
-   同时拿掉了原来那行来源提示（.foot-hint）才重新装回来 ——
-   以后还想往左栏底部塞东西，先看这一栏还剩多少余量。
-   吸底（sticky）留着当保险：真溢出时它钉在栏底不动，字段在它下面滚，
-   主操作不会跟着滚出去。 */
+/* 左栏底部：保存 / 导出 · 返回 / 删除，三行。
+   ⚠️ 高度是紧的：1440×900 下刚好装得下，再塞东西就长出栏内滚动条。 */
 #view-char-editor .char-rail-foot {
   position: sticky;
   bottom: 0;
@@ -5434,18 +5505,29 @@ m-button.btn-new > .mi-btn__control:hover {
   gap: 6px;
 }
 
-/* 保存 / 返回 / 删除角色都铺满栏宽（宿主），文字靠左是里层的对齐 —— 写在宿主上没效果。 */
+/* 铺满栏宽写在宿主上，文字靠左是里层的对齐 */
 #view-char-editor .char-rail-foot m-button {
   width: 100%;
 }
 
-#view-char-editor .char-rail-foot m-button > .mi-btn__control {
-  justify-content: flex-start;
+/* 导出 / 返回 并排：左栏净宽 188px，各占一半，别往里加更长的文案 */
+#view-char-editor .char-rail-pair {
+  display: flex;
+  gap: 6px;
 }
 
-/* 头像 + 形象：一排两个，底边对齐（旧版用 position:absolute + top:150px 的
-   魔法数把头像钉在形象旁边，pane 一变高就错位 —— 改成普通 flex 行布局）。
-   「点击上传」小字 / 「清除」按钮的字号沿用自己的通用规则，不再压成 9/10px。 */
+#view-char-editor .char-rail-pair m-button {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+}
+
+/* 删除单独收尾 */
+#view-char-editor .char-rail-foot #btn-del-char {
+  margin-top: 6px;
+}
+
+/* 头像 + 形象：一排两个，底边对齐 */
 #view-char-editor .char-avatar {
   width: 56px; /* 42px 的圈装不下「点击上传」四个字，编辑页放大一档当好点击目标 */
   height: 56px;

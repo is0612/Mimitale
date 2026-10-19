@@ -1,21 +1,8 @@
 'use strict';
 
-// ============================================================================
-//  data/petContext.js —— 「该不该说话、说什么给谁听」这一层
-//
-//  判断放在主界面而不是主进程，理由见 main/pet-ipc.js 顶部那段：
-//  会话、最近几条、摘要、状态面板都在渲染层的内存里，主进程只有一个磁盘上的
-//  conversations.json，让它还原「现在聊到哪了」等于把一份逻辑抄两遍。
-//
-//  这个模块干三件事：
-//    1. 缓存一份桌宠配置（设置页和右键菜单改完会推 pet:changed 过来刷新）
-//    2. 按「每隔 N 轮」计数，决定这一轮要不要说
-//    3. 把上下文打包成一小份交给主进程（**不是完整历史**，见下面 buildPetContext）
-//
-//  ⚠️ 宠物说的话**永远不写进 convo.messages**。
-//     写进去角色下一轮就会「听见」宠物说话，扮演当场崩 —— 这是硬红线，
-//     记忆走的是主进程那边的 data/pet/memory（见 main/pet-store.js）。
-// ============================================================================
+// data/petContext.js —— 桌宠「该不该说话、说什么给谁听」这一层（判断放渲染层，理由见 main/pet-ipc.js 顶部）
+// 三件事：缓存桌宠配置（改完会推 pet:changed 刷新）、按「每隔 N 轮」计数决定这轮说不说、把上下文打包交给主进程。
+// ⚠️ 宠物说的话**永远不写进 convo.messages** —— 写进去角色下一轮就会「听见」宠物说话，扮演当场崩（记忆走 main/pet-store.js）。
 
 import { api } from '../core/api.js';
 import { activeConvo, asArray } from '../core/util.js';
@@ -36,9 +23,7 @@ const MAX_MESSAGE_CHARS = 500;
 /** 状态面板最多带几个字段 */
 const MAX_PANEL_FIELDS = 8;
 
-// ---------------------------------------------------------------------------
-//  配置缓存
-// ---------------------------------------------------------------------------
+// --- 配置缓存 ---
 
 let petCache = null;
 
@@ -57,9 +42,7 @@ export function petState() {
   return petCache;
 }
 
-// ---------------------------------------------------------------------------
-//  上下文
-// ---------------------------------------------------------------------------
+// --- 上下文 ---
 
 /** 状态面板快照：宠物靠它就能看出「刚才好感涨了」这类事，不用去啃正文 */
 function panelSnapshot(convo) {
@@ -79,26 +62,14 @@ function panelSnapshot(convo) {
 }
 
 /**
- * 打包给宠物看的上下文。
- *
- * **这里刻意不发完整历史** —— 那是 O(n²) 的烧钱法，而且没必要：
- * 宠物只要知道「刚才发生什么」就能插一句嘴。所以给的是
- * 「最近 6 条 + 主对话摘要 + 状态面板」，三样都是现成的，几乎零新增成本：
- *   · convoContextMessages 已经按 maxTurns 裁好了
- *   · formatSummaryForPrompt 是早就算好的剧情摘要
- *   · 面板本来就是结构化数据，比读正文准得多
- *
- * 返回的形状要和 main/pet-brain.js 的 buildUserPrompt 对得上。
+ * 打包给宠物看的上下文：给「最近 6 条 + 摘要 + 状态面板」三样现成的，**刻意不发完整历史**（O(n²) 烧钱且没必要）。⚠️ 形状要和 main/pet-brain.js 的 buildUserPrompt 对得上。
  */
 export function buildPetContext() {
   const convo = activeConvo();
   if (!convo) return { convoTitle: '', characters: '', recent: [], summary: '', panel: '' };
 
-  // 助手那侧显示成谁，交给 cast.js 的 speakerName 统一裁决：
-  // 绑了卡 → 卡名；进了世界 → 世界名；都没有 → 「默认人设」那个名字。
-  // ⚠️ 别在这里直接取 assistantName：绑卡 / 进世界的会话里，助手那些消息
-  //    会被贴上「默认人设」的名字，宠物会被绕晕（明明在演顾言，上下文里
-  //    却写着这些台词是「团子」说的）。
+  // 助手显示成谁交给 cast.js 的 speakerName 裁决（绑卡 → 卡名；进世界 → 世界名；都没有 → 默认人设名）。
+  // ⚠️ 别直接取 assistantName：会贴上「默认人设」的名字，宠物会被绕晕。
   const charName = speakerName(convo) || '';
   const userName = convoUserName(convo) || '我';
   const panelFields = convoPanelFields(convo);
@@ -126,15 +97,10 @@ export function buildPetContext() {
   };
 }
 
-// ---------------------------------------------------------------------------
-//  触发
-// ---------------------------------------------------------------------------
+// --- 触发 ---
 
 /**
- * 「已经过去几轮」按会话分开数。
- *
- * 只在内存里，不落盘：重启之后从头数起，代价顶多是「刚开软件那一轮不说」，
- * 而落盘要多维护一个文件、还要处理读失败 —— 不值得。
+ * 「已经过去几轮」按会话分开数，只在内存里。⚠️ 不落盘是刻意的：重启从头数起代价只是「刚开那一轮不说」，落盘要多维护一个文件、还要处理读失败。
  */
 const turnCounters = new Map();
 
@@ -155,11 +121,7 @@ export function turnsUntilNextSpeak() {
 }
 
 /**
- * 一轮角色回复刚结束时调一次。
- *
- * 四道检查，全过了才真的开口：
- *   ① 桌宠功能开着 ② 主动发言没暂停 ③ 没在静音期 ④ 攒够轮数了
- * 任何一条挡下都只是「这次不说」，不报错 —— 用户不该看到宠物相关的报错。
+ * 一轮角色回复刚结束时调一次：① 桌宠开着 ② 主动发言没暂停 ③ 没在静音期 ④ 攒够轮数，全过了才真开口；任何一条挡下都只是「这次不说」，不报错。
  */
 export async function maybePetAutoSpeak() {
   const config = petCache && petCache.config;
@@ -167,10 +129,7 @@ export async function maybePetAutoSpeak() {
 
   if (!config || !config.enabled || !pet) return { ok: false, skipped: true, why: 'off' };
   if (!pet.speakEnabled) return { ok: false, skipped: true, why: 'paused' };
-  // 「隐藏桌宠」= 用户不想看见它，那也不该听见它。和上面几个闸门同一个口径：
-  // 隐藏期间不攒轮数，而且要把**已经攒的那部分清掉** —— 只「不计数」是不够的，
-  // 攒到 N-1 再藏、重新显示时下一轮照样立刻开口，正是注释里说的
-  // 「一显示出来就蹦一句，像是隐藏根本没用」。
+  // 隐藏期间不攒轮数，且要把**已经攒的那部分清掉** —— 只「不计数」不够：攒到 N-1 再藏、重新显示时照样立刻开口。
   if (!pet.visible) {
     const hiddenConvo = activeConvo();
     if (hiddenConvo) turnCounters.delete(hiddenConvo.id);
@@ -192,10 +151,7 @@ export async function maybePetAutoSpeak() {
   return speakNow('auto');
 }
 
-/**
- * 立刻说一次（用户在右键菜单点「让桌宠现在说话」、或设置页点预览走的是另一条路）。
- * reason 决定要不要写记忆：'preview' 永远不写。
- */
+/** 立刻说一次（右键菜单「现在说话」走这里）；reason 决定要不要写记忆，'preview' 永远不写 */
 export async function speakNow(reason) {
   const context = buildPetContext();
   try {
@@ -208,13 +164,7 @@ export async function speakNow(reason) {
   }
 }
 
-/**
- * 设置页的「预览」。
- *
- * 和 speakNow 的区别只有一个：**reason 是 preview，主进程那边不会写记忆**，
- * 也不会写主对话记录。预览是用来试人格和温度的，点十次也不该在宠物脑子里
- * 留下十句话。
- */
+/** 设置页的「预览」：与 speakNow 唯一区别是 reason = preview —— 主进程不写记忆、也不写主对话记录 */
 export function previewSpeak() {
   return speakNow('preview');
 }

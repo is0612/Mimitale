@@ -1,48 +1,23 @@
 'use strict';
 
-// ============================================================================
-//  views/aiGen.js —— 「让 AI 生成一个角色」
-//
-//  两个入口共用这一个弹窗，差别只在喂给模型的上下文：
-//    · 角色库入口（scope='library'）—— 只给用户写的那段描述，通用型角色
-//    · 世界书入口（scope='worldbook'）—— 额外给这本书的名称、开场白、
-//      按描述筛出来的条目、以及已有的副本名单。生成的是这个世界里的 NPC
-//      （酒馆的小二、咖啡店的老板娘这种），名字和用词要跟世界观对得上。
-//
-//  生成完**不落盘**：把字段交给角色编辑器，让它开一份新草稿（和点「新建角色」
-//  是同一条路）。用户看过、改过、点「保存角色」之后才真正进角色库 / 这本书。
-//
-//  调用模型走 window.mimitale.sendChat —— 和聊天共用一条通道，所以设置里配的
-//  任意服务商都能用。**不要用 data/messages.js 的 buildApiMessages**：那条路会
-//  带上对话历史、世界书命中、状态栏规则，那是给「继续聊天」用的，拿来写生成
-//  任务是错的。
-//
-//  本机桥接（type='tavern-bridge'）要走它自己的解包：桥接的 /chat_with_image
-//  返回的是 { text, image }，文字在 text 里，不在 OpenAI 那种 choices[].message 上。
-//  桥接还会按正文里的关键词和语义判断该不该配图 —— 生成角色时那是纯浪费
-//  （出图要 30~40 秒、还要占显存），所以生成期间 force_image 一律关掉。
-// ============================================================================
+// 这个视图负责「AI 生成角色」弹窗：角色库入口生成通用角色，世界书入口按这本书的设定生成 NPC；生成完不落盘，交给角色编辑器开草稿。
+// ⚠️ 不要用 data/messages.js 的 buildApiMessages：它会带上对话历史和世界书命中，拿来写生成任务是错的。
+// ⚠️ 本机桥接返回 { text, image }，文字在 text 里而非 choices[].message；生成期间 force_image 一律关（出图 30~40 秒）。
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { uid } from '../core/util.js';
 import { h } from '../ui/build.js';
 import { iconHtml } from '../ui/icons.js';
-// 字段（标签 + 控件 + 说明）的规范件，见 ui/controls.js
 import { field } from '../ui/controls.js';
-// 组件库：生成弹窗里的两个多行框（见 components/index.js）
 import { mTextarea, mButton } from '../components/index.js';
 import { showToast } from '../ui/toast.js';
 import { currentEndpoint, isBridgeProvider } from '../data/providers.js';
 import { worldbookCharacters } from '../data/library.js';
 
-// ---------------------------------------------------------------------------
-//  提示词
-// ---------------------------------------------------------------------------
+// --- 提示词 ---
 
-// 属性表的变化规则。措辞和产品里那条约定保持一致：
-// 「平时不变，但一旦发生变化就必须输出」—— 写成「只在变化时输出」，模型会自己
-// 判断「这轮没变」然后把整行省掉，状态栏就再也不更新了。
+// ⚠️ 措辞必须是「一旦变化就必须输出」：写成「只在变化时输出」，模型会自行判断「这轮没变」把整行省掉，状态栏就再不更新。
 const MODE_RULE = 'mode 用 static 表示平时几乎不动的（身高、体重、身份这类），' +
   '用 dynamic 表示会随剧情变动的（好感度、金钱、穿着这类）——' +
   'dynamic 的字段一旦这一轮发生了跟它有关的事就必须输出。拿不准就写 dynamic。';
@@ -121,18 +96,12 @@ ${FIELDS_SPEC}
 7. 角色要有「可互动性」：不是完美无缺的偶像，要有小缺点、小执念、小矛盾，方便后续剧情推进。
 8. 只输出 JSON 本身，不要任何解释或代码块标记。`;
 
-/**
- * 用户手填的「背景 / 基调」（角色库那侧的可选输入）。
- */
 function briefSection(brief) {
   const text = String(brief || '').trim();
   if (!text) return '';
   return `\n\n【背景 / 基调】\n${text.slice(0, 1000)}\n\n角色的设定、用词、世界观必须严格贴合上面这个背景，不要另起一套。`;
 }
 
-/**
- * 世界书模式下额外要遵守的规则。
- */
 const BOOK_SYSTEM_TAIL = `这是一位要在「世界」里出场的配角（NPC），不是主角，也不是玩家自己。
 
 额外要求：
@@ -144,11 +113,10 @@ const BOOK_SYSTEM_TAIL = `这是一位要在「世界」里出场的配角（NPC
   firstMes 结尾必须是明确需要立刻回应的具体请求或问题，不能软着陆。
 · 只输出 JSON 本身。`;
 
-// 条目总量上限：世界书单本最多 5000 条，全喂进去光输入就爆了。
+// 上限：世界书单本最多 5000 条，全喂进去输入就爆了
 const MAX_ENTRY_CHARS = 2400;
 const MAX_ENTRY_COUNT = 12;
 
-/** 一段文字里能用来匹配的关键词：按标点和空白切开，去掉太短的碎片 */
 function keywordsOf(text) {
   return String(text || '')
     .split(/[\s,，、。.；;：:！!？?（）()【】\[\]"'“”‘’]+/)
@@ -157,9 +125,6 @@ function keywordsOf(text) {
     .slice(0, 30);
 }
 
-/**
- * 挑出跟这段描述相关的条目。
- */
 function pickEntries(book, prompt, budget) {
   const entries = (Array.isArray(book.entries) ? book.entries : []).filter(
     (e) => e && e.enabled !== false && String(e.content || '').trim()
@@ -200,7 +165,6 @@ function pickEntries(book, prompt, budget) {
   return picked;
 }
 
-/** 世界书模式下的设定块：书名 + 开场白 + 相关条目 + 已有角色 */
 function buildBookContext(book, prompt) {
   const parts = [`【世界：${book.name}】`];
 
@@ -219,9 +183,7 @@ function buildBookContext(book, prompt) {
   return parts.join('\n\n');
 }
 
-// ---------------------------------------------------------------------------
-//  取模型返回的正文
-// ---------------------------------------------------------------------------
+// --- 取模型返回的正文 ---
 
 function responseText(response, bridge) {
   if (!response) return '';
@@ -229,9 +191,7 @@ function responseText(response, bridge) {
   return typeof response.content === 'string' ? response.content : '';
 }
 
-// ---------------------------------------------------------------------------
-//  解析模型输出
-// ---------------------------------------------------------------------------
+// --- 解析模型输出 ---
 
 /** 去掉 ```json 围栏和正文前后的解释文字，只留下最外面那个花括号块 */
 function extractJsonBlock(raw) {
@@ -240,7 +200,6 @@ function extractJsonBlock(raw) {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) text = fenced[1].trim();
 
-  // 再尝试去掉可能的前后废话
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start >= 0 && end > start) text = text.slice(start, end + 1);
@@ -252,10 +211,7 @@ function str(value, max) {
   return typeof value === 'string' ? value.slice(0, max) : '';
 }
 
-/**
- * 按顺序找第一个非空字符串。
- * 兼容 first_mes / firstMes / greeting 等常见变体。
- */
+/** 按顺序找第一个非空字符串（兼容 first_mes / greeting 等变体） */
 function pickStr(json, keys, max) {
   for (const key of keys) {
     const text = str(json[key], max);
@@ -277,9 +233,7 @@ function parseTags(value) {
     .slice(0, 20);
 }
 
-/**
- * 属性：只留 normalizePanelField 认得的键，形状不对的整条丢掉。
- */
+/** 只留 normalizePanelField 认得的键，形状不对的整条丢掉 */
 function parseAttrs(value) {
   if (!Array.isArray(value)) return [];
   const out = [];
@@ -322,9 +276,6 @@ function parseAttrs(value) {
   return out;
 }
 
-/**
- * 把模型输出解析成角色字段。
- */
 export function parseGeneratedCharacter(raw) {
   const text = extractJsonBlock(raw);
   if (!text) return { ok: false, error: '模型没有返回内容', raw: String(raw || '') };
@@ -361,9 +312,7 @@ export function parseGeneratedCharacter(raw) {
   };
 }
 
-// ---------------------------------------------------------------------------
-//  弹窗
-// ---------------------------------------------------------------------------
+// --- 弹窗 ---
 
 let layerEl = null;
 let nodes = null;
@@ -387,9 +336,6 @@ function bookFor(id) {
   return list.find((w) => w.id === id) || null;
 }
 
-/**
- * 打开生成弹窗。
- */
 export function openAiGenModal(options = {}) {
   if (layerEl) closeLayer();
 
@@ -508,7 +454,7 @@ function buildLayer() {
     h(
       'footer',
       { class: 'modal-foot' },
-      h('span', { class: 'foot-hint', text: '生成结果会填进角色编辑器，点「保存角色」才真正创建' }),
+      h('span', { class: 'foot-hint', text: '生成结果会填进角色编辑器，点「保存」才真正创建' }),
       h('div', { class: 'foot-actions' }, stopBtn, goBtn)
     )
   );
