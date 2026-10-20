@@ -123,7 +123,7 @@ async function clickMoreItem(sel) {
 }
 
 /**
- * 展开消息工具条末尾那颗「⋯」，让收起来的低频按钮（继续 / 配图 / 帮我想想 / 分支 / 删除）显形。
+ * 展开消息工具条末尾那颗「⋯」，让收起来的低频按钮（复制 / 重新生成 / 配图 / 分支 / 删除）显形。
  *
  * 和 clickMoreItem 同一个道理：这些按钮**一直在 DOM 里**（`.mini-extra` 只是
  * `display:none`），直接对着它们 click() 也能触发 —— 但那样就绕开了
@@ -773,6 +773,8 @@ await scenario('角色库：新建角色', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   check('角色库一开始是空的', shown('#char-page-empty'));
+  // 空状态自己就是「去导入 / 去新建」的提示，末尾不再补一张添加卡（重复）
+  check('空列表不给「添加」卡', !$('#char-page-grid .lib-add-card'));
 
   const before = (await savedCharacters()).length;
 
@@ -798,12 +800,32 @@ await scenario('角色库：新建角色', async () => {
   const last = saved[saved.length - 1] || {};
   check('落盘的角色名正确', last.name === '冒烟测试角色', `落盘的是「${last.name}」`);
   check('落盘的描述正确', last.description === '这是冒烟测试写进去的描述', `落盘的是「${last.description}」`);
+
+  // --- 网格末尾那张「添加角色」卡（2026-10-20）---
+  // 有卡片之后才出现：翻到最后一张卡就能直接加，不用再回屏幕右上角。
+  const charAdd = $('#char-page-grid .lib-add-card');
+  check('有卡片之后末尾出现「添加角色」卡', !!charAdd);
+  check('添加卡不算进卡片数量（故意不挂 .char-card）',
+    !!charAdd && !charAdd.classList.contains('char-card') &&
+    $$('#char-page-grid > *').length === $$('#char-page-grid .char-card').length + 1,
+    `网格子节点 ${$$('#char-page-grid > *').length} 个 / 卡片 ${$$('#char-page-grid .char-card').length} 张`);
+  check('添加卡是网格最后一项', !!charAdd && $('#char-page-grid').lastElementChild === charAdd);
+  const charAddText = charAdd ? [...charAdd.querySelectorAll('button')].map((b) => b.textContent.trim()).join(' / ') : '';
+  check('添加卡里是「导入角色卡 / AI 生成 / ＋ 新建角色」三颗',
+    charAddText === '导入角色卡 / AI 生成 / ＋ 新建角色', charAddText);
   // 新建的角色保存完就完事了：弹窗自己关掉，回到角色列表看新卡
   check('保存后弹窗自己关掉（不用再点一次关闭）', !shown('#view-char-editor'));
   check('保存后没有多问一句「放弃新建？」', !shown('#confirm-modal'));
 
   const card = $$('#char-page-grid .char-card')[0];
-  check('卡片上有「编辑」和「聊天」两个入口', !!buttonByText(card, '编辑') && !!buttonByText(card, '聊天'));
+  check(
+    '卡片上有「编辑 / 导出 / 聊天」三个入口',
+    !!buttonByText(card, '编辑') && !!buttonByText(card, '导出') && !!buttonByText(card, '聊天')
+  );
+  check(
+    '卡片的「导出」不用进详情页就能点',
+    !!buttonByText(card, '导出') && !shown('#view-char-editor')
+  );
 
   // 标签是「这张卡属于什么类型」，得让人在列表页就看得见，否则分类没意义
   const subText = card.querySelector('.char-card-sub').textContent;
@@ -874,12 +896,13 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   // 2026-10-16：这一页 14 颗 .btn 全换 <m-button>。除结构外盯两件容易悄悄坏掉的：
-  //   ① 左栏「导出 / 删除角色」要铺满栏宽、文字靠左 —— width 挂宿主、
-  //      justify-content 挂里层，写反了不报错、只是按钮缩成一行文字那么宽；
+  //   ① 左栏「保存 / 导出」要铺满栏宽 —— width 挂宿主、里层跟着撑满，
+  //      写反了不报错、只是按钮缩成一行文字那么宽；
   //   ② 三颗「清除」带着 hidden 类 —— 宿主上 `.hidden` 的 display:none !important
   //      必须照样压过 m-button 自己的 display（不然按钮删不掉地常驻）。
   // ⚠️ btn-close-chars（返回）2026-10-19 从右上角挪到了左上角，并改成**图标按钮** ——
   //    图标按钮按约定不套 m-button（见 components/button.js 文件头），所以从这张表里去掉。
+  //    2026-10-20：左栏底部那颗重复的「返回」撤掉，返回只留页头这一处 + Esc。
   const CHAR_BTN_IDS = ['btn-save-char','btn-clear-avatar','btn-clear-portrait','btn-first-template','btn-alt-add','btn-attr-template','btn-add-attr','btn-attr-paste','btn-attr-paste-apply','c-wb-add-btn','btn-export-char','btn-del-char'];
   const bad = CHAR_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
   check('角色编辑器 12 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
@@ -897,12 +920,13 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   //    `button({ class: ... })` 现渲染的（不带 variant 就不生成 .btn 底座，见
   //    ui/build.js 文件头那条「图标按钮不套组件」的边界）。「解散这一组」已迁
   //    m-button —— 它不再带 `.btn-danger`，断言里按 `#c-attr-group-edit m-button` 找。
-  // 导出和「返回」并排待在左栏底部（1+2+1：保存独占一行，导出·返回并排，删除殿后）
+  // 左栏底部三行：保存 / 导出 / 删除；导出独占一行，不再和「返回」并排。
   const exportBtn = byId('btn-export-char');
   check(
-    '「导出」在左栏底部（和「返回」并排）',
-    !!exportBtn && !!exportBtn.closest('#char-rail-foot') && !!exportBtn.closest('.char-rail-pair'),
-    exportBtn ? (exportBtn.closest('.char-rail-pair') ? '在左栏并排' : '不在左栏并排') : '按钮不存在'
+    '「导出」独占左栏底部一行',
+    !!exportBtn && !!exportBtn.closest('#char-rail-foot') && !exportBtn.closest('.char-rail-pair') &&
+      exportBtn.getBoundingClientRect().width > 150,
+    exportBtn ? `${Math.round(exportBtn.getBoundingClientRect().width)}px` : '按钮不存在'
   );
   const railSave = byId('btn-save-char');
   check(
@@ -911,8 +935,8 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
     railSave ? String(Math.round(railSave.getBoundingClientRect().width)) : '按钮不存在'
   );
   check(
-    '左栏底部有「返回」（和页头那颗同一个动作）',
-    !!byId('btn-back-char') && !!byId('btn-back-char').closest('#char-rail-foot')
+    '左栏底部不再重复「返回」（页头那颗就够）',
+    !byId('btn-back-char')
   );
   check('「清除」的 hidden 照样生效', byId('btn-clear-avatar').classList.contains('hidden') && getComputedStyle(byId('btn-clear-avatar')).display === 'none');
 });
@@ -1898,8 +1922,7 @@ await scenario('续写：也把状态表补回来', async () => {
   const node = lastAssistant();
   check('兜底说明这条上有「继续」', !!node && !!buttonByText(node, '继续'));
 
-  // 「继续」2026-10-13 起收在「⋯」里 —— 先点开再点它（别对着 display:none 的元素点）
-  await openMsgMore(node);
+  // 「继续」2026-10-20 起改成常显（不再收在「⋯」里），直接点即可
   click(buttonByText(node, '继续'));
   const back = await settlePanelValue('金币', '55', 8000);
   await waitFor('流式结束', () => byId('btn-send').disabled === false, 8000);
@@ -2677,11 +2700,11 @@ await scenario('消息：编辑与继续', async () => {
 
     check('工具条末尾有「⋯」在（低频按钮收在它后面）', !!moreNow() && !!extraNow());
     check(
-      '常显的只有 复制 / 编辑 / 重新生成 / ⋯',
+      '常显的是 继续 / 编辑 / 帮我想想 + ⋯',
       Array.from(bar().querySelectorAll('.mini-btn'))
         .filter((b) => getComputedStyle(b).display !== 'none')
         .map((b) => b.textContent.trim())
-        .join(',') === '复制,编辑,重新生成,⋯',
+        .join(',') === '继续,编辑,帮我想想,⋯',
       Array.from(bar().querySelectorAll('.mini-btn'))
         .filter((b) => getComputedStyle(b).display !== 'none')
         .map((b) => b.textContent.trim())
@@ -2707,7 +2730,6 @@ await scenario('消息：编辑与继续', async () => {
 
   // --- 继续：应该是「追加」，不是「替换」---
   const before = lastNode().querySelector('.msg-content').textContent;
-  await openMsgMore(lastNode());
   click(buttonByText(lastNode(), '继续'));
   await waitFor('内容变长', () => {
     const node = lastNode();
@@ -3721,7 +3743,8 @@ await scenario('侧栏：入口网格与收起', async () => {
           (cs.borderTopColor === 'rgba(0, 0, 0, 0)' || b.id === 'btn-settings')
         );
       }),
-      foot.map((b) => `${getComputedStyle(b.control).backgroundColor}/${getComputedStyle(b.control).borderTopColor}`).join(' ')
+      foot.map((b) => `${b.id}${b.classList.contains('active') ? '[active]' : ''} ` +
+        `${getComputedStyle(b.control).backgroundColor}/${getComputedStyle(b.control).borderTopColor}`).join(' ')
     );
     // 这一组上面有一条**通栏**分隔线（稿子 2:28，1px #2a2e34）——
     // 用 ::before 画的，所以得读伪元素的计算样式。
@@ -3951,8 +3974,32 @@ await scenario('导出', async () => {
   click('#btn-export-char');
   await sleep(300);
   check('导出角色卡后有提示', $('#toast').textContent.includes('已导出'), $('#toast').textContent);
+  // 制造一处没保存的改动：返回时应该先拦一下，别把改动静默丢掉
+  setValue('#c-desc', `${byId('c-desc').value}（未保存）`);
   click('#btn-close-chars');
-  await sleep(150);
+  await waitFor('有未保存改动时返回会拦一下', () => shown('#confirm-modal'));
+  check(
+    '确认框说的是「没保存的改动」',
+    byId('confirm-message').textContent.includes('没保存'),
+    byId('confirm-message').textContent
+  );
+  click('#confirm-ok');
+  await waitFor('确认放弃后回到角色库', () => shown('#view-chars'));
+
+  // --- 角色库卡片上的「导出」：不用为了拿走一张卡先进详情页 ---
+  const listCard = $$('#char-page-grid .char-card')[0];
+  const listExport = listCard && buttonByText(listCard, '导出');
+  check('角色卡列表上有「导出」按钮', !!listExport);
+  if (listExport) {
+    const toast = $('#toast');
+    if (toast) {
+      toast.classList.add('hidden');
+      toast.textContent = '';
+    }
+    click(listExport);
+    await sleep(300);
+    check('从列表导出角色卡后有提示', $('#toast').textContent.includes('已导出'), $('#toast').textContent);
+  }
 
   // --- 会话 ---
   click('#convo-list .convo-item');
@@ -4016,16 +4063,82 @@ await scenario('世界书：新建条目', async () => {
   await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
   check('种子里那本世界书有卡片', $$('#wb-page-grid .char-card').length === 1);
 
-  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
+  // --- 网格末尾那张「添加世界书」卡（2026-10-20）---
+  const wbAdd = $('#wb-page-grid .lib-add-card');
+  check('世界书网格末尾有「添加世界书」卡', !!wbAdd);
+  check('添加卡不算进卡片数量（故意不挂 .char-card）',
+    !!wbAdd && !wbAdd.classList.contains('char-card') &&
+    $$('#wb-page-grid > *').length === $$('#wb-page-grid .char-card').length + 1,
+    `网格子节点 ${$$('#wb-page-grid > *').length} 个 / 卡片 ${$$('#wb-page-grid .char-card').length} 张`);
+  check('添加卡是网格最后一项', !!wbAdd && $('#wb-page-grid').lastElementChild === wbAdd);
+  const wbAddText = wbAdd ? [...wbAdd.querySelectorAll('button')].map((b) => b.textContent.trim()).join(' / ') : '';
+  check('添加卡里是「导入世界书 / ＋ 新建世界书」两颗',
+    wbAddText === '导入世界书 / ＋ 新建世界书', wbAddText);
+
+  // 这两颗按钮是**转发**页头那颗的 click（业务只写一份）。验证转发真的通：
+  // 在页头按钮上挂一个捕获阶段的探针，把事件拦下来 —— 既证明「点的是同一条路」，
+  // 又不会真的新建一本把后面的场景搅乱。
+  const headNewBook = byId('btn-new-worldbook');
+  let forwarded = 0;
+  const spyForward = (event) => { forwarded += 1; event.stopImmediatePropagation(); };
+  headNewBook.addEventListener('click', spyForward, true);
+  click(buttonByText(wbAdd, '＋ 新建世界书'));
+  await sleep(60);
+  headNewBook.removeEventListener('click', spyForward, true);
+  check('添加卡上的按钮走的就是页头那颗（转发 1 次）', forwarded === 1, `转发 ${forwarded} 次`);
+
+  // --- 列表卡片上的「导出」---
+  // 2026-10-20：先是从编辑器书籍条搬到列表卡片（右上角悬停浮出的小圆钮），
+  // 同日又改成**和角色卡列表完全一样** —— 操作行里一颗普通按钮，夹在「编辑 / 游玩」中间。
+  // 两处长得不一样只会让人多找一遍。
+  const listCard = $$('#wb-page-grid .char-card')[0];
+  const listExport = buttonByText(listCard, '导出');
+  const wbActions = listCard.querySelector('.char-card-actions');
+  check('世界书卡片操作行里有「导出」', !!listExport, wbActions.textContent.replace(/\s+/g, ' '));
+  check('「导出」排在「编辑」和「游玩」中间（和角色卡列表同位）',
+    wbActions.textContent.replace(/\s+/g, '') === '编辑导出游玩', wbActions.textContent.replace(/\s+/g, ''));
+  check('「导出」不再悬在卡片右上角', !!listExport && getComputedStyle(listExport).position !== 'absolute',
+    listExport && getComputedStyle(listExport).position);
+  check('右上角只剩 ×', !!listCard.querySelector('.char-card-del'));
+  if (listExport) {
+    const t0 = $('#toast');
+    if (t0) { t0.classList.add('hidden'); t0.textContent = ''; }
+    click(listExport);
+    await sleep(400);
+    check('卡片上的「导出」会写文件', $('#toast').textContent.includes('已导出'), $('#toast').textContent);
+    // 导出不该顺带开大图 / 进编辑器
+    check('点「导出」不会进编辑器', shown('#view-worldbooks') && !shown('#view-wb-editor'));
+  }
+
+  click(buttonByText(listCard, '编辑'));
   await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
 
   // 2026-10-16：这一页 14 颗 .btn 全换 <m-button>。`.wb-entry-actions` 那三颗的
   // 内边距（6px 8px）写在**里层**上 —— 写到宿主上不报错，只是按钮瘦不下来。
   // ⚠️ btn-close-worldbooks（返回）2026-10-19 挪到左上角并改成图标按钮，
   //    图标按钮按约定不套 m-button，所以从这张表里去掉。
-  const WB_BTN_IDS = ['btn-save-wb','btn-clear-wb-cover','btn-add-wb-chars','btn-ai-wb-char','btn-new-wb-char','btn-sync-wb-attrs','btn-preview-wb','btn-export-wb','btn-del-worldbook','btn-new-entry','btn-wb-entry-template','btn-wb-add-event','btn-del-entry'];
+  // ⚠️ btn-export-wb 2026-10-20 从书籍条去掉了（搬到列表卡片上），也去掉。
+  const WB_BTN_IDS = ['btn-save-wb','btn-clear-wb-cover','btn-add-wb-chars','btn-ai-wb-char','btn-new-wb-char','btn-sync-wb-attrs','btn-preview-wb','btn-del-worldbook','btn-new-entry','btn-wb-entry-template','btn-wb-add-event','btn-del-entry'];
   const wbBad = WB_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
-  check('世界书编辑器 13 颗按钮都是 m-button 宿主', wbBad.length === 0, wbBad.join(', ') || '全部是');
+  check('世界书编辑器 12 颗按钮都是 m-button 宿主', wbBad.length === 0, wbBad.join(', ') || '全部是');
+  check('编辑器里不再有「导出」（只在列表卡片上）', !byId('btn-export-wb'));
+  // 2026-10-20：保存从页头右上搬到书籍条右侧 —— 书籍条三屏共用，位置在任何
+  // tab 都固定，且紧挨脏状态胶囊。页头只剩「返回 / 标题 / 全文 N 字」。
+  const wbSaveBtn = byId('btn-save-wb');
+  const wbSaveHost = wbSaveBtn.closest('.wb-bookbar-actions');
+  check('保存按钮在书籍条右侧', !!wbSaveHost && !!wbSaveHost.closest('.wb-bookbar'));
+  check('保存按钮不在页头', !wbSaveBtn.closest('.wb-head'));
+  check('保存胶囊跟保存按钮挨在一起', byId('wb-save-state').parentElement === wbSaveHost);
+  check('页头不再有面包屑', !byId('wb-crumb'));
+  check('页头右侧只剩字数', [...document.querySelectorAll('#view-wb-editor .wb-head .page-actions > *')]
+    .every((node) => node === byId('wb-total-words')), [...document.querySelectorAll('#view-wb-editor .wb-head .page-actions > *')].map((n) => n.id || n.className).join(','));
+  // 每次进编辑器都停在「书籍设置」，不恢复上次停在哪一屏
+  check('进编辑器默认在「书籍设置」',
+    !byId('wb-panel-settings').hidden && byId('wb-panel-entries').hidden,
+    `settings=${!byId('wb-panel-settings').hidden} entries=${!byId('wb-panel-entries').hidden}`);
+  click('#wb-tab-entries');
+  await sleep(120);
+  check('切到「条目」屏', !byId('wb-panel-entries').hidden && byId('wb-panel-settings').hidden);
   // ⚠️ 同角色编辑器：JS 渲染的 .btn 还在这页上（NPC 属性面板共用同一套），
   //    「没有原生 .btn」要等 JS 侧调用点迁完才能上。
   check('条目行按钮的内边距落在里层（6px 8px）', getComputedStyle(byId('btn-new-entry').control).paddingLeft === '8px', getComputedStyle(byId('btn-new-entry').control).padding);
@@ -4052,11 +4165,6 @@ await scenario('世界书：新建条目', async () => {
   check('点「保存」之后条目才落盘', titles.includes('冒烟测试条目'), `落盘的是 ${JSON.stringify(titles)}`);
   check('保存完保存胶囊回到「所有更改已保存」', byId('wb-save-state').dataset.state === 'saved', byId('wb-save-state').textContent);
   check('保存有提示', $('#toast').textContent.includes('已保存'), $('#toast').textContent);
-
-  // 顺便把这本书导出一次（这时书里已经有条目了，才验得到条目字段的映射）
-  click('#btn-export-wb');
-  await sleep(300);
-  check('导出世界书后有提示', $('#toast').textContent.includes('已导出'), $('#toast').textContent);
 
   // --- 「条目」标题 + 行上的 × ---
   check('「条目」有自己的标题（左栏顶部那行）',
@@ -4095,6 +4203,13 @@ await scenario('世界书：新建条目', async () => {
   check('条目行比改版前瘦（≤ 72px）',
     wbRect('#wb-entry-list .wb-entry').height <= 72,
     `${Math.round(wbRect('#wb-entry-list .wb-entry').height)}px`);
+  // × 从「绝对定位浮在右上角」改成「右边一列、自己垂直居中」（2026-10-20）
+  const entryRow = entryDel ? entryDel.closest('.wb-entry') : null;
+  const rowBox = entryRow ? entryRow.getBoundingClientRect() : null;
+  const delBox = entryDel ? entryDel.getBoundingClientRect() : null;
+  check('行上的 × 垂直居中（上下留白相等）',
+    !!rowBox && !!delBox && Math.abs((delBox.top - rowBox.top) - (rowBox.bottom - delBox.bottom)) <= 2,
+    rowBox && delBox ? `上 ${Math.round(delBox.top - rowBox.top)} / 下 ${Math.round(rowBox.bottom - delBox.bottom)}` : '找不到条目行');
   check('书籍设置和本书角色各自独立分区',
     $('#wb-panel-settings').contains(byId('wb-name')) &&
     $('#wb-panel-settings').contains(byId('wb-opening')) &&
@@ -4102,8 +4217,8 @@ await scenario('世界书：新建条目', async () => {
   check('条目列表栏里不再有书级字段',
     !$('.wb-list').contains(byId('wb-name')) && !$('.wb-list').contains(byId('wb-opening')),
     '书名 / 开场白还留在 .wb-list 里');
-  check('导出 / 预览命中位于书籍条，删除本书留在设置屏',
-    $('#wb-bookbar').contains(byId('btn-export-wb')) &&
+  check('书籍条只剩「预览命中」，删除本书留在设置屏',
+    !byId('btn-export-wb') &&
     $('#wb-bookbar').contains(byId('btn-preview-wb')) &&
     $('#wb-panel-settings').contains(byId('btn-del-worldbook')));
   // 统计去重：全书统计只在书籍条出现一次，页头只留字数
@@ -4128,8 +4243,9 @@ await scenario('世界书：新建条目', async () => {
   setValue('#wb-search', '世界总览');
   check('世界书搜索过滤条目列表', $$('#wb-entry-list .wb-entry').length === 1);
   setValue('#wb-search', '');
-  check('页脚只剩那行状态提示（导出搬进书籍条了）',
-    !$('#view-wb-editor .page-foot').contains(byId('btn-export-wb')),
+  // 页脚只有那一行状态提示（导出 / 预览这些动作都在书籍条或列表卡片上，不下来）
+  check('页脚只剩那行状态提示',
+    !!byId('wb-foot-hint') && $('#view-wb-editor .page-foot').querySelectorAll('button, m-button').length === 0,
     $('#view-wb-editor .page-foot').textContent.trim());
 
   // 两条新条目：删「甲」的时候不该把编辑焦点从「乙」抢走（× 上的 stopPropagation）
@@ -4287,6 +4403,20 @@ await scenario('AI 生成角色：角色库', async () => {
   importBtn.textContent = '导入角色卡';
   importBtn.disabled = false;
   check('还原后里层一并还原', importCtrl.textContent === '导入角色卡' && importCtrl.disabled === false);
+
+  // 2026-10-20：按钮自带 loading —— 转圈圈 + 期间不可点 + 告诉读屏器在忙。
+  // 生成 / 导入 / 拉模型这些「等结果」的按钮都走这一套，这里钉组件本身的口径。
+  importBtn.loading = true;
+  const spinner = importCtrl.querySelector('.mi-btn__spinner');
+  check('loading 会在文字前面插一颗转圈圈', !!spinner && importCtrl.firstElementChild === spinner);
+  check('loading 期间里层不可点', importCtrl.disabled === true);
+  check('loading 期间宿主 .disabled 也读成 true', importBtn.disabled === true);
+  check('loading 会告诉读屏器在忙', importCtrl.getAttribute('aria-busy') === 'true');
+  check('转圈圈不占按钮文字', importCtrl.textContent.trim() === '导入角色卡', importCtrl.textContent);
+  importBtn.loading = false;
+  check('收起 loading：转圈圈没了', !importCtrl.querySelector('.mi-btn__spinner'));
+  check('收起 loading：又能点了', importCtrl.disabled === false && importCtrl.getAttribute('aria-busy') === null);
+  check('收起 loading：宿主 .disabled 跟着回到 false', importBtn.disabled === false);
   check('「＋ 新建角色」是 primary 那一档', byId('btn-new-char').classList.contains('mi-btn--primary'));
   check('角色库页不再有原生 .btn 按钮', !$('#view-chars .btn'));
 
@@ -4316,7 +4446,20 @@ await scenario('AI 生成角色：角色库', async () => {
   const prompt = $('#ai-gen-prompt');
   check('弹窗里有描述输入框', !!prompt);
   setValue('#ai-gen-prompt', '一个话很少的守夜人');
+
+  // 「开始生成」那颗加载态的靶子（点下去文字就变了，先抓住宿主）
+  const goBtn = $$('.ai-gen-modal m-button').find((b) => b.textContent.trim() === '开始生成');
+  check('生成按钮是 m-button', !!goBtn);
   click(buttonByText($('.ai-gen-modal'), '开始生成'));
+
+  // 点下去那一瞬间就该是「生成中… + 转圈圈」，不用等模型回来 —— 这一段是同步做完的
+  check('生成中：按钮文字变成「生成中…」', !!goBtn && goBtn.textContent === '生成中…', goBtn && goBtn.textContent);
+  check(
+    '生成中：按钮在转圈圈',
+    !!goBtn && !!goBtn.control && !!goBtn.control.querySelector('.mi-btn__spinner'),
+    goBtn && goBtn.control && goBtn.control.className
+  );
+  check('生成中：按钮点不动', !!goBtn && goBtn.control && goBtn.control.disabled === true);
 
   // 生成完直接把字段填进角色编辑器草稿
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
@@ -4406,6 +4549,88 @@ await scenario('AI 生成角色：模型输出带围栏和废话', async () => {
 });
 
 // ---------------------------------------------------------------------------
+//  场景 11.65：「AI 补设定」—— 角色编辑器里给一张卡现补一本世界书
+//
+//  假后端认「世界书编辑」+ "entries"（见 tools/smoke-test.js），回 4 条，其中一条
+//  **既非常驻、又没有关键词** —— 它永远注入不到，必须被丢掉。
+//  验：① 生成完只是草稿，不建书；② 点保存才建书、绑到这张卡；③ 保存后清单清空。
+// ---------------------------------------------------------------------------
+await scenario('AI 补设定：保存才建书', async () => {
+  click('#btn-chars');
+  await waitFor('切到角色库页面', () => shown('#view-chars'));
+
+  // 上一场生成并保存下来的「守夜人」：描述和性格都有，够 AI 读
+  const card = $$('#char-page-grid .char-card').find((node) => node.textContent.includes('守夜人'));
+  check('角色库里有上一场存的「守夜人」', !!card);
+  click(buttonByText(card, '编辑'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
+
+  check('编辑器里有「AI 补设定」按钮', !!byId('c-wb-ai-btn'));
+  check(
+    '角色库的卡上标着 library 作用域',
+    !!byId('c-wb-ai-block') && byId('c-wb-ai-block').dataset.scope === 'library',
+    byId('c-wb-ai-block') && byId('c-wb-ai-block').dataset.scope
+  );
+
+  const booksBefore = (await savedWorldbooks()).length;
+  click('#c-wb-ai-btn');
+  // 这颗按钮在生成时变「中止」（还能点），所以转圈圈落在状态行上
+  check('补设定：生成中状态行在转圈圈', !!$('#c-wb-ai-status .spinner'));
+  await waitFor('条目出现', () => $$('#c-wb-ai-list .cwb-ai-entry').length > 0);
+  check('补设定：出结果后转圈圈收掉了', !$('#c-wb-ai-status .spinner'));
+
+  const rows = $$('#c-wb-ai-list .cwb-ai-entry');
+  const rowText = rows.map((r) => r.textContent).join(' / ');
+  // 假后端给了 4 条，去掉那条没关键词的，应该刚好 3 条
+  check('既非常驻又没关键词的那条被丢掉', rows.length === 3, `${rows.length} 条：${rowText}`);
+  check('常驻条目标着「常驻」', rows.some((r) => r.textContent.includes('常驻')), rowText);
+  check('非常驻条目显示关键词', rows.some((r) => r.textContent.includes('换班')), rowText);
+  check('状态行说明「保存才建书」', byId('c-wb-ai-status').textContent.includes('保存'), byId('c-wb-ai-status').textContent);
+  check('这次还不会有新书落盘', (await savedWorldbooks()).length === booksBefore, `${(await savedWorldbooks()).length} / ${booksBefore}`);
+
+  // 就地改正文：点「改」展开一条，改完收起 —— 落盘的应该是改过的文字
+  const firstRow = $$('#c-wb-ai-list .cwb-ai-entry')[0];
+  click(firstRow.querySelector('.cwb-ai-edit-btn'));
+  await waitFor('正文框展开', () => !!$('#c-wb-ai-list .cwb-ai-content'));
+  const area = $('#c-wb-ai-list .cwb-ai-content');
+  check('展开的是第 1 条的正文', String(area.value).includes('换班'), area.value);
+  setValue('#c-wb-ai-list .cwb-ai-content', '改过的正文：换班要当面交接，缺一样都算事故。');
+  check('打字不会把框重画掉', $$('#c-wb-ai-list .cwb-ai-content').length === 1);
+  click($$('#c-wb-ai-list .cwb-ai-entry')[0].querySelector('.cwb-ai-edit-btn'));
+  await sleep(80);
+  check('再点一下收起', !$('#c-wb-ai-list .cwb-ai-content'));
+
+  click('#btn-save-char');
+  await waitFor('新书落盘', async () => (await savedWorldbooks()).length === booksBefore + 1);
+
+  const books = await savedWorldbooks();
+  const book = books.find((b) => b.name === '守夜人的世界书');
+  check('建出来的书叫「守夜人的世界书」', !!book, books.map((b) => b.name).join(' / '));
+
+  const entries = (book && book.entries) || [];
+  check('书里有 3 条设定', entries.length === 3, String(entries.length));
+  check('就地改的正文进了书', entries.some((e) => String(e.content).includes('改过的正文')), JSON.stringify(entries.map((e) => String(e.content).slice(0, 10))));
+  check('那条没关键词的没进书', !entries.some((e) => e.title === '用不上的那条'), entries.map((e) => e.title).join(' / '));
+  check('关键词按数组存下来了', entries.some((e) => (e.keys || []).includes('换班')), JSON.stringify(entries.map((e) => e.keys)));
+  check('常驻那条落成了 constant', entries.filter((e) => e.constant).length === 1, JSON.stringify(entries.map((e) => [e.title, e.constant])));
+
+  const savedChar = (await savedCharacters()).find((c) => c.name === '守夜人');
+  check(
+    '新建的书绑到了这张卡上',
+    !!book && !!savedChar && (savedChar.worldbookIds || []).includes(book.id),
+    JSON.stringify(savedChar && savedChar.worldbookIds)
+  );
+  check('编辑器里那块也列出了这本书', $('#c-wb-list').textContent.includes('守夜人的世界书'), $('#c-wb-list').textContent);
+  check('保存之后草稿清单清空了', $$('#c-wb-ai-list .cwb-ai-entry').length === 0, String($$('#c-wb-ai-list .cwb-ai-entry').length));
+
+  click('#btn-close-chars');
+  await sleep(150);
+  check('保存后关闭不弹放弃确认', !shown('#confirm-modal'));
+  await waitFor('编辑器关闭', () => !shown('#view-char-editor'));
+});
+
+//
+// ---------------------------------------------------------------------------
 //  场景 11.7：AI 生成 NPC —— 世界书那一侧
 //
 //  和角色库那条路共用弹窗和草稿，但上下文完全不同：它要带这本书的条目和副本名单。
@@ -4434,6 +4659,17 @@ await scenario('AI 生成 NPC：依据世界书', async () => {
 
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   check('标题是「新建本书角色」', byId('chars-title').textContent === '新建本书角色', byId('chars-title').textContent);
+  // 副本这条路上「AI 补设定」补的是**这本书**的条目（副本自带的书进世界时不被注入）
+  check(
+    '副本上的「AI 补设定」标着 worldbook 作用域',
+    !!byId('c-wb-ai-block') && byId('c-wb-ai-block').dataset.scope === 'worldbook',
+    byId('c-wb-ai-block') && `class=${byId('c-wb-ai-block').className} scope=${byId('c-wb-ai-block').dataset.scope}`
+  );
+  check(
+    '副本上说明写进这本书',
+    byId('c-wb-ai-status').textContent.includes('这本书'),
+    byId('c-wb-ai-status').textContent
+  );
   // 名字来自假后端的「带世界上下文」分支 —— 对不上就说明 system 里没带上这本书的设定
   check('生成时确实带上了这本书的上下文', byId('c-name').value === '后厨帮工', byId('c-name').value);
 
@@ -4450,6 +4686,91 @@ await scenario('AI 生成 NPC：依据世界书', async () => {
 
   click('#btn-close-worldbooks');
   await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
+});
+
+// ---------------------------------------------------------------------------
+//  场景 11.75：「AI 补设定」在副本上 —— 补进那本书的草稿
+//
+//  副本进世界时注入的是**那本书**（data/cast.js 的 effectiveWorldbookIds），
+//  所以这里的条目既不建新书、也不直接写 book.entries（世界书编辑器可能正压着一份脏草稿，
+//  之后一保存就把它整体覆盖掉）。正确落点是那本书的**草稿**：
+//  回世界书编辑器能看见，点「保存」才进磁盘。这条验的就是这三步。
+// ---------------------------------------------------------------------------
+await scenario('AI 补设定：副本并进这本书的草稿', async () => {
+  click('#btn-worldbooks');
+  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
+
+  const bookCard = $$('#wb-page-grid .char-card').find((c) => c.textContent.includes('冒烟测试世界'));
+  check('列表里有「冒烟测试世界」这张卡', !!bookCard);
+  click(buttonByText(bookCard, '编辑'));
+  await waitFor('世界书编辑器打开', () => shown('#view-wb-editor'));
+
+  const bookBefore = (await savedWorldbooks()).find((b) => b.name === '冒烟测试世界');
+  check('磁盘上有那本测试书', !!bookBefore);
+  const entriesOnDisk = ((bookBefore && bookBefore.entries) || []).length;
+  const listedBefore = $$('#wb-entry-list .wb-entry').length;
+
+  const npc = $$('#wb-char-list .wb-char-card').find((c) => c.textContent.includes('后厨帮工'));
+  check('本书角色里有「后厨帮工」', !!npc);
+  click(buttonByText(npc, '编辑'));
+  await waitFor('副本编辑器打开', () => shown('#view-char-editor'));
+  check('编辑的是本书副本', byId('chars-title').textContent === '编辑本书角色', byId('chars-title').textContent);
+
+  click('#c-wb-ai-btn');
+  await waitFor('副本上也补出了条目', () => $$('#c-wb-ai-list .cwb-ai-entry').length > 0);
+  check(
+    '补出 3 条（死条目那条被丢掉）',
+    $$('#c-wb-ai-list .cwb-ai-entry').length === 3,
+    String($$('#c-wb-ai-list .cwb-ai-entry').length)
+  );
+  check(
+    '状态行说明会并进这本书',
+    byId('c-wb-ai-status').textContent.includes('并进'),
+    byId('c-wb-ai-status').textContent
+  );
+
+  click('#btn-save-char');
+  // 保存完草稿就交给那本书了：清单清空即说明 materialize 走完了
+  await waitFor('副本保存完', () => $$('#c-wb-ai-list .cwb-ai-entry').length === 0, 8000);
+  await sleep(250);
+
+  // 世界书编辑器还在后台：左栏条目列表应该已经多出这 3 条（appendEntriesToBookDraft 里刷的）
+  check(
+    '那本书的左栏条目列表跟着长了 3 条',
+    $$('#wb-entry-list .wb-entry').length === listedBefore + 3,
+    `${$$('#wb-entry-list .wb-entry').length} / ${listedBefore + 3}`
+  );
+  // 但还没落盘 —— 保存副本不会顺手把整本书写进磁盘
+  check(
+    '磁盘上的条目数没变（只是草稿）',
+    (((await savedWorldbooks()).find((b) => b.name === '冒烟测试世界') || {}).entries || []).length === entriesOnDisk,
+    String((((await savedWorldbooks()).find((b) => b.name === '冒烟测试世界') || {}).entries || []).length)
+  );
+
+  click('#btn-close-chars');
+  await waitFor('回到世界书编辑器', () => shown('#view-wb-editor'));
+  check(
+    '页头保存胶囊提示「有未保存的改动」',
+    byId('wb-save-state').dataset.state === 'dirty',
+    byId('wb-save-state').textContent
+  );
+
+  click('#btn-save-wb');
+  await waitFor('这本书真的落盘', async () => {
+    const book = (await savedWorldbooks()).find((b) => b.name === '冒烟测试世界');
+    return !!book && (book.entries || []).length === entriesOnDisk + 3;
+  });
+
+  const savedBook = (await savedWorldbooks()).find((b) => b.name === '冒烟测试世界');
+  const titles = (savedBook.entries || []).map((e) => e.title);
+  check('补出来的三条进了这本书', ['夜班规矩', '街口那盏灯', '这座城的作派'].every((t) => titles.includes(t)), JSON.stringify(titles));
+  const savedNpc = ((savedBook && savedBook.characters) || []).find((c) => c.name === '后厨帮工');
+  check('副本没被绑上一本新书', !savedNpc || !(savedNpc.worldbookIds || []).length, JSON.stringify(savedNpc && savedNpc.worldbookIds));
+
+  click('#btn-close-worldbooks');
+  await sleep(150);
+  if (shown('#confirm-modal')) click('#confirm-ok');
+  await waitFor('世界书编辑器关闭', () => !shown('#view-wb-editor'));
 });
 
 // ---------------------------------------------------------------------------
@@ -5376,8 +5697,7 @@ await scenario('帮我想想（给几个下一步）', async () => {
   check('建议条默认不显示', !shown('#suggest-strip'));
   check('建议列表一开始是空的', byId('suggest-list').children.length === 0);
 
-  // 点「帮我想想」→ 假后端会回 5 条带序号和引号的选项
-  await openMsgMore(lastAssistant());
+  // 点「帮我想想」（2026-10-20 起常显，不用先展开「⋯」）→ 假后端会回 5 条带序号和引号的选项
   const trigger = Array.from(lastAssistant().querySelectorAll('.msg-actions .mini-btn'))
     .find((b) => b.textContent.trim() === '帮我想想');
   click(trigger);
@@ -5412,7 +5732,6 @@ await scenario('帮我想想（给几个下一步）', async () => {
   await sleep(250);
 
   // ✕ 能收起
-  await openMsgMore(lastAssistant());
   const trigger2 = Array.from(lastAssistant().querySelectorAll('.msg-actions .mini-btn'))
     .find((b) => b.textContent.trim() === '帮我想想');
   if (trigger2) {
@@ -5469,6 +5788,30 @@ await scenario('角色：绑定自带的世界书', async () => {
   check('说明文字提到「单独聊天会带上」',
     String(byId('c-wb-hint').textContent || '').includes('单独跟它聊天时会带上'),
     String(byId('c-wb-hint').textContent || '').slice(0, 60));
+
+  // --- 行上的「编辑」：一步跳到这本书的详情（2026-10-20）---
+  const boundRow = $$('#c-wb-list .cwb-row')[0];
+  const rowEdit = boundRow.querySelector('.cwb-row-edit');
+  check('已绑的那行有「编辑」按钮', !!rowEdit);
+  check('「编辑」排在解绑 ✕ 左边',
+    !!rowEdit && !!rowEdit.nextElementSibling &&
+    rowEdit.nextElementSibling.classList.contains('cwb-row-del'));
+  if (rowEdit) {
+    click(rowEdit);
+    await waitFor('跳到世界书编辑器', () => shown('#view-wb-editor'), 4000);
+    check('跳过去的就是绑的那一本',
+      String(byId('wb-bookbar-name').textContent || '').includes('冒烟测试世界'),
+      byId('wb-bookbar-name').textContent);
+    // 跳转不是「离开角色编辑器」：表单内容得原样留着
+    check('跳转不丢角色编辑器里填的内容', byId('c-name').value === NAME, byId('c-name').value);
+
+    click('#btn-close-worldbooks');
+    await waitFor('返回角色编辑器', () => shown('#view-char-editor'), 4000);
+    await sleep(150);
+    check('返回后还在那张卡上（没被弹「放弃改动」冲掉）',
+      byId('c-name').value === NAME, byId('c-name').value);
+    check('返回后那行「已绑世界书」还在', $$('#c-wb-list .cwb-row').length === 1);
+  }
 
   // 关掉开关 → 说明跟着变
   setChecked('#c-wb-enabled', false);
@@ -5673,6 +6016,61 @@ await scenario('导入：重发 id 时绑定要跟着走', async () => {
     }
     check('空输入返回空结果', emptyOk);
   }
+});
+
+// ---------------------------------------------------------------------------
+//  场景 20b：导入的角色卡自带世界书时，用这张卡的立绘补封面
+//
+//  这条走不了 UI：整个导入在文件框后面，中间态点不到。所以直接拿真模块来调
+//  seedBookCovers（导出就是为了这个）。要点是「只补空封面」和「图裁不出来别崩」。
+// ---------------------------------------------------------------------------
+await scenario('导入：自带世界书拿角色立绘当封面', async () => {
+  let mod = null;
+  try {
+    mod = await import(new URL('js/views/characterImport.js', document.baseURI).href);
+  } catch (err) {
+    check('导入模块能加载', false, (err && err.message) || String(err));
+  }
+  if (!mod || typeof mod.seedBookCovers !== 'function') {
+    check('导入模块导出了 seedBookCovers', false, typeof (mod && mod.seedBookCovers));
+    return;
+  }
+  check('导入模块导出了 seedBookCovers', true);
+
+  // 造一张真 PNG（不写死 base64：画布出图永远能解码）
+  const canvas = document.createElement('canvas');
+  canvas.width = 6;
+  canvas.height = 6;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#c33';
+  ctx.fillRect(0, 0, 6, 6);
+  const AVATAR = canvas.toDataURL('image/png');
+
+  const books = [
+    { id: 'wb-a', name: '卡里自带的世界书', cover: '' },
+    { id: 'wb-b', name: '本来就有封面的', cover: 'data:image/png;base64,KEEP' }
+  ];
+  const chars = [
+    { id: 'c-a', name: '带立绘的', avatar: AVATAR, worldbookIds: ['wb-a'] },
+    { id: 'c-b', name: '有书没立绘', avatar: '', worldbookIds: ['wb-b'] }
+  ];
+
+  await mod.seedBookCovers(books, chars);
+
+  check('空封面被角色立绘补上了', String(books[0].cover).startsWith('data:image/'),
+    String(books[0].cover).slice(0, 40));
+  check('补的是 2:3 的裁切图（不是原图直传）', books[0].cover !== AVATAR);
+  check('书里自己带的封面不动', books[1].cover === 'data:image/png;base64,KEEP', books[1].cover);
+
+  // 没立绘 / 没绑书 → 不动，也不该抛
+  const lonely = [{ id: 'wb-c', name: '没人认领', cover: '' }];
+  let ok = true;
+  try {
+    await mod.seedBookCovers(lonely, []);
+  } catch (err) {
+    ok = false;
+  }
+  check('找不到归属角色时留空、不抛错', ok && lonely[0].cover === '', String(lonely[0].cover));
 });
 
 // ---------------------------------------------------------------------------
@@ -8790,6 +9188,82 @@ await scenario('预设：编辑已有预设并落盘', async () => {
 });
 
 // ---------------------------------------------------------------------------
+//  预设：AI 生成
+//
+//  假后端认「写「预设」的编辑」+ "note"（见 tools/smoke-test.js）。
+//  链路和「AI 生成角色」同一条规矩：弹窗 → 生成 → 填进预设编辑器草稿 →
+//  点「保存」才落盘。名字跟着输入 / 场次变，用来证明这两段真的进了请求。
+// ---------------------------------------------------------------------------
+await scenario('预设：AI 生成', async () => {
+  click('#btn-presets');
+  await waitFor('预设页出来了', () => shown('#view-presets'));
+
+  // 入口在「＋ 新建预设」左边，不会顺手创建什么
+  const aiBtn = byId('btn-ai-preset');
+  const newBtn = byId('btn-new-preset');
+  check('预设页有「AI 生成」按钮', !!aiBtn);
+  check(
+    '「AI 生成」紧挨着排在「＋ 新建预设」左边',
+    !!aiBtn && !!newBtn && aiBtn.nextElementSibling === newBtn,
+    aiBtn && newBtn ? `${aiBtn.textContent.trim()} / ${newBtn.textContent.trim()}` : ''
+  );
+
+  const before = ((await window.mimitale.getPresets()).presets || []).length;
+
+  click('#btn-ai-preset');
+  await waitFor('生成弹窗打开', () => shown('.preset-ai-modal'));
+  check(
+    '弹窗是预设那一版（不是角色那版）',
+    $('.preset-ai-modal').textContent.includes('AI 生成预设') && !byId('ai-gen-prompt'),
+    $('.preset-ai-modal').textContent.slice(0, 40)
+  );
+  check('弹窗里有「想要的效果」输入框', !!byId('preset-ai-prompt'));
+  check('弹窗里有可选的「适用场次」框', !!byId('preset-ai-scene'));
+
+  // 空着点生成要被拦下（不发请求、弹窗不关）
+  click(buttonByText($('.preset-ai-modal'), '开始生成'));
+  await sleep(80);
+  check('没写想要的效果时不会发请求（弹窗还开着）', shown('.preset-ai-modal'));
+
+  setValue('#preset-ai-prompt', '冒烟：回复太长了，短一点、多留白');
+  setValue('#preset-ai-scene', '深夜便利店，安静的日常');
+
+  const goBtn = $$('.preset-ai-modal m-button').find((b) => b.textContent.trim() === '开始生成');
+  check('生成按钮是 m-button', !!goBtn);
+  click(buttonByText($('.preset-ai-modal'), '开始生成'));
+
+  // 和「AI 生成角色」一样：点下去那一瞬间就该是「生成中… + 不可点」
+  check('生成中：按钮文字变成「生成中…」', !!goBtn && goBtn.textContent === '生成中…', goBtn && goBtn.textContent);
+  check('生成中：按钮点不动', !!goBtn && goBtn.control && goBtn.control.disabled === true);
+
+  await waitFor('预设编辑器打开', () => shown('#preset-modal'));
+  check('生成后打开的是新建草稿', byId('preset-title').textContent.trim() === '新建预设', byId('preset-title').textContent);
+  // 名字里的「·夜」只有「适用场次」进了 system 才会有 —— 一并证明提示词那两段都拼上了
+  check('名字已回填（含场次标记）', byId('pr-name').value === '短句对白·夜', byId('pr-name').value);
+  check('说明已回填', byId('pr-note').value.includes('少总结'), byId('pr-note').value);
+  check('标签已回填', byId('pr-tags').value.includes('节奏'), byId('pr-tags').value);
+  check('指令正文已回填', byId('pr-content').value.includes('三句话'), byId('pr-content').value.slice(0, 40));
+
+  // 最要紧的一条：生成完**还没落盘**，和手建一样要用户点保存
+  await sleep(150);
+  check(
+    '生成后还没落盘（点保存才创建）',
+    ((await window.mimitale.getPresets()).presets || []).length === before,
+    `期望 ${before}，实际 ${((await window.mimitale.getPresets()).presets || []).length}`
+  );
+
+  click('#btn-save-preset');
+  await waitFor('保存后弹窗关上', () => !shown('#preset-modal'));
+
+  const saved = (await window.mimitale.getPresets()).presets || [];
+  const made = saved.find((p) => p.name === '短句对白·夜');
+  check('保存后预设进了盘上', !!made, JSON.stringify(saved.map((p) => p.name)));
+  check('正文按原样存下来', made && made.content.includes('三句话'), made && made.content);
+  check('说明存成 note', made && made.note.includes('少总结'), made && made.note);
+  check('标签按数组存下来', made && Array.isArray(made.tags) && made.tags.join('|') === '节奏|对白', made && JSON.stringify(made.tags));
+});
+
+// ---------------------------------------------------------------------------
 //  角色表情图 —— 按回复正文里的词换状态卡上的图
 //
 //  ⚠️ 放在预设那几条**聊天场景之前**：最后一条 chat:send 会被宿主侧的
@@ -10396,6 +10870,8 @@ await scenario('批量：角色库与世界书的选择态', async () => {
   click('#btn-char-batch');
   await sleep(120);
   check('点「批量」进入选择态', shown('#char-batch-active') && !shown('#char-batch-normal'));
+  // 选择态里整卡就是一个勾选框，末尾那张「添加」卡跟着收起来（它勾不了，也不该混进去）
+  check('选择态里「添加」卡收起来', !$('#char-page-grid .lib-add-card'));
 
   const cards = $$('#char-page-grid .char-card');
   check('卡片都成了可点选的格子', cards.length > 0 && cards.every((c) => c.classList.contains('is-selectable')));
@@ -10463,6 +10939,7 @@ await scenario('批量：角色库与世界书的选择态', async () => {
     '退出后卡片不再是选择格子',
     $$('#char-page-grid .char-card').every((c) => !c.classList.contains('is-selectable'))
   );
+  check('退出选择态后「添加」卡回到末尾', !!$('#char-page-grid .lib-add-card'));
 
   // ---- 世界书 ----
   click('#btn-worldbooks');
@@ -10472,6 +10949,7 @@ await scenario('批量：角色库与世界书的选择态', async () => {
   click('#btn-wb-batch');
   await sleep(100);
   check('世界书也能进选择态', shown('#wb-batch-active') && !shown('#wb-batch-normal'));
+  check('世界书选择态里「添加」卡也收起来', !$('#wb-page-grid .lib-add-card'));
   const books = $$('#wb-page-grid .char-card');
   check('世界书卡片也成了可点选的格子', books.length > 0 && books[0].classList.contains('is-selectable'));
 

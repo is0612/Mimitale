@@ -319,7 +319,7 @@ function setPreview(text, isError) {
 }
 
 async function doPreview() {
-  el.pet.btnPreview.disabled = true;
+  el.pet.btnPreview.loading = true;
   setPreview('它正在想…');
   try {
     const result = await previewSpeak();
@@ -332,7 +332,7 @@ async function doPreview() {
     setPreview(result.lines.join('\n') + (via ? `\n${via}` : ''));
     el.pet.btnSay.disabled = false;
   } finally {
-    el.pet.btnPreview.disabled = false;
+    el.pet.btnPreview.loading = false;
     renderStatusLine();
   }
 }
@@ -513,14 +513,14 @@ export function initPetSettings(opts) {
   // ---- 状态按钮 ----
 
   el.pet.btnSpeak.addEventListener('click', async () => {
-    el.pet.btnSpeak.disabled = true;
+    el.pet.btnSpeak.loading = true;
     try {
       // 走入口层注入的 options.speakNow，和右键菜单「现在说话」是同一条路
       await options.speakNow?.('manual');
     } catch (err) {
       showToast(`让它说话失败：${(err && err.message) || '未知错误'}`, 'error');
     } finally {
-      el.pet.btnSpeak.disabled = false;
+      el.pet.btnSpeak.loading = false;
       await refreshPetCache();
       renderPetSettings();
     }

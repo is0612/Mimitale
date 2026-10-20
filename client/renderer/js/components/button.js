@@ -12,7 +12,7 @@
 //  迁移期两者并存，`.`btn` 退役时把左边那个选择器删掉就行，不会留下两份外观。
 // ============================================================================
 
-import { MiControl, applyOptions } from './base.js';
+import { MiControl, applyOptions, setAttr, toggleAttr } from './base.js';
 
 /**
  * 类名字面量表：variant / size / block 都在这儿。
@@ -31,9 +31,67 @@ export class MiButton extends MiControl {
   static classTable = CLASS_TABLE;
   static forwardAttrs = ['aria-label', 'aria-describedby', 'title'];
 
+  static get observedAttributes() {
+    return [...super.observedAttributes, 'loading'];
+  }
+
   /**
-   * 里层那颗原生 <button>：宿主里原有的**文本**收进 label，其余节点（图标之类）
-   * 原样搬进按钮。搬完之后宿主里只剩这颗按钮，不会留下游离的文本节点。
+   * loading = 这一次点击正在等结果（生成 / 导入 / 拉模型…）。
+   * 组件负责三件事：转圈圈、**不可点**、告诉读屏器在忙。
+   * 文字不归它管 —— 调用方要写「生成中…」还是保持原文，由业务决定。
+   */
+  get loading() {
+    return this.hasAttribute('loading');
+  }
+
+  set loading(value) {
+    toggleAttr(this, 'loading', value);
+  }
+
+  /**
+   * ⚠️ loading 也算「禁用」：否则用户能连点两次，两次请求一起飞。
+   * 但它是**两个独立状态** —— disabled 属性是调用方声明的，loading 是临时的；
+   * 取反只看属性，所以 `btn.disabled = false` 不会被 loading 卡住。
+   */
+  get disabled() {
+    return this.hasAttribute('disabled') || this.loading;
+  }
+
+  set disabled(value) {
+    toggleAttr(this, 'disabled', value);
+  }
+
+  /** 父类 sync() 会把外观 / 禁用 / 转发属性重算一遍，这里再补上转圈圈 */
+  sync() {
+    super.sync();
+    this.syncLoading();
+  }
+
+  /** 转圈圈：插在 label 前面（flex 排好），收掉时整颗删掉，不留空壳 */
+  syncLoading() {
+    const control = this.control;
+    if (!control) return;
+
+    const on = this.loading;
+    // 显式写 "true" 而不是只挂一个空属性：读屏器和测试都读得懂
+    setAttr(control, 'aria-busy', on ? 'true' : null);
+
+    if (on) {
+      if (!this._spinner) {
+        const spinner = document.createElement('span');
+        spinner.className = 'mi-btn__spinner';
+        spinner.setAttribute('aria-hidden', 'true');
+        control.insertBefore(spinner, control.firstChild);
+        this._spinner = spinner;
+      }
+    } else if (this._spinner) {
+      this._spinner.remove();
+      this._spinner = null;
+    }
+  }
+
+  /** 里层那颗原生 <button>：宿主里原有的**文本**收进 label，其余节点（图标之类）
+   *  原样搬进按钮。搬完之后宿主里只剩这颗按钮，不会留下游离的文本节点。
    */
   render() {
     const control = document.createElement('button');

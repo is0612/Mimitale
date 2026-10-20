@@ -199,6 +199,16 @@ test('applyOptions：value / checked 走 property，剩下的走 attribute', () 
   assert.equal(node.getAttribute('rows'), '5');
 });
 
+test('applyOptions：loading 落到属性上，false 会把它摘掉', () => {
+  const node = M.applyOptions(fakeNode('m-button'), { loading: true });
+  assert.equal(node.getAttribute('loading'), '');
+
+  M.applyOptions(node, { loading: false });
+  assert.equal(node.getAttribute('loading'), null, 'loading=false 必须摘掉，不然按钮永远转圈');
+
+  assert.equal(M.applyOptions(fakeNode('m-button'), { loading: null }).getAttribute('loading'), null, 'null 不动它');
+});
+
 test('applyOptions：onXxx 变成事件，别的 on 开头的字符串不当事件', () => {
   const node = M.applyOptions(fakeNode('m-button'), { onInput: () => {}, onclick: 'ignored', onClick: () => {} });
   assert.deepEqual(node.listeners.map((l) => l.type).sort(), ['click', 'input']);

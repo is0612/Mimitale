@@ -890,7 +890,7 @@ async function testConnection() {
   const provider = providerById(editingProviderId);
   if (!provider) return;
 
-  el.btnTest.disabled = true;
+  el.btnTest.loading = true;
   el.btnTest.textContent = '测试中…';
   try {
     const result = await api.testConnection({ provider });
@@ -898,8 +898,8 @@ async function testConnection() {
   } catch (err) {
     showToast((err && err.message) || '连接失败', 'error');
   } finally {
-    el.btnTest.disabled = false;
-    el.btnTest.textContent = '测试当前提供商';
+    el.btnTest.loading = false;
+    el.btnTest.textContent = '测试当前模型提供商';
   }
 }
 
@@ -908,7 +908,7 @@ async function fetchModels() {
   const provider = providerById(editingProviderId);
   if (!provider) return;
 
-  el.btnFetchModels.disabled = true;
+  el.btnFetchModels.loading = true;
   el.btnFetchModels.textContent = '获取中…';
   try {
     const models = asArray(await api.listModels({ provider }));
@@ -954,7 +954,7 @@ async function fetchModels() {
       showToast(message, 'error');
     }
   } finally {
-    el.btnFetchModels.disabled = false;
+    el.btnFetchModels.loading = false;
     el.btnFetchModels.textContent = '拉取可用模型';
   }
 }

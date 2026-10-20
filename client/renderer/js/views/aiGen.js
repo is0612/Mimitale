@@ -185,16 +185,36 @@ function buildBookContext(book, prompt) {
 
 // --- 取模型返回的正文 ---
 
-function responseText(response, bridge) {
+/** 桥接返回 { text, image }，直连返回 { content } —— 两种形状都在这里收口 */
+export function generationText(response, bridge) {
   if (!response) return '';
   if (bridge) return String(response.text || '');
   return typeof response.content === 'string' ? response.content : '';
 }
 
+/**
+ * 生成任务要打哪一路：没配服务 / 没填 Key 时弹提示并返回 null。
+ * ⚠️ 「AI 生成角色」和编辑器里的「AI 补设定」共用这一份 —— 两边各写一遍，
+ *    迟早有一边漏掉桥接判断（桥接 provider 没有 apiKey，照样能生成）。
+ */
+export function resolveGenTarget() {
+  const endpoint = currentEndpoint();
+  if (!endpoint || !endpoint.provider) {
+    showToast('还没有配置模型服务，请先在设置里添加', 'error');
+    return null;
+  }
+  const bridge = isBridgeProvider(endpoint.provider);
+  if (!bridge && !endpoint.provider.apiKey) {
+    showToast(`还没有填写「${endpoint.provider.name}」的 API Key`, 'error');
+    return null;
+  }
+  return { endpoint, bridge };
+}
+
 // --- 解析模型输出 ---
 
 /** 去掉 ```json 围栏和正文前后的解释文字，只留下最外面那个花括号块 */
-function extractJsonBlock(raw) {
+export function extractJsonBlock(raw) {
   let text = String(raw || '').trim();
 
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -373,7 +393,8 @@ export function openAiGenModal(options = {}) {
 function updateButtons() {
   if (!nodes) return;
   if (nodes.go) {
-    nodes.go.disabled = busy;
+    // loading 自带「不可点」：转圈圈 + 文字一起变，用户一眼知道在等
+    nodes.go.loading = busy;
     nodes.go.textContent = busy ? '生成中…' : '开始生成';
   }
   if (nodes.stop) nodes.stop.classList.toggle('hidden', !busy);
@@ -487,17 +508,9 @@ async function generate() {
     return;
   }
 
-  const endpoint = currentEndpoint();
-  if (!endpoint || !endpoint.provider) {
-    showToast('还没有配置模型服务，请先在设置里添加', 'error');
-    return;
-  }
-
-  const bridge = isBridgeProvider(endpoint.provider);
-  if (!bridge && !endpoint.provider.apiKey) {
-    showToast(`还没有填写「${endpoint.provider.name}」的 API Key`, 'error');
-    return;
-  }
+  const target = resolveGenTarget();
+  if (!target) return;
+  const { endpoint, bridge } = target;
 
   const system =
     scope === 'worldbook' && targetBook
@@ -535,7 +548,7 @@ async function generate() {
       return;
     }
 
-    const parsed = parseGeneratedCharacter(responseText(response, bridge));
+    const parsed = parseGeneratedCharacter(generationText(response, bridge));
     if (!parsed.ok) {
       showToast(`${parsed.error}，已把原文放进描述里，你自己整理一下`, 'error');
       acceptDraft({

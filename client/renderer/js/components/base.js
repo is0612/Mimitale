@@ -70,13 +70,15 @@ export function toggleAttr(node, name, on) {
  * 工厂形态共用：把 { variant, size, block, disabled, text, class, ariaLabel, onClick, ...rest } 落到元素上。
  * rest 口径：onXxx → addEventListener；value / checked → property；dataset → el.dataset；其余 → setAttribute。 */
 export function applyOptions(el, opts = {}) {
-  const { variant, size, block, disabled, text, class: className, ariaLabel, onClick, ...rest } = opts;
+  const { variant, size, block, disabled, loading, text, class: className, ariaLabel, onClick, ...rest } = opts;
 
   if (variant != null) setAttr(el, 'variant', variant);
   if (size != null) setAttr(el, 'size', size);
   // 用 != null 而不是真值判断：false 表示「明确关掉」，要能把旧属性删掉
   if (block != null) setAttr(el, 'block', block);
   if (disabled != null) setAttr(el, 'disabled', disabled);
+  // loading：转圈圈 + 期间不可点（只对带这套状态的组件有意义，其余组件当普通属性挂着）
+  if (loading != null) setAttr(el, 'loading', loading);
 
   if (className) {
     const names = Array.isArray(className) ? className : String(className).split(/\s+/);

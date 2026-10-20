@@ -79,6 +79,8 @@ let stashDraft = () => {};
 let importBooks = async () => {};
 // 打开「AI 生成 NPC」弹窗（视图不向上 import 入口层，编排放注入里）
 let aiDraftInBook = () => {};
+// 离开编辑器后通知入口层（回到角色编辑器时，那边「已绑世界书」那行要按最新数据重画）
+let afterLeave = () => {};
 
 /** 事件处理器里跑异步动作：出错统一 toast，别变成 unhandled rejection */
 function runAsync(action) {
@@ -99,6 +101,7 @@ export function initWorldbook(opts = {}) {
   if (typeof opts.stashDraft === 'function') stashDraft = opts.stashDraft;
   if (typeof opts.importBooks === 'function') importBooks = opts.importBooks;
   if (typeof opts.aiDraftInBook === 'function') aiDraftInBook = opts.aiDraftInBook;
+  if (typeof opts.afterLeave === 'function') afterLeave = opts.afterLeave;
 
   initWorldbookLayout({ onFilter: () => {
     stashEntryForm();
@@ -106,7 +109,6 @@ export function initWorldbook(opts = {}) {
   } });
 
   // --- 编辑器本体 ---
-  el.wb.btnExport.addEventListener('click', runAsync(exportWorldbook));
   el.wb.btnClose.addEventListener('click', runAsync(leaveWorldbookEditor));
   el.wb.btnImport.addEventListener('click', runAsync(importBooks));
   el.wb.btnNew.addEventListener('click', newWorldbook);
@@ -273,6 +275,40 @@ function renderDirtyHint() {
   node.textContent = mine && mine.dirty
     ? others ? `有未保存的改动（另有 ${others} 本）` : '有未保存的改动'
     : others ? `另有 ${others} 本有未保存的改动` : '所有更改已保存';
+}
+
+/**
+ * 「AI 补设定」在**副本**作用域用：把补出来的条目并进这本书的**草稿**（不落盘）。
+ *
+ * ⚠️ 不能直接往 `book.entries` 里塞：世界书编辑器手里可能正压着一份脏草稿，
+ *    之后点「保存」会用那份草稿整体覆盖 entries —— 直接塞的条目会被**静默吞掉**。
+ *    并进草稿之后，它们就在左栏的条目列表里，和手写的条目一样受「保存 / 放弃」管。
+ *
+ * @param {string} bookId
+ * @param {object[]} entries 世界书条目形状（和 newEntry 造出来的一致）
+ * @returns {boolean} 书不存在 / 没有可用条目 → false
+ */
+export function appendEntriesToBookDraft(bookId, entries) {
+  const book = worldbookById(bookId);
+  const list = (Array.isArray(entries) ? entries : []).filter(
+    (entry) => entry && String(entry.content || '').trim()
+  );
+  if (!book || !list.length) return false;
+
+  // 编辑器里可能正开着某一条：先把它收进草稿，免得下面重画列表时拿旧表单回写
+  stashEntryForm();
+
+  const draft = draftFor(book);
+  draft.entries = [...draft.entries, ...list];
+  if (!draft.dirty) draft.dirty = true;
+
+  // 正编辑着这一本：左栏列表 / 条目数立刻跟着变，否则回到这一屏看到的还是旧列表
+  if (editingWorldbookId === book.id) {
+    el.wb.entryCount.textContent = wbEntryCountText(draft.entries);
+    renderEntryList();
+  }
+  renderDirtyHint();
+  return true;
 }
 
 /** 草稿写回世界书（点「保存」时用）。返回是否真的提交了 */
@@ -505,7 +541,9 @@ function renderEntryList() {
   }
 
   for (const entry of entries) {
-    // 一行两行：① 名称 + 状态徽章 + 「字数 · 顺序」（靠右，不压 × 按钮）② 关键词
+    // 两行两列：① 名称 + 状态徽章 ② 关键词 + 「字数 · 顺序」；
+    // 右边那一列是 × 的**专属位置**（横跨两行、自己垂直居中）。
+    // 改版前 × 是绝对定位浮在右上角、元信息贴着它 —— 看着像溢出没排好（2026-10-20）。
     const order = entry.order ?? WB_NEW_ENTRY_DEFAULTS.order;
     const words = String(entry.content || '').length;
     el.wb.entryList.appendChild(
@@ -530,10 +568,14 @@ function renderEntryList() {
           { class: 'wb-entry-title' },
           h('span', { class: 'wb-entry-name', text: entry.title }),
           entry.constant && h('span', { class: 'wb-badge', text: '常驻' }),
-          entry.enabled === false && h('span', { class: 'wb-badge', text: '停用' }),
+          entry.enabled === false && h('span', { class: 'wb-badge', text: '停用' })
+        ),
+        h(
+          'div',
+          { class: 'wb-entry-sub' },
+          h('span', { class: 'wb-entry-keys', text: (entry.keys || []).join(' / ') || '（无关键词）' }),
           h('span', { class: 'wb-entry-meta', text: `${words} 字 · ${order}`, title: `${words} 字 · 插入顺序 ${order}` })
         ),
-        h('div', { class: 'wb-entry-keys', text: (entry.keys || []).join(' / ') || '（无关键词）' }),
         // 行上的 ×：只删草稿所以不问确认；stopPropagation 必须加，否则这一下会同时选中该条。
         button({
           class: 'wb-entry-del',
@@ -1012,6 +1054,10 @@ function openWorldbooksModal(targetId) {
   if (from !== 'wbEditor') editorReturnView = from;
 
   selectWorldbook(next);
+  // 每次进来都停在「书籍设置」：这是「这本书长什么样」的那一屏，也是新书第一站。
+  // ⚠️ 别恢复上次停在哪 —— 上次可能是三天前为了改一条条目点进去的，
+  //    今天从列表点「编辑」是想看书本身（2026-10-20 星宝要求）。
+  setWorldbookPanel('settings');
   renderWorldbookChars();
 
   showView('wbEditor');
@@ -1046,11 +1092,14 @@ export async function leaveWorldbookEditor() {
   el.wb.bookWrap.classList.add('hidden');
   showEntryForm(false);
 
-  showView(editorReturnView === 'wbEditor' ? 'worldbooks' : editorReturnView);
+  const back = editorReturnView === 'wbEditor' ? 'worldbooks' : editorReturnView;
+  showView(back);
   renderWorldbookChars();
   renderDirtyHint();
   // 列表页要马上看到最新状态（给「新建又放弃」收尾）。
   renderWorldbookPage();
+  // 回到角色编辑器时，那边「已绑世界书」那行可能刚被改名 / 加过条目 —— 交给入口层重画
+  afterLeave(back);
 }
 
 /** 新建一本世界书，并直接进编辑器 */
@@ -1374,6 +1423,21 @@ async function deleteWorldbook() {
   await deleteWorldbookById(editingWorldbookId);
 }
 
+/** 从列表卡片导出**某一本**（导的是盘上那份，不是草稿）。@param {string} id */
+export async function exportWorldbookById(id) {
+  const book = worldbookById(id);
+  if (!book) return null;
+
+  await saveExport({
+    title: '导出世界书',
+    fileName: `${safeFileName(book.name || '未命名世界书')}.json`,
+    filters: [{ name: '世界书 JSON（酒馆可直接导入）', extensions: ['json'] }],
+    // cover 也带上 —— 少了它，「导出再导回来」就是丢封面
+    text: JSON.stringify(worldbookPayload(book), null, 2)
+  });
+  return book;
+}
+
 /** 批量导出世界书：每本一个 .json（酒馆 lorebook 规范）。导的是**盘上那份**，不是草稿。@param {string[]} ids */
 export async function exportWorldbooksByIds(ids) {
   const wanted = new Set(Array.isArray(ids) ? ids : []);
@@ -1527,26 +1591,4 @@ async function previewWorldbook() {
     console.error('预览失败', err);
     showToast('预览失败', 'error');
   }
-}
-
-/** 导出当前编辑的世界书（导出的是界面上这份草稿，不是盘上那份） */
-async function exportWorldbook() {
-  const book = currentWorldbook();
-  const draft = currentDraft();
-  if (!book || !draft) return;
-
-  stashWorldbookName();
-  stashEntryForm();
-
-  await saveExport({
-    title: '导出世界书',
-    fileName: `${safeFileName(draft.name)}.json`,
-    filters: [{ name: '世界书 JSON（酒馆可直接导入）', extensions: ['json'] }],
-    // cover 也带上（导出的永远是界面上这份草稿）—— 少了它，「导出再导回来」就是丢封面
-    text: JSON.stringify(
-      worldbookPayload({ ...book, name: draft.name, entries: draft.entries, cover: draft.cover }),
-      null,
-      2
-    )
-  });
 }

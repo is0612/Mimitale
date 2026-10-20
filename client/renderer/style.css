@@ -309,7 +309,7 @@ body {
 }
 
 .mi-btn--sm > .mi-btn__control {
-  padding: 6px 12px;
+  padding: 8px 16px;
   font-size: var(--fs-xs);
 }
 
@@ -405,6 +405,49 @@ m-button.btn-new > .mi-btn__control {
   cursor: not-allowed;
   box-shadow: none;
   filter: grayscale(0.3);
+}
+
+/* ---------------------------- 转圈圈（加载中） ----------------------------
+   按钮里的那颗由组件插（components/button.js 的 syncLoading），
+   状态行里的「正在读这张卡…」用同一个 `.spinner`，动画只有这一份。
+
+   ⚠️ 只转一个 2px 的圆环、不铺一层遮罩：按钮本身已经 disabled + 降透明度，
+   再盖一层只会让「点了没反应」变成「点了看不清」。 */
+.mi-btn__spinner,
+.spinner {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* 按钮里：紧跟文字前面，和 label 之间留一点呼吸 */
+.mi-btn__spinner {
+  margin-right: 6px;
+}
+
+/* 行内状态文字里：和基线对齐，否则圈圈会往上飘 */
+.spinner {
+  margin-right: 6px;
+  vertical-align: -0.12em;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 系统开了「减少动态效果」：转还是要转（它表示「在等」），但放慢到不晃眼 */
+@media (prefers-reduced-motion: reduce) {
+  .mi-btn__spinner,
+  .spinner {
+    animation-duration: 2.4s;
+  }
 }
 
 /* ============================================================================
@@ -1364,6 +1407,10 @@ body.pad-dragging {
   padding: 8px;
   top: 24px;
   right: 12px;
+}
+
+.sidebar-toggle:focus-visible {
+  outline:none
 }
 
 .sidebar.collapsed .brand-name {
@@ -2558,8 +2605,6 @@ body.pad-dragging {
   margin-top: 14px;
   border-color: var(--accent-border-soft);
   font-family: var(--font-ui);
-  background: color-mix(in srgb, var(--bg-card) 32%, transparent);
-  backdrop-filter: blur(6px);
 }
 
 /* 选项按钮的容器：点「换一批」时里面换成骨架屏 */
@@ -3548,11 +3593,6 @@ m-button.btn-new > .mi-btn__control:hover {
 .sidebar-foot #btn-settings {
   margin-top: 8px;
   min-height: 44px;
-}
-
-.sidebar-foot #btn-settings > .mi-btn__control {
-  border-top: 1px solid var(--border);
-  padding-top: 14px;
 }
 
 .story-eyebrow {
@@ -5021,7 +5061,8 @@ m-button.btn-new > .mi-btn__control:hover {
   font-family: inherit;
   transition: border-color 0.15s;
   border-radius: 50%;
-  border: 4px solid var(--ce-sidebar);
+  /* 和形象同一道描边：4px 的圈会在图外再套一圈深色环，比旁边那张立绘重得多 */
+  border: 1px solid var(--border);
 }
 
 .char-portrait {
@@ -5149,9 +5190,26 @@ m-button.btn-new > .mi-btn__control:hover {
   box-shadow: var(--art-edge), var(--focus-ring);
 }
 
-/* 有图时才显示「清除」（字号沿 size="sm" 皮肤的 var(--fs-xs)，这里只压内边距） */
+/* 有图时才显示「清除」：做成图下的一条淡字按钮。
+   它和「保存 / 删除」不在一个层级上，不该跟它们一样是一块实心底 ——
+   整块底的「清除」会让人误以为那是这两张图的主操作。 */
 .char-avatar-col m-button > .mi-btn__control {
-  padding: 4px 10px;
+  min-height: 24px;
+  padding: 2px 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-faint);
+}
+
+.char-avatar-col m-button > .mi-btn__control:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+  box-shadow: none;
+}
+
+/* 上面那条把 ghost 的投影清掉了，聚焦光环得自己补回来 */
+.char-avatar-col m-button > .mi-btn__control:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 
 /* ------------------------------ 表情图（角色编辑页里那一屏） ------------------------------ */
@@ -5489,20 +5547,23 @@ m-button.btn-new > .mi-btn__control:hover {
   margin-bottom: 0;
 }
 
-/* 左栏底部：保存 / 导出 · 返回 / 删除，三行。
-   ⚠️ 高度是紧的：1440×900 下刚好装得下，再塞东西就长出栏内滚动条。 */
+/* 左栏底部：保存 / 导出 / 删除，三行。
+   层级靠三件事拉开，不靠再加一颗实心块：保存是唯一的主色面，导出是次级整行，
+   删除退成一条淡字 —— 它不占版面，但一直在。
+   返回只在页头左上角和 Esc，左栏不再放第二颗。
+   ⚠️ 高度仍是紧的：1440×900 下左栏刚好装得下，再塞东西就长出栏内滚动条。 */
 #view-char-editor .char-rail-foot {
   position: sticky;
   bottom: 0;
   z-index: 1;
   margin-top: auto;
-  padding: 8px 0 2px;
+  padding: 10px 0 4px;
   border-top: 1px solid var(--ce-line);
   background: var(--ce-sidebar);
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* 铺满栏宽写在宿主上，文字靠左是里层的对齐 */
@@ -5510,21 +5571,34 @@ m-button.btn-new > .mi-btn__control:hover {
   width: 100%;
 }
 
-/* 导出 / 返回 并排：左栏净宽 188px，各占一半，别往里加更长的文案 */
-#view-char-editor .char-rail-pair {
-  display: flex;
-  gap: 6px;
+/* 主操作比次级高一档：32 / 28 / 24 三级，一眼能排出先后 */
+#view-char-editor .char-rail-foot #btn-save-char > .mi-btn__control {
+  min-height: 32px;
+  font-weight: 600;
 }
 
-#view-char-editor .char-rail-pair m-button {
-  flex: 1 1 0;
-  width: auto;
-  min-width: 0;
-}
-
-/* 删除单独收尾 */
+/* 删除：去掉 danger 的整块实底，平时只是一条淡字，悬停才染红。
+   确认识别靠悬停 / 聚焦时的红，不靠一整块红底在栏底常驻。 */
 #view-char-editor .char-rail-foot #btn-del-char {
-  margin-top: 6px;
+  margin-top: 2px;
+}
+
+#view-char-editor .char-rail-foot #btn-del-char > .mi-btn__control {
+  min-height: 24px;
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--text-faint);
+  box-shadow: none;
+}
+
+#view-char-editor .char-rail-foot #btn-del-char > .mi-btn__control:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* 同上：投影清掉之后，键盘聚焦要还能看见 */
+#view-char-editor .char-rail-foot #btn-del-char > .mi-btn__control:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 
 /* 头像 + 形象：一排两个，底边对齐 */
@@ -5533,8 +5607,18 @@ m-button.btn-new > .mi-btn__control:hover {
   height: 56px;
 }
 
-#view-char-editor .char-avatar-col .char-media-item:last-child {
-  gap: 4px;
+/* 还是空槽时改虚线、收掉 art-edge 的白边 —— 白边是给透明底素材勾轮廓的，
+   空框套一圈白线只会和虚线打架。 */
+#view-char-editor .char-avatar:has(.char-avatar-empty),
+#view-char-editor .char-portrait:has(.char-avatar-empty) {
+  border-style: dashed;
+  box-shadow: none;
+}
+
+/* 收掉白边不能连键盘聚焦环一起收掉 */
+#view-char-editor .char-avatar:has(.char-avatar-empty):focus-visible,
+#view-char-editor .char-portrait:has(.char-avatar-empty):focus-visible {
+  box-shadow: var(--focus-ring);
 }
 
 #view-char-editor .char-head-fields .field-label {
@@ -6148,20 +6232,144 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--text-faint);
 }
 
+/* 行上的两颗粒：编辑（跳去这本书的编辑器）/ ✕（解绑）。
+   同尺寸、不同色彩语义 —— 编辑 hover 走强调色，解绑 hover 走危险色。 */
+.cwb-row-edit,
 .cwb-row-del {
   flex: 0 0 auto;
   border: none;
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
+  font-family: inherit;
   font-size: var(--fs-xs);
   padding: 4px 6px;
   border-radius: var(--radius-sm);
 }
 
+.cwb-row-edit {
+  color: var(--text-dim);
+}
+
+.cwb-row-edit:hover {
+  color: var(--accent);
+  background: var(--bg-input);
+}
+
 .cwb-row-del:hover {
   color: var(--danger-text);
   background: var(--bg-input);
+}
+
+/* 「AI 补设定」：头部那两颗按钮 + 还没落盘的条目清单 + 状态行。
+   清单用**虚线**框：这些条目还不存在于任何一本书里，点保存才成真。 */
+.cwb-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cwb-ai {
+  margin: 0 0 10px;
+}
+
+.cwb-ai-status {
+  margin: 0;
+}
+
+.cwb-ai-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.cwb-ai-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  min-width: 0;
+}
+
+/* 展开正文时整行变成两段：上面还是「标题 · 关键词 · 改 · ✕」，下面多一个正文框 */
+.cwb-ai-entry.is-open {
+  border-style: solid;
+}
+
+.cwb-ai-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cwb-ai-title {
+  flex: 0 0 auto;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.cwb-ai-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.cwb-ai-del {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.cwb-ai-del:hover {
+  color: var(--danger-text);
+  background: var(--bg-input);
+}
+
+/* 「改」：和 ✕ 同尺寸，但 hover 走强调色 —— 一个是改、一个是删 */
+.cwb-ai-edit-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.cwb-ai-edit-btn:hover {
+  color: var(--accent);
+  background: var(--bg-input);
+}
+
+/* 就地改正文：高度给够四行，字小一档（条目正文本来就是小字块） */
+.cwb-ai-content {
+  width: 100%;
+  min-height: 84px;
+  padding: 8px 10px;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  resize: vertical;
 }
 
 /* 选择世界书的浮层 */
@@ -7073,6 +7281,69 @@ m-button.btn-new > .mi-btn__control:hover {
 .wb-card-actions .mi-btn--ghost > .mi-btn__control {
   background: transparent;
   box-shadow: none;
+}
+
+/* ---- 网格末尾那张「空白卡」（2026-10-20）----
+   把页头右上角的添加入口搬到手边：翻到最后一张卡时，不用再回到屏幕顶端找按钮。
+   形态是**虚线框 + 透明底**，一眼能看出「这里可以加」，而不是一张没加载出来的卡。
+   高度靠上半截的 `aspect-ratio: 2/3`（和封面同比例）+ 下半截按钮撑 —— 和旁边的卡对得上。
+   ⚠️ 自己写布局，**不复用 `.char-card`** —— 那种卡是可点的、进批量的，这张不是；
+      而且全项目大量断言用 `.char-card` 数卡片数，挂上去就多算一张。 */
+.lib-add-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: transparent;
+}
+
+.lib-add-card:is(:hover, :focus-within) {
+  border-color: var(--accent);
+  background: var(--bg-card);
+}
+
+.lib-add-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  /* ⚠️ 不写 aspect-ratio：网格默认 stretch，同一行有真卡片时这张会被拉成同样的高度，
+     底部因此严丝合缝。`min-height` 只管「它独占一行」时别塌成一条。 */
+  min-height: 240px;
+  padding: 12px;
+  text-align: center;
+}
+
+.lib-add-plus {
+  font-size: 38px;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--text-faint);
+  transition: color 0.15s;
+}
+
+.lib-add-card:hover .lib-add-plus {
+  color: var(--accent);
+}
+
+.lib-add-hint {
+  font-size: var(--fs-min);
+  color: var(--text-faint);
+}
+
+/* 按钮竖排：导入 / AI / 新建 三颗在 216px 的列宽里横排会挤成三截 */
+.lib-add-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: auto;
+  padding: 8px 10px 10px;
 }
 
 /* 2:3 封面：角色形象和世界书封面共用。`flex: 0 0 auto` 是必要的 ——
@@ -8518,16 +8789,6 @@ m-button.btn-new > .mi-btn__control:hover {
   white-space: nowrap;
 }
 
-.page-crumb {
-  margin: 0 0 2px;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-}
-
-.page-crumb + .page-title {
-  margin-top: 0;
-}
-
 /* 页头左上角的返回（编辑页 / 设置页共用）。
    2026-10-19 从右上角挪过来：那儿和「保存」挤在一簇，1440 窗口下离阅读起点一千多像素。
    返回属于导航、不属于「对当前对象做什么」，放在读到的第一个位置更顺，
@@ -8635,19 +8896,33 @@ m-button.btn-new > .mi-btn__control:hover {
   border: 1px solid var(--border-soft);
 }
 
-/* 头像 / 形象：一排两个、顶对齐（形象 2:3 和角色库卡片同比例，不再单独压尺寸） */
+/* 头像 / 形象：一排两格（120 + 12 + 56 = 188，正好是栏内净宽）。
+   ⚠️ 两格必须等高：形象钉死 2:3，头像那格把图压到行底 —— 标签和「清除」才会落在
+   同一条线上。顶对齐时两颗「清除」一高一低，整块看上去是两摞没对齐的东西。 */
 #view-char-editor .char-avatar-col {
-  align-items: flex-start;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: stretch;
 }
 
 #view-char-editor .char-avatar-col .char-media-item {
-  grid-template-rows: auto auto;
-  row-gap: 8px;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  row-gap: 6px;
+  justify-items: center;
+  align-items: end;
+  min-width: 0;
+}
+
+/* 头像在 180px 的行里贴底，和形象的下沿齐平；上面那块余白是有意的留白 */
+#view-char-editor .char-avatar-col .char-media-item > button {
+  align-self: end;
 }
 
 #view-char-editor .char-media-label {
   display: block;
+  line-height: 1;
 }
 
 /* 分区导航：图标 + 名称 + 一句话说明 + 计数徽章。
@@ -8746,7 +9021,7 @@ m-button.btn-new > .mi-btn__control:hover {
    ⚙ 2026-10-16 组件化：`>` 后面多一层宿主（描边/内边距/背景长在里层那颗上）。 */
 #view-char-editor .char-sheet > m-textarea > textarea {
   max-height: none;
-  padding: 18px 20px;
+  padding: 12px 16px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -8990,11 +9265,6 @@ m-button.btn-new > .mi-btn__control:hover {
   gap: 16px;
 }
 
-#view-wb-editor .wb-head .page-crumb {
-  margin: 0;
-  white-space: nowrap;
-}
-
 /* 两个编辑页页头右侧的「全文 N 字」：同一个类、同一个字号，别各写一份 */
 .editor-total {
   font-size: var(--fs-xs);
@@ -9003,7 +9273,7 @@ m-button.btn-new > .mi-btn__control:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* ----- 书籍条 64px：封面缩略 + 书名 + 一行统计 + 两个书级动作 ----- */
+/* ----- 书籍条 64px：封面缩略 + 书名 + 一行统计 + 书级动作 ----- */
 
 #view-wb-editor .wb-bookbar {
   display: flex;
@@ -9227,14 +9497,22 @@ m-button.btn-new > .mi-btn__control:hover {
   padding: 6px 8px;
 }
 
-/* 行：两行（名称 + 徽章 + 「字数 · 顺序」 / 关键词），59px 左右。
-   ⚠️ 右侧 30px 是**给绝对定位的 × 留的位** —— 不留位它就会压住「顺序 100」的后两位
-      （改版前那本 51 条的书里，元信息显示成「51 字 · 1」就是这个原因）。 */
+/* 行：两行两列（名称 + 徽章 / 关键词 + 「字数 · 顺序」），右边一列专给 ×。
+   ⚠️ × 自己占一列、垂直居中 —— 别再改回 absolute 浮在右上角：那样它跟两行文字
+      都不对齐，元信息还贴着它，整行看着像没排好（2026-10-20 星宝：「删除按钮不居中，
+      居中了整体看着又很怪」）。进了网格列之后「居中」才对得上东西。 */
 #view-wb-editor .wb-entry {
-  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  grid-template-areas:
+    'title del'
+    'sub   del';
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 3px;
   flex: 0 0 auto;
   min-width: 0;
-  padding: 10px 30px 10px 10px;
+  padding: 9px 6px 9px 10px;
   border: 1px solid transparent;
   border-radius: var(--radius);
   cursor: pointer;
@@ -9262,12 +9540,13 @@ m-button.btn-new > .mi-btn__control:hover {
 #view-wb-editor .wb-entry-title {
   display: flex;
   align-items: center;
+  grid-area: title;
   gap: 6px;
   min-width: 0;
 }
 
 #view-wb-editor .wb-entry-name {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   font-size: var(--fs-sm);
@@ -9286,20 +9565,20 @@ m-button.btn-new > .mi-btn__control:hover {
   border-radius: 999px;
 }
 
-#view-wb-editor .wb-entry-meta {
-  flex: none;
-  margin-left: auto;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+/* 第二行：关键词靠左（长了截断），「字数 · 顺序」靠右 —— 元信息跟着这一行走，
+   不再跟 × 抢同一条线的末端。 */
+#view-wb-editor .wb-entry-sub {
+  display: flex;
+  align-items: baseline;
+  grid-area: sub;
+  gap: 8px;
+  min-width: 0;
 }
 
-/* ⚠️ 必须 display: block —— 它是 .wb-entry 的直接子级，而 .wb-entry 不是 flex 容器，
-   inline 的 span 上 overflow / text-overflow 一律不生效（截断查不出来）。 */
+/* ⚠️ 关键词是 flex 子项：截断要 min-width: 0 + overflow，少一个都只剩「压扁」不截断 */
 #view-wb-editor .wb-entry-keys {
-  display: block;
-  margin-top: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   font-size: var(--fs-xs);
   color: var(--text-faint);
@@ -9307,15 +9586,23 @@ m-button.btn-new > .mi-btn__control:hover {
   white-space: nowrap;
 }
 
+#view-wb-editor .wb-entry-meta {
+  flex: none;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* 行上的 ×：平时淡着、鼠标扫过来（或键盘 Tab 到）才亮 —— 点一下直接删，
    不问确认框（删的只是草稿，点「保存」才落盘，反悔的办法是不保存）。 */
 #view-wb-editor .wb-entry-del {
-  position: absolute;
-  top: 4px;
-  right: 4px;
   display: flex;
+  grid-area: del;
   align-items: center;
   justify-content: center;
+  align-self: center;
+  justify-self: center;
   width: 24px;
   height: 24px;
   padding: 0;
@@ -9727,10 +10014,14 @@ m-button.btn-new > .mi-btn__control:hover {
   margin-top: auto;
 }
 
+/* 封面 + 书名（2026-10-20 重排）：
+   左边一张 132×198 的封面（2:3，和列表卡同一个比例），右栏贴顶放书名、贴底放
+   「清除封面 + 一行说明」，两边同高。改版前三样东西挤在 96px 宽的一条里，
+   书名框拉得老长、右下角空出一大片 —— 看着像没排完。 */
 #view-wb-editor .wb-cover-cell {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 18px;
 }
 
 #view-wb-editor .wb-cover-frame {
@@ -9739,7 +10030,7 @@ m-button.btn-new > .mi-btn__control:hover {
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 96px;
+  width: 132px;
   aspect-ratio: 2 / 3;
   padding: 0;
   overflow: hidden;
@@ -9761,12 +10052,15 @@ m-button.btn-new > .mi-btn__control:hover {
   border-style: solid;
 }
 
+/* align-self: stretch 让右栏跟封面同高 —— 封面是这一格里最高的那个，
+   于是「清除封面」自动落到封面的下沿，不会吊在半空。 */
 #view-wb-editor .wb-cover-side {
   display: flex;
   flex: 1 1 auto;
+  align-self: stretch;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -9777,6 +10071,19 @@ m-button.btn-new > .mi-btn__control:hover {
 
 #view-wb-editor .wb-cover-side .field-label {
   padding-top: 0;
+}
+
+/* 封面的两个附注（清除 / 尺寸提示）排一行，贴在封面下沿那一线上 */
+#view-wb-editor .wb-cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+#view-wb-editor .wb-cover-tip {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
 }
 
 #view-wb-editor .wb-danger {
@@ -9814,7 +10121,6 @@ m-button.btn-new > .mi-btn__control:hover {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 1100px;
 }
 
 #view-wb-editor .wb-chars-bar {

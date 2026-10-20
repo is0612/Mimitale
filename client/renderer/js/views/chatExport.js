@@ -165,9 +165,8 @@ function avatarPngDataUrl(character) {
   });
 }
 
-/** 导出当前编辑的角色卡：存 .png 就是带数据的酒馆卡，存 .json 就是纯数据 */
-export async function exportCharacter() {
-  const character = currentEditorCharacter();
+/** 把一张角色卡写成 .png / .json：编辑器里的「导出」和角色库卡片上的「导出」共用。 */
+export async function exportCharacterCard(character) {
   if (!character) return;
 
   const name = safeFileName(character.name);
@@ -201,7 +200,22 @@ export async function exportCharacter() {
   });
 }
 
-/** 批量导出：每张一个 .json（带头像 / 立绘）。单张 PNG 去编辑器里点「导出」。 */
+/** 导出当前编辑的角色卡：存 .png 就是带数据的酒馆卡，存 .json 就是纯数据 */
+export async function exportCharacter() {
+  return exportCharacterCard(currentEditorCharacter());
+}
+
+/** 角色库卡片上的「导出」：按 id 取已落盘的那一张，不用先进详情页 */
+export async function exportCharacterById(id) {
+  const character = characters().find((c) => c.id === id);
+  if (!character) {
+    showToast('找不到这个角色，可能刚被删除', 'error');
+    return;
+  }
+  return exportCharacterCard(character);
+}
+
+/** 批量导出：每张一个 .json（带头像 / 立绘）。单张 PNG 走编辑器或角色库卡片上的「导出」。 */
 export async function exportCharactersByIds(ids) {
   const wanted = new Set(Array.isArray(ids) ? ids : []);
   const list = characters().filter((c) => wanted.has(c.id));

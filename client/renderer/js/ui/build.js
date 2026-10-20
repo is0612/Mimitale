@@ -94,12 +94,37 @@ export function button({ class: className, text, title, ariaLabel, disabled, onC
   });
 }
 
-/** 列表页骨架：清空网格 → 切空状态 → 更新副标题 → 铺卡片 */
-export function renderListPage({ grid, empty, sub, subText, items, card }) {
+/**
+ * 列表页骨架：清空网格 → 切空状态 → 更新副标题 → 铺卡片 →（可选）末尾补一张「添加卡」。
+ * `addCard` 直接给现成的节点（调用方自己判断该不该给，比如空列表 / 批量选择态就不给）。
+ */
+export function renderListPage({ grid, empty, sub, subText, items, card, addCard }) {
   clear(grid);
   if (empty) empty.classList.toggle('hidden', !!items.length);
   if (sub) sub.textContent = subText || '';
   for (const item of items) grid.appendChild(card(item));
+  if (addCard) grid.appendChild(addCard);
+}
+
+/**
+ * 网格末尾那张「空白卡」：把页头右上角的添加动作搬到手边（划到最后一张卡时不用再回头）。
+ * 占一个卡片格 —— 上半截跟封面同比例（2:3），下半截放按钮，所以高度和旁边的卡对得上。
+ * ⚠️ **不带 `.char-card` 类**：它不是一张卡（不可点、不进批量、没有封面），
+ *    而且全项目大量断言用 `.char-card` 数卡片数量，带上就会凭空多一张。
+ * 业务不归这里管：按钮的 onClick 由调用方给（通常是转发页头那颗按钮的 click）。
+ */
+export function libraryAddCard({ hint, actions }) {
+  return h(
+    'div',
+    { class: 'lib-add-card', role: 'listitem' },
+    h(
+      'div',
+      { class: 'lib-add-body' },
+      h('span', { class: 'lib-add-plus', 'aria-hidden': 'true', text: '＋' }),
+      hint ? h('span', { class: 'lib-add-hint', text: hint }) : null
+    ),
+    h('div', { class: 'lib-add-actions' }, actions)
+  );
 }
 
 /**

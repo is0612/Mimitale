@@ -1,18 +1,18 @@
 'use strict';
 
 // views/characterList.js —— 角色列表页（卡片 + 批量选择）
-// edit / chat / remove / removeMany / exportMany 由入口层注入（都跨了别的分区）
+// edit / chat / remove / exportOne / removeMany / exportMany 由入口层注入（都跨了别的分区）
 // ⚠️ 卡片与世界书共用 ui/build.js 的 libraryCard()：两边只允许差在内容
 
 import { el } from '../core/dom.js';
-import { h, libraryCard, renderListPage } from '../ui/build.js';
+import { h, libraryAddCard, libraryCard, renderListPage } from '../ui/build.js';
 import { mButton } from '../components/index.js';
 import { entityTone } from '../ui/avatarTone.js';
 import { openLightbox } from '../ui/lightbox.js';
 import { characters, characterPortrait } from '../data/library.js';
 import { createBatchSelect } from './batchSelect.js';
 
-let actions = { edit: () => {}, chat: () => {}, remove: () => {}, removeMany: null, exportMany: null };
+let actions = { edit: () => {}, chat: () => {}, remove: () => {}, exportOne: null, removeMany: null, exportMany: null };
 let query = '';
 let batch = null;
 
@@ -79,7 +79,9 @@ export function renderCharacterPage() {
       ? `共 ${all.length} 个角色 · 点「聊天」先定好你是谁，再开始`
       : '导入酒馆角色卡，或自己写一个',
     items: list,
-    card: characterCard
+    card: characterCard,
+    // 末尾那张「添加卡」：空列表有专门的大提示，不重复；批量选择态整卡是勾选框，也不给
+    addCard: list.length && !(batch && batch.isActive()) ? characterAddCard() : null
   });
 
   if (el.charPageCount) {
@@ -92,6 +94,23 @@ export function renderCharacterPage() {
   const searching = !!needle && all.length > 0;
   if (emptyTitle) emptyTitle.textContent = searching ? '没有匹配的角色' : EMPTY_TITLE;
   if (emptyHint) emptyHint.textContent = searching ? '换个关键词再试，或者清空搜索框。' : EMPTY_HINT;
+}
+
+/**
+ * 网格末尾那张「添加角色」卡（2026-10-20）：把页头右上角那三颗搬到手边。
+ * 点击**转发**到页头那颗按钮的 click —— 业务只在原来那处写一遍，两边永远同步；
+ * 以后谁给页头那颗加了 loading / 禁用，这张卡上的也跟着走。
+ */
+function characterAddCard() {
+  const forward = (btn) => () => btn && btn.click();
+  return libraryAddCard({
+    hint: '不用翻回右上角',
+    actions: [
+      mButton({ variant: 'ghost', size: 'sm', block: true, text: '导入角色卡', onClick: forward(el.btnImportCard) }),
+      mButton({ variant: 'ghost', size: 'sm', block: true, text: 'AI 生成', onClick: forward(el.btnAiChar) }),
+      mButton({ variant: 'primary', size: 'sm', block: true, text: '＋ 新建角色', onClick: forward(el.btnNewChar) })
+    ]
+  });
 }
 
 function characterCard(c) {
@@ -125,6 +144,16 @@ function characterCard(c) {
     }),
     actions: [
       mButton({ variant: 'ghost', size: 'sm', text: '编辑', onClick: () => actions.edit(c.id) }),
+      // 不用进详情页就能把这张卡拿走；和批量导出同一条 PNG/JSON 通道
+      actions.exportOne
+        ? mButton({
+            variant: 'ghost',
+            size: 'sm',
+            text: '导出',
+            title: '导出这张角色卡（PNG / JSON）',
+            onClick: () => actions.exportOne(c.id)
+          })
+        : null,
       mButton({ variant: 'primary', size: 'sm', text: '聊天', onClick: () => actions.chat(c.id) })
     ],
     selecting: !!(batch && batch.isActive()),

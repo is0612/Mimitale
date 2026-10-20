@@ -54,6 +54,7 @@ import {
   initPreset,
   openPresetEditor,
   newPreset,
+  openPresetDraft,
   deletePresetById,
   closePresetEditor
 } from './views/preset.js';
@@ -71,6 +72,7 @@ import {
   editWorldbookFromPage,
   deleteWorldbookById,
   deleteWorldbooksByIds,
+  exportWorldbookById,
   exportWorldbooksByIds,
   openWorldbookEditor,
   renderWorldbookChars,
@@ -88,11 +90,13 @@ import {
   startCharacterDraftFromAi,
   releaseEditorScope,
   stashCharacterForm,
+  refreshCharWorldbookBox,
   deleteCharacterById,
   deleteCharactersByIds
 } from './views/characterEditor.js';
 import { initCharacterImport, pickImportFiles, warnImportErrors } from './views/characterImport.js';
 import { initAiGen, openAiGenModal } from './views/aiGen.js';
+import { initPresetAi, openPresetAiModal } from './views/presetAi.js';
 import { renderAll } from './views/redraw.js';
 import { renderConvoList, renderModelSwitch, applyModelChoice } from './views/chatList.js';
 import { renderMessages } from './views/chatMessages.js';
@@ -105,7 +109,7 @@ import {
 } from './views/composer.js';
 import { clearConvo } from './views/convoActions.js';
 import { summarizeNow } from './views/summarize.js';
-import { exportCharacter, exportConversation, exportCharactersByIds } from './views/chatExport.js';
+import { exportCharacter, exportCharacterById, exportConversation, exportCharactersByIds } from './views/chatExport.js';
 import { startPlayerFlow, chatWithCharacter } from './views/worldPlay.js';
 
 // 事件监听器里跑异步动作：出错只落日志，避免变成 unhandled rejection。
@@ -133,12 +137,17 @@ function registerRefreshListeners() {
     openEditor: editWorldbookFromPage,
     remove: deleteWorldbookById,
     removeMany: deleteWorldbooksByIds,
-    exportMany: exportWorldbooksByIds
+    exportMany: exportWorldbooksByIds,
+    // 卡片右上角那颗 ↓：单本导出。编辑器里那颗「导出」已经去掉了（2026-10-20），
+    // 从此「拿走一本书」只在列表页发生 —— 导的永远是盘上那份，不是草稿。
+    exportOne: exportWorldbookById
   });
   // 预设列表同理：动作跨模块，由入口层注入。
   initPresetList({ openEditor: openPresetEditor, remove: deletePresetById, exportOne: exportPreset });
   // 预设编辑器保存 / 删除后要全量重绘（预设页、视角弹窗都可能跟着变）。
   initPreset({ rerender: () => renderAll() });
+  // 预设页的「AI 生成」：生成完开一张填好的草稿 —— 和手建一样，保存才创建。
+  initPresetAi({ startDraft: (fields) => openPresetDraft(fields) });
   initPresetIo({ rerender: () => renderAll() });
 }
 
@@ -239,6 +248,8 @@ function bindEvents() {
   el.btnExportConvo.addEventListener('click', runAsync(exportConversation));
   // 预设页右上角「＋ 新建预设」：打开空草稿（真正建出来要等点保存）
   if (el.btnNewPreset) el.btnNewPreset.addEventListener('click', newPreset);
+  // 它左边那颗「AI 生成」：先弹一句描述，生成完走的也是预设编辑器草稿。
+  if (el.btnAiPreset) el.btnAiPreset.addEventListener('click', openPresetAiModal);
   // 状态卡入口条不用在这里绑事件 —— 头像的点击由 views/panelUi.js 铺的时候就地挂上。
 
   // 记忆管理弹窗在 views/memoryUi.js；这里只留「手动压一段」。
@@ -536,7 +547,8 @@ async function init() {
     edit: (id) => openCharacterEditor(id, 'library'),
     chat: chatWithCharacter,
     remove: deleteCharacterById,
-    // 批量：导出每张一个 JSON、删除一次确认一次写盘（都跨模块，见各自模块的文件头）
+    // 单张导出（列表卡片上用）和批量导出（每张一个 JSON）都跨模块，见各自模块的文件头
+    exportOne: exportCharacterById,
     removeMany: deleteCharactersByIds,
     exportMany: exportCharactersByIds
   });
@@ -559,7 +571,12 @@ async function init() {
     draftInBook: () => startCharacterDraftInBook(),
     releaseScope: () => releaseEditorScope(),
     // 「AI 生成 NPC」：带上这本书的 id，生成时拿它的条目和副本名单当上下文
-    aiDraftInBook: (bookId) => openAiGenModal({ scope: 'worldbook', bookId })
+    aiDraftInBook: (bookId) => openAiGenModal({ scope: 'worldbook', bookId }),
+    // 从角色编辑器点行上的「编辑」跳过来逛一圈、再「返回」：那行「已绑世界书」
+    // 可能已经被改名 / 加过条目，按最新数据重画一遍（不然还挂着旧的 N 条）
+    afterLeave: (view) => {
+      if (view === 'charEditor') refreshCharWorldbookBox();
+    }
   });
   // 设置页保存后要重绘右上角切换器和消息列表，所以注入进去。
   initSettings({

@@ -115,6 +115,31 @@ export function newPreset() {
   el.pr.name.focus();
 }
 
+/**
+ * 用 AI 生成的内容开一张新草稿（入口层接到 views/presetAi.js 的 startDraft）。
+ * 字段已填好，但和手建的一样 —— 看过、改过、点「保存」才真正进 state。
+ * @returns {boolean} 编辑器是否真的开了（失败时调用方要提示）
+ */
+export function openPresetDraft(fields) {
+  const f = fields && typeof fields === 'object' ? fields : {};
+  draft = {
+    id: null,
+    name: String(f.name || '').trim(),
+    note: String(f.note || '').trim(),
+    tags: Array.isArray(f.tags) ? f.tags.filter((t) => typeof t === 'string' && t.trim()) : [],
+    content: String(f.content || ''),
+    enabled: true,
+    global: false,
+    temperature: null,
+    maxTokens: null,
+    topP: null
+  };
+  fillForm();
+  showEditor('AI 生成 · 看过、改过，点「保存」才创建');
+  el.pr.name.focus();
+  return true;
+}
+
 function fillForm() {
   const d = draft || {};
   el.pr.name.value = d.name || '';

@@ -953,6 +953,84 @@ function registerStubs() {
     // ⚠️ 这个桩**必须能返回真东西**，否则「界面没反应」这类问题会伪装成别处失败，
     //    而且返回空和返回垃圾都表现为「生成后字段是空的」，很难分辨。
     const allText = allMsgs.map((m) => String((m && m.content) || '')).join('\n');
+
+    // 「AI 补设定」（角色编辑器里那块，2026-10-20）：和「AI 生成角色」共用 chat:send。
+    // 认两样：人设里的「世界书编辑」+ 字段契约里的 "entries"。和下面那条互不干扰 ——
+    // 那条要的是「角色设定师」+ "firstMes"。
+    //
+    // 特意给了一条「既非常驻、又没有关键词」的条目：它永远不会被注入，
+    // 解析器必须把它丢掉（这是这块最容易出「悄悄多一条死条目」的地方）。
+    if (/世界书编辑/.test(allText) && allText.includes('"entries"')) {
+      const payloadText = JSON.stringify({
+        entries: [
+          {
+            title: '夜班规矩',
+            keys: ['换班', '交接'],
+            content: '这栋楼换班要当面交接：上一班的记录本、钥匙、手电，缺一样都算事故。',
+            constant: false
+          },
+          {
+            title: '街口那盏灯',
+            keys: ['街口', '路灯'],
+            content: '街口的路灯坏了三年没人修，深夜回来的人都会绕到马路对面走。',
+            constant: false
+          },
+          {
+            title: '这座城的作派',
+            keys: [],
+            content: '这里的人不打听别人的来路，问得太多会被当成外人。',
+            constant: true
+          },
+          {
+            // 既非常驻又没有关键词 —— 注入时永远轮不到它，解析器要丢掉
+            title: '用不上的那条',
+            content: '一条没有关键词的设定。',
+            constant: false
+          }
+        ]
+      });
+      for (const piece of payloadText.match(/[\s\S]{1,40}/g) || []) {
+        if (!event.sender.isDestroyed()) event.sender.send('chat:chunk', { requestId, text: piece });
+        await sleep(2);
+      }
+      return {
+        ok: true,
+        requestId,
+        model,
+        content: payloadText,
+        reasoning: '',
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        finishReason: 'stop'
+      };
+    }
+
+    // 「AI 生成预设」（预设页右上角那颗，2026-10-20）：同样共用 chat:send。
+    // 认两样：人设里的「写「预设」的编辑」+ 字段契约里的 "note"。
+    // 名字跟着用户描述 / 场次变 —— 对不上就说明那两段没拼进请求（user 缺描述、system 缺场次）。
+    if (/写「预设」的编辑/.test(allText) && allText.includes('"note"')) {
+      const asked = allText.includes('冒烟：回复太长');
+      const hasScene = allText.includes('【适用的场次】');
+      const payloadText = JSON.stringify({
+        name: asked ? (hasScene ? '短句对白·夜' : '短句对白') : '通用预设',
+        note: '让回复短下来，多留白、少总结。',
+        tags: ['节奏', '对白'],
+        content: '每轮回复不超过三句话。\n不解释情绪，让动作和语气自己说话。\n写场景只写一个细节，不铺全景。'
+      });
+      for (const piece of payloadText.match(/[\s\S]{1,40}/g) || []) {
+        if (!event.sender.isDestroyed()) event.sender.send('chat:chunk', { requestId, text: piece });
+        await sleep(2);
+      }
+      return {
+        ok: true,
+        requestId,
+        model,
+        content: payloadText,
+        reasoning: '',
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        finishReason: 'stop'
+      };
+    }
+
     // ⚠️ 认的**不能是一整句措辞**：原来盯「你是一位角色设定师」，2026-10-19 那句改成
     //    「你是一位经验丰富的角色设定师」之后桩就认不出来了 —— 生成请求被当成普通聊天，
     //    返回一段「冒烟测试回复」，下游十几条断言（名字没回填、落盘没属性……）连带全红，
@@ -3159,6 +3237,137 @@ async function probeAiGenParse(win, result) {
 }
 
 /**
+ * 「AI 补设定」（角色编辑器里那块）的解析体检。和 probeAiGenParse 一个道理：
+ * 纯函数，直接 import 进来喂原文，不经过「点按钮 → 等假后端 → 看界面」那一堆变量。
+ * 重点盯两处容易静默出错的：
+ *   · 既非常驻、又没关键词的条目必须丢掉 —— 留着永远不会被注入，用户以为它生效了；
+ *   · 关键词写成「逗号串」是模型最常见的偷懒写法，得拆成数组。
+ */
+async function probeBookEntries(win, result) {
+  const push = (name, pass, detail) =>
+    result.results.push({ name, pass: !!pass, detail: detail || '' });
+
+  try {
+    const out = await win.webContents.executeJavaScript(`(async () => {
+      const mod = await import(new URL('js/views/charBookAi.js', document.baseURI).href);
+      if (typeof mod.parseBookEntries !== 'function') return { exported: false };
+
+      const clean = JSON.stringify({
+        entries: [
+          { title: '夜班规矩', keys: ['换班', '交接'], content: '换班要当面交接。', constant: false },
+          { title: '这座城的作派', keys: [], content: '不打听别人的来路。', constant: true },
+          { title: '用不上的那条', content: '既非常驻也没有关键词。', constant: false }
+        ]
+      });
+      const commaKeys = JSON.stringify({
+        entries: [{ title: '街口', keys: '街口，路灯', content: '路灯坏了三年。', constant: false }]
+      });
+      const fenced = '好的：\\n\\n\\\`\\\`\\\`json\\n' + clean + '\\n\\\`\\\`\\\`';
+
+      const a = mod.parseBookEntries(clean);
+      const b = mod.parseBookEntries(commaKeys);
+      const c = mod.parseBookEntries(fenced);
+      const d = mod.parseBookEntries('这不是 JSON');
+      return {
+        exported: true,
+        clean: {
+          ok: a.ok,
+          n: (a.entries || []).length,
+          unusable: a.unusable || 0,
+          constant: (a.entries || []).filter((e) => e.constant).length,
+          dropped: !(a.entries || []).some((e) => e.title === '用不上的那条')
+        },
+        comma: { ok: b.ok, keys: ((b.entries || [])[0] || {}).keys, err: b.error },
+        fenced: { ok: c.ok, n: (c.entries || []).length },
+        junk: { ok: d.ok, err: d.error }
+      };
+    })()`);
+
+    if (!out || !out.exported) {
+      push('AI 补设定：解析函数可以从模块里拿到', false, JSON.stringify(out));
+      return;
+    }
+    push('AI 补设定：能解析出条目', out.clean.ok && out.clean.n === 2, JSON.stringify(out.clean));
+    push('AI 补设定：既非常驻又没关键词的条目被丢掉', out.clean.dropped && out.clean.unusable === 1, JSON.stringify(out.clean));
+    push('AI 补设定：常驻条目没被当成关键词条目', out.clean.constant === 1, JSON.stringify(out.clean));
+    push('AI 补设定：关键词写成逗号串也认', out.comma.ok && (out.comma.keys || []).length === 2, JSON.stringify(out.comma));
+    push('AI 补设定：带围栏的输出也能解析', out.fenced.ok && out.fenced.n === 2, JSON.stringify(out.fenced));
+    push('AI 补设定：乱码不抛错、给出错误', !out.junk.ok && !!out.junk.err, JSON.stringify(out.junk));
+  } catch (err) {
+    push('AI 补设定：解析体检能跑起来', false, (err && err.message) || String(err));
+  }
+}
+
+/**
+ * 「AI 生成预设」的解析体检：同上，纯函数直接喂原文。
+ * 重点盯两处：正文空了不能算成功（否则会开一张只有名字的空预设）；
+ * 名字缺失要有兜底名（保存按钮靠名字非空才放行，空名字会让「保存」变成没反应）。
+ */
+async function probePresetGenParse(win, result) {
+  const push = (name, pass, detail) =>
+    result.results.push({ name, pass: !!pass, detail: detail || '' });
+
+  try {
+    const out = await win.webContents.executeJavaScript(`(async () => {
+      const mod = await import(new URL('js/views/presetAi.js', document.baseURI).href);
+      if (typeof mod.parseGeneratedPreset !== 'function') return { exported: false };
+
+      const clean = JSON.stringify({
+        name: '短句对白',
+        note: '让回复短下来，多留白。',
+        tags: ['节奏', '对白'],
+        content: '每轮不超过三句话。\\n不解释情绪。'
+      });
+      const fenced = '好的，我按你说的写了：\\n\\n\\\`\\\`\\\`json\\n' + clean + '\\n\\\`\\\`\\\`\\n\\n还需要再短吗？';
+      const commaTags = JSON.stringify({ name: '短句对白', note: '说明', tags: '节奏，对白', content: '一条规则。' });
+      const noContent = JSON.stringify({ name: '空壳', note: '只有说明', content: '   ' });
+      const noName = JSON.stringify({ note: '没名字', content: '一条规则。' });
+
+      const a = mod.parseGeneratedPreset(clean);
+      const b = mod.parseGeneratedPreset(fenced);
+      const c = mod.parseGeneratedPreset(commaTags);
+      const d = mod.parseGeneratedPreset(noContent);
+      const e = mod.parseGeneratedPreset(noName);
+      const f = (r) => r.fields || {};
+      return {
+        exported: true,
+        clean: {
+          ok: a.ok,
+          name: f(a).name,
+          tags: f(a).tags || [],
+          content: !!f(a).content,
+          err: a.error
+        },
+        fenced: { ok: b.ok, name: f(b).name, err: b.error },
+        comma: { ok: c.ok, tags: f(c).tags || [], err: c.error },
+        noContent: { ok: d.ok, err: d.error },
+        noName: { ok: e.ok, name: f(e).name }
+      };
+    })()`);
+
+    if (!out || !out.exported) {
+      push('AI 生成预设：解析函数可以从模块里拿到', false, JSON.stringify(out));
+      return;
+    }
+    push(
+      'AI 生成预设：干净的 JSON 能解析出全部字段',
+      out.clean.ok && out.clean.name === '短句对白' && out.clean.content && out.clean.tags.length === 2,
+      JSON.stringify(out.clean)
+    );
+    push(
+      'AI 生成预设：带围栏和废话的输出也能解析',
+      out.fenced.ok && out.fenced.name === '短句对白',
+      JSON.stringify(out.fenced)
+    );
+    push('AI 生成预设：标签写成逗号串也认', out.comma.ok && out.comma.tags.length === 2, JSON.stringify(out.comma));
+    push('AI 生成预设：正文是空的就不算成功', !out.noContent.ok && !!out.noContent.err, JSON.stringify(out.noContent));
+    push('AI 生成预设：没给名字时有个兜底名', out.noName.ok && out.noName.name === '未命名预设', JSON.stringify(out.noName));
+  } catch (err) {
+    push('AI 生成预设：解析体检能跑起来', false, (err && err.message) || String(err));
+  }
+}
+
+/**
  * 文案体检：属性编辑器的「更新频率」提示不该硬编码具体字段名（字段是用户
  * 卡片/世界书的数据）。放宿主侧用 fs 读源码，是因为渲染层 CSP 拦 fetch file://。
  */
@@ -3766,6 +3975,8 @@ app.whenReady().then(async () => {
       probeSettingsWhitelist(result);
       await probeStoreWriteFailure(result);
       await probeAiGenParse(win, result);
+      await probeBookEntries(win, result);
+      await probePresetGenParse(win, result);
       probeBatchLibrary(result);
       await probeWorldbookExportRoundTrip(win, result);
       probeWorldbookDeepSplit(result);
@@ -3993,7 +4204,9 @@ app.whenReady().then(async () => {
           document.querySelector('#btn-worldbooks')?.click();
           await new Promise(r => setTimeout(r, 450));
           // 悬停态在图里看不出来，把第一张卡的 × 直接点亮
-          const del = document.querySelector('#wb-page-grid .char-card .char-card-del');
+          // （「导出」2026-10-20 已改成操作行里的一颗常显按钮，不用再点亮）
+          const card = document.querySelector('#wb-page-grid .char-card');
+          const del = card && card.querySelector('.char-card-del');
           if (del) del.style.opacity = '1';`,
         // 世界书编辑器的左栏：封面块在最上面（书的脸），下面才是书名 / 开场白 / 本书角色。
         // 打开一本**带封面的**，否则看到的还是空框。
@@ -4008,7 +4221,10 @@ app.whenReady().then(async () => {
           const card = cards.find(c => c.querySelector('.wb-card-cover img')) || cards[0];
           const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (btn) btn.click();
-          await new Promise(r => setTimeout(r, 600));`,
+          await new Promise(r => setTimeout(r, 600));
+          // ⚠️ 2026-10-20 起进编辑器默认落在「书籍设置」，这一屏要看条目工作台得自己切过去
+          document.querySelector('#wb-tab-entries')?.click();
+          await new Promise(r => setTimeout(r, 300));`,
         // 世界书编辑器的「书籍设置」分区：书名那格在这儿（`wb-name`，页面规则原来给的是
         // 34px 这个**没有档位对应**的高度，迁组件时要决定靠向哪一档）。没有这个场景的话
         // 改完看不见 —— 2026-10-16 加。
@@ -4395,6 +4611,73 @@ app.whenReady().then(async () => {
           $('#btn-clear-avatar')?.classList.remove('hidden');
           $('#btn-clear-portrait')?.classList.remove('hidden');
           await nap(200);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 角色编辑器里「世界书」那一块：一行 = 书名 + 条目数 + 编辑 + 解绑 ✕。
+        // 2026-10-20 加了「编辑」—— 要核的是这一行没被挤成两行、四样东西的间距还匀。
+        charWorldbook: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-chars')?.click();
+          await nap(400);
+          const cards = $$('#char-page-grid .char-card');
+          const card = cards.find(c => (c.textContent || '').includes('自带世界书测试')) || cards[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await nap(600);
+          document.querySelector('#char-section-tab-worldbook')?.click();
+          await nap(400);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 「AI 补设定」补完之后的形态（2026-10-20）：头部两颗按钮并排 +
+        // 虚线条目清单 + 状态行。要核的是:标题别把关键词挤没、✕ 贴右、虚线框间距。
+        // 条目来自假后端（见本文件 chat:send 里「世界书编辑」那一段）。
+        cwbAi: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-chars')?.click();
+          await nap(400);
+          const cards = $$('#char-page-grid .char-card');
+          const card = cards.find(c => (c.textContent || '').includes('自带世界书测试')) || cards[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await nap(600);
+          document.querySelector('#char-section-tab-worldbook')?.click();
+          await nap(300);
+          $('#c-wb-ai-btn')?.click();
+          await nap(1200);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 同上，但把第一条「改」展开 —— 核的是就地改正文时那一块的高度 / 内边距 / 贴合。
+        cwbAiEdit: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-chars')?.click();
+          await nap(400);
+          const cards = $$('#char-page-grid .char-card');
+          const card = cards.find(c => (c.textContent || '').includes('自带世界书测试')) || cards[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await nap(600);
+          document.querySelector('#char-section-tab-worldbook')?.click();
+          await nap(300);
+          $('#c-wb-ai-btn')?.click();
+          await nap(1200);
+          document.querySelector('#c-wb-ai-list .cwb-ai-edit-btn')?.click();
+          await nap(350);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 按钮的 loading 态（2026-10-20）：转圈圈 + 文案 + 变灰，核的是圈圈大小 / 和文字的距离。
+        // 真跑一次生成太快抓不稳这一帧，所以直接给按钮置位（和 aiGen 里点完「开始生成」同一形状）。
+        btnLoading: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-chars')?.click();
+          await nap(450);
+          const pair = [$('#btn-import-card'), $('#btn-new-char')];
+          if (pair[0]) { pair[0].loading = true; pair[0].textContent = '导入中…'; }
+          if (pair[1]) { pair[1].loading = true; pair[1].textContent = '生成中…'; }
+          await nap(250);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 角色编辑页（视图七）：整个主区域就是表单。
         // ⚠️ 2026-10-13 起它是**页面**不再是弹窗，所以这里没有「点放大」那一步 ——

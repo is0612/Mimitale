@@ -34,7 +34,7 @@ function fillPresetList(convo) {
   const list = selectableDialoguePresets();
   if (!list.length) {
     el.pPresetList.appendChild(
-      h('p', { class: 'preset-pick-empty', text: '还没有预设。左侧「预设」页里新建。' })
+      h('p', { class: 'preset-pick-empty', text: '还没有预设。左侧「预设」页里新建，或用右上角的「AI 生成」写一条。' })
     );
     return;
   }

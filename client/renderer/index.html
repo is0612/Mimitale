@@ -196,7 +196,7 @@
             <!-- 批量：常态只露一颗「批量」，进入选择态换成「已选 N · 全选 · 导出 · 删除 · 取消」。
                  世界书页那一组是同一套结构（id 前缀 char- / wb-）。 -->
             <div id="char-batch-normal" class="lib-batch">
-              <m-button id="btn-char-batch" variant="ghost" size="sm">批量</m-button>
+              <m-button id="btn-char-batch" variant="ghost" size="sm">批量操作</m-button>
             </div>
             <div id="char-batch-active" class="lib-batch hidden">
               <span id="char-batch-count" class="lib-batch-count">已选 0 个</span>
@@ -239,23 +239,25 @@
           </div>
 
           <div id="char-form" class="char-form hidden">
-            <!-- 图片区：头像 / 形象 + 表情图入口，放在表单最顶上，和下面的文字字段同级。
-                 两种图的形状就是存下来的形状（裁剪框住哪块这里就显示哪块）。 -->
+            <!-- 图片区：形象 / 头像 + 表情图入口，放在表单最顶上，和下面的文字字段同级。
+                 两种图的形状就是存下来的形状（裁剪框住哪块这里就显示哪块）。
+                 ⚠️ 顺序是排版的一部分：形象在前（120px 列）、头像在后（56px 列），
+                    和 .char-avatar-col 的 grid-template-columns 一一对应，别单独调换。 -->
             <div class="char-media-top">
               <div class="char-avatar-col">
-                <div class="char-media-item">
-                  <button id="char-avatar" class="char-avatar art-edge" type="button" title="点击上传头像（正方形，用在消息气泡和状态卡上）" aria-label="上传头像">
-                    <span class="char-avatar-empty">点击上传</span>
-                  </button>
-                  <span class="char-media-label">头像</span>
-                  <m-button id="btn-clear-avatar" variant="ghost" size="sm" class="hidden">清除</m-button>
-                </div>
                 <div class="char-media-item">
                   <button id="char-portrait" class="char-portrait art-edge" type="button" title="点击上传角色形象（竖版立绘，显示在角色库列表上）" aria-label="上传角色形象">
                     <span class="char-avatar-empty">点击上传</span>
                   </button>
                   <span class="char-media-label">形象</span>
                   <m-button id="btn-clear-portrait" variant="ghost" size="sm" class="hidden">清除</m-button>
+                </div>
+                <div class="char-media-item">
+                  <button id="char-avatar" class="char-avatar art-edge" type="button" title="点击上传头像（正方形，用在消息气泡和状态卡上）" aria-label="上传头像">
+                    <span class="char-avatar-empty">点击上传</span>
+                  </button>
+                  <span class="char-media-label">头像</span>
+                  <m-button id="btn-clear-avatar" variant="ghost" size="sm" class="hidden">清除</m-button>
                 </div>
               </div>
 
@@ -549,9 +551,18 @@
             <div id="c-worldbook-box" class="char-worldbook-box">
               <div class="cwb-head">
                 <span class="field-label" data-icon="book">自带世界书</span>
-                <m-button id="c-wb-add-btn" variant="ghost" size="sm">＋ 绑定</m-button>
+                <div class="cwb-head-actions">
+                  <!-- 「AI 补设定」（2026-10-20）：读这张卡补几条世界设定，保存角色时才建书。
+                       只给角色库的卡用 —— 世界书副本进世界时注入的是那本书，自带书不生效。 -->
+                  <m-button id="c-wb-ai-btn" variant="ghost" size="sm">AI 补设定</m-button>
+                  <m-button id="c-wb-add-btn" variant="ghost" size="sm">＋ 绑定</m-button>
+                </div>
               </div>
               <div id="c-wb-list" class="cwb-list"></div>
+              <div id="c-wb-ai-block" class="cwb-ai">
+                <p id="c-wb-ai-status" class="field-help cwb-ai-status"></p>
+                <div id="c-wb-ai-list" class="cwb-ai-list hidden"></div>
+              </div>
               <label class="check" id="c-wb-switch">
                 <input id="c-wb-enabled" type="checkbox" checked />
                 <span class="check-text">
@@ -584,13 +595,11 @@
 
         <!-- ⚠️ 这一块由 characterEditorLayout.js 整块搬进 .char-identity-pane，
              id 一个都不能改（characterEditor.js 直接按 id 取用）。
-             ⚠️ 四颗按钮占三行是高度算好的：各占一行会多约 34px，左栏就长出滚动条。 -->
+             三颗按钮占三行：保存独占一行、导出独占一行、删除收成一条淡字。
+             「返回」不在这儿 —— 页头左上角和 Esc 已经是同一个动作，左栏不再放第二颗。 -->
         <div id="char-rail-foot" class="char-rail-foot">
           <m-button id="btn-save-char" variant="primary" size="sm">保存</m-button>
-          <div class="char-rail-pair">
-            <m-button id="btn-export-char" variant="ghost" size="sm" title="存成 PNG 卡（酒馆可直接导入）或 JSON">导出</m-button>
-            <m-button id="btn-back-char" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
-          </div>
+          <m-button id="btn-export-char" variant="ghost" size="sm" title="存成 PNG 卡（酒馆可直接导入）或 JSON">导出</m-button>
           <m-button id="btn-del-char" variant="danger" size="sm">删除</m-button>
         </div>
       </section>
@@ -618,7 +627,7 @@
             <span id="wb-page-count" class="lib-count"></span>
             <!-- 和角色库那一组是同一套（见上方 char-batch-* 的注释） -->
             <div id="wb-batch-normal" class="lib-batch">
-              <m-button id="btn-wb-batch" variant="ghost" size="sm">批量</m-button>
+              <m-button id="btn-wb-batch" variant="ghost" size="sm">批量操作</m-button>
             </div>
             <div id="wb-batch-active" class="lib-batch hidden">
               <span id="wb-batch-count" class="lib-batch-count">已选 0 本</span>
@@ -646,15 +655,15 @@
            （原来是 78 + 100 + 47 = 225 —— 900 的窗口里四分之一还没看到一个字段）。 -->
       <section id="view-wb-editor" class="view hidden" aria-label="编辑世界书">
         <header class="page-head wb-head">
+          <!-- 页头只留「返回 + 标题」和右侧的全文总字数。
+               ⚠️ 面包屑 2026-10-20 去掉了：标题已经写着「编辑世界书」，下面的书籍条
+                  又立刻给出书名 —— 「世界书 / 灰港」是第三遍。 -->
           <div class="wb-head-left editor-head-left">
             <button id="btn-close-worldbooks" class="page-back" type="button" title="返回上一屏（Esc）" aria-label="返回" data-icon="chevron-left"><span>返回</span></button>
-            <p class="page-crumb" id="wb-crumb" hidden></p>
             <h1 id="worldbooks-title" class="page-title">编辑世界书</h1>
           </div>
           <div class="page-actions">
             <span id="wb-total-words" class="editor-total"></span>
-            <span id="wb-save-state" class="save-pill" data-state="saved">所有更改已保存</span>
-            <m-button id="btn-save-wb" variant="primary" size="sm" title="把这本书的书名 / 开场白 / 条目写进磁盘">保存</m-button>
           </div>
         </header>
 
@@ -663,9 +672,12 @@
 
         <div id="wb-book-wrap" class="wb-book-wrap hidden">
 
-          <!-- 书籍条 64px：封面缩略 + 书名 + 一行统计 + 两个书级动作。
-               统计只在这里出现一次 —— 原来页头 / 书籍头 / 书籍设置右栏三份重复，
-               同一组数字读三遍就没人在读它了。 -->
+          <!-- 书籍条 64px：封面缩略 + 书名 + 一行统计 + 书级动作。
+               2026-10-20：**保存**从页头右上角搬到这儿（星宝：「太远了」）——
+               这一条是三屏共用的一条，不管在条目 / 书籍设置 / 本书角色哪一屏，
+               保存都在同一个位置，而且紧挨着「有未保存的改动」那颗胶囊。
+               「导出」则搬到了列表卡片右上角（同日）。
+               统计仍然只在这里出现一次（原来页头 / 书籍头 / 书籍设置右栏三份重复）。 -->
           <div class="wb-bookbar" id="wb-bookbar">
             <button id="wb-bookbar-cover" class="wb-bookbar-cover" type="button"
                     title="换封面（在「书籍设置」里）" aria-label="去书籍设置换封面"></button>
@@ -673,7 +685,8 @@
             <span id="wb-bookbar-sub" class="wb-bookbar-sub"></span>
             <div class="wb-bookbar-actions">
               <m-button id="btn-preview-wb" variant="ghost" size="sm">预览命中</m-button>
-              <m-button id="btn-export-wb" variant="ghost" size="sm" title="导出成酒馆能直接导入的 JSON">导出</m-button>
+              <span id="wb-save-state" class="save-pill" data-state="saved">所有更改已保存</span>
+              <m-button id="btn-save-wb" variant="primary" size="sm" title="把这本书的书名 / 开场白 / 条目写进磁盘">保存</m-button>
             </div>
           </div>
 
@@ -848,7 +861,9 @@
                   </div>
                   <div class="wb-sheet-body wb-cover-cell">
                     <!-- 封面：铺在世界书列表卡片上的那张 2:3 竖版图（和角色形象同一个比例，
-                         走同一个裁剪组件）。点击上传 → 结果先落**草稿**，点页头「保存」才写盘。 -->
+                         走同一个裁剪组件）。点击上传 → 结果先落**草稿**，点页头「保存」才写盘。
+                         2026-10-20 重排：封面放大到 132px、和右栏同高，书名贴顶、动作贴底 ——
+                         原来三样东西挤在 96px 宽的一条里，右下角空出一大片。 -->
                     <button id="wb-cover" class="wb-cover-frame" type="button"
                             title="点击上传封面（2:3 竖版，铺在世界书列表的卡片上）" aria-label="上传世界书封面">
                       <span class="wb-cover-empty">点击上传</span>
@@ -857,9 +872,12 @@
                       <label class="field field-stack wb-book-name">
                         <span class="field-label">书名</span>
                         <m-input id="wb-name" placeholder="世界书名称" aria-label="世界书名称"></m-input>
+                        <span class="field-help">列表卡片上压着封面显示，页头和会话里也用它。</span>
                       </label>
-                      <span class="field-help">封面显示在世界书列表的卡片上；2:3 竖版最合适，点左边的图换一张。</span>
-                      <m-button id="btn-clear-wb-cover" variant="ghost" size="sm" class="hidden">清除封面</m-button>
+                      <div class="wb-cover-actions">
+                        <m-button id="btn-clear-wb-cover" variant="ghost" size="sm" class="hidden">清除封面</m-button>
+                        <span class="wb-cover-tip">2:3 竖版 · 点左边的图换一张</span>
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -889,7 +907,7 @@
               </div>
               <div class="wb-danger">
                 <h3>删除这本书</h3>
-                <p id="wb-danger-hint">删除会连同这本书的条目和角色副本一起删掉，不可恢复。想留底先用书籍条的「导出」。</p>
+                <p id="wb-danger-hint">删除会连同这本书的条目和角色副本一起删掉，不可恢复。想留底先在列表卡片上点「导出」。</p>
                 <m-button id="btn-del-worldbook" variant="danger" size="sm">删除本书</m-button>
               </div>
             </aside>
@@ -928,6 +946,8 @@
           <div class="page-actions">
             <m-button id="btn-import-preset" variant="ghost" size="sm">导入</m-button>
             <m-button id="btn-export-presets" variant="ghost" size="sm">导出全部</m-button>
+            <m-button id="btn-ai-preset" variant="ghost" size="sm"
+                      title="说一句你想要的效果，AI 写成一整套规则（名字、说明、标签、指令正文），生成完可以自己改">AI 生成</m-button>
             <m-button id="btn-new-preset" variant="primary" size="sm">＋ 新建预设</m-button>
           </div>
         </header>
@@ -946,7 +966,8 @@
             <div class="page-empty-title">还没有预设</div>
             <p class="page-empty-hint">
               预设是叠在对话上的一层指令：写一段「回复要遵循什么规则」，<br />
-              再在会话的「视角」里选上它，这一场对话就按它来。
+              再在会话的「视角」里选上它，这一场对话就按它来。<br />
+              不知道从哪下笔，就点右上角「AI 生成」，说一句你想要的效果。
             </p>
           </div>
         </div>

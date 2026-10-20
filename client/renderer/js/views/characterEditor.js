@@ -22,7 +22,7 @@ import {
 } from '../data/library.js';
 import { persistCharacters, persistConversations, persistLibrary } from '../data/persist.js';
 import { optionsSpecFromCharacter, DEFAULT_OPTIONS_COUNT } from '../data/suggestions.js';
-import { currentWorldbook, renderWorldbookChars, focusWorldbook } from './worldbook.js';
+import { currentWorldbook, renderWorldbookChars, focusWorldbook, openWorldbookEditor } from './worldbook.js';
 import { renderWorldbookPage } from './worldbookList.js';
 import { renderCharacterPage } from './characterList.js';
 import { renderCharAttrs, initCharAttrsUi } from './charAttributes.js';
@@ -32,6 +32,7 @@ import {
   initCharExpressionsUi
 } from './charExpressions.js';
 import { openAiGenModal } from './aiGen.js';
+import { initCharBookAi, resetCharBookAi, materializeCharBook, setCharBookScope } from './charBookAi.js';
 import { attachAutoGrow, syncAutoGrowAll } from '../ui/auto-grow.js';
 import { mTextarea, hostOf } from '../components/index.js';
 import { pickAndCrop } from '../ui/imageCrop.js';
@@ -211,14 +212,27 @@ function updateCharEditorScopeUi() {
   }
 }
 
-/** 离开编辑器回到来处；页头「返回」、Esc、保存完自动走、删除/导出后都走它 */
-export async function leaveCharacterEditor() {
+/**
+ * 离开编辑器回到来处；页头「返回」、Esc、保存完自动走、删除后都走它。
+ * force：调用方已经确认过（比如删除成功后），不再问「要不要放弃改动」。
+ */
+export async function leaveCharacterEditor({ force = false } = {}) {
   // 新建的角色还没保存：离开就等于放弃，先问一句，免得辛苦填的设定白写
   if (isCharDraft()) {
     const typed = el.c.name.value.trim();
     const ok = await confirmDialog({
       title: '放弃新建',
       message: `「${typed || '新角色'}」还没保存，关掉就不会创建这个角色。`,
+      confirmText: '放弃',
+      danger: true
+    });
+    if (!ok) return;
+  } else if (!force && el.charSaveState && el.charSaveState.dataset.state === 'dirty') {
+    // 改已有角色：没保存就返回，改动静默丢掉过一次 —— 和新建草稿一样先问一句
+    const name = (el.c.name.value || '').trim() || '这个角色';
+    const ok = await confirmDialog({
+      title: '放弃未保存的改动',
+      message: `「${name}」还有没保存的改动，返回后会丢掉。`,
       confirmText: '放弃',
       danger: true
     });
@@ -394,6 +408,9 @@ function fillCharForm(character) {
   // 开关的草稿要从这张卡的当前值起算（老数据没这个字段 = 开）
   charDraftWbEnabled = character.worldbookEnabled !== false;
 
+  // 换了一张卡：上一张还没落盘的 AI 设定草稿不能跟过来
+  resetCharBookAi();
+
   // 角色自带的世界书：清单 + 绑定按钮 + 开关
   renderCharWorldbookBox(character);
 
@@ -469,6 +486,10 @@ function renderShowInPanelBox() {
 function renderCharWorldbookBox(character) {
   if (!character) return;
 
+  // 「AI 补设定」：角色库的卡保存时建一本自己的书；世界书里的副本并进**这本书的草稿**
+  // （副本自己带的世界书进世界时不会被注入，见 data/cast.js 的 effectiveWorldbookIds）
+  setCharBookScope(charEditorScope, currentWorldbook() ? currentWorldbook().name : '');
+
   const ids = character && Array.isArray(character.worldbookIds) ? character.worldbookIds : [];
   const books = ids.map((id) => worldbookById(id)).filter(Boolean);
   setCharSectionCount('worldbook', String(books.length));
@@ -499,6 +520,16 @@ function renderCharWorldbookBox(character) {
       const n = Array.isArray(book.entries) ? book.entries.length : 0;
       count.textContent = `${n} 条`;
 
+      // 「编辑」：不离开角色编辑器，只是切到那本书的编辑器逛一圈；返回时还回这张卡。
+      // 2026-10-20 星宝要的（原来想改书得先返回 → 世界书页 → 找书 → 点编辑，四步）。
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'cwb-row-edit';
+      edit.title = '打开这本书的编辑器（改完返回还会回到这张卡）';
+      edit.setAttribute('aria-label', `编辑世界书 ${book.name}`);
+      edit.textContent = '编辑';
+      edit.addEventListener('click', () => openBoundWorldbook(book.id));
+
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'cwb-row-del';
@@ -507,7 +538,7 @@ function renderCharWorldbookBox(character) {
       del.textContent = '✕';
       del.addEventListener('click', () => unbindWorldbookFromCharacter(book.id));
 
-      row.append(name, count, del);
+      row.append(name, count, edit, del);
       el.c.wbList.appendChild(row);
     }
   }
@@ -531,6 +562,28 @@ function renderCharWorldbookBox(character) {
   el.c.wbHint.textContent = enabled
     ? '现在生效。单独跟它聊天时会带上这些设定；但绑进某个世界当角色时不生效 —— 那条会话已经有自己的世界观了。'
     : '已停用。无论单独聊天、还是绑进某个世界当角色，都不会带入这几本书 —— 这张卡保持干净（绑定关系留着，随时能再打开）。';
+}
+
+/**
+ * 行上的「编辑」：跳去那本书的**详情**（世界书编辑器）。
+ *
+ * ⚠️ 不走 leaveCharacterEditor —— 那条路会弹「放弃未保存的改动」并把编辑态收掉。
+ * 这里只是切屏：角色编辑器这一屏的 DOM 原样留着，世界书编辑器点「返回」就回到
+ * 这张卡（`openWorldbookEditor` 会把来处记成 charEditor）。
+ * 但填在输入框里、还没进草稿的那点内容先收一份 —— 切屏期间只要别处触发一次重绘，
+ * 没收过的输入就白填了（和「导入前先 stash」同一手）。
+ */
+function openBoundWorldbook(bookId) {
+  if (!worldbookById(bookId)) return;
+  stashCharForm();
+  openWorldbookEditor(bookId);
+}
+
+/** 世界书编辑器逛一圈回来时用：把那块「已绑世界书」按**最新**数据重画。
+ *  书名 / 条目数可能刚在那边改过，不重画就还是旧的那行。 */
+export function refreshCharWorldbookBox() {
+  const character = editorCharacterById(editingCharacterId);
+  if (character) renderCharWorldbookBox(character);
 }
 
 /** 只刷新开关下面的说明文字（切换开关时用，不动清单） */
@@ -888,6 +941,8 @@ async function saveCharacter() {
   // 「新建」还是「改已有」要在落盘前记下来：草稿一提交 charDraft 就清空
   const creating = isCharDraft();
   const scope = creating ? charDraft.scope : charEditorScope;
+  // 副本作用域要写进哪本书：草稿提交之后 charDraft 就没了，先记下来
+  const draftBookId = charDraft ? charDraft.bookId : null;
 
   stashCharForm();
 
@@ -895,6 +950,21 @@ async function saveCharacter() {
   if (creating && !commitCharDraft()) {
     showToast('这本书已经不在了，角色没能创建', 'error');
     return;
+  }
+
+  // 「AI 补设定」补出来的条目：角色库的卡 → 建一本书并绑上（跟着同一次写盘落地）；
+  // 副本 → 并进这本书的草稿，等世界书编辑器那边点「保存」
+  const madeBook = await materializeCharBook(character, {
+    scope,
+    bookId: scope === 'worldbook'
+      ? draftBookId || (currentWorldbook() ? currentWorldbook().id : null)
+      : null
+  });
+  if (madeBook && !madeBook.draft) {
+    // 刚补的设定默认是开着的 —— 用户刚要的东西，别让它一上来就是停用态
+    charDraftWbEnabled = true;
+    character.worldbookEnabled = true;
+    renderCharWorldbookBox(character);
   }
 
   // 新建是终点（直接离开）；改已有的留在本页，多半还要接着改
@@ -910,7 +980,7 @@ async function saveCharacter() {
     if (!(await persistCharacters())) return;
     setCharSaveState('saved');
     showToast(`角色「${character.name}」已创建`, 'ok');
-    await leaveCharacterEditor();
+    await leaveCharacterEditor({ force: true });
     return;
   }
 
@@ -1005,7 +1075,7 @@ export async function deleteCharacterById(id, scope) {
   // 编辑器正开在这个角色上就离开它；放在写盘成功之后（失败时角色还在，不该关编辑器）
   if (editingCharacterId === character.id) {
     editingCharacterId = null;
-    if (currentViewName() === 'charEditor') await leaveCharacterEditor();
+    if (currentViewName() === 'charEditor') await leaveCharacterEditor({ force: true });
   }
 
   persistConversations(0);
@@ -1070,7 +1140,7 @@ export async function deleteCharactersByIds(ids) {
   // 编辑器正开在被删的某一张上：没有可编辑的对象了，离开它
   if (editingCharacterId && wanted.has(editingCharacterId)) {
     editingCharacterId = null;
-    if (currentViewName() === 'charEditor') await leaveCharacterEditor();
+    if (currentViewName() === 'charEditor') await leaveCharacterEditor({ force: true });
   }
 
   persistConversations(0);
@@ -1285,8 +1355,6 @@ export function initCharacterEditor(injected) {
   }
   el.btnSaveChar.addEventListener('click', saveCharacter);
   el.btnDelChar.addEventListener('click', deleteCharacter);
-  // 左栏底部那颗「返回」：和页头左上那颗、Esc 是同一条路（leaveCharacterEditor）
-  if (el.btnBackChar) el.btnBackChar.addEventListener('click', leaveCharacterEditor);
 
   el.charAvatar.addEventListener('click', pickAvatar);
   el.btnClearAvatar.addEventListener('click', clearAvatar);
@@ -1305,6 +1373,16 @@ export function initCharacterEditor(injected) {
   });
 
   el.c.wbAddBtn.addEventListener('click', openWorldbookPicker);
+
+  // 「AI 补设定」：要读**表单里当前**的卡 —— 先 stash 进草稿，刚手改的描述才带得上；
+  // 拿到条目算「有未保存的改动」，和手改走同一条路（点保存才建书、才落盘）。
+  initCharBookAi({
+    readCard: () => {
+      stashCharForm();
+      return editorCharacterById(editingCharacterId);
+    },
+    onChange: () => setCharSaveState('dirty')
+  });
 
   if (el.c.optionsOn) el.c.optionsOn.addEventListener('change', renderOptionsConfig);
 

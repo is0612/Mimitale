@@ -49,7 +49,6 @@ export function initWorldbookLayout({ onFilter }) {
     search,
     filter,
     bookWrap: document.getElementById('wb-book-wrap'),
-    crumb: document.getElementById('wb-crumb'),
     name: document.getElementById('wb-bookbar-name'),
     sub: document.getElementById('wb-bookbar-sub'),
     cover: document.getElementById('wb-bookbar-cover'),
@@ -109,10 +108,6 @@ export function syncWorldbookLayout(book, draft, characterCount) {
   if (!layout) return;
   const bookName = draft?.name || book?.name || '世界书';
   layout.name.textContent = bookName;
-  if (layout.crumb) {
-    layout.crumb.textContent = `世界书 / ${bookName}`;
-    layout.crumb.hidden = false;
-  }
 
   const entries = Array.isArray(draft?.entries) ? draft.entries : [];
   const on = entries.filter((entry) => entry.enabled !== false).length;
@@ -152,8 +147,8 @@ export function syncWorldbookLayout(book, draft, characterCount) {
   // 「删除这本书」那张卡上说清后果 —— 数字跟着草稿走，不是跟上一次保存的那份
   if (layout.dangerHint) {
     layout.dangerHint.textContent = chars
-      ? `会连同 ${total} 条条目和 ${chars} 个角色副本一起删掉，不可恢复。想留底先用书籍条的「导出」。`
-      : `会连同 ${total} 条条目一起删掉，不可恢复。想留底先用书籍条的「导出」。`;
+      ? `会连同 ${total} 条条目和 ${chars} 个角色副本一起删掉，不可恢复。想留底先在列表卡片上点「导出」。`
+      : `会连同 ${total} 条条目一起删掉，不可恢复。想留底先在列表卡片上点「导出」。`;
   }
 
   // 「本书角色」屏右上角那句：数字 + 一句「副本是副本」

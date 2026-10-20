@@ -142,7 +142,7 @@ function buildMemoryCard(convo, seg, index, total) {
     title: '用这段对应的原文重新压一次',
     disabled: !!convo.summaryBusy,
     onClick: async () => {
-      regenBtn.disabled = true;
+      regenBtn.loading = true;
       regenBtn.textContent = '生成中…';
       const ok = await regenerateSummary(convo, seg.id);
       renderMemoryModal();

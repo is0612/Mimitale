@@ -55,7 +55,7 @@ export function renderPresetPage() {
   const title = el.presetPageEmpty.querySelector('.page-empty-title');
   const hint = el.presetPageEmpty.querySelector('.page-empty-hint');
   if (title) title.textContent = all.length ? '没有匹配的预设' : '还没有预设';
-  if (hint) hint.textContent = all.length ? '调整搜索词或筛选条件。' : '新建或导入预设。';
+  if (hint) hint.textContent = all.length ? '调整搜索词或筛选条件。' : '新建、导入，或者点右上角「AI 生成」，说一句你想要的效果。';
 }
 
 function presetRow(preset) {
