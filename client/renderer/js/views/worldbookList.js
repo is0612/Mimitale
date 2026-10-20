@@ -108,7 +108,6 @@ export function renderWorldbookPage() {
 function worldbookAddCard() {
   const forward = (btn) => () => btn && btn.click();
   return libraryAddCard({
-    hint: '不用翻回右上角',
     actions: [
       mButton({ variant: 'ghost', size: 'sm', block: true, text: '导入世界书', onClick: forward(el.wb.btnImport) }),
       mButton({ variant: 'primary', size: 'sm', block: true, text: '＋ 新建世界书', onClick: forward(el.wb.btnNew) })

@@ -17,7 +17,6 @@ import {
 } from '../data/library.js';
 import { convoPanel, convoPanelFields, panelFieldName, panelKeyParts, panelOwnerLabel } from '../data/panel.js';
 import { convoPlayer, userName, speakerName } from '../data/cast.js';
-import { currentEditorCharacter } from './characterEditor.js';
 
 /** 不能用裸 btoa：它只吃 Latin-1，中文会直接抛错 */
 function base64Utf8(text) {
@@ -165,7 +164,9 @@ function avatarPngDataUrl(character) {
   });
 }
 
-/** 把一张角色卡写成 .png / .json：编辑器里的「导出」和角色库卡片上的「导出」共用。 */
+/** 把一张角色卡写成 .png / .json：角色库卡片右上角的「导出」和批量导出共用。
+ *  ⚠️ 编辑器里那颗「导出」2026-10-20 撤了 —— 同一张卡在列表上就能拿走，
+ *  两个入口并列只会让人以为它们导出的东西不一样。 */
 export async function exportCharacterCard(character) {
   if (!character) return;
 
@@ -198,11 +199,6 @@ export async function exportCharacterCard(character) {
     base64: String(png).split(',')[1] || '',
     pngText: { keyword: 'chara', text: base64Utf8(pngJson) }
   });
-}
-
-/** 导出当前编辑的角色卡：存 .png 就是带数据的酒馆卡，存 .json 就是纯数据 */
-export async function exportCharacter() {
-  return exportCharacterCard(currentEditorCharacter());
 }
 
 /** 角色库卡片上的「导出」：按 id 取已落盘的那一张，不用先进详情页 */

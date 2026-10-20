@@ -119,17 +119,12 @@
       <section id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions"></section>
 
       <footer class="composer">
-        <!-- 「帮我想想」给出的几个下一步。点一下就当成你说的话发出去 -->
-
-        <div id="suggest-strip" class="suggest-strip hidden" aria-label="可以这样接话">
-          <span class="suggest-title">可以这样接</span>
-          <div id="suggest-list" class="suggest-list"></div>
-          <button id="btn-suggest-close" class="suggest-close" type="button" title="收起" aria-label="收起建议">✕</button>
-        </div>
+        <!-- 「帮我想想」的结果不在这里 —— 它和自动剧情选项是同一块（.msg-options，
+             画在最新一条 AI 回复下面）。别在输入框上方再加一条建议条。 -->
         <div class="composer-box">
           <!-- 快捷短语：把「旁白：/ OOC：/ 推进剧情…」这类常用指令和符号插进输入框。
                它是**插入**不是发送 —— 前几条是前缀，插完还要接着写内容；
-               「点一下就发出去」那条路归上面的建议条（#suggest-strip）。
+               「点一下就发出去」那条路归剧情选项（.msg-options）。
                面板贴在 .composer-box 上（它是 position: relative），所以输入框
                自己长高时面板跟着往上走。行由 views/quickPhrases.js 铺。 -->
           <button id="btn-quick" class="btn-quick" type="button"
@@ -595,11 +590,17 @@
 
         <!-- ⚠️ 这一块由 characterEditorLayout.js 整块搬进 .char-identity-pane，
              id 一个都不能改（characterEditor.js 直接按 id 取用）。
-             三颗按钮占三行：保存独占一行、导出独占一行、删除收成一条淡字。
-             「返回」不在这儿 —— 页头左上角和 Esc 已经是同一个动作，左栏不再放第二颗。 -->
+             2026-10-20：保存 / 返回 / AI 补充 / 删除，四行。
+             · 「导出」撤了 —— 角色库卡片右上角那颗已经能拿走这张卡（同日加的），
+               编辑器里再放一颗只是把两处入口做成同一件事；
+             · 「返回」补回来了：页头的返回在左上角，手停在左栏底部改完一屏要回去时，
+               鼠标得横跨整个窗口 —— 原来那条「左栏不重复放返回」的规矩就是为这个让路的；
+             · 「AI 补充」紧贴返回下面：它只改表单，等于「改完要保存」那条线上的辅助动作，
+               和删除之间隔开一行，中间不留手滑的缝。 -->
         <div id="char-rail-foot" class="char-rail-foot">
           <m-button id="btn-save-char" variant="primary" size="sm">保存</m-button>
-          <m-button id="btn-export-char" variant="ghost" size="sm" title="存成 PNG 卡（酒馆可直接导入）或 JSON">导出</m-button>
+          <m-button id="btn-back-char" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
+          <m-button id="btn-ai-fill-char" variant="ghost" size="sm" title="让 AI 重写描述 / 性格 / 场景 / 开场白 / 示例对话">AI 补充</m-button>
           <m-button id="btn-del-char" variant="danger" size="sm">删除</m-button>
         </div>
       </section>

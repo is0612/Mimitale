@@ -375,7 +375,6 @@ m-button.btn-new > .mi-btn__control {
    带 .art-edge 的头像另有「描边 + 光环」组合规则且位置更靠后，照旧覆盖。 */
 .mi-btn__control:focus-visible,
 .btn-quick:focus-visible,
-.suggest-btn:focus-visible,
 .icon-btn:focus-visible,
 .preset-chip:focus-visible,
 .settings-nav-item:focus-visible,
@@ -2602,7 +2601,6 @@ body.pad-dragging {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-top: 14px;
   border-color: var(--accent-border-soft);
   font-family: var(--font-ui);
 }
@@ -2649,7 +2647,7 @@ body.pad-dragging {
   border-radius: var(--radius-sm);
   cursor: pointer;
   border-color: var(--border-soft);
-  padding: 12px 14px;
+  padding: 4px 8px;
 }
 
 .msg-option-btn:hover {
@@ -2687,7 +2685,6 @@ body.pad-dragging {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 4px;
   padding: 4px 6px 0;
 }
 
@@ -2982,58 +2979,6 @@ body.pad-dragging {
   color: inherit;
 }
 
-/* ---------------------- 「帮我想想」的建议条 ---------------------- */
-.suggest-close {
-  flex: 0 0 auto;
-  margin-left: auto;
-  border: none;
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  font-size: var(--fs-xs);
-  padding: 4px 6px;
-  border-radius: var(--radius-sm);
-}
-
-.suggest-close:hover {
-  color: var(--text);
-  background: var(--bg-input);
-}
-
-/* ⚠️ flex-direction: column 是基础段留下的、末尾覆盖层**并没有改**它 —— 合并时不能丢。 */
-.suggest-list {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-/* 每颗按钮左对齐、可以折行 —— 选项长短差别大，居中反而不好扫 */
-.suggest-btn {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  border-color: var(--accent-border-soft);
-}
-
-.suggest-btn:hover {
-  border-color: var(--accent-border-strong);
-  background: var(--accent-soft);
-}
-
-
 /* 气泡里的图（用户发的 / AI 生成的） */
 .bubble-images {
   display: flex;
@@ -3117,25 +3062,6 @@ m-button.btn-send > .mi-btn__control {
   font-size: var(--fs-xs);
   color: var(--text-faint);
   margin-top: 10px;
-}
-
-.suggest-strip {
-  max-width: none;
-  margin: 0 0 10px;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  background: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 12px;
-}
-
-.suggest-title {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
 }
 
 /* 滑块：吃满剩余宽度（轨道样式复用文件里那条通用 input[type=range] 规则） */
@@ -5547,23 +5473,27 @@ m-button.btn-new > .mi-btn__control:hover {
   margin-bottom: 0;
 }
 
-/* 左栏底部：保存 / 导出 / 删除，三行。
-   层级靠三件事拉开，不靠再加一颗实心块：保存是唯一的主色面，导出是次级整行，
+/* 左栏底部：保存 / 返回 / AI 补充 / 删除，四行。
+   层级靠三件事拉开，不靠再加一颗实心块：保存是唯一的主色面，返回和 AI 补充是次级整行，
    删除退成一条淡字 —— 它不占版面，但一直在。
-   返回只在页头左上角和 Esc，左栏不再放第二颗。
-   ⚠️ 高度仍是紧的：1440×900 下左栏刚好装得下，再塞东西就长出栏内滚动条。 */
+   ⚠️ 高度仍是紧的：1440×900 下左栏刚好装得下，再塞东西就长出栏内滚动条
+   （冒烟里那条「左栏没有长出栏内滚动条」就是守这个的）。
+   2026-10-20：原来这颗位置是「导出」，撤掉换成「返回」+「AI 补充」—— 高度就是这么涨上来的。 */
 #view-char-editor .char-rail-foot {
   position: sticky;
   bottom: 0;
   z-index: 1;
   margin-top: auto;
-  padding: 10px 0 4px;
+  /* 2026-10-20 从三行变四行（导出 → 返回 + AI 补充），栏底这一摞本来就顶得很紧，
+     所以间距比上面那些块更抠一点：8 → 6、上边距 10 → 8。四颗挤在一起反而更像一组，
+     顺便给底部留出余量（1440×900 下左栏一旦长出栏内滚动条，冒烟里那条断言就红）。 */
+  padding: 8px 0 4px;
   border-top: 1px solid var(--ce-line);
   background: var(--ce-sidebar);
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* 铺满栏宽写在宿主上，文字靠左是里层的对齐 */
@@ -7286,13 +7216,23 @@ m-button.btn-new > .mi-btn__control:hover {
 /* ---- 网格末尾那张「空白卡」（2026-10-20）----
    把页头右上角的添加入口搬到手边：翻到最后一张卡时，不用再回到屏幕顶端找按钮。
    形态是**虚线框 + 透明底**，一眼能看出「这里可以加」，而不是一张没加载出来的卡。
-   高度靠上半截的 `aspect-ratio: 2/3`（和封面同比例）+ 下半截按钮撑 —— 和旁边的卡对得上。
+   高度：网格默认 stretch，同一行有真卡时它被拉成一样高；独占一行时靠 min-height 撑住。
+   内容只有一**组**：圈着的加号 + 竖排的几颗按钮，整组在卡里居中。
+   ⚠️ 别改回「加号占满上半截、按钮钉在底部」：同一行里有真卡时这张会被拉得很高，
+      中间会空出一大块，加号和按钮被扯到上下两头，看着生硬（2026-10-20 星宝的原话）。
    ⚠️ 自己写布局，**不复用 `.char-card`** —— 那种卡是可点的、进批量的，这张不是；
       而且全项目大量断言用 `.char-card` 数卡片数，挂上去就多算一张。 */
 .lib-add-card {
   display: flex;
   flex-direction: column;
+  /* 整组居中：卡被拉多高都在中间，不会上下分离 */
+  justify-content: center;
   align-items: stretch;
+  /* ⚠️ 不让网格把它拉成旁边真卡那么高：这张不是卡、是新东西的入口，
+     248px 的小方块比一块巨大的虚线空板更像「可以点」。同一行里它会短一截，
+     下面是网格的空白 —— 那比「中间空一大块」干净。 */
+  align-self: start;
+  min-height: 248px;
   overflow: hidden;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius);
@@ -7306,44 +7246,49 @@ m-button.btn-new > .mi-btn__control:hover {
 
 .lib-add-body {
   display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   width: 100%;
-  /* ⚠️ 不写 aspect-ratio：网格默认 stretch，同一行有真卡片时这张会被拉成同样的高度，
-     底部因此严丝合缝。`min-height` 只管「它独占一行」时别塌成一条。 */
-  min-height: 240px;
-  padding: 12px;
-  text-align: center;
+  padding: 8px 12px 14px;
 }
 
+/* ＋ 装在一枚虚线圆环里：这块**没有文字**了（原来那句「不用翻回右上角」是解释，
+   看两次就懂、之后一直是噪音），所以形状得自己讲清楚「这里能加」——
+   圆环是「待填的空位」，虚线是「还没成形」，一眼和旁边那些有封面的卡分开。 */
 .lib-add-plus {
-  font-size: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 50%;
+  font-size: 26px;
   font-weight: 300;
   line-height: 1;
   color: var(--text-faint);
-  transition: color 0.15s;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s, transform 0.18s;
 }
 
-.lib-add-card:hover .lib-add-plus {
+/* 卡一响（鼠标进来 / 里面某个按钮拿到焦点），圆环就实心化：
+   虚线变实线 + 染主色 + 微微放大。三步一起动才像「被按亮」，只换颜色会显得没反应。 */
+.lib-add-card:is(:hover, :focus-within) .lib-add-plus {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
   color: var(--accent);
-}
-
-.lib-add-hint {
-  font-size: var(--fs-min);
-  color: var(--text-faint);
+  transform: scale(1.06);
 }
 
 /* 按钮竖排：导入 / AI / 新建 三颗在 216px 的列宽里横排会挤成三截 */
+/* 按钮竖排：导入 / AI / 新建 三颗在 216px 的列宽里横排会挤成三截。
+   `margin-top` 不再 auto —— 那样会把它推到卡底，和加号分家（见上面那段注释）。 */
 .lib-add-actions {
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  margin-top: auto;
-  padding: 8px 10px 10px;
+  padding: 0 10px 10px;
 }
 
 /* 2:3 封面：角色形象和世界书封面共用。`flex: 0 0 auto` 是必要的 ——

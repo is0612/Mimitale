@@ -34,12 +34,17 @@ function check(name, pass, detail) {
 }
 
 /** 轮询等待，超时抛错（比固定 sleep 稳，也比 sleep 快） */
+/**
+ * 轮询到条件成立，超时就抛（场景会记一条「场景没能跑完」）。
+ * ⚠️ `fn` 可以是 async 的，但必须 `await` 它的结果 —— 直接 `ok = fn()` 拿到的是个
+ * Promise，永远 truthy，等于「只读一次、不重试」，落盘那类跨 IPC 的条件就会偶尔跑输。
+ */
 async function waitFor(label, fn, timeout = 5000) {
   const t0 = Date.now();
   for (;;) {
     let ok = false;
     try {
-      ok = fn();
+      ok = await fn();
     } catch (err) {
       /* 元素还没出现，继续等 */
     }
@@ -813,6 +818,31 @@ await scenario('角色库：新建角色', async () => {
   const charAddText = charAdd ? [...charAdd.querySelectorAll('button')].map((b) => b.textContent.trim()).join(' / ') : '';
   check('添加卡里是「导入角色卡 / AI 生成 / ＋ 新建角色」三颗',
     charAddText === '导入角色卡 / AI 生成 / ＋ 新建角色', charAddText);
+
+  // 加号和那三颗按钮得是**一组**、整组在卡里居中。
+  // ⚠️ 这条守的是观感不是结构：原来加号占满上半截、按钮靠 `margin-top: auto` 钉在底部，
+  //    同一行里有真卡时这张会被拉得很高，中间空一大块、上下两头各挂一样东西 ——
+  //    元素都在、数量也对，只有看图（或量数字）才知道它「生硬」。
+  const addGeom = (() => {
+    if (!charAdd) return null;
+    const box = charAdd.getBoundingClientRect();
+    const plus = charAdd.querySelector('.lib-add-plus');
+    const buttons = [...charAdd.querySelectorAll('.lib-add-actions m-button')];
+    if (!plus || !buttons.length) return null;
+    const p = plus.getBoundingClientRect();
+    const last = buttons[buttons.length - 1].getBoundingClientRect();
+    return {
+      gap: Math.round(buttons[0].getBoundingClientRect().top - p.bottom),
+      top: Math.round(p.top - box.top),
+      bottom: Math.round(box.bottom - last.bottom),
+      height: Math.round(box.height)
+    };
+  })();
+  check(
+    '添加卡：加号和按钮是一组、整组居中',
+    !!addGeom && addGeom.gap <= 24 && Math.abs(addGeom.top - addGeom.bottom) <= 16,
+    addGeom ? `上留 ${addGeom.top} / 下留 ${addGeom.bottom} / 加号到按钮 ${addGeom.gap} / 卡高 ${addGeom.height}` : '量不出来'
+  );
   // 新建的角色保存完就完事了：弹窗自己关掉，回到角色列表看新卡
   check('保存后弹窗自己关掉（不用再点一次关闭）', !shown('#view-char-editor'));
   check('保存后没有多问一句「放弃新建？」', !shown('#confirm-modal'));
@@ -896,16 +926,16 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   // 2026-10-16：这一页 14 颗 .btn 全换 <m-button>。除结构外盯两件容易悄悄坏掉的：
-  //   ① 左栏「保存 / 导出」要铺满栏宽 —— width 挂宿主、里层跟着撑满，
+  //   ① 左栏底部那几颗要铺满栏宽 —— width 挂宿主、里层跟着撑满，
   //      写反了不报错、只是按钮缩成一行文字那么宽；
   //   ② 三颗「清除」带着 hidden 类 —— 宿主上 `.hidden` 的 display:none !important
   //      必须照样压过 m-button 自己的 display（不然按钮删不掉地常驻）。
   // ⚠️ btn-close-chars（返回）2026-10-19 从右上角挪到了左上角，并改成**图标按钮** ——
   //    图标按钮按约定不套 m-button（见 components/button.js 文件头），所以从这张表里去掉。
-  //    2026-10-20：左栏底部那颗重复的「返回」撤掉，返回只留页头这一处 + Esc。
-  const CHAR_BTN_IDS = ['btn-save-char','btn-clear-avatar','btn-clear-portrait','btn-first-template','btn-alt-add','btn-attr-template','btn-add-attr','btn-attr-paste','btn-attr-paste-apply','c-wb-add-btn','btn-export-char','btn-del-char'];
+  //    2026-10-20：那颗「导出」撤了（改到角色库卡片上），左栏底部换成「返回」+「AI 补充」。
+  const CHAR_BTN_IDS = ['btn-save-char','btn-clear-avatar','btn-clear-portrait','btn-first-template','btn-alt-add','btn-attr-template','btn-add-attr','btn-attr-paste','btn-attr-paste-apply','c-wb-add-btn','btn-back-char','btn-ai-fill-char','btn-del-char'];
   const bad = CHAR_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
-  check('角色编辑器 12 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
+  check('角色编辑器 13 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
 
   // 返回按钮应当在**标题那一块**里（左上），而不是右侧的操作簇里 ——
   // 只要有人把它挪回 .page-actions，这条就红。
@@ -920,23 +950,23 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   //    `button({ class: ... })` 现渲染的（不带 variant 就不生成 .btn 底座，见
   //    ui/build.js 文件头那条「图标按钮不套组件」的边界）。「解散这一组」已迁
   //    m-button —— 它不再带 `.btn-danger`，断言里按 `#c-attr-group-edit m-button` 找。
-  // 左栏底部三行：保存 / 导出 / 删除；导出独占一行，不再和「返回」并排。
-  const exportBtn = byId('btn-export-char');
+  //
+  // 左栏底部四行，顺序是固定的：保存 → 返回 → AI 补充 → 删除。
+  // ⚠️ 这条替掉的是原来那句「左栏底部不再重复返回」：2026-10-20 星宝要求把返回补回来
+  //    （改完一屏手还停在栏底，回页头左上太远），所以「不重复」这条规矩反过来了 ——
+  //    现在要守的是**顺序**和「导出真的撤干净了」。
+  const railIds = $$('#char-rail-foot m-button').map((node) => node.id);
   check(
-    '「导出」独占左栏底部一行',
-    !!exportBtn && !!exportBtn.closest('#char-rail-foot') && !exportBtn.closest('.char-rail-pair') &&
-      exportBtn.getBoundingClientRect().width > 150,
-    exportBtn ? `${Math.round(exportBtn.getBoundingClientRect().width)}px` : '按钮不存在'
+    '左栏底部四行：保存 → 返回 → AI 补充 → 删除',
+    railIds.join(' → ') === 'btn-save-char → btn-back-char → btn-ai-fill-char → btn-del-char',
+    railIds.join(' → ')
   );
+  check('编辑器里不再有「导出」（改到角色库卡片上）', !byId('btn-export-char'));
   const railSave = byId('btn-save-char');
   check(
     '「保存角色」铺满左栏栏宽',
     !!railSave && railSave.getBoundingClientRect().width > 150,
     railSave ? String(Math.round(railSave.getBoundingClientRect().width)) : '按钮不存在'
-  );
-  check(
-    '左栏底部不再重复「返回」（页头那颗就够）',
-    !byId('btn-back-char')
   );
   check('「清除」的 hidden 照样生效', byId('btn-clear-avatar').classList.contains('hidden') && getComputedStyle(byId('btn-clear-avatar')).display === 'none');
 });
@@ -3954,11 +3984,16 @@ await scenario('导出', async () => {
   // --- 角色卡 ---
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
-  click(buttonByText($$('#char-page-grid .char-card')[0], '编辑'));
+  // 认名字不按下标：角色库是按更新时间排的，前面几场都会把它顶到第一位。
+  const exportSourceCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('属性测试角色'));
+  check('角色库里有「属性测试角色」', !!exportSourceCard, $$('#char-page-grid .char-card').map((c) => c.textContent.slice(0, 12)).join(' / '));
+  click(buttonByText(exportSourceCard, '编辑'));
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   // 先给它绑一本世界书再导出 —— 这样「导出的卡带不带 character_book」
   // 才验得到（宿主侧的 probeExports 会看导出的卡里有没有这本）。
+  // ⚠️ 2026-10-20：编辑器里的「导出」撤了，卡片只能从角色库那颗按 id 取**落盘**的那一张，
+  //    所以绑定必须真的保存下去（以前不保存也能导出，因为导出的是内存里那个对象）。
   click('#c-wb-add-btn');
   await waitFor('世界书选择浮层出现', () => !!$('.cwb-picker'));
   const exportBook = $$('.cwb-picker .cwb-picker-row').find((o) =>
@@ -3971,13 +4006,17 @@ await scenario('导出', async () => {
     check('导出场景：能选到种子世界书', false, JSON.stringify($$('.cwb-picker .cwb-picker-row').map((o) => o.textContent.trim())));
   }
 
-  click('#btn-export-char');
-  await sleep(300);
-  check('导出角色卡后有提示', $('#toast').textContent.includes('已导出'), $('#toast').textContent);
-  // 制造一处没保存的改动：返回时应该先拦一下，别把改动静默丢掉
+  click('#btn-save-char');
+  await waitFor('导出场景：绑定落盘', async () => {
+    const saved = (await savedCharacters()).find((c) => c.name === '属性测试角色');
+    return !!saved && Array.isArray(saved.worldbookIds) && saved.worldbookIds.length > 0;
+  });
+
+  // 制造一处没保存的改动：用左栏那颗「返回」离开时要先拦一下，别把改动静默丢掉
+  // （顺便验这颗新按钮走的是和页头「返回」同一个动作，不是自己另写一套）
   setValue('#c-desc', `${byId('c-desc').value}（未保存）`);
-  click('#btn-close-chars');
-  await waitFor('有未保存改动时返回会拦一下', () => shown('#confirm-modal'));
+  click('#btn-back-char');
+  await waitFor('左栏「返回」遇到未保存改动会拦一下', () => shown('#confirm-modal'));
   check(
     '确认框说的是「没保存的改动」',
     byId('confirm-message').textContent.includes('没保存'),
@@ -3987,7 +4026,8 @@ await scenario('导出', async () => {
   await waitFor('确认放弃后回到角色库', () => shown('#view-chars'));
 
   // --- 角色库卡片上的「导出」：不用为了拿走一张卡先进详情页 ---
-  const listCard = $$('#char-page-grid .char-card')[0];
+  const listCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('属性测试角色')) ||
+    $$('#char-page-grid .char-card')[0];
   const listExport = listCard && buttonByText(listCard, '导出');
   check('角色卡列表上有「导出」按钮', !!listExport);
   if (listExport) {
@@ -4627,6 +4667,84 @@ await scenario('AI 补设定：保存才建书', async () => {
   await sleep(150);
   check('保存后关闭不弹放弃确认', !shown('#confirm-modal'));
   await waitFor('编辑器关闭', () => !shown('#view-char-editor'));
+});
+
+// ---------------------------------------------------------------------------
+//  场景 11.66：「AI 补充」—— 先确认，再把五栏写回表单，点保存才进卡
+//
+//  假后端认「角色卡编辑」+ "mesExample"（见 tools/smoke-test.js），回五栏文字，
+//  **故意不带 name**：这条任务只改那五栏，模型顺手给个新名字也不能把卡名改掉。
+//  验四件：① 点错预防（先弹确认，取消就什么都不发生）；② 等的时候按钮在转圈圈
+//  且点不动；③ 五栏回填、名字/标签没动、保存胶囊变脏；④ 点了保存才落盘。
+// ---------------------------------------------------------------------------
+await scenario('AI 补充：确认后重写五栏', async () => {
+  click('#btn-chars');
+  await waitFor('切到角色库页面', () => shown('#view-chars'));
+
+  // 上一场生成并保存下来的「守夜人」：五栏里描述和性格都有，够 AI 读
+  const card = $$('#char-page-grid .char-card').find((node) => node.textContent.includes('守夜人'));
+  check('角色库里有上一场存的「守夜人」', !!card);
+  click(buttonByText(card, '编辑'));
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
+
+  const btn = byId('btn-ai-fill-char');
+  check('左栏底部有「AI 补充」按钮', !!btn && String(btn.textContent).includes('AI 补充'), btn && btn.textContent);
+
+  const nameBefore = byId('c-name').value;
+  const tagsBefore = byId('c-tags').value;
+  const descBefore = byId('c-desc').value;
+
+  // ① 点错预防：先弹确认
+  click('#btn-ai-fill-char');
+  await waitFor('点「AI 补充」先弹确认', () => shown('#confirm-modal'));
+  const confirmText = byId('confirm-message').textContent;
+  check('确认框说清会覆盖哪几栏 + 保存才生效', /五栏/.test(confirmText) && confirmText.includes('保存'), confirmText);
+  click('#confirm-cancel');
+  await waitFor('取消后确认框收起', () => !shown('#confirm-modal'));
+  await sleep(120);
+  check('取消之后按钮没进 loading', !byId('btn-ai-fill-char').loading);
+  check('取消之后描述一个字都没变', byId('c-desc').value === descBefore);
+
+  // ② 真要跑：等的时候按钮转圈圈 + 不可点
+  click('#btn-ai-fill-char');
+  await waitFor('再次弹确认', () => shown('#confirm-modal'));
+  click('#confirm-ok');
+  await waitFor('按钮进入 loading', () => byId('btn-ai-fill-char').loading);
+  check('loading 时有转圈圈', !!$('#btn-ai-fill-char .mi-btn__spinner'));
+  check('loading 期间按钮点不动', byId('btn-ai-fill-char').disabled === true);
+  check('loading 文案是「补充中…」', String(byId('btn-ai-fill-char').textContent).includes('补充中'), byId('btn-ai-fill-char').textContent);
+
+  // ③ 五栏回填
+  await waitFor('五栏都填上了', () => byId('c-desc').value.includes('AI补充后的描述'));
+  check('描述换了', byId('c-desc').value.includes('AI补充后的描述'), byId('c-desc').value.slice(0, 24));
+  check('性格换了', byId('c-personality').value.includes('AI补充后的性格'), byId('c-personality').value.slice(0, 24));
+  check('场景换了', byId('c-scenario').value.includes('AI补充后的场景'), byId('c-scenario').value.slice(0, 24));
+  check('开场白换了', byId('c-first').value.includes('AI补充后的开场白'), byId('c-first').value.slice(0, 24));
+  check('示例对话换了', byId('c-example').value.includes('<START>'), byId('c-example').value.slice(0, 24));
+  check('名字没被改（模型给了新名字也不能动）', byId('c-name').value === nameBefore, `${byId('c-name').value} / ${nameBefore}`);
+  check('标签没被改', byId('c-tags').value === tagsBefore);
+  check('出结果后按钮恢复原样', !byId('btn-ai-fill-char').loading && String(byId('btn-ai-fill-char').textContent).includes('AI 补充'));
+  check('表单标成「有未保存的改动」', byId('char-save-state').dataset.state === 'dirty', byId('char-save-state').dataset.state);
+
+  // ④ 这时候还只是表单里改过，磁盘上得还是老描述
+  const beforeSave = (await savedCharacters()).find((c) => c.name === '守夜人');
+  check('保存前磁盘上还是老描述', !!beforeSave && beforeSave.description === descBefore, beforeSave && beforeSave.description.slice(0, 20));
+
+  click('#btn-save-char');
+  await waitFor('保存落盘', async () => {
+    const saved = (await savedCharacters()).find((c) => c.name === '守夜人');
+    return !!saved && String(saved.description).includes('AI补充后的描述');
+  });
+  const afterSave = (await savedCharacters()).find((c) => c.name === '守夜人');
+  check(
+    '点保存之后新描述才进卡',
+    !!afterSave && String(afterSave.description).includes('AI补充后的描述'),
+    afterSave && String(afterSave.description).slice(0, 20)
+  );
+
+  click('#btn-close-chars');
+  await waitFor('编辑器关闭', () => !shown('#view-char-editor'));
+  check('保存后关闭不弹放弃确认', !shown('#confirm-modal'));
 });
 
 //
@@ -5676,8 +5794,11 @@ await scenario('准备悬停验证', async () => {
 
 // ---------------------------------------------------------------------------
 //  帮我想想：给几个下一步让你挑
+//
+//  它和自动剧情选项是**同一块 UI**（.msg-options）—— 区别只是手动要一次。
+//  所以断言按剧情选项的口径走（序号 / 换一批 / ✕），不再有独立的建议条。
 // ---------------------------------------------------------------------------
-await scenario('帮我想想（给几个下一步）', async () => {
+await scenario('帮我想想（补一批剧情选项）', async () => {
   // 回聊天视图，并确保末尾有一条 AI 回复（工具条上才有「帮我想想」）
   const convoItem = $('#convo-list .convo-item');
   if (convoItem) {
@@ -5692,34 +5813,87 @@ await scenario('帮我想想（给几个下一步）', async () => {
 
   check('AI 回复上有「帮我想想」', actionsOf(lastAssistant()).includes('帮我想想'), JSON.stringify(actionsOf(lastAssistant())));
   check('用户消息上没有「帮我想想」', !actionsOf($$('#messages .msg.user').pop()).includes('帮我想想'));
+  check(
+    '输入框上方没有独立的建议条（已并进剧情选项）',
+    !byId('suggest-strip') && !byId('suggest-list') && !byId('btn-suggest-close')
+  );
 
-  // 建议条默认收起、且是空的
-  check('建议条默认不显示', !shown('#suggest-strip'));
-  check('建议列表一开始是空的', byId('suggest-list').children.length === 0);
+  // 先把已有的自动选项收掉，才能证明下面这块是「帮我想想」生出来的
+  const closeBefore = $$('#messages .msg-options-close')[0];
+  if (closeBefore) {
+    click(closeBefore);
+    await sleep(250);
+  }
+  check('收起之后没有选项块', $$('#messages .msg-options').length === 0, `${$$('#messages .msg-options').length} 块`);
 
-  // 点「帮我想想」（2026-10-20 起常显，不用先展开「⋯」）→ 假后端会回 5 条带序号和引号的选项
+  // 点「帮我想想」（常显，不用先展开「⋯」）→ 假后端会回 5 行带序号和引号的选项
   const trigger = Array.from(lastAssistant().querySelectorAll('.msg-actions .mini-btn'))
     .find((b) => b.textContent.trim() === '帮我想想');
   click(trigger);
-  await waitFor('建议出现', () => shown('#suggest-strip') && byId('suggest-list').children.length > 0, 8000);
+  await waitFor('选项块长出来', () => $$('#messages .msg-options').length > 0, 8000);
   await sleep(200);
 
-  const items = $$('#suggest-list .suggest-btn');
-  const texts = items.map((b) => b.textContent.trim());
+  const items = $$('#messages .msg-option-btn');
+  const texts = items.map((b) => b.querySelector('.opt-text').textContent);
 
-  check('渲染出 4 个建议按钮（第 5 条被丢掉）', items.length === 4, `${items.length}: ${JSON.stringify(texts)}`);
+  check('渲染出 4 个选项（第 5 条被丢掉）', items.length === 4, `${items.length}: ${JSON.stringify(texts)}`);
   check('按钮都是 button 元素', items.every((b) => b.tagName === 'BUTTON'), true);
   check('序号被剥掉', !texts.some((t) => /^\d+\s*[.、)）]/.test(t)), JSON.stringify(texts));
   check('引号被剥掉', !texts.some((t) => /^[「『"']/.test(t) || /[」』"']$/.test(t)), JSON.stringify(texts));
   check('第一条内容正确', texts[0] === '我想先喝一杯，压压惊', JSON.stringify(texts[0]));
   check('四条彼此不同', new Set(texts).size === texts.length, JSON.stringify(texts));
 
-  // 点第一条 → 当成玩家的话发出去，建议条收起
-  const beforeUser = $$('#messages .msg.user').length;
-  click(items[0]);
-  await sleep(250);
+  // 版式跟自动选项是同一套：带数字序号（输入框能按 1~9）、带「换一批」
+  check(
+    '选项前面带数字序号',
+    items.every((b) => /^\d+$/.test((b.querySelector('.opt-index') || {}).textContent || '')),
+    JSON.stringify(items.map((b) => (b.querySelector('.opt-index') || {}).textContent))
+  );
+  check('选项块带「换一批」（跟自动选项同一块 UI）', $$('#messages .msg-options-reroll').length > 0);
+  check('选项挂在最新一条 AI 回复下面', !!lastAssistant().querySelector('.msg-options'));
 
-  check('点选项后建议条自动收起', !shown('#suggest-strip'));
+  // --- 有选项块时再点「帮我想想」：也要有骨架屏（和「换一批」是同一个动作）---
+  // 用户报的 bug：两个按钮能同时点，而且点「帮我想想」时没有加载态。
+  {
+    byId('toast').classList.add('hidden');
+    byId('toast').textContent = '';
+
+    const again = Array.from(lastAssistant().querySelectorAll('.msg-actions .mini-btn'))
+      .find((b) => b.textContent.trim() === '帮我想想');
+    click(again);
+
+    check(
+      '有选项块时点「帮我想想」也画骨架屏',
+      $$('#messages .msg-option-skeleton').length > 0,
+      `骨架条 ${$$('#messages .msg-option-skeleton').length} 条`
+    );
+
+    // 这一次还没回来，紧接着点「换一批」：必须挡下来，不能并发发第二个请求
+    const rerollNow = $$('#messages .msg-options-reroll')[0];
+    if (rerollNow) {
+      click(rerollNow);
+      check(
+        '要选项期间再点「换一批」会被挡下（不并发）',
+        byId('toast').textContent.includes('正在要选项'),
+        byId('toast').textContent
+      );
+      check(
+        '被挡下时骨架屏还在（不会被误换回按钮）',
+        $$('#messages .msg-option-skeleton').length > 0,
+        `骨架条 ${$$('#messages .msg-option-skeleton').length} 条`
+      );
+    }
+
+    await waitFor(
+      '这一批回来（骨架屏换回按钮）',
+      () => $$('#messages .msg-option-skeleton').length === 0 && $$('#messages .msg-option-btn').length > 0,
+      8000
+    );
+  }
+
+  // 点第一条 → 当成玩家的话发出去（上面又重绘过一次，节点要重新抓）
+  const beforeUser = $$('#messages .msg.user').length;
+  click($$('#messages .msg-option-btn')[0]);
   await waitFor('选项被当成玩家消息发出', () => $$('#messages .msg.user').length === beforeUser + 1, 8000);
   check('发出去的就是选项内容',
     String($$('#messages .msg.user').pop().textContent || '').includes('我想先喝一杯，压压惊'));
@@ -5731,16 +5905,16 @@ await scenario('帮我想想（给几个下一步）', async () => {
   }, 8000);
   await sleep(250);
 
-  // ✕ 能收起
-  const trigger2 = Array.from(lastAssistant().querySelectorAll('.msg-actions .mini-btn'))
-    .find((b) => b.textContent.trim() === '帮我想想');
-  if (trigger2) {
-    click(trigger2);
-    await waitFor('建议再次出现', () => shown('#suggest-strip'), 8000);
-    click('#btn-suggest-close');
-    await sleep(150);
-    check('点 ✕ 能收起建议条', !shown('#suggest-strip'));
-    check('收起后列表也清空', byId('suggest-list').children.length === 0);
+  // ✕ 能收起这一批（要新内容就再点一次「帮我想想」）
+  const closeAfter = $$('#messages .msg-options-close')[0];
+  if (closeAfter) {
+    click(closeAfter);
+    await sleep(200);
+    check(
+      '点 ✕ 能收起这一批选项',
+      $$('#messages .msg-options').length === 0,
+      `${$$('#messages .msg-options').length} 块`
+    );
   }
 });
 
@@ -6896,6 +7070,35 @@ await scenario('选项：普通回复也要避开上一批', async () => {
 
     const none = mod.optionsInstruction({ optionsSpec: null, options: [] });
     check('没开剧情选项时不注入', none === '', JSON.stringify(none));
+
+    // 「帮我想想」和「换一批」现在是同一条指令，靠「手上有没有上一批」自动切口径。
+    if (typeof mod.optionsRequestInstruction === 'function') {
+      const withPrev = mod.optionsRequestInstruction({
+        optionsSpec: { count: 3, hint: '' },
+        options: ['先喝汤，别接她这句话']
+      });
+      check(
+        '手动要一批：有上一批时走「换一批」口径',
+        withPrev.includes('【换一批剧情选项】') && withPrev.includes('先喝汤，别接她这句话'),
+        withPrev
+      );
+
+      const noPrev = mod.optionsRequestInstruction({ optionsSpec: { count: 3, hint: '' }, options: [] });
+      check(
+        '手动要一批：没有上一批时走「补一批」口径',
+        noPrev.includes('【补一批剧情选项】') && !noPrev.includes('上一轮已经给过') && !noPrev.includes('换掉'),
+        noPrev
+      );
+
+      const plain = mod.optionsRequestInstruction({ optionsSpec: null, options: [] });
+      check(
+        '手动要一批：纯聊天也给默认 4 条（卡上关了选项同理）',
+        plain.includes('给出 4 个选项'),
+        plain
+      );
+    } else {
+      check('suggestions 模块导出了 optionsRequestInstruction', false);
+    }
   }
 });
 

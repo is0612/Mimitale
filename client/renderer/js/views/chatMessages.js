@@ -16,7 +16,7 @@ import { convoPlayer, convoUserName, userName, speakerName, assistantName } from
 import { cleanAssistantText, convoFieldDisplayNames, panelGroupNames } from '../data/panel.js';
 import { scrollToBottom } from './stream.js';
 import { buildMessageImages, illustrateMessage } from './chatImages.js';
-import { suggestNextActions, pickOption, rerollOptions, closeOptions } from './suggestionsUi.js';
+import { requestMoreOptions, pickOption, closeOptions } from './suggestionsUi.js';
 import { switchVariant, editMessage, regenerateFrom, continueLastMessage } from './composer.js';
 import { removeMessage, branchFromMessage } from './convoActions.js';
 import { openStateCard } from './stateCard.js';
@@ -95,12 +95,27 @@ export function setOpeningBusy(id) {
   openingBusyId = id;
 }
 
+/**
+ * 当前那块选项的「换骨架屏 / 换回按钮」。⚠️ 两个入口（帮我想想 / 换一批）共用它：
+ * 它们本来就是一个动作，反馈也必须一样。整块重绘时先清空（见 renderMessages）。
+ */
+let optionsLoading = null;
+
+/** 供 views/suggestionsUi.js 在请求期间调：有选项块就换骨架屏，没有就什么也不做。
+ *  ⚠️ 「没有块就不画」是刻意的（星宝 2026-10-20 定）—— 纯聊天第一次要选项时只有按钮上的
+ *     「在想…」，别为了「补齐加载态」去凭空造一块占位骨架。 */
+export function setOptionsLoading(busy) {
+  if (!optionsLoading) return;
+  if (busy) optionsLoading.show();
+  else optionsLoading.hide();
+}
+
 /** 剧情选项块：每行一个选项（点一下当作玩家说了这句话），底下有「换一批」和「✕」。
  *  按钮动作都在 suggestionsUi.js，这里只管接线。 */
 function buildOptionsBlock(options) {
   const box = h('div', { class: 'msg-options' });
 
-  // 选项按钮包一层容器：点「换一批」时把里面换成骨架屏，等模型返回再换回来
+  // 选项按钮包一层容器：请求期间把里面换成骨架屏，等模型返回再换回来
   const list = h('div', { class: 'msg-options-list' });
   box.appendChild(list);
 
@@ -138,8 +153,11 @@ function buildOptionsBlock(options) {
 
   renderButtons();
 
-  // 「换一批」：先换骨架屏并禁用按钮，等模型返回；失败时原地把旧选项画回来
-  // （成功时 refreshAll 已整块重绘）。
+  // 请求期间这块要能自己切骨架屏 —— 存进模块级，让建议条两个入口都能用同一套反馈
+  optionsLoading = { show: renderSkeleton, hide: renderButtons };
+
+  // 「换一批」：只负责自己的按钮文案；骨架屏由 requestMoreOptions 统一触发
+  // （「帮我想想」点的时候也要有，反馈才一致）。失败时 requestMoreOptions 已把旧选项写回。
   const reroll = h(
     'button',
     {
@@ -153,11 +171,11 @@ function buildOptionsBlock(options) {
         btn.disabled = true;
         const original = btn.textContent;
         btn.textContent = '换一批中…';
-        renderSkeleton();
         try {
-          const ok = await rerollOptions(activeConvo());
-          // 失败时 rerollOptions 已把旧选项写回，这里换回旧按钮；成功时 refreshAll 已整块重绘。
-          if (!ok) renderButtons();
+          const ok = await requestMoreOptions(activeConvo(), { tag: 'reroll', failText: '换一批失败' });
+          // ok === false 才是「这次真的失败了，骨架屏要换回旧按钮」；
+          // 'busy'（被另一次请求挡住）时骨架屏归另一次管，别在这儿重画。
+          if (ok === false) renderButtons();
         } finally {
           btn.disabled = false;
           btn.textContent = original;
@@ -170,7 +188,7 @@ function buildOptionsBlock(options) {
     type: 'button',
     class: 'msg-options-close',
     text: '✕',
-    title: '收起这一批选项（下一轮回复会带新的）',
+    title: '收起这一批选项（要新的再点「帮我想想」或「换一批」）',
     onClick: () => closeOptions(activeConvo())
   });
 
@@ -417,14 +435,16 @@ function messageNode(message, index, character, labels, ctx) {
       extras.push(draw);
     }
 
-    // 帮我想想：卡住不知道说什么时，让 AI 给几个下一步让你挑
+    // 帮我想想：这轮没给剧情选项（模型漏了 / 纯聊天 / 卡上关了），手动要一批
     if (isLast && String(message.content || '').trim()) {
       const suggest = document.createElement('button');
       suggest.className = 'mini-btn';
       suggest.textContent = '帮我想想';
-      suggest.title = '让 AI 给几个下一步，点一下就直接发出去';
+      suggest.title = '让 AI 补一批剧情选项，点一下就发出去';
       suggest.setAttribute('aria-label', '让 AI 帮我想下一步');
-      suggest.addEventListener('click', () => suggestNextActions(suggest));
+      suggest.addEventListener('click', () =>
+        requestMoreOptions(activeConvo(), { trigger: suggest, tag: 'suggest', failText: '想不出来' })
+      );
       direct.push(suggest);
     }
   }
@@ -552,6 +572,8 @@ export function renderMessages(options) {
     user: convoUserName(convo),
     assistant: speakerName(convo)
   };
+  // 马上要重建整棵树了 —— 旧的选项块闭包全都作废，别让 setOptionsLoading 摸到脱离文档的节点
+  optionsLoading = null;
   const lastMsg = convo.messages[convo.messages.length - 1];
   // 剧情选项挂在最新一条 AI 回复下面：你刚发了话、或正在流式生成就先不挂
   const showOptions =

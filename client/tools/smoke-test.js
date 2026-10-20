@@ -1004,6 +1004,38 @@ function registerStubs() {
       };
     }
 
+    // 「AI 补充」（角色编辑器左栏那颗，2026-10-20）：把它手上这张卡的五栏重写一遍。
+    // 认两样：人设里的「角色卡编辑」+ 字段契约里的 "mesExample"。
+    // 和「AI 生成角色」那条不冲突 —— 那条要「角色设定师」+ "firstMes"，措辞是两套。
+    //
+    // 故意**不返回 name**：这条任务只改五栏，模型要是顺手给了个新名字，
+    // 界面也不能把卡名改掉（applyAiFill 只认这五个键）。
+    if (/角色卡编辑/.test(allText) && allText.includes('"mesExample"')) {
+      const payloadText = JSON.stringify({
+        description: 'AI补充后的描述：守夜人靠在楼道尽头的铁梯上，手电筒夹在腋下，指节上有一道旧疤。',
+        personality: 'AI补充后的性格：话少，问一句答半句；被追问急了会先沉默两秒，再蹦出一个短句。',
+        scenario: 'AI补充后的场景：凌晨三点的老楼楼道，你们在两盏坏掉的声控灯之间。',
+        firstMes: 'AI补充后的开场白：她把手电往你脚边一照。\\n\\n「这么晚，你上来干什么？」',
+        mesExample:
+          '{{user}}: 我找人。\\n{{char}}: 找哪个？这层只剩两户。\\n\\n<START>\\n\\n{{user}}: 你住这儿多久了？\\n{{char}}: 记不清了。'
+      });
+      // ⚠️ 切得比别的桩碎、也慢一点（24 字 / 8ms）：界面那条断言要看按钮的
+      //    loading 态（转圈圈 + 不可点），一口气吐完的话轮询根本抓不到。
+      for (const piece of payloadText.match(/[\s\S]{1,24}/g) || []) {
+        if (!event.sender.isDestroyed()) event.sender.send('chat:chunk', { requestId, text: piece });
+        await sleep(8);
+      }
+      return {
+        ok: true,
+        requestId,
+        model,
+        content: payloadText,
+        reasoning: '',
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        finishReason: 'stop'
+      };
+    }
+
     // 「AI 生成预设」（预设页右上角那颗，2026-10-20）：同样共用 chat:send。
     // 认两样：人设里的「写「预设」的编辑」+ 字段契约里的 "note"。
     // 名字跟着用户描述 / 场次变 —— 对不上就说明那两段没拼进请求（user 缺描述、system 缺场次）。
@@ -1211,10 +1243,10 @@ function registerStubs() {
       };
     }
 
-    // 「帮我想想」会带一条特殊的指令；这时给回几个选项，好让测试能验证解析与渲染。
-    // 故意让模型「不听话」带序号和引号，测试要能容忍。
+    // 「帮我想想」会带一条特殊的指令（补一批剧情选项）；这时给回几个选项，好让测试能验证解析与渲染。
+    // 故意让模型「不听话」带序号和引号、也不带「【剧情选项】：」标记 —— 测试要能容忍（走按行兜底）。
     const askedForSuggestions = ((payload && payload.messages) || []).some((m) =>
-      String((m && m.content) || '').includes('替「玩家」想几个')
+      String((m && m.content) || '').includes('补一批剧情选项')
     );
     if (askedForSuggestions) {
       const suggestions = [
@@ -3299,6 +3331,57 @@ async function probeBookEntries(win, result) {
 }
 
 /**
+ * 「AI 补充」（角色编辑器左栏那颗）的解析体检：同上，纯函数直接喂原文。
+ * 盯两处：
+ *   · 模型偷懒写 first_mes / mes_example（下划线写法）也得认，否则那两栏会被静默丢掉；
+ *   · 一栏都没解析出来时必须报错 —— 否则界面上「点了一下什么都没发生」。
+ */
+async function probeCardFillParse(win, result) {
+  const push = (name, pass, detail) =>
+    result.results.push({ name, pass: !!pass, detail: detail || '' });
+
+  try {
+    const out = await win.webContents.executeJavaScript(`(async () => {
+      const mod = await import(new URL('js/views/charAiFill.js', document.baseURI).href);
+      if (typeof mod.parseCardFill !== 'function') return { exported: false };
+
+      const clean = JSON.stringify({
+        description: '描述', personality: '性格', scenario: '场景', firstMes: '开场白', mesExample: '示例'
+      });
+      const snake = JSON.stringify({ first_mes: '开场白', mes_example: '示例' });
+      const fenced = '好的：\\n\\n\\\`\\\`\\\`json\\n' + clean + '\\n\\\`\\\`\\\`';
+      const empty = JSON.stringify({ description: '', personality: '   ' });
+
+      const a = mod.parseCardFill(clean);
+      const b = mod.parseCardFill(snake);
+      const c = mod.parseCardFill(fenced);
+      const d = mod.parseCardFill('这不是 JSON');
+      const e = mod.parseCardFill(empty);
+      return {
+        exported: true,
+        clean: { ok: a.ok, filled: a.filled },
+        snake: { ok: b.ok, firstMes: (b.fields || {}).firstMes, mesExample: (b.fields || {}).mesExample },
+        fenced: { ok: c.ok, filled: c.filled },
+        junk: { ok: d.ok, err: d.error },
+        empty: { ok: e.ok, err: e.error }
+      };
+    })()`);
+
+    if (!out || !out.exported) {
+      push('AI 补充：解析函数可以从模块里拿到', false, JSON.stringify(out));
+      return;
+    }
+    push('AI 补充：五栏都能解析出来', out.clean.ok && out.clean.filled === 5, JSON.stringify(out.clean));
+    push('AI 补充：下划线写法（first_mes / mes_example）也认', out.snake.ok && out.snake.firstMes && out.snake.mesExample, JSON.stringify(out.snake));
+    push('AI 补充：带围栏的输出也能解析', out.fenced.ok && out.fenced.filled === 5, JSON.stringify(out.fenced));
+    push('AI 补充：乱码不抛错、给出错误', !out.junk.ok && !!out.junk.err, JSON.stringify(out.junk));
+    push('AI 补充：一栏都没给就算失败', !out.empty.ok && !!out.empty.err, JSON.stringify(out.empty));
+  } catch (err) {
+    push('AI 补充：解析体检能跑起来', false, (err && err.message) || String(err));
+  }
+}
+
+/**
  * 「AI 生成预设」的解析体检：同上，纯函数直接喂原文。
  * 重点盯两处：正文空了不能算成功（否则会开一张只有名字的空预设）；
  * 名字缺失要有兜底名（保存按钮靠名字非空才放行，空名字会让「保存」变成没反应）。
@@ -3976,6 +4059,7 @@ app.whenReady().then(async () => {
       await probeStoreWriteFailure(result);
       await probeAiGenParse(win, result);
       await probeBookEntries(win, result);
+      await probeCardFillParse(win, result);
       await probePresetGenParse(win, result);
       probeBatchLibrary(result);
       await probeWorldbookExportRoundTrip(win, result);

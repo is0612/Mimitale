@@ -94,10 +94,7 @@ export const el = {
   btnPerspective: $('btn-perspective'),
   btnMore: $('btn-more'),
   moreMenu: $('topbar-more'),
-  suggestStrip: $('suggest-strip'),
-  suggestList: $('suggest-list'),
-  btnSuggestClose: $('btn-suggest-close'),
-  // 行由 views/quickPhrases.js 铺，开合也在那边（纯插入，不发送 —— 发送归建议条）
+  // 行由 views/quickPhrases.js 铺，开合也在那边（纯插入，不发送 —— 发送归剧情选项）
   btnQuick: $('btn-quick'),
   quickMenu: $('quick-menu'),
   perspectiveModal: $('perspective-modal'),
@@ -194,7 +191,9 @@ export const el = {
   btnNewChar: $('btn-new-char'),
   btnDelChar: $('btn-del-char'),
   btnSaveChar: $('btn-save-char'),
-  btnExportChar: $('btn-export-char'),
+  // 左栏底部的「返回」和「AI 补充」（导出 2026-10-20 撤掉，改在角色库卡片上）
+  btnBackChar: $('btn-back-char'),
+  btnAiFillChar: $('btn-ai-fill-char'),
   btnExportConvo: $('btn-export-convo'),
   btnAddAttr: $('btn-add-attr'),
   charEmpty: $('char-empty'),

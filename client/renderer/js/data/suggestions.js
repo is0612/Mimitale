@@ -1,35 +1,33 @@
 'use strict';
 
-// data/suggestions.js —— 「帮我想想」和「剧情选项」的纯逻辑，一行 DOM 都不碰（按钮 / 交互在 views/suggestionsUi.js）
-// 「帮我想想」= 额外发一次请求的一次性建议；「剧情选项」= 面板的一部分，跟状态栏一起在正文里输出、每轮更新。
+// data/suggestions.js —— 「剧情选项」的纯逻辑，一行 DOM 都不碰（按钮 / 交互在 views/suggestionsUi.js）
+//
+// 这里只有一个东西：**玩家下一步能做什么**的那批选项。两个来源、一个动作：
+//   ① 自动（optionsInstruction）—— 模型每轮跟着回复带出来；
+//   ② 手动（optionsRequestInstruction）—— 用户点「帮我想想」或「换一批」时要一次。
+//      这两个按钮是同一个动作的两个位置：没有上一批 → 补一批，有 → 换一批，措辞自动切。
+// ⚠️ 两个来源**产出同一样东西**（写回 convo.options），所以界面上也只有一块 UI（.msg-options）。
+//    以前「帮我想想」另起了一套临时建议条，等于把同一件事做了两遍：没有序号、按不了 1~9、
+//    不能换一批、关窗口就没了 —— 2026-10-20 合并掉。
 
 import { OPTIONS_LABEL, OPTIONS_LINE_RE } from './panel.js';
 import { asArray } from '../core/util.js';
 
-// --- 帮我想想 ---
+// 一条选项最多多少字 —— 点下去要当消息发出去，不能变成小作文
+const MAX_OPTION_CHARS = 120;
+// 一屏最多几个（模型给多了会挤爆面板）
+const MAX_OPTIONS = 6;
+// 默认给几个 —— 须和 main/characters.js 的 DEFAULT_OPTIONS 对齐（角色卡没配过时按这个数走）
+export const DEFAULT_OPTIONS_COUNT = 4;
 
-// 一次给几个选项
-const SUGGEST_COUNT = 4;
-// 单个选项的字数上限，免得点下去变成一大段
-const MAX_SUGGEST_CHARS = 120;
+// --- 解析 ---
 
-export function suggestInstruction() {
-  return (
-    '请基于上面这段对话，替「玩家」想几个接下来可以怎么做 / 怎么说的选项。\n' +
-    '\n' +
-    '要求：\n' +
-    `1. 给 ${SUGGEST_COUNT} 个，每一个都要贴着当前局面，不要泛泛而谈。\n` +
-    '2. 每个选项要明显不同 —— 可以是不同的态度、不同的做法、或者不同的对象，\n' +
-    '   不要四个都是同一件事的不同说法。\n' +
-    '3. 用玩家第一人称，写他实际会说的话或会做的动作，\n' +
-    `   每条控制在一句话内（不超过 ${MAX_SUGGEST_CHARS} 字），不要写成小作文。\n` +
-    '4. 直接输出选项本身，不要序号、不要引号、不要解释、不要标题。\n' +
-    '5. 每行一个，不要套用任何「剧情选项」标记或分隔线，就干干脆脆几行选项。'
-  );
-}
-
-/** 从模型回复里解析出选项：一行一个，容忍它带了序号或引号 */
-export function parseSuggestions(text) {
+/**
+ * 格式全崩时的兜底：一行一个，容忍序号 / 引号 / 项目符号。
+ * 正常路径走 extractOptionsFromText（认「【剧情选项】：a / b / c」），这个只接「模型干脆没按格式写」的场。
+ */
+export function parseSuggestions(text, limit) {
+  const max = Math.max(1, Math.min(MAX_OPTIONS, Math.round(Number(limit) || DEFAULT_OPTIONS_COUNT)));
   const lines = String(text || '').split('\n');
   const out = [];
 
@@ -43,51 +41,13 @@ export function parseSuggestions(text) {
     line = line.replace(/^[「『"'“”‘’]+/, '').replace(/[」』"'“”‘’]+$/, '').trim();
 
     if (!line) continue;
-    if (line.length > MAX_SUGGEST_CHARS) line = `${line.slice(0, MAX_SUGGEST_CHARS)}…`;
+    if (line.length > MAX_OPTION_CHARS) line = `${line.slice(0, MAX_OPTION_CHARS)}…`;
 
     if (!out.includes(line)) out.push(line);
-    if (out.length >= SUGGEST_COUNT) break;
+    if (out.length >= max) break;
   }
 
   return out;
-}
-
-// --- 剧情选项 ---
-
-// 选项行标记（OPTIONS_LABEL / OPTIONS_LINE_RE）在 data/panel.js：剥选项行和剥状态栏行是同一件事
-// 一条选项最多多少字 —— 点下去要当消息发出去，不能变成小作文
-const MAX_OPTION_CHARS = 120;
-// 一屏最多几个（模型给多了会挤爆面板）
-const MAX_OPTIONS = 6;
-// 默认给几个 —— 须和 main/characters.js 的 DEFAULT_OPTIONS 对齐（角色卡没配过时按这个数走）
-export const DEFAULT_OPTIONS_COUNT = 4;
-
-/** 默认的剧情选项配置（没在角色卡上关掉的角色都用它） */
-export function defaultOptionsSpec() {
-  return { count: DEFAULT_OPTIONS_COUNT, hint: '' };
-}
-
-/**
- * 角色卡上的剧情选项配置 → 这个会话该用的配置。⚠️ 卡上明确关了（optionsSpec === false）→ null；配过 → 复制一份（改卡不该动到进行中的这一局）；没配过 / 没卡 → 默认 4 条。
- */
-export function optionsSpecFromCharacter(character) {
-  const spec = character && character.optionsSpec;
-  if (spec === false) return null;
-  if (spec && typeof spec === 'object' && !Array.isArray(spec)) return { ...spec };
-  return defaultOptionsSpec();
-}
-
-/** 当前会话要不要每轮出剧情选项（存在会话上，跟面板走） */
-function convoOptionsSpec(convo) {
-  const spec = convo && convo.optionsSpec;
-  if (!spec || typeof spec !== 'object') return null;
-  const count = Math.max(1, Math.min(MAX_OPTIONS, Math.round(Number(spec.count) || DEFAULT_OPTIONS_COUNT)));
-  return { count, hint: String(spec.hint || '').trim().slice(0, 200) };
-}
-
-/** 会话当前的剧情选项列表（容错：老会话可能没有这个字段） */
-function convoOptions(convo) {
-  return asArray(convo && convo.options);
 }
 
 // 孤立的拉丁字母片段（模型把示例里的「A / B / C」当成标签抄出来了）；只丢**单个**字母，「OK」「B超」不受影响
@@ -129,30 +89,60 @@ export function extractOptionsFromText(text) {
   return out;
 }
 
-/**
- * 「换一批」的指令：按同一套设定再给一批，格式和 optionsInstruction 一致。⚠️ 必须把上一批列出来要求避开，否则点了等于没点；示例给真实内容而非「A / B / C」—— 占位字母会被照抄成单字母标签。
- */
-export function rerollOptionsInstruction(convo) {
-  const spec = convoOptionsSpec(convo);
-  const count = spec ? spec.count : DEFAULT_OPTIONS_COUNT;
+// --- 指令 ---
+// 三个入口（每轮 / 换一批 / 补一批）只有开头那句「什么时候给」不同，格式要求走同一份。
 
-  const previous = convoOptions(convo).filter(Boolean);
-  const avoid = previous.length
-    ? `上一批选项是：${previous.map((t) => `「${t}」`).join('、')}。换一批时请避开这些（或至少别原样照搬），给几个明显不一样的做法。\n`
-    : '';
+/** 格式那一行：怎么摆、几个、别加什么。 */
+function optionShapeLine(count) {
+  return (
+    `用「【${OPTIONS_LABEL}】：选项内容 / 选项内容 / 选项内容」的格式给出 ${count} 个选项，` +
+    '每个选项之间用「 / 」隔开（就这一行，不要编号、不要加 A/B/C 字母标签、不要再分多行）。'
+  );
+}
 
-  const lines = [
-    '【换一批剧情选项】',
-    `把上面刚给出的那批剧情选项换掉，重新另起一行，用「【剧情选项】：选项内容 / 选项内容 / 选项内容」的格式给 ${count} 个选项，` +
-      '每个选项之间用「 / 」隔开（就这一行，不要编号、不要加 A/B/C 字母标签、不要再分多行）。',
+/** 内容要求那几行：写什么、多长、几条之间要不一样。示例用真实内容而非「A / B / C」—— 占位字母会被照抄成单字母标签。 */
+function optionBodyLines() {
+  return [
     '每个选项是玩家接下来可以**直接说出口或做出来**的动作/台词，用玩家第一人称，' +
       `每条一句话以内（不超过 ${MAX_OPTION_CHARS} 字）。`,
-    '例如：【剧情选项】：走过去抱住她 / 退后一步问她怎么了 / 假装没看见，继续做自己的事。',
+    `例如：【${OPTIONS_LABEL}】：走过去抱住她 / 退后一步问她怎么了 / 假装没看见，继续做自己的事。`,
     '选项之间要明显不同（不同的态度、做法或对象），不要是同一件事的不同说法。'
   ];
-  if (avoid) lines.push(avoid.trim());
-  if (spec && spec.hint) lines.push(`额外要求：${spec.hint}`);
-  return lines.join('\n');
+}
+
+/** 默认的剧情选项配置（没在角色卡上关掉的角色都用它） */
+export function defaultOptionsSpec() {
+  return { count: DEFAULT_OPTIONS_COUNT, hint: '' };
+}
+
+/**
+ * 角色卡上的剧情选项配置 → 这个会话该用的配置。⚠️ 卡上明确关了（optionsSpec === false）→ null；配过 → 复制一份（改卡不该动到进行中的这一局）；没配过 / 没卡 → 默认 4 条。
+ */
+export function optionsSpecFromCharacter(character) {
+  const spec = character && character.optionsSpec;
+  if (spec === false) return null;
+  if (spec && typeof spec === 'object' && !Array.isArray(spec)) return { ...spec };
+  return defaultOptionsSpec();
+}
+
+/** 当前会话要不要每轮出剧情选项（存在会话上，跟面板走） */
+function convoOptionsSpec(convo) {
+  const spec = convo && convo.optionsSpec;
+  if (!spec || typeof spec !== 'object') return null;
+  const count = Math.max(1, Math.min(MAX_OPTIONS, Math.round(Number(spec.count) || DEFAULT_OPTIONS_COUNT)));
+  return { count, hint: String(spec.hint || '').trim().slice(0, 200) };
+}
+
+/** 会话当前的剧情选项列表（容错：老会话可能没有这个字段） */
+function convoOptions(convo) {
+  return asArray(convo && convo.options);
+}
+
+/** 「上一批已经给过哪些」—— 不写这句，模型会原地打转给同一批。 */
+function avoidPreviousLine(convo) {
+  const previous = convoOptions(convo).filter(Boolean);
+  if (!previous.length) return '';
+  return `上一轮已经给过：${previous.map((t) => `「${t}」`).join('、')}。这次给明显不同的新选项，不要重复上一轮的（局面有推进就更该换）。`;
 }
 
 /** 注入给模型的选项指令（有配置时才注入） */
@@ -162,27 +152,53 @@ export function optionsInstruction(convo) {
 
   const lines = [
     '【剧情选项】',
-    `每轮回复的末尾都**必须**带上「【${OPTIONS_LABEL}】：选项内容 / 选项内容 / 选项内容」这一行，` +
-      `给出 ${spec.count} 个选项，每个选项之间用「 / 」隔开。` +
-      '就这一行、紧跟正文和状态栏之后，不要编号、不要加 A/B/C 字母标签、不要再分多行，也不要因为正文长就省略这一行。',
-    '每个选项是玩家接下来可以**直接说出口或做出来**的动作/台词，用玩家第一人称，' +
-      `每条一句话以内（不超过 ${MAX_OPTION_CHARS} 字）。`,
-    `例如：【${OPTIONS_LABEL}】：走过去抱住她 / 退后一步问她怎么了 / 假装没看见，继续做自己的事。`,
-    '选项之间要明显不同（不同的态度、做法或对象），不要是同一件事的不同说法。'
+    '每轮回复的末尾都**必须**带上这一行，紧跟正文和状态栏之后，不要因为正文长就省略：',
+    optionShapeLine(spec.count),
+    ...optionBodyLines()
   ];
   if (spec.hint) lines.push(`额外要求：${spec.hint}`);
 
-  // 显式要求避开上一批，否则模型会「原地打转」给出同一批选项。
-  const previous = convoOptions(convo).filter(Boolean);
-  if (previous.length) {
-    lines.push(
-      `上一轮已经给过：${previous.map((t) => `「${t}」`).join('、')}。` +
-        '这次给明显不同的新选项，不要重复上一轮的（局面有推进就更该换）。'
-    );
-  }
+  const avoid = avoidPreviousLine(convo);
+  if (avoid) lines.push(avoid);
 
   return lines.join('\n');
 }
+
+/**
+ * 手动要一批选项 —— 「帮我想想」和「换一批」点的是**同一个动作**：
+ * 再要一批，避开手上已有的那批。唯一的变量是「手上有没有上一批」，措辞跟着变：
+ *   · 有 → 「换一批」（把上面那批换掉）
+ *   · 没有 → 「补一批」（这轮压根没给，别写正文）
+ * ⚠️ 所以别再拆成两个函数 —— 拆了就会漂：一边改了格式，另一边忘了。
+ */
+export function optionsRequestInstruction(convo) {
+  const spec = convoOptionsSpec(convo);
+  const count = spec ? spec.count : DEFAULT_OPTIONS_COUNT;
+  const hasPrevious = convoOptions(convo).filter(Boolean).length > 0;
+
+  const lines = hasPrevious
+    ? [
+        '【换一批剧情选项】',
+        '把上面刚给出的那批剧情选项换掉，重新另起一行，别再重复旧的：',
+        optionShapeLine(count),
+        ...optionBodyLines()
+      ]
+    : [
+        '【补一批剧情选项】',
+        '上面这轮没有给剧情选项，玩家不知道接下来能怎么做。这一次**不要写正文、不要写旁白、不要重复之前的剧情**，' +
+          '只把玩家接下来可以做的事给出来：',
+        optionShapeLine(count),
+        ...optionBodyLines()
+      ];
+
+  const avoid = avoidPreviousLine(convo);
+  if (avoid) lines.push(avoid);
+  if (spec && spec.hint) lines.push(`额外要求：${spec.hint}`);
+
+  return lines.join('\n');
+}
+
+// --- 会话上的选项 ---
 
 /**
  * 把最新一条回复里的选项同步到会话上，返回是否变化。⚠️ 只看最新一条 assistant：这轮没给就**保留上一批**（不清空）；兜底只退到紧邻上一批、不往回扫历史（会命中好几轮前的过时选项）。
@@ -208,6 +224,7 @@ export function syncConvoOptions(convo) {
       found = [];
     }
   } else {
+    // 这一局不出自动选项：手动补的那批（帮我想想）到此为止 —— 它就是一次性的
     found = [];
   }
 

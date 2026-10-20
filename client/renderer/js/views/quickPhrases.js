@@ -1,7 +1,7 @@
 'use strict';
 
 // 输入框左边的「快捷短语」面板：点一行把整条指令插进光标处，焦点还给输入框。
-// ⚠️ 是「插进去」不是「直接发出去」：前四条是前缀；「点一下就发」由建议条（views/suggestionsUi.js）负责。
+// ⚠️ 是「插进去」不是「直接发出去」：前四条是前缀；「点一下就发」由剧情选项（views/suggestionsUi.js）负责。
 
 import { el } from '../core/dom.js';
 import { iconHtml } from '../ui/icons.js';

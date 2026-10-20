@@ -99,7 +99,7 @@ import { initAiGen, openAiGenModal } from './views/aiGen.js';
 import { initPresetAi, openPresetAiModal } from './views/presetAi.js';
 import { renderAll } from './views/redraw.js';
 import { renderConvoList, renderModelSwitch, applyModelChoice } from './views/chatList.js';
-import { renderMessages } from './views/chatMessages.js';
+import { renderMessages, setOptionsLoading } from './views/chatMessages.js';
 import {
   sendMessage,
   autoGrowInput,
@@ -109,7 +109,7 @@ import {
 } from './views/composer.js';
 import { clearConvo } from './views/convoActions.js';
 import { summarizeNow } from './views/summarize.js';
-import { exportCharacter, exportCharacterById, exportConversation, exportCharactersByIds } from './views/chatExport.js';
+import { exportCharacterById, exportConversation, exportCharactersByIds } from './views/chatExport.js';
 import { startPlayerFlow, chatWithCharacter } from './views/worldPlay.js';
 
 // 事件监听器里跑异步动作：出错只落日志，避免变成 unhandled rejection。
@@ -244,7 +244,7 @@ function bindEvents() {
     }
   });
 
-  el.btnExportChar.addEventListener('click', runAsync(exportCharacter));
+  // 编辑器里的「导出」2026-10-20 撤了（角色库卡片右上角那颗就够），这里只剩会话导出
   el.btnExportConvo.addEventListener('click', runAsync(exportConversation));
   // 预设页右上角「＋ 新建预设」：打开空草稿（真正建出来要等点保存）
   if (el.btnNewPreset) el.btnNewPreset.addEventListener('click', newPreset);
@@ -534,9 +534,11 @@ async function init() {
     rerender: (opts) => renderAll(opts),
     openSettings
   });
-  // 建议条：点建议 / 点剧情选项 = 发一条消息（入口层编排）。
+  // 剧情选项：选用选项 = 发一条消息（入口层编排）。「帮我想想」也走这条路。
+  // setOptionsLoading 由选项块自己提供（它才知道那块 DOM 在哪），这里只是转手注入。
   initSuggestionsUi({
-    send: sendMessage
+    send: sendMessage,
+    setOptionsLoading
   });
   // 快捷短语面板：只往输入框里插，不发送。
   initQuickPhrases();

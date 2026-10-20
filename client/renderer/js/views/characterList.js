@@ -104,7 +104,6 @@ export function renderCharacterPage() {
 function characterAddCard() {
   const forward = (btn) => () => btn && btn.click();
   return libraryAddCard({
-    hint: '不用翻回右上角',
     actions: [
       mButton({ variant: 'ghost', size: 'sm', block: true, text: '导入角色卡', onClick: forward(el.btnImportCard) }),
       mButton({ variant: 'ghost', size: 'sm', block: true, text: 'AI 生成', onClick: forward(el.btnAiChar) }),

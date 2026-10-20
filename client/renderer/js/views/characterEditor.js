@@ -33,6 +33,7 @@ import {
 } from './charExpressions.js';
 import { openAiGenModal } from './aiGen.js';
 import { initCharBookAi, resetCharBookAi, materializeCharBook, setCharBookScope } from './charBookAi.js';
+import { initCharAiFill, resetCharAiFill } from './charAiFill.js';
 import { attachAutoGrow, syncAutoGrowAll } from '../ui/auto-grow.js';
 import { mTextarea, hostOf } from '../components/index.js';
 import { pickAndCrop } from '../ui/imageCrop.js';
@@ -241,6 +242,8 @@ export async function leaveCharacterEditor({ force = false } = {}) {
 
   // 选书浮层挂在 body 上、z-index 比编辑页高，不收就成了悬在屏幕上的孤儿
   closeWorldbookPicker();
+  // 「AI 补充」还在等模型的话，走了就作废 —— 否则回来时表单会被上一张卡的内容糊上
+  resetCharAiFill();
   discardCharDraft();
   // 回到来处；来处是聊天就回聊天（那种情况只可能从别处被程序调起来）
   showView(editorReturnView === 'charEditor' ? 'chars' : editorReturnView);
@@ -410,6 +413,8 @@ function fillCharForm(character) {
 
   // 换了一张卡：上一张还没落盘的 AI 设定草稿不能跟过来
   resetCharBookAi();
+  // 上一张卡的「AI 补充」请求也一样要作废，别让它把内容写进新卡的表单
+  resetCharAiFill();
 
   // 角色自带的世界书：清单 + 绑定按钮 + 开关
   renderCharWorldbookBox(character);
@@ -439,6 +444,34 @@ function fillCharForm(character) {
   // 到这儿弹窗才可见，量高度才准（隐藏状态下量会永远得到 84px）
   syncAutoGrowAll(longTextAreas().map((pair) => pair[0]).concat(altGreetTextAreas()));
   syncAllCharCounts();
+}
+
+/**
+ * 「AI 补充」的结果填进表单（见 views/charAiFill.js）。
+ * · 只覆盖 AI 真给了内容的那几栏：模型偶尔漏一栏，别拿空串把手写的抹掉；
+ * · 每填一栏派一个 input —— 和用户手打一个字走的是同一条路，角标 / 自动增高 /
+ *   「有未保存的改动」胶囊会一起刷新（直接赋值不触发 input，那三样会停在旧值）；
+ * · 名字 / 标签 / 属性 / 备注一律不碰：这份任务只改这五栏。
+ * @returns {number} 真正填了几栏（0 = 一栏都没填，调用方要报错）
+ */
+function applyAiFill(fields) {
+  const map = [
+    ['description', el.c.desc],
+    ['personality', el.c.personality],
+    ['scenario', el.c.scenario],
+    ['firstMes', el.c.first],
+    ['mesExample', el.c.example]
+  ];
+
+  let written = 0;
+  for (const [key, node] of map) {
+    const value = fields && typeof fields[key] === 'string' ? fields[key].trim() : '';
+    if (!value || !node) continue;
+    node.value = value;
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+    written += 1;
+  }
+  return written;
 }
 
 /** 剧情选项的配置区：开关关着就整块收起来（省得看着以为在生效） */
@@ -1191,11 +1224,6 @@ export function stashCharacterForm() {
   stashCharForm();
 }
 
-/** 编辑器里正在编辑的那个角色（导出角色卡要用） */
-export function currentEditorCharacter() {
-  return editorCharacterById(editingCharacterId);
-}
-
 // 开场白模板：定场 → 登场 → 留个话头（从社区角色卡归纳的三段骨架）。
 // 占位是单花括号；{{user}} / {{char}} 才是会被替换的宏。
 const FIRST_MES_TEMPLATE = [
@@ -1345,6 +1373,9 @@ export function initCharacterEditor(injected) {
   });
 
   el.btnCloseChars.addEventListener('click', leaveCharacterEditor);
+  // 左栏底部那颗「返回」和页头左上角、Esc 是同一个动作：改完一屏手还停在栏底，
+  // 不用横跨整个窗口回去（2026-10-20 补的，原来故意只留页头那一处）。
+  el.btnBackChar.addEventListener('click', leaveCharacterEditor);
   el.btnNewChar.addEventListener('click', newCharacter);
   // 角色列表页的「AI 生成」：作用域钉死角色库，直接调 aiGen 入口（经入口层转手漏传就是「点了没反应」）
   if (el.btnAiChar) {
@@ -1382,6 +1413,16 @@ export function initCharacterEditor(injected) {
       return editorCharacterById(editingCharacterId);
     },
     onChange: () => setCharSaveState('dirty')
+  });
+
+  // 「AI 补充」：同样先 stash —— 模型要读的是**表单里**这张卡，刚手改的描述才带得上；
+  // 结果只写回表单，点「保存」才进卡（applyAiFill 里派的 input 会顺手把胶囊打脏）。
+  initCharAiFill({
+    readCard: () => {
+      stashCharForm();
+      return editorCharacterById(editingCharacterId);
+    },
+    apply: applyAiFill
   });
 
   if (el.c.optionsOn) el.c.optionsOn.addEventListener('change', renderOptionsConfig);
