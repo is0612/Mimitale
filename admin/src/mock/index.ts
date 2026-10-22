@@ -22,7 +22,7 @@
  * 试玩账号：admin / admin123
  */
 
-import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
+import { AxiosError, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import {
   ApiCode,
   type AdminAccount,
@@ -1100,6 +1100,21 @@ function matchPath(pattern: string, path: string): Record<string, string> | null
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
+/** 自定义 adapter 也要遵守 Axios 的 validateStatus，才能触发 401 错误拦截器。 */
+function settleResponse(response: AxiosResponse): AxiosResponse {
+  const validateStatus = response.config.validateStatus
+  if (response.status && validateStatus && !validateStatus(response.status)) {
+    throw new AxiosError(
+      `Request failed with status code ${response.status}`,
+      response.status >= 400 && response.status < 500 ? AxiosError.ERR_BAD_REQUEST : AxiosError.ERR_BAD_RESPONSE,
+      response.config,
+      response.request,
+      response
+    )
+  }
+  return response
+}
+
 export const mockAdapter: AxiosAdapter = async (config) => {
   await sleep(160 + Math.random() * 240)
 
@@ -1155,16 +1170,16 @@ export const mockAdapter: AxiosAdapter = async (config) => {
 
     const outcome = route.handler({ params: paramsMatched, query, body, headers })
     const status = outcome.httpStatus ?? 200
-    return {
+    return settleResponse({
       data: { code: outcome.code, message: outcome.message ?? 'ok', data: outcome.data ?? null },
       status,
       statusText: status === 200 ? 'OK' : 'Error',
       headers: {},
       config: requestConfig
-    } as AxiosResponse
+    } as AxiosResponse)
   }
 
-  return {
+  return settleResponse({
     data: {
       code: ApiCode.NOT_FOUND,
       message: `mock 还没实现这个接口：${method} ${path}`,
@@ -1174,5 +1189,5 @@ export const mockAdapter: AxiosAdapter = async (config) => {
     statusText: 'OK',
     headers: {},
     config: requestConfig
-  } as AxiosResponse
+  } as AxiosResponse)
 }

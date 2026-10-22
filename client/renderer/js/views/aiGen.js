@@ -99,7 +99,7 @@ ${FIELDS_SPEC}
 function briefSection(brief) {
   const text = String(brief || '').trim();
   if (!text) return '';
-  return `\n\n【背景 / 基调】\n${text.slice(0, 1000)}\n\n角色的设定、用词、世界观必须严格贴合上面这个背景，不要另起一套。`;
+  return `\n\n【背景 / 基调】\n${text}\n\n角色的设定、用词、世界观必须严格贴合上面这个背景，不要另起一套。`;
 }
 
 const BOOK_SYSTEM_TAIL = `这是一位要在「世界」里出场的配角（NPC），不是主角，也不是玩家自己。

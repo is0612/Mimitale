@@ -5,7 +5,7 @@ export const SITE = {
   latin: 'Mimitale',
   tagline: 'AI 角色扮演与互动故事',
   /** 客户端仓库（页脚「GitHub 仓库」指向这里） */
-  repo: 'https://github.com/ls546280821/Mimitale',
+  repo: 'https://github.com/is0612/Mimitale',
   license: 'MIT'
 } as const
 

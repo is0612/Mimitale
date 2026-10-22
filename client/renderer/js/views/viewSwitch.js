@@ -12,7 +12,7 @@ import { renderPresetPage } from './presetList.js';
 
 let currentView = 'chat';
 
-const VIEWS = ['chat', 'chars', 'charEditor', 'worldbooks', 'wbEditor', 'presets', 'help', 'settings'];
+const VIEWS = ['chat', 'chars', 'charEditor', 'worldbooks', 'wbEditor', 'presets', 'settings'];
 
 const VIEW_PARTS = [
   { name: 'chat', view: 'viewChat', btn: null },

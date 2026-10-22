@@ -3,6 +3,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
+  // 与 nginx 的 /admin/ 挂载路径一致，避免误加载官网根目录的资源。
+  base: '/admin/',
   plugins: [vue()],
   resolve: {
     alias: {

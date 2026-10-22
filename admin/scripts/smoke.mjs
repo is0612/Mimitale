@@ -8,6 +8,7 @@
  * 不需要后端、不需要浏览器。
  */
 
+import axios from 'axios'
 import { build } from 'esbuild'
 import { pathToFileURL, fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
@@ -21,6 +22,7 @@ await build({
   bundle: true,
   format: 'esm',
   platform: 'node',
+  external: ['axios'],
   outfile: bundlePath,
   logLevel: 'warning'
 })
@@ -31,6 +33,8 @@ const call = (config) =>
   mockAdapter({
     baseURL: '/api',
     headers: {},
+    // 旧断言直接检查错误响应；Axios 集成断言另外验证默认的 reject 行为。
+    validateStatus: () => true,
     ...config,
     data: config.body ? JSON.stringify(config.body) : undefined
   })
@@ -78,6 +82,44 @@ try {
     const noToken = await call({ url: '/admin/auth/me', method: 'get' })
     check('没带 token → HTTP 401', noToken.status === 401, `got ${noToken.status}`)
     check('code = 40101', noToken.data.code === 40101, JSON.stringify(noToken.data))
+  }
+
+  console.log('\n[Axios adapter 集成]')
+  {
+    const http = axios.create({ baseURL: '/api', adapter: mockAdapter })
+    let intercepted401 = false
+    http.interceptors.response.use(undefined, (error) => {
+      intercepted401 = error.response?.status === 401
+      return Promise.reject(error)
+    })
+
+    let rejected
+    try {
+      await http.get('/admin/auth/me')
+    } catch (error) {
+      rejected = error
+    }
+    check('Axios 默认拒绝 HTTP 401', Boolean(rejected))
+    check('401 是 AxiosError', axios.isAxiosError(rejected))
+    check('401 错误码为 ERR_BAD_REQUEST', rejected?.code === 'ERR_BAD_REQUEST')
+    check('401 错误保留响应与业务码', rejected?.response?.status === 401 && rejected.response.data.code === 40101)
+    check('401 进入错误响应拦截器', intercepted401)
+
+    const accepted = await http.get('/admin/auth/me', { validateStatus: (status) => status === 401 })
+    check('自定义 validateStatus 可接受 401', accepted.status === 401 && accepted.data.code === 40101)
+    const acceptAll = await http.get('/admin/auth/me', { validateStatus: null })
+    check('validateStatus 为 null 可接受 401', acceptAll.status === 401)
+
+    const me = await http.get('/admin/auth/me', { headers: auth(token) })
+    check('Axios 带 token 的成功路径不变', me.status === 200 && me.data.code === 0 && me.data.data.username === 'admin')
+
+    let customRejected
+    try {
+      await http.get('/admin/auth/me', { headers: auth(token), validateStatus: () => false })
+    } catch (error) {
+      customRejected = error
+    }
+    check('自定义 validateStatus 也能拒绝 HTTP 200', axios.isAxiosError(customRejected) && customRejected.response?.status === 200)
   }
 
   console.log('\n[客户列表]')

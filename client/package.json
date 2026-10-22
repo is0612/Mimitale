@@ -15,6 +15,10 @@
     "test:pet": "node tools/test-pet-window.js && node tools/test-pet-store.js",
     "test:png": "node tools/test-png.js",
     "test:ui": "node --test tools/test-ui-controls.js tools/test-ui-components.js",
+    "test:records": "node --test tools/test-record-store.js",
+    "test:records:ipc": "electron --no-sandbox tools/test-record-ipc.js",
+    "test:library-changes": "node --test tools/test-library-changes.js",
+    "test:library-close": "electron --no-sandbox tools/test-library-close.js",
     "shot:components": "electron --no-sandbox tools/shot-components.js",
     "check:integrity": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/clear-low-integrity.ps1",
     "fix:integrity": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/clear-low-integrity.ps1 -Fix"

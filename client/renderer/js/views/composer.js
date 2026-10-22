@@ -10,7 +10,7 @@ import { el } from '../core/dom.js';
 import { activeConvo, uid, now } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { iconHtml } from '../ui/icons.js';
-import { h, button, clear } from '../ui/build.js';
+import { h, clear } from '../ui/build.js';
 // 该量/该写高度的那颗：组件（<m-textarea>）要落到里层那颗原生框上
 import { controlOf } from '../ui/auto-grow.js';
 import { mTextarea, mButton } from '../components/index.js';

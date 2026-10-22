@@ -1,14 +1,28 @@
 'use strict';
 
 // data/persist.js —— 把内存里的数据写回磁盘
-// 会话防抖保存；角色库 / 世界书是两个文件，但主进程允许一次写入带上两者，所以走 persistLibrary() 一起落盘。
-// 三个入口都在写角色库，所以 persistCharacters / persistLibrary 沉在这儿。
+// 会话防抖保存；三个库按已确认基线计算变更，只提交增改与显式删除。
+// 角色 / 世界书共用渲染层队列；每个库的一批变更在主进程原子提交，跨库仍非事务。
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { CONFIG } from '../core/config.js';
 import { showToast } from '../ui/toast.js';
 import { characters, worldbooks, dialoguePresets } from './library.js';
+import { createLibraryChanges, isSuperseded } from './libraryChanges.js';
+
+const characterChanges = createLibraryChanges({ records: characters,
+  save: (change) => api.applyCharacterChanges(change), saveNow: (change) => api.applyCharacterChangesNow(change) });
+const worldbookChanges = createLibraryChanges({ records: worldbooks,
+  save: (change) => api.applyWorldbookChanges(change), saveNow: (change) => api.applyWorldbookChangesNow(change) });
+const presetChanges = createLibraryChanges({ records: dialoguePresets,
+  save: (change) => api.applyPresetChanges(change), saveNow: (change) => api.applyPresetChangesNow(change) });
+
+let charactersLoaded = false;
+export function markCharactersLoaded() {
+  characterChanges.markLoaded();
+  charactersLoaded = true;
+}
 
 let saveTimer = null;
 
@@ -36,6 +50,7 @@ async function writeWithOneLateRetry(writeOnce) {
   try {
     return await writeOnce();
   } catch (firstErr) {
+    if (isSuperseded(firstErr)) throw firstErr;
     console.warn(`[persist] 写盘失败，${WRITE_RETRY_DELAY_MS} 毫秒后自动再试一次`, firstErr);
     await new Promise((r) => setTimeout(r, WRITE_RETRY_DELAY_MS));
     return writeOnce();
@@ -97,6 +112,7 @@ let worldbooksLoaded = false;
 
 /** 启动时读到世界书后调用（读失败就别调，见上） */
 export function markWorldbooksLoaded() {
+  worldbookChanges.markLoaded();
   worldbooksLoaded = true;
 }
 
@@ -105,10 +121,20 @@ let presetsLoaded = false;
 
 /** 启动时读到预设后调用（读失败就别调，见上） */
 export function markPresetsLoaded() {
+  presetChanges.markLoaded();
   presetsLoaded = true;
 }
 
-/** 把当前预设写回磁盘（单独一个文件，不受角色 / 世界书影响）；immediate = true 时立刻写、不等下一帧 */
+/** 关窗只提交未确认变更；带同步回执，任一库失败都阻止无声退出。 */
+export function flushLibrariesNow() {
+  const errors = [];
+  for (const changes of [...(charactersLoaded ? [characterChanges] : []), ...(worldbooksLoaded ? [worldbookChanges] : []), ...(presetsLoaded ? [presetChanges] : [])]) {
+    try { changes.flushNow(); } catch (err) { errors.push(err.message || String(err)); }
+  }
+  if (errors.length) throw new Error(errors.join('；'));
+}
+
+/** 提交预设变化；immediate = true 时同步等待主进程写盘回执。 */
 export function persistPresets(immediate) {
   // 没读进来就什么都别写：写下去等于把文件清空
   if (!presetsLoaded) {
@@ -116,16 +142,15 @@ export function persistPresets(immediate) {
     return Promise.resolve(false);
   }
 
-  const buildPayload = () => ({ presets: dialoguePresets() });
-
   if (immediate) {
-    api.savePresetsNow(buildPayload());
+    presetChanges.flushNow();
     return Promise.resolve(true);
   }
 
-  return queueWrite('presets', () => api.savePresets(buildPayload()))
+  return queueWrite('presets', () => presetChanges.flush())
     .then(() => true)
     .catch((err) => {
+      if (isSuperseded(err)) return true;
       console.error('保存预设失败（已自动重试过）', err);
       showToast(writeFailedText('预设', err), 'error');
       return false;
@@ -133,30 +158,29 @@ export function persistPresets(immediate) {
 }
 
 /**
- * 把角色库写回磁盘，**返回是否真的写成功了**（调用方靠它决定要不要报「已保存」）。⚠️ 只在 worldbooksLoaded 时才带 worldbooks，否则「存一次角色」会把 worldbooks.json 写空；immediate 走 ipcRenderer.send、没有回执。
+ * 提交角色及已加载世界书的变化，返回写盘结果；未变化的记录不发回主进程。
  */
 export function persistCharacters(immediate) {
-  const buildPayload = () => {
-    const payload = { characters: characters() };
-    if (worldbooksLoaded) payload.worldbooks = worldbooks();
-    return payload;
-  };
-
   if (immediate) {
-    api.saveCharactersNow(buildPayload());
+    characterChanges.flushNow();
+    if (worldbooksLoaded) worldbookChanges.flushNow();
     return Promise.resolve(true);
   }
 
-  return queueWrite('characters', () => api.saveCharacters(buildPayload()))
+  return queueWrite('characters', async () => {
+    await characterChanges.flush();
+    if (worldbooksLoaded) await worldbookChanges.flush();
+  })
     .then(() => true)
     .catch((err) => {
+      if (isSuperseded(err)) return true;
       console.error('保存角色失败（已自动重试过）', err);
       showToast(writeFailedText('角色', err), 'error');
       return false;
     });
 }
 
-/** 把角色库 + 世界书写回磁盘（两个文件，主进程允许一次写入带上两者）；返回是否成功 —— 绑定失败时界面要回滚，不能假装成功 */
+/** 提交角色 / 世界书变化，各文件独立原子写；跨文件失败仍须调用方处理回滚。 */
 export async function persistLibrary() {
   // 世界书没读进来就什么都别写：写下去等于把文件清空
   if (!worldbooksLoaded) {
@@ -166,11 +190,13 @@ export async function persistLibrary() {
 
   try {
     // 和 persistCharacters 共用一个 key：两者写的都是 characters.json，必须互相排队
-    await queueWrite('characters', () =>
-      api.saveCharacters({ characters: characters(), worldbooks: worldbooks() })
-    );
+    await queueWrite('characters', async () => {
+      await characterChanges.flush();
+      await worldbookChanges.flush();
+    });
     return true;
   } catch (err) {
+    if (isSuperseded(err)) return true;
     console.error('保存世界书失败（已自动重试过）', err);
     showToast(writeFailedText('世界书', err), 'error');
     return false;

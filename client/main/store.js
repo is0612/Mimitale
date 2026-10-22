@@ -1,6 +1,6 @@
 'use strict';
 
-// main/store.js —— 本地数据读写（整份重写 + backup；落盘走 .tmp 再 rename 的原子写）
+// main/store.js —— 本地数据读写（整库兼容接口 + 排队单条接口；物理写入仍走 .tmp/rename + backup）
 // ============================================================================
 
 const { safeStorage } = require('electron');
@@ -11,6 +11,7 @@ const { dataDir } = require('./data-dir.js');
 const { normalizeCharacter } = require('./characters.js');
 const { createWorldbookNormalizer } = require('./worldbook-store.js');
 const { normalizePreset, MAX_PRESETS } = require('./presets.js');
+const { createRecordStore } = require('./record-store.js');
 
 /** 数据目录里某个文件的全路径。⚠️ 数据不在 userData 里（默认程序旁边的 data\），别去 %APPDATA% 找 */
 function dataFile(name) {
@@ -116,13 +117,17 @@ function writeJsonNow(file, data, delays) {
 /**
  * 排队写入，失败会 reject。⚠️ 队尾必须自己把异常吃掉（.then 的两个处理函数），否则一次失败会把 writeQueue 永久钉在 rejected，从此所有保存静默不写。
  */
-function writeJson(file, data) {
-  const result = writeQueue.then(() => writeJsonNow(file, data));
+function queueStoreWrite(task) {
+  const result = writeQueue.then(task);
   writeQueue = result.then(
     () => undefined,
     () => undefined
   );
   return result;
+}
+
+function writeJson(file, data) {
+  return queueStoreWrite(() => writeJsonNow(file, data));
 }
 
 // 数据目录的挑选与可写探测（probeDirWritable）在 main/data-dir.js
@@ -391,6 +396,16 @@ function savePresets(payload, options) {
   return writeJson(presetsFile(), data).then(() => data);
 }
 
+// --- 单条库接口：完整记录 upsert，显式 id，不自动生成，不联动其他文件 ---
+// 仅保证同一主进程排队操作的串行性；旧整库覆盖 / immediate 保存仍需后续迁移。
+function recordStore(file, key, normalize, maxItems) {
+  return createRecordStore({ file, key, normalize, maxItems, enqueue: queueStoreWrite, write: writeJsonNow });
+}
+
+const characterRecords = recordStore(charactersFile, 'characters', normalizeCharacter);
+const worldbookRecords = recordStore(worldbooksFile, 'worldbooks', normalizeStoredWorldbook, MAX_WORLDBOOKS);
+const presetRecords = recordStore(presetsFile, 'presets', normalizePreset, MAX_PRESETS);
+
 // --- RAG 向量仓库：vectors.json 的 items 键是 "<model>::<key>" —— 带模型名，换 embedding 模型自然不污染 ---
 
 const VECTORS_VERSION = 1;
@@ -425,13 +440,28 @@ module.exports = {
   saveConversations,
   loadCharacters,
   saveCharacters,
+  applyCharacterChanges: characterRecords.applyChanges,
+  applyCharacterChangesNow: characterRecords.applyChangesNow,
+  loadCharacter: characterRecords.loadOne,
+  saveCharacter: characterRecords.saveOne,
+  deleteCharacter: characterRecords.deleteOne,
   newWorldbookId,
   loadWorldbooks,
   saveWorldbooks,
+  applyWorldbookChanges: worldbookRecords.applyChanges,
+  applyWorldbookChangesNow: worldbookRecords.applyChangesNow,
+  loadWorldbook: worldbookRecords.loadOne,
+  saveWorldbook: worldbookRecords.saveOne,
+  deleteWorldbook: worldbookRecords.deleteOne,
   worldbookEntriesByIds,
   newPresetId,
   loadPresets,
   savePresets,
+  applyPresetChanges: presetRecords.applyChanges,
+  applyPresetChangesNow: presetRecords.applyChangesNow,
+  loadPreset: presetRecords.loadOne,
+  savePreset: presetRecords.saveOne,
+  deletePreset: presetRecords.deleteOne,
   loadVectors,
   saveVectors
 };

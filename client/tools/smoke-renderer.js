@@ -607,6 +607,10 @@ await scenario('设置页', async () => {
     folderCtrl ? folderCtrl.innerHTML.slice(0, 60) : '(没有里层)'
   );
   check('禁用的桌宠按钮里层也带着 disabled', byId('btn-pet-say').control.disabled === true);
+  await waitFor('桌宠形象列表加载', () => byId('s-pet-skin').value === 'assets\u0000whale');
+  check('桌宠形象列表包含当前鲸鱼而非空列表兜底',
+    Array.from(byId('s-pet-skin').options).some((option) => option.value === 'assets\u0000whale' && option.textContent === '鲸鱼'));
+  check('桌宠形象提示能识别当前内置形象', byId('s-pet-skin-hint').textContent.includes('当前形象：whale'));
   const testBtn = byId('btn-test');
   testBtn.textContent = '测试中…';
   testBtn.disabled = true;
@@ -4577,12 +4581,19 @@ await scenario('AI 生成角色：背景/基调框', async () => {
   check('角色库那侧有「背景 / 基调」框', !!byId('ai-gen-brief'));
 
   setValue('#ai-gen-prompt', '一个值夜班的店员');
-  setValue('#ai-gen-brief', '现代都市的深夜便利店，安静、有点孤独');
+  const brief = '现代都市的深夜便利店，安静、有点孤独。'.repeat(80) + '【末尾约束：店员必须记得离别时的承诺】';
+  check('回归背景超过旧的 1000 字上限', brief.length > 1000);
+  setValue('#ai-gen-brief', brief);
   click(buttonByText($('.ai-gen-modal'), '开始生成'));
 
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   // 名字跟着「有没有基调」变 —— 还是「守夜人」就说明那段没拼进 system
   check('背景/基调确实拼进了提示词', byId('c-name').value === '便利店店员', byId('c-name').value);
+  const { entries } = await window.mimitale.requestLog();
+  const sent = entries.find((entry) => entry.body.messages.some((msg) =>
+    msg.role === 'system' && msg.content.includes('【背景 / 基调】')));
+  check('背景超过 1000 字仍完整发送，末尾约束不丢失',
+    !!sent && sent.body.messages.some((msg) => msg.role === 'system' && msg.content.includes(brief)));
 
   click('#btn-close-chars');
   await waitFor('弹出放弃确认框', () => shown('#confirm-modal'));

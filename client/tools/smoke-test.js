@@ -691,6 +691,101 @@ function registerStubs() {
   // get 也要归一化 —— 真实现是 main/store.js 的 loadPresets() 读盘时过一遍。
   // 只让 save 归一化的话，「别人分享的导入形态」（正文住 metadata.systemPromptContent、
   // description 只是说明）在界面上会明文不认，测试却全绿。
+  // 批次路径与旧整库 save 分开：完整记录只替换同 id，绝不回落成整库覆盖。
+  // 每个库有独立队列 / generation，关闭窗口的成功同步写会淘汰之前排队的批次。
+  function registerLibraryChanges(key, normalize, maxItems = Infinity) {
+    let pending = Promise.resolve();
+    let generation = 0;
+    const recordId = (id) => {
+      if (typeof id !== 'string' || !id.trim() || id !== id.trim()) {
+        throw new Error('Record id must be a non-empty string without outer whitespace');
+      }
+      return id;
+    };
+    const prepare = (payload) => {
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) ||
+          !Array.isArray(payload.upserts) || !Array.isArray(payload.deletes)) {
+        throw new Error('Changes require upserts and deletes arrays');
+      }
+      const upsertIds = new Set();
+      const upserts = payload.upserts.map((record) => {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) {
+          throw new Error('A complete record object is required');
+        }
+        const id = recordId(record.id);
+        if (upsertIds.has(id)) throw new Error(`Duplicate upsert id: ${id}`);
+        upsertIds.add(id);
+        const snapshot = clone(record);
+        if (!snapshot || snapshot.id !== id) throw new Error('Record id changed during serialization');
+        const item = normalize(snapshot);
+        if (!item || item.id !== id) throw new Error('Record normalization changed id');
+        return item;
+      });
+      const deleteIds = new Set();
+      const deletes = payload.deletes.map((value) => {
+        const id = recordId(value);
+        if (deleteIds.has(id)) throw new Error(`Duplicate delete id: ${id}`);
+        if (upsertIds.has(id)) throw new Error(`Record id appears in upserts and deletes: ${id}`);
+        deleteIds.add(id);
+        return id;
+      });
+      return { upserts, deletes };
+    };
+    const commit = (changes) => {
+      const current = store[key];
+      if (!Array.isArray(current)) throw new Error(`Invalid collection: ${key}`);
+      const existingIds = new Set();
+      for (const record of current) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) {
+          throw new Error(`Invalid record in ${key}`);
+        }
+        const id = recordId(record.id);
+        if (existingIds.has(id)) throw new Error(`Duplicate record id in ${key}: ${id}`);
+        existingIds.add(id);
+      }
+      const deleted = new Set(changes.deletes);
+      const replacements = new Map(changes.upserts.map((record) => [record.id, record]));
+      const next = current.filter((record) => !deleted.has(record.id)).map((record) => replacements.get(record.id) || record);
+      const added = changes.upserts.filter((record) => !existingIds.has(record.id));
+      next.push(...added);
+      // 旧库即便已经超限也允许改已有记录；新建必须以删后的最终容量为准。
+      if (added.length && next.length > maxItems) {
+        throw new Error(`Collection limit reached: ${key} (${maxItems})`);
+      }
+      // 所有验证 / 归一化 / 序列化都完成后才一次更新内存；失败不留下半个批次。
+      const snapshot = clone(next);
+      const result = clone(changes);
+      store[key] = snapshot;
+      return result;
+    };
+    ipcMain.handle(`${key}:apply-changes`, (_event, payload) => {
+      remember(`${key}:apply-changes`, payload);
+      const changes = prepare(payload);
+      const requestedGeneration = generation;
+      const operation = pending.then(() => {
+        if (requestedGeneration !== generation) {
+          throw new Error('ERR_SUPERSEDED: superseded by synchronous library changes');
+        }
+        return commit(changes);
+      });
+      pending = operation.catch(() => {});
+      return operation;
+    });
+    ipcMain.on(`${key}:apply-changes-sync`, (event, payload) => {
+      remember(`${key}:apply-changes-sync`, payload);
+      try {
+        const result = commit(prepare(payload));
+        generation += 1;
+        event.returnValue = { ok: true, result };
+      } catch (err) {
+        event.returnValue = { ok: false, error: String((err && err.message) || err) };
+      }
+    });
+  }
+  registerLibraryChanges('characters', normalizeCharacter);
+  registerLibraryChanges('worldbooks', normalizeStoredWorldbook, 200);
+  registerLibraryChanges('presets', normalizePreset, 200);
+
   ipcMain.handle('presets:get', () => clone({ presets: store.presets.map((p) => normalizePreset(p)) }));
   ipcMain.handle('presets:save', (_event, payload) => {
     remember('presets:save', payload);
@@ -838,6 +933,7 @@ function registerStubs() {
     mainModel: 'test-model'
   });
 
+  ipcMain.handle('pet:skins', () => [{ id: 'whale', source: 'assets', label: '鲸鱼' }]);
   ipcMain.handle('pet:get', () => petPayload());
   ipcMain.handle('pet:update', (_event, payload) => {
     remember('pet:update');

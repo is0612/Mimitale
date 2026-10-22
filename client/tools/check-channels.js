@@ -46,6 +46,10 @@ for (const f of mainFiles) {
   // 不认这一条就会把它注册的 4 个 save-sync 通道全报成「没注册」。
   for (const m of src.matchAll(/registerSyncSave\(\s*'([^']+)'/g)) handled.add(m[1]);
   for (const m of src.matchAll(/registerSyncSave\(\s*`([^`]+)`/g)) handled.add(m[1]);
+  for (const m of src.matchAll(/registerLibraryChanges\(\s*'([^']+)'\s*,\s*'([^']+)'/g)) {
+    handled.add(m[1]);
+    handled.add(m[2]);
+  }
   for (const m of src.matchAll(/(?:sendToRenderer|webContents\.send|\.send)\(\s*'([^']+)'/g)) sent.add(m[1]);
   for (const m of src.matchAll(/sendToPet\(\s*'([^']+)'/g)) sent.add(m[1]);
 }
@@ -57,7 +61,8 @@ const listened = new Set(); // preload 里 on(...) 监听的
 for (const f of preloads) {
   const src = fs.readFileSync(f, 'utf8');
   const base = path.basename(f);
-  for (const m of src.matchAll(/ipcRenderer\.(?:invoke|send)\(\s*'([^']+)'/g)) invoked.set(m[1], base);
+  for (const m of src.matchAll(/ipcRenderer\.(?:invoke|send|sendSync)\(\s*'([^']+)'/g)) invoked.set(m[1], base);
+  for (const m of src.matchAll(/applyChangesNow\(\s*'([^']+)'/g)) invoked.set(m[1], base);
   for (const m of src.matchAll(/ipcRenderer\.on\(\s*'([^']+)'/g)) listened.add(m[1]);
 }
 

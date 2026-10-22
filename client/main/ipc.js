@@ -10,18 +10,30 @@ const { spawn } = require('node:child_process');
 
 const {
   dataFile,
+  applyCharacterChanges, applyCharacterChangesNow,
+  applyWorldbookChanges, applyWorldbookChangesNow,
+  applyPresetChanges, applyPresetChangesNow,
   writeJson,
   loadJsonWithFallback,
   loadConversations,
   saveConversations,
   loadCharacters,
   saveCharacters,
+  loadCharacter,
+  saveCharacter,
+  deleteCharacter,
   newWorldbookId,
   loadWorldbooks,
   saveWorldbooks,
+  loadWorldbook,
+  saveWorldbook,
+  deleteWorldbook,
   worldbookEntriesByIds,
   loadPresets,
   savePresets,
+  loadPreset,
+  savePreset,
+  deletePreset,
   loadVectors,
   saveVectors
 } = require('./store.js');
@@ -252,6 +264,16 @@ function openFolderInExplorer(dir) {
 }
 
 function registerIpc() {
+  function registerLibraryChanges(channel, syncChannel, apply, applyNow) {
+    ipcMain.handle(channel, (_event, payload) => apply(payload));
+    ipcMain.on(syncChannel, (event, payload) => {
+      try { event.returnValue = { ok: true, result: applyNow(payload) }; }
+      catch (err) { event.returnValue = { ok: false, error: String(err.message || err) }; }
+    });
+  }
+  registerLibraryChanges('characters:apply-changes', 'characters:apply-changes-sync', applyCharacterChanges, applyCharacterChangesNow);
+  registerLibraryChanges('worldbooks:apply-changes', 'worldbooks:apply-changes-sync', applyWorldbookChanges, applyWorldbookChangesNow);
+  registerLibraryChanges('presets:apply-changes', 'presets:apply-changes-sync', applyPresetChanges, applyPresetChangesNow);
   ipcMain.handle('settings:get', () => {
     const settings = loadSettings();
     // notices 取走即清空，只有界面启动那一次拉取拿得到（迁移改过用户设置，不能只在日志里说）
@@ -345,6 +367,9 @@ function registerIpc() {
   ipcMain.handle('characters:get', () => loadCharacters());
 
   ipcMain.handle('characters:save', (_event, payload) => saveCharacters(payload));
+  ipcMain.handle('characters:get-one', (_event, id) => loadCharacter(id));
+  ipcMain.handle('characters:save-one', (_event, record) => saveCharacter(record));
+  ipcMain.handle('characters:delete-one', (_event, id) => deleteCharacter(id));
 
   registerSyncSave('characters:save-sync', saveCharacters);
 
@@ -353,6 +378,9 @@ function registerIpc() {
   ipcMain.handle('worldbooks:get', () => loadWorldbooks());
 
   ipcMain.handle('worldbooks:save', (_event, payload) => saveWorldbooks(payload));
+  ipcMain.handle('worldbooks:get-one', (_event, id) => loadWorldbook(id));
+  ipcMain.handle('worldbooks:save-one', (_event, record) => saveWorldbook(record));
+  ipcMain.handle('worldbooks:delete-one', (_event, id) => deleteWorldbook(id));
 
   registerSyncSave('worldbooks:save-sync', saveWorldbooks);
 
@@ -362,6 +390,9 @@ function registerIpc() {
   ipcMain.handle('presets:get', () => loadPresets());
 
   ipcMain.handle('presets:save', (_event, payload) => savePresets(payload));
+  ipcMain.handle('presets:get-one', (_event, id) => loadPreset(id));
+  ipcMain.handle('presets:save-one', (_event, record) => savePreset(record));
+  ipcMain.handle('presets:delete-one', (_event, id) => deletePreset(id));
 
   registerSyncSave('presets:save-sync', savePresets);
 

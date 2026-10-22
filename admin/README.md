@@ -1,6 +1,6 @@
 # Mimitale 客户管理后台
 
-给自己用的后台，用来管理**在 Mimitale 客户端里注册使用的客户**。
+给自己用的客户管理后台前端。**当前只有 Mock 数据，没有真实后端；客户端注册、登录和云同步尚未实现。** 下文的客户账号与接口描述是待实现的契约，不代表生产能力已上线。
 
 **前端独立项目**，跟根目录的 Electron 应用没有任何构建上的关系（两套 `node_modules`，互不干扰）。
 
@@ -28,7 +28,7 @@
 ```bash
 cd admin
 npm install
-npm run dev          # 打开 http://localhost:5173
+npm run dev          # 打开 http://localhost:5173/admin/
 ```
 
 **默认是 Mock 模式**，不需要后端：
@@ -41,7 +41,7 @@ npm run dev          # 打开 http://localhost:5173
 npm run build        # 产出 dist/
 npm run preview      # 预览构建结果
 npm run typecheck    # 类型检查
-npm run smoke        # 接口自测（98 条断言，几秒钟，不需要后端和浏览器）
+npm run smoke        # Mock 接口自测（2026-10-22 实测 125 条断言（含 Axios 401 集成），不需要后端和浏览器）
 ```
 
 改完 `src/mock` 或 `src/types` 之后跑一下 `npm run smoke`，能立刻知道你刚才有没有把接口改坏。
@@ -59,6 +59,8 @@ npm install --no-save --ignore-scripts @esbuild/win32-x64
 第二条不能省 —— 它是 esbuild 的可选依赖，第一条失败时被一起回滚了。
 
 ## 连真实后端
+
+以下仅适用于后端实现并部署之后；当前仓库没有对应服务，关闭 Mock 不会自动获得真实账号能力。
 
 复制 `.env.example` 成 `.env`，把开关关掉：
 
@@ -198,8 +200,10 @@ src/
 
 ## 部署
 
-`npm run build` 出来的 `dist/` 是纯静态文件，丢给 nginx 即可。
-因为路由用的是 **hash 模式**，nginx 不需要配 `try_files`：
+`npm run build` 默认按 `/admin/` 生成资源路径（见 `vite.config.ts`），产物是纯静态文件。
+下例将 `dist/` 内容部署到 `/var/www/mimitale-admin/`，访问 `/admin/`。
+若改为独立域名根目录部署，应运行 `npm run build -- --base=/` 并同步调整 nginx。
+**hash 模式**只处理前端路由，不会修正错误的资源路径；下例无需额外配置 `try_files`：
 
 ```nginx
 location /admin/ {

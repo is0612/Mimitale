@@ -1,7 +1,7 @@
 'use strict';
 
 import { el } from '../core/dom.js';
-import { button, h, renderListPage } from '../ui/build.js';
+import { h, renderListPage } from '../ui/build.js';
 import { mButton } from '../components/index.js';
 import { dialoguePresets } from '../data/library.js';
 

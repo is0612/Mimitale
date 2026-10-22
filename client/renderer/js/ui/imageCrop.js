@@ -4,7 +4,7 @@
 // 视口用 canvas 直接绘制：屏幕上看到的和输出的像素是同一套坐标
 // 返回 Promise<string|null>：确定得 dataURL，取消（按钮 / Esc / 点空白）得 null
 
-import { h, button } from './build.js';
+import { h } from './build.js';
 import { mButton } from '../components/index.js';
 import { api } from '../core/api.js';
 import { showToast } from './toast.js';

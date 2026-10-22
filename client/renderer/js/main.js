@@ -19,7 +19,7 @@ import { initModelMenu } from './ui/modelMenu.js';
 import { initSelects } from './ui/select.js';
 import { defineComponents } from './components/index.js';
 
-import { persistCharacters, persistLibrary, markWorldbooksLoaded, markPresetsLoaded, conversationsSavePayload } from './data/persist.js';
+import { persistLibrary, markCharactersLoaded, markWorldbooksLoaded, markPresetsLoaded, conversationsSavePayload, flushLibrariesNow } from './data/persist.js';
 import { refreshPetCache, speakNow } from './data/petContext.js';
 import { initPetSettings, openPetSection } from './views/petSettings.js';
 import { currentEndpoint, isBridgeProvider } from './data/providers.js';
@@ -451,7 +451,7 @@ function bindEvents() {
     assistant.reasoning = (assistant.reasoning || '') + text;
   });
 
-  window.addEventListener('beforeunload', () => {
+  window.addEventListener('beforeunload', (event) => {
     if (!startupDataLoaded) return;
     try {
       const saved = api.saveConversationsNow(conversationsSavePayload());
@@ -459,9 +459,14 @@ function bindEvents() {
     } catch (err) {
       console.warn('关窗前保存会话失败', err);
     }
-    // ⚠️ 必须走 persistCharacters —— 它带「世界书没读出来就别写」的守卫；
-    // 绕过会拿空数组把 worldbooks.json 清空。
-    persistCharacters(true);
+    try {
+      flushLibrariesNow();
+    } catch (err) {
+      event.preventDefault();
+      event.returnValue = '';
+      console.error('关窗前保存库失败', err);
+      showToast(`保存失败，窗口暂不关闭：${err.message || err}`, 'error');
+    }
   });
 }
 
@@ -648,11 +653,18 @@ async function init() {
   syncChatPadHandles();
 
   state.characters = asArray(storedChars && storedChars.characters);
+  try { markCharactersLoaded(); } catch (err) {
+    console.error('角色记录 ID 无效，本次禁用保存', err);
+    showToast('角色记录 ID 无效，本次不会写回它，请先备份并修复数据', 'error');
+  }
 
   // ⚠️ 世界书读不到要记住没读到，否则之后存一次角色就把 worldbooks.json 覆盖成空。
   if (books.ok) {
     state.worldbooks = asArray(books.r && books.r.worldbooks);
-    markWorldbooksLoaded();
+    try { markWorldbooksLoaded(); } catch (err) {
+      console.error('世界书记录 ID 无效，本次禁用保存', err);
+      showToast('世界书记录 ID 无效，本次不会写回它，请先备份并修复数据', 'error');
+    }
   } else {
     console.error('读取世界书失败', books.err);
     showToast('世界书没能读出来，本次不会写回它（重启试试）', 'error');
@@ -661,7 +673,10 @@ async function init() {
   // 预设同理：读失败要记住，否则之后存一次预设就把文件写空了
   if (presets.ok) {
     state.dialoguePresets = asArray(presets.r && presets.r.presets);
-    markPresetsLoaded();
+    try { markPresetsLoaded(); } catch (err) {
+      console.error('预设记录 ID 无效，本次禁用保存', err);
+      showToast('预设记录 ID 无效，本次不会写回它，请先备份并修复数据', 'error');
+    }
   } else {
     console.error('读取预设失败', presets.err);
     showToast('预设没能读出来，本次不会写回它（重启试试）', 'error');

@@ -7,6 +7,12 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+function applyChangesNow(channel, payload) {
+  const response = ipcRenderer.sendSync(channel, payload);
+  if (!response || !response.ok) throw new Error(response && response.error || '保存未收到主进程确认');
+  return response.result;
+}
+
 // ---------------------------------------------------------------------------
 //  主题：主进程通过启动参数把当前主题传进来。
 //  在这里（而不是 renderer.js 里）打标记，是为了在首屏渲染前就生效，
@@ -56,19 +62,34 @@ contextBridge.exposeInMainWorld('mimitale', {
   saveConversationsNow: (payload) => ipcRenderer.send('conversations:save-sync', payload),
 
   // --- 角色库 ---
+  applyCharacterChanges: (payload) => ipcRenderer.invoke('characters:apply-changes', payload),
+  applyCharacterChangesNow: (payload) => applyChangesNow('characters:apply-changes-sync', payload),
+  applyWorldbookChanges: (payload) => ipcRenderer.invoke('worldbooks:apply-changes', payload),
+  applyWorldbookChangesNow: (payload) => applyChangesNow('worldbooks:apply-changes-sync', payload),
+  applyPresetChanges: (payload) => ipcRenderer.invoke('presets:apply-changes', payload),
+  applyPresetChangesNow: (payload) => applyChangesNow('presets:apply-changes-sync', payload),
   getCharacters: () => ipcRenderer.invoke('characters:get'),
+  getCharacter: (id) => ipcRenderer.invoke('characters:get-one', id),
+  saveCharacter: (record) => ipcRenderer.invoke('characters:save-one', record),
+  deleteCharacter: (id) => ipcRenderer.invoke('characters:delete-one', id),
   saveCharacters: (payload) => ipcRenderer.invoke('characters:save', payload),
   saveCharactersNow: (payload) => ipcRenderer.send('characters:save-sync', payload),
   importCard: () => ipcRenderer.invoke('characters:import'),
 
   // --- 世界书 ---
   getWorldbooks: () => ipcRenderer.invoke('worldbooks:get'),
+  getWorldbook: (id) => ipcRenderer.invoke('worldbooks:get-one', id),
+  saveWorldbook: (record) => ipcRenderer.invoke('worldbooks:save-one', record),
+  deleteWorldbook: (id) => ipcRenderer.invoke('worldbooks:delete-one', id),
   saveWorldbooks: (payload) => ipcRenderer.invoke('worldbooks:save', payload),
   saveWorldbooksNow: (payload) => ipcRenderer.send('worldbooks:save-sync', payload),
   previewWorldbook: (payload) => ipcRenderer.invoke('worldbooks:preview', payload),
 
   // --- 预设（叠在对话上的一层指令） ---
   getPresets: () => ipcRenderer.invoke('presets:get'),
+  getPreset: (id) => ipcRenderer.invoke('presets:get-one', id),
+  savePreset: (record) => ipcRenderer.invoke('presets:save-one', record),
+  deletePreset: (id) => ipcRenderer.invoke('presets:delete-one', id),
   savePresets: (payload) => ipcRenderer.invoke('presets:save', payload),
   savePresetsNow: (payload) => ipcRenderer.send('presets:save-sync', payload),
   // 导入预设文件（弹框 + 解析，不落盘）；导出走通用的 saveFile
