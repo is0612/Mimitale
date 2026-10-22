@@ -19,6 +19,23 @@ function dataFile(name) {
 }
 
 let writeQueue = Promise.resolve();
+let libraryTransaction;
+let libraryTransactionActive = false;
+function withLibraryTransaction(call) {
+  libraryTransactionActive = true;
+  try { return call(); } finally { libraryTransactionActive = false; }
+}
+function getLibraryTransaction() {
+  if (!libraryTransaction) {
+    const { createLibraryTransaction } = require('./library-transaction.js');
+    libraryTransaction = createLibraryTransaction({ directory: dataDir, write: writeJsonNow });
+  }
+  return libraryTransaction;
+}
+function recoverLibraryFor(file) {
+  if (libraryTransactionActive || !['characters.json', 'worldbooks.json'].includes(path.basename(file))) return;
+  withLibraryTransaction(() => getLibraryTransaction().recover());
+}
 
 // --- 写入失败的重试 ---
 //  Windows 短暂占用（索引 / 同步盘 / 杀软 / 另一实例）会吃 EPERM / EBUSY / EACCES，退避 30 / 70 / 150 / 250 ms 重试；关窗口那条同步路另有更短的表。
@@ -87,6 +104,7 @@ function tryBackup(file, delays) {
  * 同步落盘：先备份再写（关窗口的最后一次保存必须在这一轮事件循环里写完）。⚠️ 失败必须抛，否则界面会误报「已保存」。
  */
 function writeJsonNow(file, data, delays) {
+  recoverLibraryFor(file);
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
 
@@ -133,6 +151,7 @@ function writeJson(file, data) {
 // 数据目录的挑选与可写探测（probeDirWritable）在 main/data-dir.js
 
 function loadJsonWithFallback(file) {
+  recoverLibraryFor(file);
   try {
     const raw = fs.readFileSync(file, 'utf8');
     return JSON.parse(raw);
@@ -238,6 +257,8 @@ function loadConversations() {
   return { conversations, activeId };
 }
 
+let conversationsGeneration = 0;
+
 function saveConversations(payload, options) {
   const limited = limitConversations(payload && payload.conversations);
   const requestedActiveId = payload && payload.activeId;
@@ -245,21 +266,32 @@ function saveConversations(payload, options) {
   const activeId = limited.some((c) => c.id === requestedActiveId) ? requestedActiveId : null;
 
   const file = dataFile('conversations.json');
-  const data = { conversations: limited, activeId };
+  const data = JSON.parse(JSON.stringify({ conversations: limited, activeId }));
 
   // 关窗口时的最后一次保存必须立刻落盘，不能排队等微任务
   if (options && options.immediate) {
     writeJsonNow(file, data, CLOSE_RETRY_BACKOFF_MS);
+    conversationsGeneration += 1;
     return Promise.resolve(data);
   }
   // ⚠️ 返回的是**写盘的 Promise**，不是 data —— 见 saveCharacters 那段注释。
-  return writeJson(file, data).then(() => data);
+  const generation = conversationsGeneration;
+  return queueStoreWrite(() => {
+    if (generation !== conversationsGeneration) {
+      const err = new Error('ERR_SUPERSEDED: 会话保存已被较新的同步保存取代');
+      err.code = 'ERR_SUPERSEDED';
+      throw err;
+    }
+    return writeJsonNow(file, data);
+  }).then(() => data);
 }
 
 // --- 角色库：一个角色 = 一张卡，支持酒馆 PNG 卡（元数据藏在 tEXt 块）和 JSON，存在 characters.json ---
 
 function charactersFile() {
-  return dataFile('characters.json');
+  const file = dataFile('characters.json');
+  recoverLibraryFor(file);
+  return file;
 }
 
 function loadCharacters() {
@@ -295,7 +327,9 @@ function saveCharacters(payload, options) {
 // --- 世界书（World Info / Lorebook）：存在 worldbooks.json，生效范围只由「会话绑定了哪本书」决定 ---
 
 function worldbooksFile() {
-  return dataFile('worldbooks.json');
+  const file = dataFile('worldbooks.json');
+  recoverLibraryFor(file);
+  return file;
 }
 
 function newWorldbookId() {
@@ -406,6 +440,33 @@ const characterRecords = recordStore(charactersFile, 'characters', normalizeChar
 const worldbookRecords = recordStore(worldbooksFile, 'worldbooks', normalizeStoredWorldbook, MAX_WORLDBOOKS);
 const presetRecords = recordStore(presetsFile, 'presets', normalizePreset, MAX_PRESETS);
 
+let libraryGeneration = 0;
+function commitLibraryChanges(payload, immediate) {
+  const characters = characterRecords.planChanges(payload && payload.characters);
+  const worldbooks = worldbookRecords.planChanges(payload && payload.worldbooks);
+  if (characters.changed || worldbooks.changed) {
+    withLibraryTransaction(() => getLibraryTransaction().commit({ characters: characters.data, worldbooks: worldbooks.data }));
+  }
+  if (immediate) {
+    libraryGeneration += 1;
+    characterRecords.supersede();
+    worldbookRecords.supersede();
+  }
+  return { characters: characters.result, worldbooks: worldbooks.result };
+}
+function applyLibraryChanges(payload) {
+  let snapshot;
+  try { snapshot = JSON.parse(JSON.stringify(payload)); } catch (err) { return Promise.reject(err); }
+  const generation = libraryGeneration;
+  return queueStoreWrite(() => {
+    if (generation !== libraryGeneration) throw new Error('ERR_SUPERSEDED: superseded by synchronous library changes');
+    return commitLibraryChanges(snapshot, false);
+  });
+}
+function applyLibraryChangesNow(payload) {
+  return commitLibraryChanges(payload, true);
+}
+
 // --- RAG 向量仓库：vectors.json 的 items 键是 "<model>::<key>" —— 带模型名，换 embedding 模型自然不污染 ---
 
 const VECTORS_VERSION = 1;
@@ -430,6 +491,8 @@ function saveVectors(store) {
 }
 
 module.exports = {
+  applyLibraryChanges,
+  applyLibraryChangesNow,
   dataFile,
   writeJson,
   writeJsonNow,

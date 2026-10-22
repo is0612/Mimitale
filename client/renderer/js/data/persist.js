@@ -24,6 +24,24 @@ export function markCharactersLoaded() {
   charactersLoaded = true;
 }
 
+function flushCharacterWorldbooks(synchronous = false) {
+  const character = characterChanges.beginBatch();
+  let worldbook;
+  try { worldbook = worldbookChanges.beginBatch(); }
+  catch (err) { character.finish(); throw err; }
+  const payload = { characters: character.payload, worldbooks: worldbook.payload };
+  const finish = () => { character.finish(); worldbook.finish(); };
+  const acknowledge = () => { character.acknowledge(synchronous); worldbook.acknowledge(synchronous); };
+  const changed = Object.values(payload).some((change) => change.upserts.length || change.deletes.length);
+  if (!changed) { finish(); return; }
+  if (synchronous) {
+    try { api.applyLibraryChangesNow(payload); acknowledge(); } finally { finish(); }
+    return;
+  }
+  try { return Promise.resolve(api.applyLibraryChanges(payload)).then(acknowledge).finally(finish); }
+  catch (err) { finish(); throw err; }
+}
+
 let saveTimer = null;
 
 // Keep the committed history on disk while a replacement is still in flight.
@@ -99,6 +117,7 @@ export function persistConversations(delay) {
     queueWrite('conversations', () =>
       api.saveConversations(conversationsSavePayload())
     ).catch((err) => {
+      if (isSuperseded(err)) return;
       console.error('保存会话失败（已自动重试过）', err);
       showToast(writeFailedText('会话', err), 'error');
     });
@@ -128,8 +147,15 @@ export function markPresetsLoaded() {
 /** 关窗只提交未确认变更；带同步回执，任一库失败都阻止无声退出。 */
 export function flushLibrariesNow() {
   const errors = [];
-  for (const changes of [...(charactersLoaded ? [characterChanges] : []), ...(worldbooksLoaded ? [worldbookChanges] : []), ...(presetsLoaded ? [presetChanges] : [])]) {
-    try { changes.flushNow(); } catch (err) { errors.push(err.message || String(err)); }
+  const calls = [];
+  if (charactersLoaded && worldbooksLoaded) calls.push(() => flushCharacterWorldbooks(true));
+  else {
+    if (charactersLoaded) calls.push(() => characterChanges.flushNow());
+    if (worldbooksLoaded) calls.push(() => worldbookChanges.flushNow());
+  }
+  if (presetsLoaded) calls.push(() => presetChanges.flushNow());
+  for (const call of calls) {
+    try { call(); } catch (err) { errors.push(err.message || String(err)); }
   }
   if (errors.length) throw new Error(errors.join('；'));
 }
@@ -162,14 +188,14 @@ export function persistPresets(immediate) {
  */
 export function persistCharacters(immediate) {
   if (immediate) {
-    characterChanges.flushNow();
-    if (worldbooksLoaded) worldbookChanges.flushNow();
+    if (worldbooksLoaded) flushCharacterWorldbooks(true);
+    else characterChanges.flushNow();
     return Promise.resolve(true);
   }
 
   return queueWrite('characters', async () => {
-    await characterChanges.flush();
-    if (worldbooksLoaded) await worldbookChanges.flush();
+    if (worldbooksLoaded) await flushCharacterWorldbooks();
+    else await characterChanges.flush();
   })
     .then(() => true)
     .catch((err) => {
@@ -191,8 +217,7 @@ export async function persistLibrary() {
   try {
     // 和 persistCharacters 共用一个 key：两者写的都是 characters.json，必须互相排队
     await queueWrite('characters', async () => {
-      await characterChanges.flush();
-      await worldbookChanges.flush();
+      await flushCharacterWorldbooks();
     });
     return true;
   } catch (err) {

@@ -576,9 +576,13 @@ function registerStubs() {
     if (payload && 'activeId' in payload) store.activeId = payload.activeId;
     return { ok: true };
   });
-  ipcMain.on('conversations:save-sync', (_event, payload) => {
+  ipcMain.on('conversations:save-sync', (event, payload) => {
     remember('conversations:save-sync', payload);
-    if (payload && Array.isArray(payload.conversations)) store.conversations = clone(payload.conversations);
+    try {
+      if (payload && Array.isArray(payload.conversations)) store.conversations = clone(payload.conversations);
+      if (payload && 'activeId' in payload) store.activeId = payload.activeId;
+      event.returnValue = { ok: true, result: clone({ conversations: store.conversations, activeId: store.activeId }) };
+    } catch (err) { event.returnValue = { ok: false, error: err.message }; }
   });
 
   // --- 角色库（和 main.js 一样：一次调用可能同时带 worldbooks）---
@@ -781,10 +785,49 @@ function registerStubs() {
         event.returnValue = { ok: false, error: String((err && err.message) || err) };
       }
     });
+    return { prepare, commit, supersede: () => { generation += 1; } };
   }
-  registerLibraryChanges('characters', normalizeCharacter);
-  registerLibraryChanges('worldbooks', normalizeStoredWorldbook, 200);
+  const characterChanges = registerLibraryChanges('characters', normalizeCharacter);
+  const worldbookChanges = registerLibraryChanges('worldbooks', normalizeStoredWorldbook, 200);
   registerLibraryChanges('presets', normalizePreset, 200);
+  let libraryGeneration = 0;
+  let libraryQueue = Promise.resolve();
+  const prepareLibrary = (payload) => ({
+    characters: characterChanges.prepare(payload && payload.characters),
+    worldbooks: worldbookChanges.prepare(payload && payload.worldbooks)
+  });
+  const commitLibrary = (changes) => {
+    const originalCharacters = store.characters;
+    const originalWorldbooks = store.worldbooks;
+    try {
+      return { characters: characterChanges.commit(changes.characters), worldbooks: worldbookChanges.commit(changes.worldbooks) };
+    } catch (err) {
+      store.characters = originalCharacters;
+      store.worldbooks = originalWorldbooks;
+      throw err;
+    }
+  };
+  ipcMain.handle('library:apply-changes', (_event, payload) => {
+    remember('library:apply-changes', payload);
+    const changes = prepareLibrary(payload);
+    const generation = libraryGeneration;
+    const result = libraryQueue.then(() => {
+      if (generation !== libraryGeneration) throw new Error('ERR_SUPERSEDED: library close flush');
+      return commitLibrary(changes);
+    });
+    libraryQueue = result.catch(() => {});
+    return result;
+  });
+  ipcMain.on('library:apply-changes-sync', (event, payload) => {
+    remember('library:apply-changes-sync', payload);
+    try {
+      const result = commitLibrary(prepareLibrary(payload));
+      libraryGeneration += 1;
+      characterChanges.supersede();
+      worldbookChanges.supersede();
+      event.returnValue = { ok: true, result };
+    } catch (err) { event.returnValue = { ok: false, error: err.message }; }
+  });
 
   ipcMain.handle('presets:get', () => clone({ presets: store.presets.map((p) => normalizePreset(p)) }));
   ipcMain.handle('presets:save', (_event, payload) => {

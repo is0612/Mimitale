@@ -14,7 +14,9 @@ import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { characterForConvo } from './library.js';
 import { applyMacros } from './messages.js';
-import { convoUserName, effectiveWorldbookIds } from './cast.js';
+import { convoUserName, effectiveWorldbookIds, isPlainChatConvo } from './cast.js';
+import { convoContextMessages } from './memory.js';
+import { isGmMode } from './narration.js';
 
 // 一次最多带几条进来。多了会挤掉真正最近的内容，而且 token 哗哗涨
 const RAG_TOP_K = 4;
@@ -25,15 +27,15 @@ const RAG_MIN_SCORE = 0.32;
 const RAG_QUERY_TURNS = 3;
 
 /** 把捞回来的东西拼成注入块 */
-function formatRagSection(items, character, me) {
+function formatRagSection(items, character, me, charMacro) {
   if (!items || !items.length) return '';
 
   const lines = items.map((item) => {
     if (item.kind === 'worldbook') {
-      return `【设定 · ${item.title || '未命名'}】\n${applyMacros(item.text, character, me)}`;
+      return `【设定 · ${item.title || '未命名'}】\n${applyMacros(item.text, character, me, charMacro)}`;
     }
-    const who = item.role === 'user' ? me : (character && character.name) || '对方';
-    return `【早先 · ${who}】\n${applyMacros(item.text, character, me)}`;
+    const who = item.role === 'user' ? me : (character && character.name) || charMacro || '对方';
+    return `【早先 · ${who}】\n${applyMacros(item.text, character, me, charMacro)}`;
   });
 
   return (
@@ -47,11 +49,9 @@ function formatRagSection(items, character, me) {
 /** 跑一次检索，拿到可以注入的那一段（失败就返回空字符串，绝不拦着聊天） */
 export async function recallSection(convo) {
   const settings = state.settings || {};
-  if (settings.ragEnabled !== true || !settings.embeddingProviderId) return '';
+  if (!convo || isPlainChatConvo(convo) || settings.ragEnabled !== true || !settings.embeddingProviderId) return '';
 
-  const history = (convo.messages || []).filter(
-    (m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
-  );
+  const history = convoContextMessages(convo);
   if (history.length < 2) return '';
 
   const recent = history.slice(-RAG_QUERY_TURNS);
@@ -78,7 +78,10 @@ export async function recallSection(convo) {
       console.error('语义检索失败', result && result.error);
       return '';
     }
-    return formatRagSection(result.items, characterForConvo(convo), convoUserName(convo));
+    // 和主提示词一致：GM 不取残留绑定卡，也不能回落到默认助手的人设名。
+    const gmMode = isGmMode(convo);
+    const character = gmMode ? null : characterForConvo(convo);
+    return formatRagSection(result.items, character, convoUserName(convo), gmMode ? '叙述者' : '');
   } catch (err) {
     console.error('语义检索失败', err);
     return '';

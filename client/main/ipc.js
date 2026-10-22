@@ -10,6 +10,7 @@ const { spawn } = require('node:child_process');
 
 const {
   dataFile,
+  applyLibraryChanges, applyLibraryChangesNow,
   applyCharacterChanges, applyCharacterChangesNow,
   applyWorldbookChanges, applyWorldbookChangesNow,
   applyPresetChanges, applyPresetChangesNow,
@@ -271,6 +272,7 @@ function registerIpc() {
       catch (err) { event.returnValue = { ok: false, error: String(err.message || err) }; }
     });
   }
+  registerLibraryChanges('library:apply-changes', 'library:apply-changes-sync', applyLibraryChanges, applyLibraryChangesNow);
   registerLibraryChanges('characters:apply-changes', 'characters:apply-changes-sync', applyCharacterChanges, applyCharacterChangesNow);
   registerLibraryChanges('worldbooks:apply-changes', 'worldbooks:apply-changes-sync', applyWorldbookChanges, applyWorldbookChangesNow);
   registerLibraryChanges('presets:apply-changes', 'presets:apply-changes-sync', applyPresetChanges, applyPresetChangesNow);
@@ -359,8 +361,15 @@ function registerIpc() {
 
   ipcMain.handle('conversations:save', (_event, payload) => saveConversations(payload));
 
-  // 关窗口时的「最后存一次」，不需要回执（失败只记日志，见 registerSyncSave）
-  registerSyncSave('conversations:save-sync', saveConversations);
+  // Conversation close-save is synchronous so renderer can keep the window open on failure.
+  ipcMain.on('conversations:save-sync', (event, payload) => {
+    try {
+      saveConversations(payload, { immediate: true });
+      event.returnValue = { ok: true, result: loadConversations() };
+    } catch (err) {
+      event.returnValue = { ok: false, error: String(err && (err.message || err)) };
+    }
+  });
 
   // --- 角色库 ---
 

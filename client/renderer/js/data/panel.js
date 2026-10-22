@@ -26,7 +26,7 @@ import {
 import { stripEmoTags } from './expressions.js';
 
 // 字段行：全角/半角冒号都认；字段名限 24 字内，避免长句被误认成字段。
-const PANEL_LINE_RE = /^【([^】\n]{1,24})】[：:]\s*(.*)$/;
+const PANEL_LINE_RE = /^【([^】\n]+)】[：:]\s*(.*)$/;
 // 超过 200 字的行更像正文，不当面板
 const PANEL_LINE_MAX = 200;
 // 未知字段的值超过 60 字就不当面板（首轮扫描的兜底）
@@ -194,8 +194,21 @@ export function panelFieldAllowed(name) {
   return !PANEL_RESERVED.has(name) && !name.includes('的设定') && !name.includes('的性格');
 }
 
+/** 裸字段仍限 24 字；已知 owner 前缀不占字段名额度。 */
+function panelLabelAllowed(label, known, convo) {
+  if (!panelFieldAllowed(label)) return false;
+  if (label.length <= 24) return true;
+  if (known && known.has(label)) {
+    const i = label.indexOf(OWNER_LABEL_SEP);
+    if (i > 0 && label.slice(i + 1).trim().length <= 24) return true;
+  }
+  if (!convo) return false;
+  const parsed = parseFieldLabel(convo, label);
+  return !!parsed.owner && parsed.name.length <= 24 && panelFieldAllowed(parsed.name);
+}
+
 /** 抽面板字段（保序）：给了 knownFields 就只收这些名字，首轮才按「值短」猜 */
-function extractPanelFromText(text, knownFields) {
+function extractPanelFromText(text, knownFields, convo) {
   const known = knownFields && knownFields.length ? new Set(knownFields) : null;
   const found = new Map();
 
@@ -207,7 +220,7 @@ function extractPanelFromText(text, knownFields) {
     if (!m) continue;
 
     const name = m[1].trim();
-    if (!name || !panelFieldAllowed(name)) continue;
+    if (!name || !panelLabelAllowed(name, known, convo)) continue;
 
     const value = m[2].trim();
 
@@ -241,7 +254,7 @@ function stripPanelLinesWith(text, known) {
       if (!m) return true;
 
       const name = m[1].trim();
-      if (!name || !panelFieldAllowed(name)) return true;
+      if (!name || !panelLabelAllowed(name, known)) return true;
 
       if (known) return !known.has(name);
 
@@ -594,6 +607,7 @@ export function syncConvoPanel(convo) {
     }
   }
   const latest = new Map();
+  let updateOrder = 0;
   // 手改过的字段 → 改动时刻。重扫历史时，比它早写的回复不许覆盖（见 markPanelManual）
   const manualTable = convo.panelManual && typeof convo.panelManual === 'object' ? convo.panelManual : {};
 
@@ -602,7 +616,7 @@ export function syncConvoPanel(convo) {
     const content = String(msg.content || '');
     if (!content.includes('【')) continue;
 
-    const found = extractPanelFromText(content, knownNames);
+    const found = extractPanelFromText(content, knownNames, convo);
     for (const [rawName, value] of found) {
       // 模型可能带「角色名·字段名」前缀：拆出归属，拆不开就退回无主字段。
       const { owner, name } = parseFieldLabel(convo, rawName);
@@ -628,14 +642,16 @@ export function syncConvoPanel(convo) {
       }
       // 手改过的字段只认改动之后的回复；时间戳缺失 / 老的 true 按 0＝不设限。
       const editedAt = Number(manualTable[key]) || 0;
-      if (!editedAt || Number(msg.at || 0) > editedAt) latest.set(key, value);
+      if (!editedAt || Number(msg.at || 0) > editedAt) {
+        latest.set(key, { value, at: Number(msg.at || 0), order: ++updateOrder });
+      }
     }
   }
 
   // 历史值优先，没扫到就沿用现有；数值在这里夹回范围，否则下一轮会照抄越界值。
   const panel = {};
   for (const key of order) {
-    const value = latest.has(key) ? latest.get(key) : existingPanel[key];
+    const value = latest.has(key) ? latest.get(key).value : existingPanel[key];
     if (value !== undefined) panel[key] = clampPanelValue(convo, key, value, defs);
   }
 
@@ -644,7 +660,7 @@ export function syncConvoPanel(convo) {
   convo.panelDefs = defs;
 
   // 收尾：AI 没带前缀的无主字段并回主角（入口条已无「世界」卡）。
-  absorbTopLevelIntoPlayer(convo);
+  absorbTopLevelIntoPlayer(convo, latest);
 
   const afterFields = convoPanelFields(convo).join('\u0001');
   return beforeFields !== afterFields || beforePanel !== JSON.stringify(convoPanel(convo));
@@ -652,7 +668,7 @@ export function syncConvoPanel(convo) {
 
 // 无主字段认领顺序：卡上声明过→那张卡；单角色聊天→绑卡；其余→主角。
 // 认不出主角时原样不动；幂等，返回是否改动。
-export function absorbTopLevelIntoPlayer(convo) {
+export function absorbTopLevelIntoPlayer(convo, latest) {
   if (!convo) return false;
   if (!absorbingOwnerName(convo)) return false;
 
@@ -675,6 +691,16 @@ export function absorbTopLevelIntoPlayer(convo) {
     }
   }
 
+  // 手加字段不一定在卡模板里：裸名只对应一个既有 owner 时保留归属。
+  const uniqueOwnerByName = new Map();
+  for (const key of convoPanelFields(convo)) {
+    const owner = ownerOf(key);
+    if (!owner) continue;
+    const name = panelFieldName(key);
+    if (!uniqueOwnerByName.has(name)) uniqueOwnerByName.set(name, owner);
+    else if (uniqueOwnerByName.get(name) !== owner) uniqueOwnerByName.set(name, '');
+  }
+
   // 单角色聊天（绑卡且非 GM）→ 无主字段全归那张卡；不要求它已持有字段。
   const soloCard =
     convo.characterId && convo.gmMode !== true
@@ -686,6 +712,14 @@ export function absorbTopLevelIntoPlayer(convo) {
   const panel = { ...convoPanel(convo) };
   const defs = { ...convoPanelDefs(convo) };
   const remove = new Set();
+  const canReplace = (key, target) => {
+    const source = latest && latest.get(key);
+    const current = latest && latest.get(target);
+    // 历史顺序决定新旧；裸名只是同一字段的别名，不能在归属时压过较新的前缀记录。
+    if (current && (!source || current.order >= source.order)) return false;
+    const editedAt = Number(convo.panelManual && convo.panelManual[target]) || 0;
+    return !editedAt || !!(source && source.at > editedAt);
+  };
 
   const claim = (key, owner) => {
     const fieldName = panelFieldName(key);
@@ -693,8 +727,8 @@ export function absorbTopLevelIntoPlayer(convo) {
     const target = panelKey(fieldName, owner);
     if (fields.includes(target)) {
       // 已有同名字段：用这一轮的无主值覆盖，手改过的除外
-      if (!(convo.panelManual && convo.panelManual[target]) && String(value || '').trim()) {
-        panel[target] = value;
+      if (canReplace(key, target) && String(value || '').trim()) {
+        panel[target] = clampPanelValue(convo, target, value, defs);
       }
     } else if (fields.length < MAX_PANEL_FIELDS) {
       fields.push(target);
@@ -717,6 +751,12 @@ export function absorbTopLevelIntoPlayer(convo) {
       continue;
     }
 
+    const existingOwner = uniqueOwnerByName.get(fieldName);
+    if (existingOwner) {
+      claim(key, existingOwner);
+      continue;
+    }
+
     if (soloOwner) {
       claim(key, soloOwner);
       continue;
@@ -727,12 +767,8 @@ export function absorbTopLevelIntoPlayer(convo) {
       // 主角已有同名字段：空的用无主值填；玩家手改过保留；否则这一轮的值覆盖。
       const had = String(panel[target] || '').trim();
       const now = String(panel[key] || '').trim();
-      if (!had) {
-        if (now) panel[target] = panel[key];
-      } else if (convo.panelManual && convo.panelManual[target]) {
-        // 手改优先
-      } else {
-        panel[target] = panel[key];
+      if (canReplace(key, target) && (had || now)) {
+        panel[target] = clampPanelValue(convo, target, panel[key], defs);
       }
       remove.add(key);
     } else if (fields.length < MAX_PANEL_FIELDS) {

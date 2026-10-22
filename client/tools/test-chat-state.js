@@ -104,6 +104,19 @@ const options = c => Array.from(c.options);
   assert.equal(await preparing, false);
   assert.equal(h.sends(), 0, 'invalidated preparation never dispatches IPC');
 
+  // Imported/legacy history can contain null placeholders; context building skips
+  // them, so asking for options must do the same without leaving the global lock.
+  h = harness();
+  h.convo.messages = [null, { role: 'assistant', content: '有效轮次', at: 10 }, null];
+  const withNullHistory = h.ctx.requestMoreOptions(h.convo);
+  h.response.resolve({ ok: true, content: '【剧情选项】：检查房间 / 离开房间' });
+  assert.equal(await withNullHistory, true);
+  assert.deepEqual(options(h.convo), ['检查房间', '离开房间']);
+  assert.equal(await h.ctx.requestMoreOptions(h.convo), true, 'null history must not leave options request permanently busy');
+  h = harness();
+  h.convo.messages = [null];
+  assert.equal(await h.ctx.requestMoreOptions(h.convo), false, 'null-only history is empty');
+
   // Execute the real list-item keyboard handler with a native nested button target.
   const listSource = source('views/chatList.js');
   const keyboard = listSource.match(/onkeydown: (\(event\) => \{[\s\S]*?\n          \}),/)[1];

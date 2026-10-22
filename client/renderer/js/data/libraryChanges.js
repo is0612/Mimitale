@@ -75,5 +75,20 @@ export function createLibraryChanges({ records, save, saveNow }) {
     acknowledge(change);
   }
 
-  return { markLoaded, flush, flushNow };
+  function beginBatch() {
+    const change = pending();
+    const token = {};
+    const started = generation;
+    inFlight.set(token, change);
+    return {
+      payload: payload(change),
+      acknowledge(synchronous = false) {
+        if (synchronous) { generation += 1; inFlight.clear(); }
+        if (synchronous || started === generation) acknowledge(change);
+      },
+      finish() { inFlight.delete(token); }
+    };
+  }
+
+  return { markLoaded, flush, flushNow, beginBatch };
 }

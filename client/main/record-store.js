@@ -138,8 +138,8 @@ function createRecordStore({ file, key, normalize, maxItems = Infinity, enqueue,
     return { upserts, deletes };
   }
 
-  function commitChanges(changes) {
-    if (!changes.upserts.length && !changes.deletes.length) return changes;
+  function planChanges(payload) {
+    const changes = prepareChanges(payload);
     const path = file();
     const { data, recovered } = readCollection(path, key);
     const existing = new Set(data[key].map((record) => record.id));
@@ -152,9 +152,17 @@ function createRecordStore({ file, key, normalize, maxItems = Infinity, enqueue,
     if (added.length && list.length > maxItems) {
       throw new Error(`Collection limit reached: ${key} (${maxItems})`);
     }
-    if (!isDeepStrictEqual(data[key], list)) commit(path, { ...data, [key]: list }, recovered);
-    return changes;
+    return { path, data: { ...data, [key]: list }, recovered, changed: !isDeepStrictEqual(data[key], list), result: changes };
   }
+
+  function commitChanges(changes) {
+    if (!changes.upserts.length && !changes.deletes.length) return changes;
+    const plan = planChanges(changes);
+    if (plan.changed) commit(plan.path, plan.data, plan.recovered);
+    return plan.result;
+  }
+
+  function supersede() { generation += 1; }
 
   function applyChanges(payload) {
     let changes;
@@ -176,7 +184,7 @@ function createRecordStore({ file, key, normalize, maxItems = Infinity, enqueue,
     return result;
   }
 
-  return { loadOne, saveOne, deleteOne, applyChanges, applyChangesNow };
+  return { loadOne, saveOne, deleteOne, applyChanges, applyChangesNow, planChanges, supersede };
 }
 
 module.exports = { createRecordStore };

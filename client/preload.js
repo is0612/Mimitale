@@ -59,7 +59,14 @@ contextBridge.exposeInMainWorld('mimitale', {
   // --- 历史会话 ---
   getConversations: () => ipcRenderer.invoke('conversations:get'),
   saveConversations: (payload) => ipcRenderer.invoke('conversations:save', payload),
-  saveConversationsNow: (payload) => ipcRenderer.send('conversations:save-sync', payload),
+  saveConversationsNow: (payload) => {
+    const response = ipcRenderer.sendSync('conversations:save-sync', payload);
+    if (!response || !response.ok) throw new Error(response && response.error || '会话保存未收到主进程确认');
+    return response.result;
+  },
+
+  applyLibraryChanges: (payload) => ipcRenderer.invoke('library:apply-changes', payload),
+  applyLibraryChangesNow: (payload) => applyChangesNow('library:apply-changes-sync', payload),
 
   // --- 角色库 ---
   applyCharacterChanges: (payload) => ipcRenderer.invoke('characters:apply-changes', payload),

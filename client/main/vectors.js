@@ -127,11 +127,12 @@ function collectCandidates(options) {
   for (const book of books) {
     if (!book || !wanted.has(book.id)) continue;
     for (const entry of book.entries || []) {
-      const text = String(entry && entry.content ? entry.content : '').trim();
+      if (!entry || entry.enabled === false) continue;
+      const text = String(entry.content || '').trim();
       if (!text) continue;
       out.push({
         kind: 'worldbook',
-        key: `w:${book.id}:${entry.id}`,
+        key: `w:${book.id}:${entry.id}:${hashText(text)}`,
         text,
         title: String(entry.title || '')
       });

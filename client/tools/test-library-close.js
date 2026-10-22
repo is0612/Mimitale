@@ -150,11 +150,30 @@ async function integrationTests() {
   assert.equal(read('characters.json').characters.find((item) => item.id === 'c1').name, 'after ENOSPC');
   passed('Electron: repaired flush retries pending diff');
 
+  await run("testState.conversations = [{id:'close-convo',messages:[{role:'user',content:'pending close'}]}]; testState.activeId = 'close-convo';");
+  fs.writeFileSync = function(file, ...args) {
+    if (path.resolve(String(file)) === path.join(profile, 'conversations.json.tmp')) {
+      const err = new Error('ENOSPC: conversation close disk full'); err.code = 'ENOSPC'; throw err;
+    }
+    return originalWrite.call(this, file, ...args);
+  };
+  try {
+    const blocked = new Promise((resolve) => win.webContents.once('will-prevent-unload', resolve));
+    win.close();
+    await blocked;
+    assert.equal(win.isDestroyed(), false, 'conversation write failure blocks close');
+    assert.match(await run('return closeErrors.join(" ");'), /会话保存失败/);
+    assert.equal(store.loadConversations().conversations.length, 0);
+    passed('Electron: conversation failure receipt blocks production beforeunload');
+  } finally { fs.writeFileSync = originalWrite; }
+
   await run("testState.dialoguePresets[0].name = 'preset saved on close';");
   const closed = new Promise((resolve) => win.once('closed', resolve));
   win.close();
   await closed;
   assert.equal(read('presets.json').presets.find((item) => item.id === 'p1').name, 'preset saved on close');
+  assert.equal(store.loadConversations().conversations[0].messages[0].content, 'pending close');
+  assert.equal(store.loadConversations().activeId, 'close-convo');
   assert.ok(read('characters.json').characters.some((item) => item.id === 'peer'));
   passed('Electron: production beforeunload flushes pending preset and closes');
 

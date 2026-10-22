@@ -93,8 +93,8 @@ export async function requestMoreOptions(convo, { trigger = null, tag = 'options
     return false;
   }
 
-  const history = (convo.messages || []).filter(
-    (m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
+  const history = (Array.isArray(convo.messages) ? convo.messages : []).filter(
+    (m) => m && (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
   );
   if (!history.length) {
     showToast('还没有对话内容，先聊两句', 'error');
@@ -119,14 +119,14 @@ export async function requestMoreOptions(convo, { trigger = null, tag = 'options
 
   pendingConvoId = convo.id;
   const version = convoDerivedRequestVersion(convo);
-  const historySnapshot = convo.messages.map((message) => ({ message, role: message.role, content: message.content, at: message.at }));
+  const historySnapshot = convo.messages.map((message) => ({ message, role: message?.role, content: message?.content, at: message?.at }));
   const optionsSnapshot = JSON.stringify(convo.options || []);
   const isCurrent = () => activeConvo() === convo && state.conversations.includes(convo) &&
     !state.streaming && convoDerivedRequestVersion(convo) === version &&
     JSON.stringify(convo.options || []) === optionsSnapshot &&
-    convo.messages.length === historySnapshot.length && historySnapshot.every((entry, index) => {
+    Array.isArray(convo.messages) && convo.messages.length === historySnapshot.length && historySnapshot.every((entry, index) => {
       const message = convo.messages[index];
-      return message === entry.message && message.role === entry.role && message.content === entry.content && message.at === entry.at;
+      return message === entry.message && message?.role === entry.role && message?.content === entry.content && message?.at === entry.at;
     });
 
   try {

@@ -457,7 +457,10 @@ function bindEvents() {
       const saved = api.saveConversationsNow(conversationsSavePayload());
       if (saved && typeof saved.catch === 'function') saved.catch(() => {});
     } catch (err) {
-      console.warn('关窗前保存会话失败', err);
+      event.preventDefault();
+      event.returnValue = '';
+      console.error('关窗前保存会话失败', err);
+      showToast(`会话保存失败，窗口暂不关闭：${err.message || err}`, 'error');
     }
     try {
       flushLibrariesNow();

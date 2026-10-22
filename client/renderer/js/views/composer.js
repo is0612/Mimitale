@@ -47,17 +47,32 @@ function throwIfGenerationStopped() {
 
 async function prepareCompletion(convo) {
   let timeout;
+  let ragTimeout;
+  let preparationFinished = false;
   const interrupted = new Promise((_, reject) => {
     cancelPreparation = () => reject(new Error('已停止生成。'));
     timeout = setTimeout(() => reject(new Error('准备回复超时，请重试或检查语义检索服务。')), 45000);
   });
   try {
     return await Promise.race([
-      (async () => ({ worldbook: await matchWorldbookSections(convo), ragSection: await recallSection(convo) }))(),
+      // 语义检索的原则是「捞不到就算了」：慢到把整轮生成拖垮时降级为不带往事，
+      // 但用户主动「停止生成」仍走 interrupted 抛错。世界书匹配不降级。
+      (async () => {
+        const worldbook = await matchWorldbookSections(convo);
+        if (preparationFinished) throw new Error('回复准备已结束。');
+        throwIfGenerationStopped();
+        const ragSection = await Promise.race([
+          recallSection(convo),
+          new Promise((resolve) => { ragTimeout = setTimeout(() => resolve(''), 10000); })
+        ]);
+        return { worldbook, ragSection };
+      })(),
       interrupted
     ]);
   } finally {
+    preparationFinished = true;
     clearTimeout(timeout);
+    clearTimeout(ragTimeout);
     cancelPreparation = null;
   }
 }
@@ -293,7 +308,7 @@ function panelWrittenIn(convo, text) {
   if (!known.size) return true;
 
   for (const rawLine of String(text || '').split('\n')) {
-    const m = rawLine.trim().match(/^【([^】\n]{1,24})】[：:]/);
+    const m = rawLine.trim().match(/^【([^】\n]+)】[：:]/);
     if (m && known.has(m[1].trim())) return true;
   }
   return false;

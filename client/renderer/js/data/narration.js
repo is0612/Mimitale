@@ -166,7 +166,7 @@ function paceRuleText(convo, isGm) {
   // 单角色没有「多个 NPC 分工」这回事：multi / multiInline / noSelfIntro 都是空串。
   const vars = {
     who,
-    step2: isGm ? '在场 NPC 各给一句话或一个动作（每人最多一次）' : '你给一句话或一个动作（最多一次）',
+    step2: isGm ? '让当前镜头里最相关的 NPC 给一句话或一个动作，其余人按需留在背景，不必逐个回应' : '你给一句话或一个动作（最多一次）',
     multi: isGm ? '  · NPC 之间的先后、分工、争执 —— 由你安排，不要抛给玩家决定\n' : '',
     multiInline: isGm ? '   NPC 之间的先后和分工由你安排，不要抛给玩家决定；\n' : '',
     standoffRule: isGm
