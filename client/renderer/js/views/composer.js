@@ -9,16 +9,18 @@ import { state } from '../core/state.js';
 import { el } from '../core/dom.js';
 import { activeConvo, uid, now } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
+import { iconHtml } from '../ui/icons.js';
 import { h, button, clear } from '../ui/build.js';
 // 该量/该写高度的那颗：组件（<m-textarea>）要落到里层那颗原生框上
 import { controlOf } from '../ui/auto-grow.js';
 import { mTextarea, mButton } from '../components/index.js';
-import { persistConversations } from '../data/persist.js';
+import { persistConversations, beginConversationReplacement, endConversationReplacement } from '../data/persist.js';
 import { ensureConvoEndpoint, isBridgeProvider } from '../data/providers.js';
 import { buildApiMessages, characterContextForConvo, effectiveSampling } from '../data/messages.js';
 import { matchWorldbookSections } from '../data/cast.js';
 import { recallSection } from '../data/rag.js';
 import { invalidateSummariesForEdit } from '../data/memory.js';
+import { rebuildConvoDerivedState, invalidateConvoDerivedRequests } from '../data/convoState.js';
 import {
   convoFieldDisplayNames,
   convoPanelFields,
@@ -35,8 +37,13 @@ import { renderAll } from './redraw.js';
 import { maybeSummarize } from './summarize.js';
 import { maybePetAutoSpeak } from '../data/petContext.js';
 
-let preparationStopped = false;
+// Applies to the whole generation chain, including retries and panel repair requests.
+let generationStopped = false;
 let cancelPreparation = null;
+
+function throwIfGenerationStopped() {
+  if (generationStopped) throw new Error('已停止生成。');
+}
 
 async function prepareCompletion(convo) {
   let timeout;
@@ -56,10 +63,16 @@ async function prepareCompletion(convo) {
 }
 
 function setStreaming(on) {
-  if (on) preparationStopped = false;
+  if (on) generationStopped = false;
   state.streaming = on;
-  el.btnStop.classList.toggle('hidden', !on);
-  el.btnSend.disabled = on;
+  const btn = el.btnSend;
+  btn.disabled = false;
+  btn.setAttribute('data-mode', on ? 'stop' : 'send');
+  btn.setAttribute('aria-label', on ? '停止生成回复' : '发送消息');
+  btn.setAttribute('title', on ? '停止生成' : '发送回应');
+  btn.setAttribute('variant', on ? 'danger' : 'primary');
+  const icon = (btn.control || btn).querySelector('.field-icon');
+  if (icon) icon.outerHTML = iconHtml(on ? 'square' : 'arrow-up');
 }
 
 /** 输入框跟着内容长高；el.input 是 <m-textarea> 宿主，量/写高度都要过 controlOf 落到原生框 */
@@ -103,6 +116,7 @@ export async function sendMessage(text) {
     convo.title = content.slice(0, 24) || '新对话';
   }
 
+  invalidateConvoDerivedRequests(convo);
   const message = { role: 'user', content, at: now() };
   convo.messages.push(message);
 
@@ -231,6 +245,7 @@ function reasoningTokensOf(usage) {
 // 让最后一条助手消息接着往下写（「继续」和截断自动续写共用）；不新建消息，增量接在原文后面。
 // ⚠️ worldbook 是 matchWorldbookSections() 返回的 { section, deepSection }，不是字符串，原样透传。
 async function extendAssistantMessage(convo, endpoint, worldbook, ragSection, nudge, opts) {
+  throwIfGenerationStopped();
   const last = convo.messages[convo.messages.length - 1];
   if (!last || last.role !== 'assistant') return { ok: false, error: '没有可续写的回复' };
 
@@ -288,6 +303,7 @@ function panelWrittenIn(convo, text) {
  * 整轮没提状态表 → 补问一次，把状态表接到同一条回复后面；只补一次，失败就算了。
  */
 async function ensurePanelWritten(convo, endpoint, worldbook, ragSection, assistant) {
+  throwIfGenerationStopped();
   if (!convoPanelFields(convo).length) return false;
   if (!String(assistant.content || '').trim()) return false;   // 空正文走别的分支
   if (panelWrittenIn(convo, assistant.content)) return false;
@@ -321,10 +337,11 @@ export async function continueLastMessage() {
     return;
   }
 
+  invalidateConvoDerivedRequests(convo);
   setStreaming(true);
   try {
     const { worldbook, ragSection } = await prepareCompletion(convo);
-    if (preparationStopped) return;
+    if (generationStopped) return;
 
     const index = convo.messages.length - 1;
     const bubble = el.messages.querySelector(`.msg[data-index="${index}"] .bubble`);
@@ -394,10 +411,20 @@ async function autoContinueTruncated(convo, index, endpoint, worldbook, ragSecti
  */
 async function requestCompletion(convo, options) {
   // 已经在生成中就别再进来 —— 先判这个，避免 ensureConvoEndpoint 顺手改会话
-  if (state.streaming) return;
+  if (state.streaming) {
+    if (options && options.rollback) {
+      options.rollback();
+      endConversationReplacement(convo);
+    }
+    return;
+  }
 
   const endpoint = ensureConvoEndpoint(convo);
   if (!endpoint) {
+    if (options && options.rollback) {
+      options.rollback();
+      endConversationReplacement(convo);
+    }
     showToast('还没有配置模型服务', 'error');
     return;
   }
@@ -406,12 +433,13 @@ async function requestCompletion(convo, options) {
   let assistant = null;
   let index = -1;
   let waitingTimer = null;
+  let completed = false;
 
   try {
     // 世界书在渲染层匹配（本地纯计算，省一次 IPC）；第一回合也要拿到设定
     const { worldbook, ragSection } = await prepareCompletion(convo);
 
-    if (preparationStopped) return;
+    if (generationStopped) return;
     const requestId = uid();
     state.requestId = requestId;
 
@@ -521,6 +549,7 @@ async function requestCompletion(convo, options) {
       const retryMessages = [...buildApiMessages(convo, worldbook, ragSection)];
       retryMessages.push({ role: 'user', content: REASONING_RETRY_NUDGE });
 
+      throwIfGenerationStopped();
       const retryId = uid();
       state.requestId = retryId;
       const retry = await api.sendChat({
@@ -573,12 +602,22 @@ async function requestCompletion(convo, options) {
       assistant.truncated = true;
     }
 
+    throwIfGenerationStopped();
     if (Array.isArray(assistant.variants)) {
       assistant.variants[assistant.variantIndex] = assistant.content;
     }
+    completed = true;
   } catch (err) {
     const message = (err && err.message) || '未知错误';
     const stopped = /已停止生成/.test(message);
+
+    // Regeneration is transactional: failure or cancellation restores the original history.
+    if (options && options.rollback) {
+      options.rollback();
+      assistant = null;
+      showToast(stopped ? '已停止生成，原对话已保留' : `重新生成失败，原对话已保留：${message}`, stopped ? undefined : 'error');
+      return;
+    }
 
     // 没生成出东西，那个占位的空候选要撤掉，不然会留下一条空白候选
     if (assistant && Array.isArray(assistant.variants)) {
@@ -598,6 +637,8 @@ async function requestCompletion(convo, options) {
       convo.messages.push({ role: 'error', content: message, at: now(), retryable: true });
     }
   } finally {
+    if (!completed && options && options.rollback) options.rollback();
+    if (options && options.rollback) endConversationReplacement(convo);
     if (waitingTimer) clearInterval(waitingTimer);
     streamPainter.stop();
     setStreaming(false);
@@ -614,11 +655,11 @@ async function requestCompletion(convo, options) {
     el.input.focus();
 
     // 攒够未压缩对话就后台压摘要；不 await，压缩要额外调一次模型
-    maybeSummarize(convo).catch((err) => console.error('后台摘要失败', err));
+    if (completed && !generationStopped) maybeSummarize(convo).catch((err) => console.error('后台摘要失败', err));
 
     // 桌宠：回复还在会话里且正文非空才问它要不要插一句（出错/被停止那条已 splice 掉）。
     // 不 await —— 这是额外一次模型调用；轮数/静音等规则全在 maybePetAutoSpeak 里。
-    if (convo.messages.includes(assistant) && String(assistant.content || '').trim()) {
+    if (completed && !generationStopped && convo.messages.includes(assistant) && String(assistant.content || '').trim()) {
       maybePetAutoSpeak().catch((err) => console.error('桌宠自动发言失败', err));
     }
   }
@@ -644,10 +685,25 @@ export function regenerateFrom(index) {
     return;
   }
 
+  invalidateConvoDerivedRequests(convo);
+  const originalMessages = convo.messages;
+  const originalState = structuredClone(Object.fromEntries(Object.entries(convo).filter(([key]) => key !== 'messages')));
+  beginConversationReplacement(convo, { ...originalState, messages: originalMessages });
+  let restored = false;
+  const rollback = () => {
+    if (restored) return;
+    restored = true;
+    for (const key of Object.keys(convo)) if (key !== 'messages') delete convo[key];
+    Object.assign(convo, originalState);
+    convo.messages = originalMessages;
+  };
+  // Invalidate summaries while the original message still has its context index.
+  if (target) invalidateSummariesForEdit(convo, target);
   convo.messages = convo.messages.slice(0, cut + 1);
+  rebuildConvoDerivedState(convo, { priorMessages: originalMessages });
   state.usage = null;
-  persistConversations(0);
-  requestCompletion(convo, existing ? { variants: existing } : undefined);
+  // Do not persist the destructive cut until the replacement succeeds.
+  return requestCompletion(convo, { variants: existing, rollback });
 }
 
 /** 换候选（swipe）：改 content 就等于换了一条，历史/复制/导出都读 content */
@@ -677,8 +733,8 @@ export function switchVariant(index, delta) {
 
 export async function stopGenerating() {
   // 只停聊天这一路 —— 后台摘要 / AI 生成角色这些不归「停止」按钮管
-  if (state.streaming && !state.requestId) {
-    preparationStopped = true;
+  if (state.streaming) {
+    generationStopped = true;
     if (cancelPreparation) cancelPreparation();
   }
   if (state.requestId) {

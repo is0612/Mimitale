@@ -24,7 +24,6 @@ export const el = {
   usageText: $('usage-text'),
   btnNew: $('btn-new'),
   btnSend: $('btn-send'),
-  btnStop: $('btn-stop'),
   btnClear: $('btn-clear'),
   btnCopyAll: $('btn-copy-all'),
   btnSettings: $('btn-settings'),

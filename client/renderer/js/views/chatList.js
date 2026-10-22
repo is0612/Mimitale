@@ -62,6 +62,8 @@ export function renderConvoList() {
           'aria-label': `打开故事：${label}`,
           tabindex: '0',
           onkeydown: (event) => {
+            // 内嵌删除按钮保留原生 Enter/Space 激活，不能被父条目抢走。
+            if (event.target !== event.currentTarget) return;
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
               switchConvo(convo.id);

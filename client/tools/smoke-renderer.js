@@ -1947,7 +1947,7 @@ await scenario('续写：也把状态表补回来', async () => {
     },
     8000
   );
-  await waitFor('流式结束', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
 
   const node = lastAssistant();
   check('兜底说明这条上有「继续」', !!node && !!buttonByText(node, '继续'));
@@ -1955,7 +1955,7 @@ await scenario('续写：也把状态表补回来', async () => {
   // 「继续」2026-10-20 起改成常显（不再收在「⋯」里），直接点即可
   click(buttonByText(node, '继续'));
   const back = await settlePanelValue('金币', '55', 8000);
-  await waitFor('流式结束', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
 
   const convosNow = await window.mimitale.getConversations();
   const act = convosNow.conversations.find((c) => c.id === convosNow.activeId);
@@ -2401,11 +2401,12 @@ await scenario('输入框：发不出去时字要留着', async () => {
 
   // --- 路径二：正在生成中按回车（输入框在流式期间并没有禁用） ---
   setValue('#input', '正在生成时打的字');
-  // 手动把界面切成「流式中」：发送按钮禁用 + state.streaming
+  // 手动模拟流式状态：合并按钮保持可点并切到 stop 模式。
   const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
   const prevStreaming = stateMod.state.streaming;
   stateMod.state.streaming = true;
-  byId('btn-send').disabled = true;
+  byId('btn-send').setAttribute('data-mode', 'stop');
+  check('生成中合并按钮仍可点且处于停止模式', !byId('btn-send').disabled && byId('btn-send').dataset.mode === 'stop');
 
   const composerMod = await import(new URL('js/views/composer.js', document.baseURI).href);
   const didSend = await composerMod.sendMessage('正在生成时打的字');
@@ -2417,7 +2418,7 @@ await scenario('输入框：发不出去时字要留着', async () => {
   );
 
   stateMod.state.streaming = prevStreaming;
-  byId('btn-send').disabled = false;
+  byId('btn-send').setAttribute('data-mode', 'send');
   setValue('#input', '');
 });
 
@@ -2672,6 +2673,32 @@ await scenario('生成准备：停止后解除等待', async () => {
   check('停止后没有悬挂请求', !appState.requestId && !appState.requestTarget);
 });
 
+await scenario('生成中导航返回并停止', async () => {
+  const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
+  const convoId = stateMod.state.activeId;
+  const convo = stateMod.state.conversations.find((item) => item.id === convoId);
+  setValue('#input', '[NAV_STOP_TEST] 测试延迟生成');
+  click('#btn-send');
+  await waitFor('慢流已进入停止模式', () => byId('btn-send').dataset.mode === 'stop', 5000);
+  await waitFor('慢流助手占位已出现', () => !!$('#messages .msg.assistant .waiting'), 5000);
+
+  setValue('#input', '导航期间保留的草稿');
+  click('#btn-chars');
+  await waitFor('生成期间进入角色库', () => shown('#view-chars'));
+  click($('#convo-list .convo-item.active'));
+  await waitFor('点击当前会话返回聊天', () => shown('#view-chat'));
+  check('返回后仍是原活动会话', stateMod.state.activeId === convoId);
+  check('返回时生成仍在继续、停止模式可用', stateMod.state.streaming && byId('btn-send').dataset.mode === 'stop' && !byId('btn-send').disabled);
+
+  click('#btn-send');
+  await waitFor('停止完成且合并按钮恢复发送', () => !stateMod.state.streaming && byId('btn-send').dataset.mode === 'send', 8000);
+  await waitFor('慢流发送内容已进入会话', () => (convo?.messages || []).some((message) => message.role === 'user' && message.content.includes('[NAV_STOP_TEST]')));
+  check('停止后活动会话未切换', stateMod.state.activeId === convoId);
+  check('草稿保留且未被误发', byId('input').value === '导航期间保留的草稿' && !(convo?.messages || []).some((message) => message.role === 'user' && message.content === '导航期间保留的草稿'));
+  check('停止后按钮保持可点并恢复发送模式', !byId('btn-send').disabled && byId('btn-send').dataset.mode === 'send');
+  setValue('#input', '');
+});
+
 await scenario('聊天：发送与回复', async () => {
   click('#convo-list .convo-item');
   await waitFor('切回聊天视图', () => shown('#view-chat'));
@@ -2685,13 +2712,12 @@ await scenario('聊天：发送与回复', async () => {
 
   await waitFor('新回复出现', () => $$('#messages .msg').length >= beforeMsgs + 2, 8000);
   await waitFor('助手回复出现', () => $('#messages').textContent.includes('冒烟测试回复'), 8000);
-  await waitFor('流式状态结束', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式状态结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
 
   check('用户消息已渲染', $('#messages').textContent.includes('冒烟测试：你好'));
   check('助手回复已渲染', $('#messages').textContent.includes('冒烟测试回复'));
   check('没有出现错误气泡', $$('#messages .msg.error').length === 0);
-  check('发送按钮恢复可用（没有卡在流式状态）', byId('btn-send').disabled === false);
-  check('停止按钮已隐藏', shown('#btn-stop') === false);
+  check('合并按钮恢复发送模式且保持可点', byId('btn-send').getAttribute('data-mode') === 'send' && !byId('btn-send').disabled);
 
   // 重点的两档样式：**加粗** 和 ==高亮== 要变成真元素，而不是原样显示星号/等号
   const strong = $('#messages strong');
@@ -2730,11 +2756,11 @@ await scenario('消息：编辑与继续', async () => {
 
     check('工具条末尾有「⋯」在（低频按钮收在它后面）', !!moreNow() && !!extraNow());
     check(
-      '常显的是 继续 / 编辑 / 帮我想想 + ⋯',
+      '常显的是 继续 / 重新生成 / 帮我想想 + ⋯',
       Array.from(bar().querySelectorAll('.mini-btn'))
         .filter((b) => getComputedStyle(b).display !== 'none')
         .map((b) => b.textContent.trim())
-        .join(',') === '继续,编辑,帮我想想,⋯',
+        .join(',') === '继续,重新生成,帮我想想,⋯',
       Array.from(bar().querySelectorAll('.mini-btn'))
         .filter((b) => getComputedStyle(b).display !== 'none')
         .map((b) => b.textContent.trim())
@@ -2746,6 +2772,8 @@ await scenario('消息：编辑与继续', async () => {
       extraNow() ? getComputedStyle(extraNow()).display : '(没有低频按钮)'
     );
 
+    check('隐藏操作按复制、编辑、删除、分支排序',
+      Array.from(bar().querySelectorAll('.mini-extra')).map(b => b.textContent.trim()).filter(text => text !== '配图').join(',') === '复制,编辑,删除,分支');
     await openMsgMore(lastNode());
     check(
       '点「⋯」后低频按钮显形',
@@ -2765,7 +2793,7 @@ await scenario('消息：编辑与继续', async () => {
     const node = lastNode();
     return node && node.querySelector('.msg-content').textContent.length > before.length;
   }, 8000);
-  await waitFor('流式结束', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
 
   const after = lastNode().querySelector('.msg-content').textContent;
   check('继续是追加而不是替换', after.startsWith(before) && after.length > before.length, `${before.length} 字 → ${after.length} 字`);
@@ -2851,7 +2879,7 @@ await scenario('消息：重新生成候选', async () => {
   //    但它画在 `setStreaming(true)` **之前**，所以单独用它也不够）+ 流式确实结束了。
   await waitFor(
     '生成完',
-    () => !!navOf(lastNode()) && byId('btn-send').disabled === false,
+    () => !!navOf(lastNode()) && byId('btn-send').getAttribute('data-mode') === 'send',
     10000
   );
   await sleep(250);
@@ -3208,7 +3236,7 @@ await scenario('给剧情配图（生图）', async () => {
   // 的断言（认的是「冒烟测试回复」）当场就不成立了。
   setValue('#input', '给这段剧情配张图吧');
   click('#btn-send');
-  await waitFor('回复完成', () => byId('btn-send').disabled === false, 10000);
+  await waitFor('回复完成', () => byId('btn-send').getAttribute('data-mode') === 'send', 10000);
   await sleep(300);
 
   check('没配生图时不显示「配图」', !actionsOf(lastAssistant()).includes('配图'), JSON.stringify(actionsOf(lastAssistant())));
@@ -4072,7 +4100,7 @@ await scenario('世界书：递归扫描', async () => {
   await waitFor('切回聊天视图', () => shown('#view-chat'));
   setValue('#input', '翁法罗斯到底是个什么样的地方？');
   click('#btn-send');
-  await waitFor('回复完成', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('回复完成', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
   await sleep(250);
 
   click('#btn-worldbooks');
@@ -5666,7 +5694,7 @@ await scenario('会话：分支与存档点', async () => {
   // --- 存完档再聊一条，然后读档退回去 ---
   setValue('#input', '这条是存完档之后聊的，读档应该把它退掉');
   click('#btn-send');
-  await waitFor('回复完成', () => byId('btn-send').disabled === false, 10000);
+  await waitFor('新一轮回复完成', () => $$('#messages .msg').length > 2 && byId('btn-send').getAttribute('data-mode') === 'send', 10000);
   // 落盘是防抖的（350ms），等久一点再读磁盘，否则读到的是上一步的快照
   await sleep(700);
 
@@ -5745,7 +5773,7 @@ await scenario('语义检索', async () => {
   await sleep(200);
   setValue('#input', '那些神到底是谁？');
   click('#btn-send');
-  await waitFor('回复完成', () => byId('btn-send').disabled === false, 12000);
+  await waitFor('回复完成', () => byId('btn-send').getAttribute('data-mode') === 'send', 12000);
   await sleep(400);
 
   // 负向对照：关掉之后不该再注入
@@ -5763,7 +5791,7 @@ await scenario('语义检索', async () => {
 
   setValue('#input', '关了语义检索之后再问一句，这句不该带往事');
   click('#btn-send');
-  await waitFor('回复完成', () => byId('btn-send').disabled === false, 12000);
+  await waitFor('回复完成', () => byId('btn-send').getAttribute('data-mode') === 'send', 12000);
   await sleep(400);
 });
 
@@ -6309,7 +6337,7 @@ await scenario('剧情选项', async () => {
   // --- 3) 发一条 → 回复里带选项 → 面板出现可点按钮 ---
   setValue('#input', '选项测试：随便说点什么');
   click('#btn-send');
-  await waitFor('回复完成', () => byId('btn-send').disabled === false, 12000);
+  await waitFor('回复完成', () => byId('btn-send').getAttribute('data-mode') === 'send', 12000);
   await sleep(300);
 
   // 剧情选项挂在最新一条 AI 回复的气泡下面（不在状态卡里）
@@ -6467,7 +6495,7 @@ await scenario('剧情选项', async () => {
   const inputEl = byId('input');
   inputEl.value = '';
   inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true, cancelable: true }));
-  await waitFor('回复完成', () => byId('btn-send').disabled === false, 12000);
+  await waitFor('回复完成', () => byId('btn-send').getAttribute('data-mode') === 'send', 12000);
   await sleep(300);
 
   // 点选项/按数字键都是「直接发送」，不该把选项文字写进输入框 —— 输入框保持原样（空）
@@ -8074,7 +8102,7 @@ await scenario('聊天：只思考不回答时给出提示', async () => {
   click('#btn-send');
 
   await waitFor('新回复出现', () => $$('#messages .msg').length >= beforeMsgs + 2, 8000);
-  await waitFor('流式状态结束', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式状态结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
 
   const assistant = $$('#messages .msg.assistant').pop();
   check('助手回复气泡存在', !!assistant);
@@ -8096,7 +8124,7 @@ await scenario('聊天：只思考不回答时给出提示', async () => {
   check('没有错误气泡', $$('#messages .msg.error').length === 0);
 
   // 流式正常结束，没卡住
-  check('发送按钮恢复可用', byId('btn-send').disabled === false);
+  check('发送按钮恢复可用', byId('btn-send').getAttribute('data-mode') === 'send');
 });
 
 // ---------------------------------------------------------------------------
@@ -8118,7 +8146,7 @@ await scenario('聊天：正文被截断时自动接着写完', async () => {
 
   await waitFor('新回复出现', () => $$('#messages .msg').length >= beforeMsgs + 2, 8000);
   // 自动续写会再发一次请求，得等它彻底停下来
-  await waitFor('流式状态结束（含自动续写）', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式状态结束（含自动续写）', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
   await sleep(400);
 
   const assistant = $$('#messages .msg.assistant').pop();
@@ -8150,7 +8178,7 @@ await scenario('聊天：正文被截断时自动接着写完', async () => {
   check('用量行标出了思考 token', usageText.includes('其中思考 6'), usageText);
 
   check('没有错误气泡', $$('#messages .msg.error').length === 0);
-  check('发送按钮恢复可用', byId('btn-send').disabled === false);
+  check('发送按钮恢复可用', byId('btn-send').getAttribute('data-mode') === 'send');
 });
 
 // ---------------------------------------------------------------------------
@@ -8166,7 +8194,7 @@ await scenario('聊天：截断续到上限后停下并提示', async () => {
   click('#btn-send');
 
   await waitFor('新回复出现', () => $$('#messages .msg').length >= beforeMsgs + 2, 8000);
-  await waitFor('流式状态结束（含两次自动续写）', () => byId('btn-send').disabled === false, 10000);
+  await waitFor('流式状态结束（含两次自动续写）', () => byId('btn-send').getAttribute('data-mode') === 'send', 10000);
   await sleep(400);
 
   const assistant = $$('#messages .msg.assistant').pop();
@@ -8206,7 +8234,7 @@ await scenario('设置：关掉自动续写后不再自己续', async () => {
   click('#btn-send');
 
   await waitFor('新回复出现', () => $$('#messages .msg').length >= beforeMsgs + 2, 8000);
-  await waitFor('流式状态结束', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式状态结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
   await sleep(400);
 
   const assistant = $$('#messages .msg.assistant').pop();
@@ -8243,7 +8271,7 @@ await scenario('聊天：思考挤掉正文时自动重试救回', async () => {
   click('#btn-send');
 
   await waitFor('新回复出现', () => $$('#messages .msg').length >= beforeMsgs + 2, 8000);
-  await waitFor('流式状态结束（含自动重试）', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式状态结束（含自动重试）', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
 
   const assistant = $$('#messages .msg.assistant').pop();
   check('助手回复气泡存在', !!assistant);
@@ -9592,7 +9620,7 @@ await scenario('角色：表情图按回复关键词切换', async () => {
   setValue('#input', '冒烟测试：表情');
   click('#btn-send');
   await waitFor('助手回复出现', () => $('#messages').textContent.includes('冒烟测试回复'), 8000);
-  await waitFor('流式状态结束', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式状态结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
 
   // 卡片在刷新时会被重建，每次都要重新拿一遍节点
   await waitFor('状态卡换上了表情图', () => {
@@ -9851,7 +9879,7 @@ await scenario('角色：表情图批量导入、默认脸与 emo 标签', async
   setValue('#input', '冒烟测试：表情标签');
   click('#btn-send');
   await waitFor('助手回复出现', () => $('#messages').textContent.includes('冒烟测试回复'), 8000);
-  await waitFor('流式状态结束', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式状态结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
 
   await waitFor(
     '状态卡换成了标签指定的那张',
@@ -10420,7 +10448,7 @@ await scenario('默认人设：按模型可编辑，并注入没绑卡的对话'
   setValue('#input', '你好');
   click('#btn-send');
   await waitFor('通用助手回复出现', () => $$('#messages .msg').length >= beforeMsgs + 2, 8000);
-  await waitFor('流式结束', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
 });
 
 await scenario('消息操作按钮：平时收起来、悬停才浮出', async () => {
@@ -10478,7 +10506,7 @@ await scenario('请求记录：列表、原文 JSON、清空', async () => {
   setValue('#input', MARK);
   click('#btn-send');
   await waitFor('这一轮回复出现', () => $$('#messages .msg').length >= beforeMsgs + 2, 8000);
-  await waitFor('流式结束', () => byId('btn-send').disabled === false, 8000);
+  await waitFor('流式结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
 
   // --- 1) 从「⋯」里打开，最新一条排在最前 ---
   await clickMoreItem('#btn-request-log');
@@ -11163,6 +11191,151 @@ await scenario('批量：角色库与世界书的选择态', async () => {
   click('#btn-wb-batch-exit');
   await sleep(100);
   check('世界书取消后也退干净', shown('#wb-batch-normal') && !shown('#wb-batch-active'));
+});
+
+// ---------------------------------------------------------------------------
+//  场景：消息导航条（右缘那一竖排轮次刻度）
+//  ⚠️ 它是按 DeepSeek Harness 的 turn rail 做的：**一轮一根**、等距 10px、
+//     框内自己滚。这里不验像素级位置（那要写死期望值、改一次样式就红），只验：
+//     有没有、条数对不对、等不等距、当前那根有没有、悬停卡片弹出/收起、点得动。
+// ---------------------------------------------------------------------------
+await scenario('消息导航条（轮次刻度）', async () => {
+  click('#convo-list .convo-item');
+  await waitFor('切回聊天视图', () => shown('#view-chat'));
+
+  const rail = byId('msg-rail');
+  check('#msg-rail 存在（index.html 里那个容器）', !!rail);
+
+  // 两轮以下不出现 —— 先把这个会话喂到够长（末尾场景，后面没人接着跑）
+  let guard = 0;
+  while ($$('#messages .msg').length < 5 && guard < 4) {
+    const before = $$('#messages .msg').length;
+    setValue('#input', `冒烟测试：导航条第 ${guard + 1} 句`);
+    click('#btn-send');
+    await waitFor('补一条消息', () => $$('#messages .msg').length >= before + 2, 8000);
+    await waitFor('这一轮流式结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
+    guard += 1;
+  }
+
+  const msgNodes = $$('#messages .msg');
+  check('会话里至少 5 条消息（两轮以下刻度按规矩隐藏）', msgNodes.length >= 5, `实际 ${msgNodes.length}`);
+  check('轮次够了，刻度条就显示出来', shown('#msg-rail'));
+
+  // 渲染完要等一帧：layout 是 requestAnimationFrame 排的，紧接着读会读到 0 高
+  await sleep(150);
+
+  const marks = $$('#msg-rail .msg-rail-mark');
+  // 轮数 = 开头的开场白（若有）算一轮 + 每条用户消息开一轮
+  let expectedTurns = 0;
+  msgNodes.forEach((node, index) => {
+    if (index === 0 || node.classList.contains('user')) expectedTurns += 1;
+  });
+  check(
+    '刻度数 = 轮数（你的一句 + 它后面的回复算一轮）',
+    marks.length === expectedTurns,
+    `刻度 ${marks.length} / 轮 ${expectedTurns} / 消息 ${msgNodes.length}`
+  );
+
+  // 位置：框竖着居中在消息区里，且不会高到吃掉整个对话
+  const railBox = rail.getBoundingClientRect();
+  const msgBox = byId('messages').getBoundingClientRect();
+  check(
+    '框竖着居中在消息区里',
+    Math.abs(railBox.top + railBox.height / 2 - (msgBox.top + msgBox.height / 2)) < 2,
+    `rail 中心=${(railBox.top + railBox.height / 2).toFixed(1)} / messages 中心=${(msgBox.top + msgBox.height / 2).toFixed(1)}`
+  );
+  check('框最高不超过 420px（再多就在框内滚）', railBox.height <= 421, `实际 ${railBox.height.toFixed(1)}`);
+
+  // 等距 10px：这是和「按真实高度比例」最本质的差别
+  const tops = marks.map((mark) => mark.offsetTop);
+  check(
+    '刻度等距排（10px 一档，不是按消息高度比例）',
+    tops.every((value, index) => index === 0 || value - tops[index - 1] === 10),
+    tops.join(',')
+  );
+
+  // 回到底部：发完消息本来就该在底部。隐藏窗口不保证自己派 scroll 事件，
+  // 这里手动派一次 —— 验的是「贴底时当前刻度是哪一根」，不是「浏览器会不会通知」。
+  const messagesEl = byId('messages');
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  messagesEl.dispatchEvent(new Event('scroll'));
+  await sleep(80);
+
+  // 当前那一轮：只许有一根，且贴底时是最后一轮
+  const active = marks.filter((mark) => mark.classList.contains('is-active'));
+  check('有且只有一根「当前」刻度', active.length === 1, active.length);
+  check(
+    '贴底时当前刻度是最后一轮',
+    marks[marks.length - 1].classList.contains('is-active'),
+    `当前=${marks.findIndex((mark) => mark.classList.contains('is-active'))} / 共 ${marks.length} 根`
+  );
+
+  // 看得见才算数：默认那根细条有颜色、不是全透明；当前这根更长更实。
+  // ⚠️ 隐藏窗口不推进过渡 —— 不先把 transition 关掉，量到的永远是过渡的**起点值**
+  //    （试过：active 和 idle 三项一模一样，正是 .4 / scaleX(.6) 那组起始样式）。
+  const noTransition = document.createElement('style');
+  noTransition.textContent = '#msg-rail .msg-rail-mark::before{transition:none !important}';
+  document.head.appendChild(noTransition);
+  const idleBar = getComputedStyle(marks[0], '::before');
+  const activeBar = getComputedStyle(active[0], '::before');
+  const idleStyle = {
+    color: idleBar.backgroundColor,
+    opacity: idleBar.opacity,
+    transform: idleBar.transform
+  };
+  const activeStyle = {
+    color: activeBar.backgroundColor,
+    opacity: activeBar.opacity,
+    transform: activeBar.transform
+  };
+  noTransition.remove();
+  check(
+    '刻度有可见的颜色和透明度',
+    idleStyle.color !== 'rgba(0, 0, 0, 0)' && Number(idleStyle.opacity) >= 0.3,
+    `${idleStyle.color} @ opacity=${idleStyle.opacity}`
+  );
+  check(
+    '当前刻度比其它刻度更长更实（100% / 最不透明）',
+    Number(activeStyle.opacity) > Number(idleStyle.opacity) &&
+      activeStyle.color !== idleStyle.color &&
+      activeStyle.transform !== idleStyle.transform,
+    `active=${activeStyle.color} @ ${activeStyle.opacity} ${activeStyle.transform} / idle=${idleStyle.color} @ ${idleStyle.opacity} ${idleStyle.transform}`
+  );
+
+  // 悬停浮层：你的话 + 回复摘要，贴在刻度条左边（不能盖住正文）
+  marks[0].dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+  await waitFor('悬停后卡片出现', () => shown('#msg-rail .msg-rail-preview'));
+  const preview = $('#msg-rail .msg-rail-preview');
+  check('卡片里有内容（你那句话 / 回复摘要）', preview.textContent.trim().length > 0, preview.textContent);
+  check(
+    '卡片贴在刻度条左边，不压正文',
+    preview.getBoundingClientRect().right <= railBox.left + 1,
+    `card right=${preview.getBoundingClientRect().right.toFixed(1)} rail left=${railBox.left.toFixed(1)}`
+  );
+  $('#msg-rail .msg-rail-scroller').dispatchEvent(new PointerEvent('pointerleave'));
+  await waitFor('鼠标移开后卡片收起', () => !shown('#msg-rail .msg-rail-preview'));
+
+  // 滚到顶上，「当前刻度」要跟着换成第一轮
+  messagesEl.scrollTop = 0;
+  messagesEl.dispatchEvent(new Event('scroll'));
+  await sleep(80);
+  check(
+    '滚到顶上时当前刻度换成第一轮',
+    marks[0].classList.contains('is-active'),
+    `当前=${marks.findIndex((mark) => mark.classList.contains('is-active'))}`
+  );
+
+  // 点刻度能不能跳到那一轮的开头。
+  // ⚠️ 不断言 scrollTop：冒烟窗口是隐藏的，Chromium 不推进平滑滚动动画，
+  //    这里等多久 scrollTop 都不会动 —— 那是测试环境的限制，不是功能坏了。
+  //    改验同步副作用：jumpTo 命中目标后会给那条消息挂 .msg-rail-flash。
+  const lastMark = marks[marks.length - 1];
+  const lastIndex = Number(lastMark.dataset.index);
+  const target = $(`#messages .msg[data-index="${lastIndex}"]`);
+  check('最后一根刻度指得到真实的消息节点', !!target, `data-index=${lastIndex}`);
+  click(lastMark);
+  check('点刻度命中了那一轮的开头消息（落点会闪一下）', !!target && target.classList.contains('msg-rail-flash'));
+  check('点完当前刻度也跟着切过去', lastMark.classList.contains('is-active'));
 });
 
 return { results, notes, hoverProbe };

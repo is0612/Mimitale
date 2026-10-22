@@ -14,15 +14,38 @@ import { entityTone } from '../ui/avatarTone.js';
 import { characterForConvo, convoWorldbookIds, worldbookById } from '../data/library.js';
 import { convoPlayer, convoUserName, userName, speakerName, assistantName } from '../data/cast.js';
 import { cleanAssistantText, convoFieldDisplayNames, panelGroupNames } from '../data/panel.js';
-import { scrollToBottom } from './stream.js';
+import { scrollToBottom, isFollowingBottom } from './stream.js';
 import { buildMessageImages, illustrateMessage } from './chatImages.js';
 import { requestMoreOptions, pickOption, closeOptions } from './suggestionsUi.js';
 import { switchVariant, editMessage, regenerateFrom, continueLastMessage } from './composer.js';
 import { removeMessage, branchFromMessage } from './convoActions.js';
 import { openStateCard } from './stateCard.js';
+import { renderMsgRail } from './msgRail.js';
 
 /** 正在生成开局的那个会话 id；同一时间只允许一个 */
 let openingBusyId = null;
+let renderedConvoId = null;
+const nodeMessages = new WeakMap();
+
+// 仅全量重绘时量位置；流式逐帧绘制不走这条路径。
+function captureReadingPosition(convo) {
+  const box = el.messages;
+  const position = { top: box.scrollTop, anchor: null, offset: 0 };
+  const remaining = new Set(convo.messages || []);
+  const top = box.getBoundingClientRect().top + box.clientTop;
+  for (const node of box.children) {
+    const message = nodeMessages.get(node);
+    if (!message) continue;
+    const rect = node.getBoundingClientRect();
+    // 当前可见消息被删时，选它之后第一个仍存在的消息，保留其屏幕偏移。
+    if (rect.bottom > top && remaining.has(message)) {
+      position.anchor = message;
+      position.offset = rect.top - top;
+      break;
+    }
+  }
+  return position;
+}
 
 /** 消息头右端的时间（24 小时制，22:41）。读不到 at 就返回空串，不要用 new Date() 编一个假的。 */
 function formatClock(at) {
@@ -199,7 +222,8 @@ function buildOptionsBlock(options) {
 /** 一条消息的工具条上**常显**哪几颗，按这个数组的次序从左到右排。
  *  不在表里的（复制 / 重新生成 / 配图 / 删除 / 分支）一律收进「⋯」。
  *  「继续」「帮我想想」只对最后一条生成，所以中间的消息上只挂「编辑」+「⋯」。 */
-const VISIBLE_BTNS = ['继续', '编辑', '帮我想想'];
+const VISIBLE_BTNS = ['继续', '重新生成', '帮我想想', '重试'];
+const EXTRA_BTNS = ['复制', '编辑', '删除', '分支', '配图'];
 
 function messageNode(message, index, character, labels, ctx) {
   const isUser = message.role === 'user';
@@ -370,9 +394,9 @@ function messageNode(message, index, character, labels, ctx) {
     body.appendChild(buildOptionsBlock(ctx.options));
   }
 
-  // 操作按钮：常显「继续 / 编辑 / 帮我想想」，其余（复制 / 重新生成 / 配图 / 删除 / 分支）收进「⋯」。
+  // 操作按钮：常显「继续 / 重新生成 / 帮我想想」；「⋯」依次为复制、编辑、删除、分支、配图。
   // ⚠️ 收的是**视觉**不是 DOM：低频按钮仍在 .msg-actions 里（display:none），冒烟按 `.mini-btn` 文字找按钮。
-  // ⚠️ 常显三颗按 VISIBLE_BTNS 的次序排，不跟随下面的创建顺序（创建顺序是 编辑 → 继续 → 帮我想想）。
+  // ⚠️ 常显操作按 VISIBLE_BTNS 的次序排，不跟随下面的创建顺序。
   const actions = document.createElement('div');
   actions.className = 'msg-actions';
   const direct = [];
@@ -400,7 +424,7 @@ function messageNode(message, index, character, labels, ctx) {
     edit.title = '直接改这条消息的内容';
     edit.setAttribute('aria-label', '编辑这条消息');
     edit.addEventListener('click', () => editMessage(index));
-    direct.push(edit);
+    extras.push(edit);
   }
 
   if (!isUser) {
@@ -410,7 +434,7 @@ function messageNode(message, index, character, labels, ctx) {
     regen.title = isError ? '重新发送上一条消息' : '重新生成这条回复';
     regen.setAttribute('aria-label', isError ? '重新发送上一条消息' : '重新生成这条回复');
     regen.addEventListener('click', () => regenerateFrom(index));
-    extras.push(regen);
+    direct.push(regen);
 
     // 「继续」只对最后一条有意义 —— 中间的回复后面早就接上别的话了
     const isLast = index === ctx.lastIndex;
@@ -469,16 +493,13 @@ function messageNode(message, index, character, labels, ctx) {
     extras.push(branch);
   }
 
-  // 常显的按 VISIBLE_BTNS 的次序排 —— 创建顺序是 编辑 → 继续 → 帮我想想，直接 append 会排出「编辑」在最前
+  // 展示顺序独立于按钮创建顺序。
   const rankOf = (btn) => {
     const i = VISIBLE_BTNS.indexOf(btn.textContent.trim());
     return i === -1 ? VISIBLE_BTNS.length : i;
   };
   direct.sort((a, b) => rankOf(a) - rankOf(b));
-
-  // 一颗常显的都没有时（比如报错消息上只剩「重试」），把「⋯」里排最前的提上来 ——
-  // 不然那条消息的工具条上只剩一颗「⋯」，等于什么都点不到。
-  if (!direct.length && extras.length) direct.push(extras.shift());
+  extras.sort((a, b) => EXTRA_BTNS.indexOf(a.textContent.trim()) - EXTRA_BTNS.indexOf(b.textContent.trim()));
 
   direct.forEach((btn) => actions.appendChild(btn));
   appendExtras(actions, extras);
@@ -520,7 +541,10 @@ export function renderMessages(options) {
   const opts = options || {};
   const convo = activeConvo();
   const character = characterForConvo(convo);
-  el.messages.innerHTML = '';
+  const sameConvo = !!convo && convo.id === renderedConvoId;
+  const follow = !!opts.forceScroll || !sameConvo || isFollowingBottom();
+  const position = !follow ? captureReadingPosition(convo) : null;
+  renderedConvoId = convo ? convo.id : null;
 
   if (!convo || !Array.isArray(convo.messages) || !convo.messages.length) {
     const empty = document.createElement('div');
@@ -562,8 +586,10 @@ export function renderMessages(options) {
     `;
     }
 
-    el.messages.appendChild(empty);
+    el.messages.replaceChildren(empty);
     scrollToBottom(true);
+    // 空会话要把刻度条收掉 —— 消息区刚被清空，上面那排刻度还指着已经不存在的消息
+    renderMsgRail();
     return;
   }
 
@@ -598,13 +624,31 @@ export function renderMessages(options) {
   const frag = document.createDocumentFragment();
   // 跨天时插日期分隔；第一条前面也插（「今天 · 第 1 轮」是这一段抬头，不是两条之间的东西）。
   let lastDay = null;
+  let anchorNode = null;
   convo.messages.forEach((message, index) => {
     const day = dayKeyOf(message.at);
     if (day && day !== lastDay) frag.appendChild(dateSeparator(message, index));
     if (day) lastDay = day;
-    frag.appendChild(messageNode(message, index, character, labels, ctx));
+    const node = messageNode(message, index, character, labels, ctx);
+    nodeMessages.set(node, message);
+    if (position && message === position.anchor) anchorNode = node;
+    frag.appendChild(node);
   });
-  el.messages.appendChild(frag);
+  // 离线构建后一次替换，减少空列表阶段及已挂载树的样式失效。
+  el.messages.replaceChildren(frag);
 
-  scrollToBottom(!!opts.forceScroll);
+  if (position) {
+    const box = el.messages;
+    box.scrollTop = position.top;
+    if (anchorNode) {
+      const offset = anchorNode.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientTop;
+      box.scrollTop += offset - position.offset;
+    }
+  } else {
+    scrollToBottom(true);
+  }
+
+  // 右缘那条导航刻度：必须在消息节点进 DOM 之后重建 —— 它靠量真实高度算每条的纵向位置
+  renderMsgRail();
+
 }

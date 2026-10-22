@@ -26,6 +26,12 @@ import { renderMarkdown } from '../ui/markdown.js';
 // 用户自己往上翻看历史时，不要被流式输出拽回底部
 let userReadingHistory = false;
 
+export function isFollowingBottom() {
+  const box = el.messages;
+  return !userReadingHistory &&
+    box.scrollHeight - box.scrollTop - box.clientHeight < CONFIG.SCROLL_BOTTOM_THRESHOLD;
+}
+
 export function scrollToBottom(force) {
   if (force) userReadingHistory = false;
   if (userReadingHistory) return;
@@ -86,7 +92,14 @@ export const streamPainter = (() => {
 
 /** 绑「用户在看历史就别自动跟随」这一段（挂在消息区上，只绑一次） */
 export function initStreamFollow() {
-  // 滚轮往上滑 = 用户在读历史，暂停自动跟随
+  // 读取事件发生时的最终位置：覆盖拖动滚动条、键盘、触摸和导航跳转。
+  // 程序拉底 / 重绘恢复也会发 scroll；它们已完成后再量，不按事件来源锁住跟随。
+  el.messages.addEventListener('scroll', () => {
+    const box = el.messages;
+    userReadingHistory = box.scrollHeight - box.scrollTop - box.clientHeight >= CONFIG.SCROLL_BOTTOM_THRESHOLD;
+  }, { passive: true });
+
+  // 向上滚轮先暂停，避免浏览器真正滚动前到来的流式帧把用户拉回底部。
   el.messages.addEventListener(
     'wheel',
     (event) => {

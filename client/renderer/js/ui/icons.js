@@ -10,6 +10,7 @@ const ICONS = {
   'panel-right': '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   'arrow-up': '<path d="M12 19V5m-6 6 6-6 6 6"/>',
+  square: '<rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor" stroke="none"/>',
   // ⚠️ 尖角而不是 `M19 12H5` 那种带横杆的：14px 下横杆拉得老长、箭头糊成一个「←」字符
   'chevron-left': '<path d="m15 18-6-6 6-6"/>',
   ellipsis: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',

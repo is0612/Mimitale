@@ -276,6 +276,18 @@ function normalizeUsage(usage) {
   return usage;
 }
 
+/** 把服务商塞在响应里的 error 对象/字符串翻译成可读错误：错误帧里通常带真实原因
+ *  （额度、权限、模型名），只说「稍后重试」会把排查线索吞掉。 */
+function describeProviderError(err) {
+  if (typeof err === 'string') return `模型服务返回错误：${err}`;
+  const inner = err && typeof err === 'object' ? (err.error || err) : null;
+  const message = inner && (inner.message || inner.msg || inner.text);
+  const code = inner && (inner.code || inner.status || inner.type);
+  const head = code !== undefined && code !== null && code !== '' ? `模型服务返回错误（${code}）：` : '模型服务返回错误：';
+  if (message) return `${head}${message}`;
+  try { return `${head}${JSON.stringify(err)}`; } catch { return head + '（无法解析的错误内容）'; }
+}
+
 /** 流式对话：SSE 逐块解析，通过 onDelta 交出增量，返回 { content, reasoning, usage, finishReason }。
  *  ⚠️ finishReason 是权威收尾信号（'length' 真截断 / 'stop' 模型自己写完），少了上层只能靠「正文为空」猜，
  *     猜错就会把「模型没落笔」说成「额度用光」。onRequest 在请求真正发出前回调一次。 */
@@ -400,6 +412,11 @@ function streamChat({ settings, messages, onDelta, onReasoning, signal, onReques
         if (data === '[DONE]') return true;
         let json;
         try { json = JSON.parse(data); } catch (err) { return false; }
+        // 错误帧：HTTP 200 也可能包着 provider 的真实错误（额度 / 权限 / 模型名），必须 reject 而不是当增量吞掉。
+        if (json.error) {
+          settle(new Error(describeProviderError(json.error)));
+          return true;
+        }
         if (json.usage) usage = json.usage;
         const choice = json.choices && json.choices[0];
         if (!choice) return false;
@@ -427,18 +444,29 @@ function streamChat({ settings, messages, onDelta, onReasoning, signal, onReques
           const line = buffer.slice(0, index);
           buffer = buffer.slice(index + 1);
           if (handleLine(line)) {
-            // DONE 是流协议的终止标记，不能等待服务端关闭 keep-alive 连接。
+            // 终止标记（DONE 或错误帧）：不能等待服务端关闭 keep-alive 连接。
             buffer = '';
-            finish();
+            // 错误帧已在 handleLine 里 settle；这里只在仍是成功路径时收尾。
+            if (!settled) finish();
             res.destroy();
             return;
           }
         }
       });
       res.on('end', () => {
-        if (!settled && buffer && handleLine(buffer)) finish();
-        else if (!settled && !content && !reasoning) settle(new Error('接口没有返回任何内容。可能是模型名不对，或该模型不支持流式输出。'));
-        else finish();
+        if (settled) return;
+        if (buffer && handleLine(buffer)) {
+          if (!settled) finish();
+          return;
+        }
+        // 部分服务商发 finish_reason 后直接 EOF，不发 [DONE]；它也是权威终止标记。
+        if (finishReason) { finish(); return; }
+        if (!content && !reasoning) {
+          settle(new Error('接口没有返回任何内容。可能是模型名不对，或该模型不支持流式输出。'));
+          return;
+        }
+        // 有 partial 不等于生成成功：EOF 没有 DONE / finish_reason 可能是上游中断。
+        settle(new Error('流式响应意外结束：服务端未发送 [DONE] 或 finish_reason，已收到的部分内容未视为成功。'));
       });
       res.on('aborted', () => settle(new Error('接口响应被中止。')));
       res.on('error', failResponse);

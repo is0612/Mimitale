@@ -1921,6 +1921,199 @@ body.pad-dragging {
   border: 0;
 }
 
+/* ------------------------------ 消息导航条（轮次刻度） ------------------------------ */
+/* 对齐 DeepSeek Harness 的 turn rail：一根刻度 = 一轮（你的一句 + 回复），等距排，
+   框竖着居中在消息区里；轮数多到框里装不下时框内自己滚，两端渐隐。
+   位置 / 高度由 views/msgRail.js 现算，这里只管长相。
+   ⚠️ 别给 .msg-rail 写死 top / height —— 场景栏换行、输入框长高都会改消息区边界。 */
+.msg-rail {
+  /* 可见那根细条的长度 = 右侧留白（默认 20 / 最小 12）扣掉两端的缝。
+     这样它正好落在「正文右边界 → 滚动条」这段空地里，内缩拖到最窄也不压字。 */
+  --msg-rail-bar: clamp(8px, calc(var(--chat-pad-right, 20px) - 2px), 20px);
+  position: absolute;
+  right: 10px; /* 紧贴滚动条左边，不盖滚动条 */
+  width: 20px; /* 只有刻度的点击区这么宽；框本身不吃鼠标 */
+  z-index: 40; /* 低于顶栏（45），高于消息正文 */
+  pointer-events: none;
+}
+
+/* 框内滚动：滚轮停在条上滚的是刻度，不是正文（overscroll 别传给正文）。
+   装得下的时候把 overflow 关掉 —— 否则这 20px 会变成一个「滚轮不响应」的死区。 */
+.msg-rail-scroller {
+  max-height: 100%;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  pointer-events: auto;
+}
+
+/* 轮数多到装不下才真的接管滚轮 */
+.msg-rail-scroller.is-scrollable {
+  overflow-y: auto;
+}
+
+.msg-rail-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* 还能往上 / 往下滚时，那一端淡出 —— 提示这里还有刻度 */
+.msg-rail-scroller.is-fade-top {
+  mask-image: linear-gradient(transparent 0, #000 24px 100%);
+}
+
+.msg-rail-scroller.is-fade-bottom {
+  mask-image: linear-gradient(#000 0 calc(100% - 24px), transparent 100%);
+}
+
+.msg-rail-scroller.is-fade-top.is-fade-bottom {
+  mask-image: linear-gradient(transparent 0, #000 24px calc(100% - 24px), transparent 100%);
+}
+
+.msg-rail-marks {
+  position: relative;
+}
+
+/* 一根刻度：整行（10px 高）都是点击区，看得见的只有右端那根 2px 细条。
+   默认 60% 长、半透明；悬停 90%；当前这一轮 100% 且最实。 */
+.msg-rail-mark {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.msg-rail-mark::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: var(--msg-rail-bar);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text-faint);
+  opacity: 0.4;
+  transform: translateY(-50%) scaleX(0.6);
+  transform-origin: 100% 50%;
+  transition:
+    transform 0.14s,
+    background-color 0.14s,
+    opacity 0.14s;
+}
+
+.msg-rail-mark:hover::before,
+.msg-rail-mark.is-preview::before {
+  background: var(--text-dim);
+  opacity: 0.9;
+  transform: translateY(-50%) scaleX(0.9);
+}
+
+.msg-rail-mark.is-active::before {
+  background: var(--text);
+  opacity: 1;
+  transform: translateY(-50%) scaleX(1);
+}
+
+.msg-rail-mark:focus-visible {
+  outline: none;
+}
+
+.msg-rail-mark:focus-visible::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: var(--msg-rail-bar);
+  border-radius: 2px;
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* 悬停浮出的卡片：你那句话 1 行 + 回复摘要 3 行，贴在框左边。
+   纵向跟着悬停那根刻度走（--msg-rail-preview-center 由 JS 写），clamp 把卡片
+   夹在框里 —— 贴顶 / 贴底那几根也不会飘到外面去。 */
+.msg-rail-preview {
+  position: absolute;
+  top: clamp(0px, calc(var(--msg-rail-preview-center, 0px) - 50px), calc(100% - 100px));
+  right: calc(100% + 10px);
+  z-index: 1;
+  box-sizing: border-box;
+  width: var(--msg-rail-preview-w, 300px);
+  max-height: 100px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  pointer-events: none;
+  overflow: hidden;
+  transition: top 0.14s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: msg-rail-preview-in 0.12s ease-out;
+}
+
+.msg-rail-preview-prompt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.msg-rail-preview-reply {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+@keyframes msg-rail-preview-in {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-rail-mark::before,
+  .msg-rail-preview {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* 跳转落点：闪一下描边，不然几千像素跳过去不知道落在哪条上 */
+@keyframes msg-rail-flash {
+  0% {
+    box-shadow: 0 0 0 2px var(--accent-border-soft);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+
+.msg-rail-flash {
+  border-radius: var(--radius);
+  animation: msg-rail-flash 0.9s ease-out;
+}
+
 /* ------------------------------ 弹窗外壳（通用） ------------------------------ */
 .modal {
   position: fixed;

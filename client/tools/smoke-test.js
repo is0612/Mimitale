@@ -884,7 +884,12 @@ function registerStubs() {
   ipcMain.handle('pet:window:setVisible', () => ({ ok: true, visible: true }));
 
   // --- 聊天：假装模型回了一句话，并且真的走一遍流式通道 ---
-  ipcMain.handle('chat:stop', () => true);
+  const slowChatRequests = new Map();
+  ipcMain.handle('chat:stop', (_event, requestId) => {
+    const cancel = slowChatRequests.get(requestId);
+    if (cancel) cancel();
+    return true;
+  });
   // 「请求记录」：读/清都走真模块（main/request-log.js），只是没真的发网络请求
   ipcMain.handle('chat:requests', () => ({ entries: listRequests(), max: MAX_LOGGED_REQUESTS }));
   ipcMain.handle('chat:requests:clear', () => {
@@ -945,6 +950,26 @@ function registerStubs() {
     const retryNudged = isRetryNudge(turn);
     const continuedNudged = isContinueNudge(turn);
     const panelNudged = isPanelNudge(turn);
+
+    // Cancellable slow stream for navigation + merged send/stop regression; never calls a real model.
+    if (turn.includes('[NAV_STOP_TEST]')) {
+      return await new Promise((resolve) => {
+        let count = 0;
+        let content = '';
+        const finish = (stopped) => {
+          clearInterval(timer);
+          slowChatRequests.delete(requestId);
+          resolve(stopped ? { ok: false, error: '已停止生成。' } : { ok: true, content, finishReason: 'stop' });
+        };
+        const timer = setInterval(() => {
+          const text = `测试分片${++count}。`;
+          content += text;
+          event.sender.send('chat:chunk', { requestId, text });
+          if (count >= 80) finish(false);
+        }, 150);
+        slowChatRequests.set(requestId, () => finish(true));
+      });
+    }
 
     // 「AI 生成角色」：它和聊天共用 chat:send，靠 system 里的特征串认出来。
     // 用 system 而不是 user 是因为那两段的 user 文案由调用方拼，容易改；
@@ -4601,6 +4626,47 @@ app.whenReady().then(async () => {
             if (hint) hint.textContent = '分隔 ' + sep + ' / 消息 ' + msg + ' / 抓手 ' + handle;
           }
 
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 消息导航条（右缘轮次刻度，对齐 DSH 的 turn rail）：普通截图里只有一排细条，
+        // 「当前那根更长更实」「悬停卡片长什么样」光看断言没用 —— 所以这里发三轮，
+        // 再手动触发一次 pointerover 把卡片钉在屏幕上（截图里没有鼠标）。
+        // ⚠️ 模板字符串：注释里不能有反引号，也不能有美元花括号。
+        msgNav: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+
+          $('#btn-chars')?.click();
+          await nap(550);
+          const card = $$('#char-page-grid .char-card').find(c => {
+            const n = c.querySelector('.char-card-name');
+            return n && n.textContent.trim() === '属性测试角色';
+          });
+          const go = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '聊天');
+          if (go) { go.click(); await nap(700); }
+          if (!$('#player-modal')?.classList.contains('hidden')) {
+            $('#btn-start-play')?.click();
+            await nap(600);
+          }
+
+          const send = async (text) => {
+            const input = $('#input');
+            if (!input) return;
+            input.value = text;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            $('#btn-send')?.click();
+            await nap(2400);
+          };
+          await send('第一轮：导航条要两根以上刻度才出现。');
+          await send('第二轮：现在能看出等距的刻度和「当前这一轮」了。');
+          await send('第三轮：这一句写长一点，好看清悬停卡片里那句摘要怎么截。');
+
+          // 悬停卡片：手动派一个 pointerover，卡片会一直留在图上（没有真实指针去移开它）
+          const marks = $$('#msg-rail .msg-rail-mark');
+          if (marks.length > 1) {
+            marks[1].dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+            await nap(400);
+          }
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 收起态的**图标轨**（设计稿屏 2）：点一下收起按钮，然后拍左栏那 52px。
         // ⚠️ 这个场景是 2026-10-12 晚补的 —— 那之前收起态是一条**空条**

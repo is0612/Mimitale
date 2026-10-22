@@ -109,7 +109,6 @@
               <button id="btn-clear" class="menu-item menu-item-danger" type="button" role="menuitem">清空对话</button>
             </div>
           </div>
-          <m-button id="btn-stop" variant="danger" size="sm" class="hidden" aria-label="停止生成回复">停止生成</m-button>
         </div>
       </header>
 
@@ -117,6 +116,13 @@
       <div id="scene-context" class="scene-context" aria-label="当前故事场景"></div>
 
       <section id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions"></section>
+
+      <!-- 消息导航条：右缘那一竖排轮次刻度，点一下跳到那一轮（见 views/msgRail.js）。
+           它是 .chat-col 的绝对定位子节点，框的 top / height 由 JS 按 .messages 的实际边界现算 ——
+           ⚠️ 不要用 CSS 固定值：上面那条场景栏会换行、下面输入框会长高，写死了迟早对不上。
+           浮在滚动条左边（right:10px），细条长度跟着右侧内缩走，不挤压正文。
+           里面的滚动容器 / 刻度 / 悬停卡片都由 JS 建 —— 条数随会话变。 -->
+      <div id="msg-rail" class="msg-rail hidden" role="navigation" aria-label="消息导航"></div>
 
       <footer class="composer">
         <!-- 「帮我想想」的结果不在这里 —— 它和自动剧情选项是同一块（.msg-options，
@@ -137,7 +143,7 @@
           <m-textarea id="input" rows="2" placeholder="写下你的回应，让故事继续……" aria-label="输入消息"></m-textarea>
           <div class="compose-tools">
             <span class="writing-mode">故事，由你续写</span>
-            <m-button id="btn-send" variant="primary" class="btn-send" data-icon="arrow-up" title="发送回应" aria-label="发送消息"></m-button>
+            <m-button id="btn-send" variant="primary" class="btn-send" data-mode="send" data-icon="arrow-up" title="发送回应" aria-label="发送消息"></m-button>
           </div>
         </div>
         <div class="composer-hint">

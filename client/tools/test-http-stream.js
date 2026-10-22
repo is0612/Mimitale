@@ -81,6 +81,21 @@ test.before(async () => {
     } else if (route === 'success-end') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       res.end(`${sse({ choices: [{ delta: { content: 'complete' }, finish_reason: 'stop' }] })}data: [DONE]\n\n`);
+    } else if (route === 'partial-error') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`${sse({ choices: [{ delta: { content: 'partial' } }] })}${sse({ error: { message: 'quota exceeded', code: 'insufficient_quota' } })}`);
+    } else if (route === 'error-only') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(sse({ error: { message: 'invalid model', type: 'model_error' } }));
+    } else if (route === 'partial-eof') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(sse({ choices: [{ delta: { content: 'partial' } }] }));
+    } else if (route === 'finish-no-done') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(sse({ choices: [{ delta: { content: 'complete' }, finish_reason: 'stop' }] }));
+    } else if (route === 'done') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`${sse({ choices: [{ delta: { content: 'done' } }] })}data: [DONE]\n\n`);
     }
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -92,9 +107,9 @@ test.after(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-const call = (route, deadlineMs = 1000, signal, progressTimeoutMs = 60000) => streamChat({
+const call = (route, deadlineMs = 1000, signal, progressTimeoutMs = 60000, onDelta) => streamChat({
   settings: { baseUrl: `${base}/${route}`, apiKey: 'test-only', model: 'test' },
-  messages: [], deadlineMs, signal, progressTimeoutMs
+  messages: [], deadlineMs, signal, progressTimeoutMs, onDelta
 });
 
 test('DONE立即完成，即使服务端保持心跳连接', async () => {
@@ -200,4 +215,29 @@ test('正常结束流解析结果正确', async () => {
   const result = await call('success-end');
   assert.equal(result.content, 'complete');
   assert.equal(result.finishReason, 'stop');
+});
+
+test('partial后收到SSE provider error时带真实错误reject', async () => {
+  let partial = '';
+  await assert.rejects(call('partial-error', 1000, undefined, 0, (delta) => { partial += delta; }), /quota exceeded/);
+  assert.equal(partial, 'partial');
+});
+
+test('仅有SSE provider error帧时reject真实错误', async () => {
+  await assert.rejects(call('error-only', 1000, undefined, 0), /invalid model/);
+});
+
+test('partial后正常EOF但没有DONE或finish_reason时reject', async () => {
+  await assert.rejects(call('partial-eof', 1000, undefined, 0), /意外结束.*未发送.*finish_reason/);
+});
+
+test('finish_reason无DONE时正常成功', async () => {
+  const result = await call('finish-no-done', 1000, undefined, 0);
+  assert.equal(result.content, 'complete');
+  assert.equal(result.finishReason, 'stop');
+});
+
+test('DONE标记正常成功', async () => {
+  const result = await call('done', 1000, undefined, 0);
+  assert.equal(result.content, 'done');
 });

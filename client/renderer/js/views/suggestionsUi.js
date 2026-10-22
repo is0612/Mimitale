@@ -26,6 +26,7 @@ import {
   parseSuggestions
 } from '../data/suggestions.js';
 import { refreshAll } from './refresh.js';
+import { convoDerivedRequestVersion } from '../data/convoState.js';
 
 let actions = { send: () => {}, setOptionsLoading: () => {} };
 
@@ -117,6 +118,16 @@ export async function requestMoreOptions(convo, { trigger = null, tag = 'options
   }
 
   pendingConvoId = convo.id;
+  const version = convoDerivedRequestVersion(convo);
+  const historySnapshot = convo.messages.map((message) => ({ message, role: message.role, content: message.content, at: message.at }));
+  const optionsSnapshot = JSON.stringify(convo.options || []);
+  const isCurrent = () => activeConvo() === convo && state.conversations.includes(convo) &&
+    !state.streaming && convoDerivedRequestVersion(convo) === version &&
+    JSON.stringify(convo.options || []) === optionsSnapshot &&
+    convo.messages.length === historySnapshot.length && historySnapshot.every((entry, index) => {
+      const message = convo.messages[index];
+      return message === entry.message && message.role === entry.role && message.content === entry.content && message.at === entry.at;
+    });
 
   try {
     // 骨架屏在这里统一画：两个入口走的是同一个动作，反馈不该一个有、一个没有。
@@ -128,7 +139,9 @@ export async function requestMoreOptions(convo, { trigger = null, tag = 'options
 
     // 复用 buildApiMessages（带人设 / 世界书 / 面板），否则模型只看到一截裸对话
     const worldbook = await matchWorldbookSections(convo);
+    if (!isCurrent()) return false;
     const ragSection = await recallSection(convo);
+    if (!isCurrent()) return false;
     const messages = buildApiMessages(convo, worldbook, ragSection);
     messages.push({ role: 'user', content: optionsRequestInstruction(convo) });
 
@@ -139,6 +152,7 @@ export async function requestMoreOptions(convo, { trigger = null, tag = 'options
       messages
     });
 
+    if (!isCurrent()) return false;
     if (!response || response.ok !== true) {
       throw new Error((response && response.error) || failText);
     }
@@ -153,8 +167,7 @@ export async function requestMoreOptions(convo, { trigger = null, tag = 'options
     }
 
     // ⚠️ 请求期间用户可能切走会话，写回前确认还是这一个
-    const current = activeConvo();
-    if (!current || current.id !== convo.id) return false;
+    if (!isCurrent()) return false;
 
     convo.options = items;
     // 不落盘的话，生成完直接关窗口，这批选项在磁盘上就不存在
@@ -162,6 +175,7 @@ export async function requestMoreOptions(convo, { trigger = null, tag = 'options
     refreshAll();
     return true;
   } catch (err) {
+    if (!isCurrent()) return false;
     convo.options = previous;
     showToast((err && err.message) || `${failText}，稍后再试`, 'error');
     return false;

@@ -14,33 +14,46 @@ function harness() {
   const state = { conversations: [convo, other], activeId: 'a', streaming: false, requestId: null, requestTarget: null, settings: {} };
   const world = deferred();
   const confirm = deferred();
-  let sends = 0, confirmations = 0;
+  const sendAttrs = {};
+  const sendIcon = { outerHTML: '' };
+  let sends = 0, confirmations = 0, renders = 0, shownViews = [];
   const ctx = vm.createContext({
-    state, console, CONFIG: {}, now: () => 1, uid: (() => { let n = 0; return () => `req-${++n}`; })(),
+    state, console, setTimeout, clearTimeout, setInterval, clearInterval, structuredClone,
+    CONFIG: {}, now: () => 1, uid: (() => { let n = 0; return () => `req-${++n}`; })(),
+    iconHtml: (name) => `<svg class="field-icon">${name}</svg>`,
     activeConvo: () => state.conversations.find(c => c.id === state.activeId),
-    el: { btnStop: { classList: { toggle() {} } }, btnSend: {}, input: { focus() {} }, messages: { querySelector: () => null } },
+    el: { btnSend: { disabled: false, attrs: sendAttrs, setAttribute(name, value) { this.attrs[name] = value; }, getAttribute(name) { return this.attrs[name] || null; }, querySelector: () => sendIcon }, input: { focus() {} }, messages: { querySelector: () => null } },
     ensureConvoEndpoint: () => ({ provider: { id: 'p', apiKey: 'k' }, model: 'm' }), isBridgeProvider: () => false,
-    showToast() {}, openSettings() {}, renderAll() {}, persistConversations() {},
+    showToast() {}, openSettings() {}, renderAll() { renders++; }, persistConversations() {},
     matchWorldbookSections: () => world.promise, recallSection: async () => '',
     buildApiMessages: () => [], characterContextForConvo: () => '', effectiveSampling: () => ({}),
     api: { sendChat: async () => { sends++; return { ok: true, content: 'reply' }; }, stopChat: async () => {} },
     streamPainter: { stop() {} }, syncConvoPanel() {}, syncConvoOptions() {}, syncPlayerNameFromPanel() {},
     convoPanelFields: () => [], maybeSummarize: async () => {}, maybePetAutoSpeak: async () => {},
-    confirmDialog: () => { confirmations++; return confirm.promise; }, resetPetTurns() {}, showView() {},
+    confirmDialog: () => { confirmations++; return confirm.promise; }, resetPetTurns() {}, showView(view) { shownViews.push(view); },
     shiftSummariesForRemoval() {}, invalidateSummariesForEdit() {},
+    rebuildConvoDerivedState() {}, invalidateConvoDerivedRequests() {},
+    beginConversationReplacement() {}, endConversationReplacement() {},
   });
   vm.runInContext(moduleSource('renderer/js/views/composer.js'), ctx);
   vm.runInContext(moduleSource('renderer/js/views/convoActions.js'), ctx);
-  return { ctx, state, convo, other, world, confirm, sends: () => sends, confirmations: () => confirmations };
+  return { ctx, state, convo, other, world, confirm, sends: () => sends, confirmations: () => confirmations, renders: () => renders, shownViews };
 }
 
 (async () => {
   let h = harness();
   const sending = h.ctx.sendMessage('first');
   assert.equal(h.state.streaming, true, 'lock held before worldbook await');
+  assert.equal(h.ctx.el.btnSend.disabled, false, 'send button stays clickable while streaming');
+  assert.equal(h.ctx.el.btnSend.getAttribute('data-mode'), 'stop', 'streaming mode selects stop');
   assert.equal(await h.ctx.sendMessage('duplicate'), false);
+  h.ctx.switchConvo('a');
+  assert.equal(h.state.activeId, 'a', 'returning to active conversation keeps target');
+  assert.equal(h.shownViews?.at(-1), 'chat');
+  const renderCount = h.renders?.();
   h.ctx.switchConvo('b');
-  assert.equal(h.state.activeId, 'a', 'cannot switch during preparation');
+  assert.equal(h.state.activeId, 'a', 'cannot switch to a different conversation while streaming');
+  assert.equal(h.renders?.(), renderCount, 'same-conversation return does not redraw streaming DOM');
   await h.ctx.clearConvo();
   assert.equal(h.confirmations(), 0, 'clear blocked before confirmation');
   h.world.resolve({});
@@ -82,6 +95,73 @@ function harness() {
     await pending;
     assert.ok(h.state.conversations.includes(h.convo), `${action}: original conversation retained`);
     assert.equal(h.convo.messages[0], original, `${action}: recheck after confirmation`);
+  }
+
+  // A stop belongs to the whole turn, not just the active HTTP request.
+  h = harness();
+  h.ctx.convoPanelFields = () => ['HP'];
+  h.ctx.convoFieldDisplayNames = () => ['HP'];
+  const continuationStarted = deferred();
+  const continuationReply = deferred();
+  let chainRequests = 0, backgroundCalls = 0;
+  h.ctx.maybeSummarize = async () => { backgroundCalls++; };
+  h.ctx.maybePetAutoSpeak = async () => { backgroundCalls++; };
+  h.ctx.api.sendChat = async () => {
+    chainRequests++;
+    if (chainRequests === 1) return { ok: true, content: 'partial', finishReason: 'length' };
+    if (chainRequests === 2) { continuationStarted.resolve(); return continuationReply.promise; }
+    throw new Error('stopped turn must not issue a panel repair');
+  };
+  h.ctx.api.stopChat = async () => continuationReply.resolve({ ok: false, error: '已停止生成。' });
+  const truncatedTurn = h.ctx.sendMessage('start');
+  h.world.resolve({});
+  await continuationStarted.promise;
+  await h.ctx.stopGenerating();
+  await truncatedTurn;
+  assert.equal(chainRequests, 2, 'stopping auto-continue prevents panel repair');
+  assert.equal(backgroundCalls, 0, 'stopped turn issues no summary or pet request');
+  assert.equal(h.convo.messages.at(-1).content, 'partial', 'stop keeps partial content');
+  assert.equal(h.state.streaming, false);
+
+  // A failed/cancelled regeneration must restore all original messages and candidates.
+  for (const mode of ['prepare-error', 'prepare-stop', 'request-error', 'partial-stop', 'success']) {
+    h = harness();
+    const question = { role: 'user', content: 'question' };
+    const answer = { role: 'assistant', content: 'old answer', variants: ['older', 'old answer'], variantIndex: 1 };
+    const later = { role: 'user', content: 'later question' };
+    const original = [question, answer, later];
+    h.convo.messages = original;
+    h.convo.summaries = [{ start: 0, end: 2, text: 'old summary' }];
+    h.convo.panel = { HP: '50' };
+    const previousSummary = JSON.stringify(h.convo.summaries);
+    h.ctx.invalidateSummariesForEdit = () => { h.convo.summaries = []; };
+    h.ctx.rebuildConvoDerivedState = () => { h.convo.panel = { HP: '100' }; };
+    h.ctx.api.sendChat = async () => {
+      if (mode === 'partial-stop') {
+        h.state.requestTarget.assistant.content = 'incomplete candidate';
+        await h.ctx.stopGenerating();
+        return { ok: false, error: '已停止生成。' };
+      }
+      return mode === 'request-error' ? { ok: false, error: 'network failed' } : { ok: true, content: 'replacement', finishReason: 'stop' };
+    };
+    const regenerating = h.ctx.regenerateFrom(1);
+    if (mode === 'prepare-error') h.world.reject(new Error('recall failed'));
+    else if (mode === 'prepare-stop') await h.ctx.stopGenerating();
+    else h.world.resolve({});
+    await regenerating;
+    if (mode === 'success') {
+      assert.equal(h.convo.messages.length, 2);
+      assert.equal(h.convo.messages[1].content, 'replacement');
+      assert.deepEqual(Array.from(h.convo.messages[1].variants), ['older', 'old answer', 'replacement']);
+      assert.equal(h.convo.summaries.length, 0, 'successful regeneration invalidates old summary');
+    } else {
+      assert.equal(h.convo.messages, original, `${mode}: original history restored`);
+      assert.equal(h.convo.messages[1], answer, `${mode}: original candidate object retained`);
+      assert.equal(h.convo.messages[2], later, `${mode}: later turns retained`);
+      assert.equal(h.convo.panel.HP, '50', `${mode}: panel restored`);
+      assert.equal(JSON.stringify(h.convo.summaries), previousSummary, `${mode}: summary restored`);
+    }
+    assert.equal(h.state.streaming, false, `${mode}: unlocked`);
   }
 
   // Execute the actual chunk/reasoning listener block, not a reimplementation.
@@ -126,6 +206,7 @@ function harness() {
   const closeCtx = vm.createContext({ startupDataLoaded: false, state: h.state,
     window: { addEventListener: (_, fn) => { close = fn; } },
     api: { saveConversationsNow: () => { saves++; } }, persistCharacters: () => { saves++; },
+    conversationsSavePayload: () => ({ conversations: h.state.conversations, activeId: h.state.activeId }),
   });
   vm.runInContext(closeBody, closeCtx);
   close();
@@ -134,5 +215,14 @@ function harness() {
   close();
   assert.equal(saves, 2, 'successful startup still saves on close');
   assert.ok(source.indexOf('startupDataLoaded = true;') > source.indexOf('state.conversations = asArray(stored.conversations)'));
+  // Pending replacement is never persisted, including the synchronous close payload.
+  const persistedConvo = { id: 'replace', messages: [{ content: 'partial replacement' }] };
+  const originalConvo = { id: 'replace', messages: [{ content: 'original answer' }, { content: 'later turn' }] };
+  const persistCtx = vm.createContext({ state: { conversations: [persistedConvo], activeId: 'replace' }, setTimeout, clearTimeout, console });
+  vm.runInContext(moduleSource('renderer/js/data/persist.js'), persistCtx);
+  persistCtx.beginConversationReplacement(persistedConvo, originalConvo);
+  assert.equal(persistCtx.conversationsSavePayload().conversations[0], originalConvo);
+  persistCtx.endConversationReplacement(persistedConvo);
+  assert.equal(persistCtx.conversationsSavePayload().conversations[0], persistedConvo);
   console.log('✓ renderer chat race regressions passed');
 })().catch(err => { console.error(err); process.exitCode = 1; });

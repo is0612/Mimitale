@@ -19,7 +19,7 @@ import { initModelMenu } from './ui/modelMenu.js';
 import { initSelects } from './ui/select.js';
 import { defineComponents } from './components/index.js';
 
-import { persistCharacters, persistLibrary, markWorldbooksLoaded, markPresetsLoaded } from './data/persist.js';
+import { persistCharacters, persistLibrary, markWorldbooksLoaded, markPresetsLoaded, conversationsSavePayload } from './data/persist.js';
 import { refreshPetCache, speakNow } from './data/petContext.js';
 import { initPetSettings, openPetSection } from './views/petSettings.js';
 import { currentEndpoint, isBridgeProvider } from './data/providers.js';
@@ -100,6 +100,8 @@ import { initPresetAi, openPresetAiModal } from './views/presetAi.js';
 import { renderAll } from './views/redraw.js';
 import { renderConvoList, renderModelSwitch, applyModelChoice } from './views/chatList.js';
 import { renderMessages, setOptionsLoading } from './views/chatMessages.js';
+// 消息导航条（右缘刻度）：只绑一次事件，刻度由 renderMessages 重建时顺手刷。
+import { initMsgRail } from './views/msgRail.js';
 import {
   sendMessage,
   autoGrowInput,
@@ -212,11 +214,10 @@ function bindEvents() {
       });
   };
 
-  el.btnSend.addEventListener('click', () => {
-    submitInput();
-  });
-
-  el.btnStop.addEventListener('click', runAsync(stopGenerating));
+  el.btnSend.addEventListener('click', runAsync(() => {
+    if (state.streaming) return stopGenerating();
+    return submitInput();
+  }));
   el.btnClear.addEventListener('click', runAsync(clearConvo));
 
   el.btnCopyAll.addEventListener('click', async () => {
@@ -453,7 +454,7 @@ function bindEvents() {
   window.addEventListener('beforeunload', () => {
     if (!startupDataLoaded) return;
     try {
-      const saved = api.saveConversationsNow({ conversations: state.conversations, activeId: state.activeId });
+      const saved = api.saveConversationsNow(conversationsSavePayload());
       if (saved && typeof saved.catch === 'function') saved.catch(() => {});
     } catch (err) {
       console.warn('关窗前保存会话失败', err);
@@ -529,6 +530,8 @@ async function init() {
   initModalMax();
   // 「用户在看历史就别自动跟随」挂在消息区上，自己绑自己。
   initStreamFollow();
+  // 右缘的消息导航条：这里只绑事件（滚轮 / 悬停 / 缩放），刻度由 renderMessages 重建。
+  initMsgRail();
   // 加图按钮自己绑；配图成功后要重绘对话区、没配生图要弹设置 —— 都是入口层的动作。
   initChatImages({
     rerender: (opts) => renderAll(opts),

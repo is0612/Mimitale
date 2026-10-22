@@ -12,6 +12,21 @@ import { characters, worldbooks, dialoguePresets } from './library.js';
 
 let saveTimer = null;
 
+// Keep the committed history on disk while a replacement is still in flight.
+const conversationReplacements = new WeakMap();
+export function beginConversationReplacement(convo, original) {
+  conversationReplacements.set(convo, original);
+}
+export function endConversationReplacement(convo) {
+  conversationReplacements.delete(convo);
+}
+export function conversationsSavePayload() {
+  return {
+    conversations: state.conversations.map((convo) => conversationReplacements.get(convo) || convo),
+    activeId: state.activeId
+  };
+}
+
 /**
  * 写盘失败后隔 1.2 秒自动再试一次（主进程退避重试只覆盖约 0.5 秒）：resolve = 真写进去了，reject = 两次都没成。⚠️ 传进来的是**取数据的函数**而不是现成 payload —— 重试要带「重试这一刻」的最新状态。
  */
@@ -67,7 +82,7 @@ export function persistConversations(delay) {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     queueWrite('conversations', () =>
-      api.saveConversations({ conversations: state.conversations, activeId: state.activeId })
+      api.saveConversations(conversationsSavePayload())
     ).catch((err) => {
       console.error('保存会话失败（已自动重试过）', err);
       showToast(writeFailedText('会话', err), 'error');

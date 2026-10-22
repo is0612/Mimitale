@@ -22,12 +22,18 @@ import { shiftSummariesForRemoval } from '../data/memory.js';
 import { showView } from './viewSwitch.js';
 import { renderAll } from './redraw.js';
 import { resetPetTurns } from '../data/petContext.js';
+import { rebuildConvoDerivedState, invalidateConvoDerivedRequests } from '../data/convoState.js';
 
 export function switchConvo(id) {
   // 会话可能在点击/异步之间被删掉了：别把 activeId 指到一个不存在的会话上。
   if (!state.conversations.some((c) => c.id === id)) return;
+  // Returning to the active conversation is navigation, not a change of request target.
+  if (id === state.activeId) {
+    showView('chat');
+    return;
+  }
   if (state.streaming) {
-    showToast('正在生成回答，先点「停止生成」再切换会话');
+    showToast('正在生成回答，先回当前会话点输入框的停止按钮，再切换会话');
     return;
   }
   state.activeId = id;
@@ -62,6 +68,7 @@ export async function removeConvo(id) {
     return;
   }
 
+  invalidateConvoDerivedRequests(convo);
   state.conversations = state.conversations.filter((c) => c.id !== id);
   // 桌宠的「攒了几轮」是按会话 id 记的，会话没了就把那条计数删掉 ——
   // 否则这个 Map 会随着删掉的会话一直长，而且 id 万一被复用会带着旧计数。
@@ -105,7 +112,12 @@ export async function clearConvo() {
     return;
   }
 
+  if (!state.conversations.includes(convo)) return;
   convo.messages = [];
+  rebuildConvoDerivedState(convo, { clear: true });
+  // Saved checkpoints remain available for an explicit restore.
+  resetPetTurns(convo.id);
+  convo.updatedAt = now();
   // 摘要必须一起清：它的 start/end 是**按当时的消息下标**记的，消息没了这些下标
   // 就成了过期坐标 —— 留着会让 buildApiMessages 以为「前面一大段已经被压缩过」，
   // 于是把新对话整段切掉（用户刚打的那句话都发不出去）。
@@ -152,8 +164,10 @@ export async function removeMessage(index) {
   index = currentIndex;
 
   // 先挪摘要覆盖点再删（要靠被删的那条算它在上下文里的位置）
+  const priorMessages = convo.messages.slice();
   shiftSummariesForRemoval(convo, index);
   convo.messages.splice(index, 1);
+  rebuildConvoDerivedState(convo, { priorMessages });
   convo.updatedAt = now();
   state.usage = null;
   renderAll({ forceScroll: false });
