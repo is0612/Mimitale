@@ -62,10 +62,12 @@ npm run test:library-changes
 npm run test:library-close
 npm run test:conversation-close
 npm run test:library-recovery
-npm run test:conversation-close
+npm run test:delete-persist
 npm run smoke
 ```
 
 `test:records` 使用 Node 和临时目录；`test:records:ipc` 使用真实 Electron、preload 和 IPC，数据隔离在临时 userData，不加载主应用界面或调用模型。IPC 负向用例会产生预期的 handler 错误日志，验收看断言和退出码。
+
+`test:delete-persist` 走真实主进程 + 真实窗口，覆盖编辑页删角色、删整本世界书、关编辑器、关窗重开、只读失败回滚、只读解除后自动重试六段，同时比对界面状态与磁盘内容；WebContents 的 console-message 仍会打印预期内的写盘失败日志，验收同样看断言和退出码。
 
 若终端继承了 `ELECTRON_RUN_AS_NODE=1`，启动 Electron 测试前应仅在该终端清除它，例如 PowerShell `$env:ELECTRON_RUN_AS_NODE=$null`，不要删改应用代码来绕过该环境变量。

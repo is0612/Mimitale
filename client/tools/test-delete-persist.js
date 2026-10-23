@@ -69,6 +69,19 @@ const read = (f) => JSON.parse(fs.readFileSync(path.join(TMP, f), 'utf8'));
 const diskChars = () => read('characters.json').characters.map((c) => c.id).join(',');
 const diskBooks = () => read('worldbooks.json').worldbooks.map((w) => w.id).join(',');
 
+// --- 断言 -------------------------------------------------------------------
+// 这个探针原来是「打印一堆 JSON 自己看」，看完就完了 —— 所以它一直没进任何脚本，
+// 2026-10-22 那轮的记录里干脆写着「未执行」。现在每条都给结论，失败退出码 1。
+const failures = [];
+function check(label, pass, detail) {
+  if (pass) {
+    console.log(`  ✓ ${label}`);
+  } else {
+    console.log(`  ✗ ${label}   ← ${detail}`);
+    failures.push(label);
+  }
+}
+
 let ipcReady = false;
 async function openWindow() {
   if (!ipcReady) {
@@ -114,6 +127,10 @@ app.whenReady().then(async () => {
              cards: document.querySelectorAll('#char-page-grid .char-card').length };
   })()`);
   log('[A 角色编辑页删角色]', JSON.stringify(A), '→ 磁盘 =', diskChars());
+  check('A 角色编辑页「删除角色」真的删掉了', A && A.ok === true, JSON.stringify(A));
+  check('A 删完自动退回列表', A && A.editorHidden === true, JSON.stringify(A));
+  check('A 列表剩 2 张卡', A && A.cards === 2, String(A && A.cards));
+  check('A 磁盘只剩 c2,c3（被删的 c1 没复活）', diskChars() === 'c2,c3', diskChars());
 
   // --- B. 世界书编辑页里「删除本书」--------------------------------------
   const B = await win.webContents.executeJavaScript(`(async () => {
@@ -136,6 +153,9 @@ app.whenReady().then(async () => {
     return { ok:true, left: document.querySelectorAll('#wb-page-grid .char-card').length };
   })()`);
   log('[B 世界书编辑页删本书]', JSON.stringify(B), '→ 磁盘 =', diskBooks());
+  check('B 世界书「删除本书」真的删掉了', B && B.ok === true, JSON.stringify(B));
+  check('B 列表剩 1 本', B && B.left === 1, String(B && B.left));
+  check('B 磁盘只剩 w2', diskBooks() === 'w2', diskBooks());
 
   // --- C. 离开编辑器之后再确认一次磁盘 -----------------------------------
   await win.webContents.executeJavaScript(`(async () => {
@@ -145,6 +165,8 @@ app.whenReady().then(async () => {
     document.querySelector('#btn-worldbooks').click(); await nap(400);
   })()`);
   log('[C 关弹窗后] 磁盘 characters =', diskChars(), '| worldbooks =', diskBooks());
+  check('C 关掉编辑器之后磁盘没被改回去', diskChars() === 'c2,c3' && diskBooks() === 'w2',
+    `${diskChars()} / ${diskBooks()}`);
 
   // --- D. 关窗口 → 重新开一个窗口，看读回来的是什么 ----------------------
   await win.webContents.executeJavaScript('window.close()');
@@ -161,6 +183,8 @@ app.whenReady().then(async () => {
     return { chars, books };
   })()`);
   log('[D 重开窗口看到]', JSON.stringify(D));
+  check('D 重开窗口：删掉的角色没回来', D && D.chars === 2, JSON.stringify(D));
+  check('D 重开窗口：删掉的世界书没回来', D && D.books === 1, JSON.stringify(D));
 
   // --- E. 模拟「一直被占着」：characters.json 设成只读，删了就该失败 ---
   const cf = path.join(TMP, 'characters.json');
@@ -179,6 +203,10 @@ app.whenReady().then(async () => {
   })()`);
   log('[E 一直只读（两次都失败）]', JSON.stringify(E));
   log('[E 之后] 磁盘 characters =', diskChars());
+  check('E 一直只读：界面没有假成功（卡片数回到 2）', E && E.before === 2 && E.after === 2, JSON.stringify(E));
+  check('E 一直只读：给了写盘失败的提示', E && E.toastVisible === true && /写进磁盘|权限/.test(E.toastText || ''),
+    E && E.toastText);
+  check('E 一直只读：磁盘一点没动', diskChars() === 'c2,c3', diskChars());
   try { fs.chmodSync(cf, 0o666); } catch (e) {}
 
   // --- F. 模拟「占用解除」：只读 1 秒后自动恢复 → 自动重试应该救回来 ---
@@ -201,7 +229,17 @@ app.whenReady().then(async () => {
   })()`);
   log('[F 只读 1 秒后放开（自动重试救回）]', JSON.stringify(F));
   log('[F 之后] 磁盘 characters =', diskChars());
+  check('F 只读放开后自动重试救回：卡片减到 1', F && F.after === 1, JSON.stringify(F));
+  check('F 磁盘真的删掉了', diskChars() === 'c3', diskChars());
 
+  console.log('');
+  if (failures.length) {
+    console.log(`❌ 失败 ${failures.length} 条：${failures.join(' / ')}`);
+    console.log('临时目录：', TMP);
+    app.exit(1);
+    return;
+  }
+  console.log('✅ 删除落盘六段全部通过（A 编辑页删角色 / B 删本书 / C 关编辑器 / D 关窗重开 / E 一直只读 / F 自动重试救回）');
   console.log('临时目录：', TMP);
   app.exit(0);
 });
