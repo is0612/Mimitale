@@ -643,12 +643,6 @@ m-textarea > .mi-textarea__control {
   row-gap: 8px;
 }
 
-/* 「高级选项」里字段间距是 12px，这里跟着走 */
-.wb-advanced .field-grid {
-  margin-bottom: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .field-grid .field > .field-label {
   padding-top: 0;
 }
@@ -2065,7 +2059,6 @@ body.pad-dragging {
   overflow: hidden;
   font-size: var(--fs-sm);
   font-weight: 600;
-  line-height: 1.5;
 }
 
 .msg-rail-preview-reply {
@@ -2076,7 +2069,6 @@ body.pad-dragging {
   margin-top: 4px;
   color: var(--text-dim);
   font-size: var(--fs-xs);
-  line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
@@ -5548,61 +5540,6 @@ m-button.btn-new > .mi-btn__control:hover {
   gap: 8px;
 }
 
-/* 高级选项折叠块 */
-/* ⚠️ `.char-advanced` 已经**没有**自己的基础形态了 —— V2 把「details 套折叠块」
-   换成三张平铺卡之后，描边 / 20px 内边距 / --ce-surface 底全由
-   `#view-char-editor .char-advanced`（见「编辑角色 · 高级设置」那段）接管，
-   这里原来是折叠块时代的写法，整条被盖住，2026-10-16 清掉。 */
-
-.wb-advanced {
-  margin-top: 2px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  background: var(--bg-side);
-  flex: 0 0 auto;
-  border-top: 1px solid var(--border);
-  padding-top: 14px;
-}
-
-/* 高级选项折叠块的箭头行（只剩世界书这边 —— 角色高级设置已改成三张平铺卡，
-   `.char-advanced > summary` 在 DOM 里一个都不存在了）。
-   颜色 / 字号 / 手型由 `#view-wb-editor .wb-advanced summary` 给，这里不重复。 */
-.wb-advanced > summary {
-  list-style: none;
-  user-select: none;
-}
-
-.wb-advanced > summary::-webkit-details-marker {
-  display: none;
-}
-
-.wb-advanced > summary::before {
-  content: "▸ ";
-  color: var(--text-faint);
-}
-
-.wb-advanced[open] > summary::before {
-  content: "▾ ";
-}
-
-.wb-advanced[open] > summary {
-  margin-bottom: 14px;
-  color: var(--text);
-}
-
-.wb-advanced .field:last-child {
-  margin-bottom: 0;
-}
-
-/* 折起来之后，「内容」是右栏唯一需要占高度的地方 */
-/* ⚠️ 直接子代是有意的：`.field-grid .field` 与本条同为 (0,2,0)，
-   写成后代选择器会让「grid 里的字段要不要 0 边距」取决于两份规则谁更靠后 ——
-   分区重排时这条就被反超过，世界书高级选项里凭空多出 12px 下边距。 */
-.wb-advanced > .field {
-  margin-bottom: 12px;
-}
-
 /* 说明文字里的小代码块，比如 {{user}} */
 .field-help code {
   padding: 0 4px;
@@ -6491,7 +6428,6 @@ m-button.btn-new > .mi-btn__control:hover {
   min-height: 84px;
   padding: 8px 10px;
   font-size: var(--fs-sm);
-  line-height: 1.6;
   resize: vertical;
 }
 
@@ -7309,8 +7245,8 @@ m-button.btn-new > .mi-btn__control:hover {
   background: rgba(0, 0, 0, 0.32);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
   color: #fff;
-  font-size: 13px;
-  line-height: 1;
+  font-size: var(--fs-sm);
+  /* 不用 line-height 对齐：这颗是 flex + center（见上面），行高只会把勾往上顶 */
   pointer-events: none;
 }
 
@@ -7458,7 +7394,6 @@ m-button.btn-new > .mi-btn__control:hover {
   border-radius: 50%;
   font-size: 26px;
   font-weight: 300;
-  line-height: 1;
   color: var(--text-faint);
   transition: color 0.15s, border-color 0.15s, background-color 0.15s, transform 0.18s;
 }
@@ -8950,7 +8885,6 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--text-dim);
   font-family: inherit;
   font-size: var(--fs-xs);
-  line-height: 1;
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s;
 }
@@ -9060,7 +8994,6 @@ m-button.btn-new > .mi-btn__control:hover {
 
 #view-char-editor .char-media-label {
   display: block;
-  line-height: 1;
 }
 
 /* 分区导航：图标 + 名称 + 一句话说明 + 计数徽章。
@@ -9647,10 +9580,10 @@ m-button.btn-new > .mi-btn__control:hover {
     'sub   del';
   align-items: center;
   column-gap: 6px;
-  row-gap: 3px;
+  row-gap: 4px;
   flex: 0 0 auto;
   min-width: 0;
-  padding: 9px 6px 9px 10px;
+  padding: 8px 6px 8px 10px;
   border: 1px solid transparent;
   border-radius: var(--radius);
   cursor: pointer;

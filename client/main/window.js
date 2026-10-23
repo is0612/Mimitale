@@ -12,9 +12,12 @@ const { DEFAULT_SETTINGS, loadSettings, ACCENTS } = require('./providers.js');
 let mainWindow = null;
 
 // 窗口底色跟着主题 + 配色走，启动时就不会先闪一下别的颜色。
-// ⚠️ 值必须和 style.css 里各配色的 --bg 一致；加新配色时这里同步补，否则 `WINDOW_BG[accent]` 是 undefined。
+// ⚠️ 值必须和 style.css 里各配色的 --bg 一致（夜间是 `[data-theme='dark']` 段里的 --bg）；
+//    加新配色时这里同步补，否则 `WINDOW_BG[accent]` 是 undefined。
+// ⚠️ dark 曾经写成 #101113，而 style.css 是 #171a18 —— 差这一档就是「启动先黑一下再变亮」。
+//    这条约束现在由 tools/test-theme-tokens.js 直接从两个文件里读值比对，别再靠肉眼。
 const WINDOW_BG = {
-  amber: { light: '#f4f5f7', dark: '#101113' }
+  amber: { light: '#f4f5f7', dark: '#171a18' }
 };
 
 // ⚠️ 窗口尺寸只有这一处定义：useContentSize 下这几个数就是画布尺寸，和设计稿 frame 一一对应。
