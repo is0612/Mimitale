@@ -73,15 +73,28 @@ export function effectiveWorldbookIds(convo) {
 /** 世界书两块注入文本的空值：调用方拿到的形状永远一致 */
 const EMPTY_WORLDBOOK = { section: '', deepSection: '' };
 
+/**
+ * 参与世界书扫描的近期正文：只认有内容的对白，**跳过历史里的 null 占位**。
+ *
+ * ⚠️ 口径和 `memory.js` / `suggestionsUi.js` 一致（都写 `m &&`）：导入 / 旧版本留下的
+ *    历史里可能夹着 null，少了这一下，`.filter` 直接抛 TypeError —— 表现是**整条消息发不出去**
+ *    （`prepareCompletion` 没有兜世界书这一步）、右栏「命中 N 条」永远空着、
+ *    「预览命中」弹出 `Cannot read properties of null (reading 'role')`。
+ *    所以三处扫描共用这一个函数，别再各写一份 filter。
+ */
+export function worldbookScanHistory(convo) {
+  return asArray(convo && convo.messages).filter(
+    (m) => m && (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
+  );
+}
+
 // 匹配世界书，返回 { section, deepSection }。⚠️ 调用方必须两块都传给 buildApiMessages，
 // 只传 section 常驻条目就丢了（表现是卡里的规则一条都不生效，且不报错）。
 export async function matchWorldbookSections(convo) {
   const allIds = [...new Set(effectiveWorldbookIds(convo))];
   if (!allIds.length) return { ...EMPTY_WORLDBOOK };
 
-  const history = (convo.messages || []).filter(
-    (m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
-  );
+  const history = worldbookScanHistory(convo);
 
   try {
     const result = await api.previewWorldbook({
@@ -107,9 +120,7 @@ export async function worldbookHitCount(convo) {
   const allIds = [...new Set(effectiveWorldbookIds(convo))];
   if (!allIds.length) return 0;
 
-  const history = (convo.messages || []).filter(
-    (m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
-  );
+  const history = worldbookScanHistory(convo);
 
   try {
     const result = await api.previewWorldbook({

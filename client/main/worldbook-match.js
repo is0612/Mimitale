@@ -3,7 +3,9 @@
 // 世界书的匹配引擎：只做纯匹配，不认识文件、不认识 IPC —— 条目从哪来由调用方决定。
 // 独立成模块供 tools/smoke-test.js require 同一份代码（和 characters.js / png.js 同理）。
 
-/** 中日韩文字没有空格分词，只能子串匹配；纯拉丁关键词才用词边界，避免 king 命中 liking。 */
+/** 中日韩文字没有空格分词，只能子串匹配；纯拉丁关键词默认也是子串，
+ *  只有条目显式勾了 matchWholeWords（酒馆的「Match Whole Words」）才走词边界 ——
+ *  否则 king 会命中 liking，而那是酒馆里另一个开关的事。 */
 const CJK_RE = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/;
 
 function escapeRegExp(text) {
@@ -85,6 +87,20 @@ function allKeywordsHit(haystack, keywords, entry) {
   return keywords.length > 0 && keywords.every((k) => keywordHit(haystack, k, entry));
 }
 
+/**
+ * 条目在「一次扫描」里的身份。
+ *
+ * id 只在**一本书内**唯一：一个会话可以同时绑好几本书，两本书里的条目完全可能撞 id
+ * （同一个 lorebook 文件导两次、或者导出工具写了固定 id）。以前直接拿 id 去重，撞了
+ * 之后第二本书那条永远不会被带出来 —— 而且不报错，只是「设定怎么没生效」。
+ * 调用方给条目带上 worldbookId 时就和书一起认；没带（单元测试 / 单书场景）仍旧按 id。
+ */
+function entryKey(entry) {
+  const id = entry && entry.id;
+  if (id == null) return entry;
+  return entry.worldbookId ? `${entry.worldbookId}::${id}` : id;
+}
+
 /** 单条 entry 是否应该被注入 */
 function entryMatches(entry, haystack, probabilityCache) {
   if (!entry || entry.enabled === false) return false;
@@ -115,7 +131,7 @@ function entryMatches(entry, haystack, probabilityCache) {
   // 概率在关键词条件合格后才抽；同一次递归扫描只抽一次，避免失败后被后续轮次复活。
   const probability = Number.isFinite(Number(entry.probability)) ? Number(entry.probability) : 100;
   if (probability < 100) {
-    const key = entry.id || entry;
+    const key = entryKey(entry);
     let allowed = probabilityCache && probabilityCache.get(key);
     if (allowed === undefined) {
       allowed = Math.random() * 100 < probability;
@@ -144,7 +160,7 @@ function matchWorldbookEntries(entries, scanText, options) {
   for (let round = 0; round <= chainLimit; round += 1) {
     const fresh = [];
     for (const entry of entries) {
-      if (seen.has(entry.id) || entry.excludeRecursion && round > 0) continue;
+      if (seen.has(entryKey(entry)) || entry.excludeRecursion && round > 0) continue;
       if (entryMatches(entry, text, probabilityCache)) fresh.push(entry);
     }
     if (!fresh.length) break;
@@ -152,7 +168,7 @@ function matchWorldbookEntries(entries, scanText, options) {
     rounds = round + 1;
     if (round > 0) recursiveCount += fresh.length;
     for (const entry of fresh) {
-      seen.add(entry.id);
+      seen.add(entryKey(entry));
       hits.push(entry);
     }
 

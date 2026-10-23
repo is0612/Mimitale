@@ -4436,6 +4436,198 @@ await scenario('世界书：本书角色', async () => {
 });
 
 // ---------------------------------------------------------------------------
+//  场景：世界书 —— 条目字段往返 + 状态筛选 + 预览命中的前置条件
+//
+//  C 节那 8 行里，以前只有「有几条条目 / 保存前后有没有落盘」被点过；
+//  **字段本身写没写进落盘文件**（概率 / 附加关键词 / 附加逻辑 / 顺序）没人管，
+//  而落盘那边是白名单式归一化（main/worldbook-parse.js）—— 漏一个字段就是
+//  「界面上填了、重启就没了」，不报错。所以这里把六个字段走一遍真实落盘 + 重开回填。
+// ---------------------------------------------------------------------------
+await scenario('世界书：条目字段往返与状态筛选', async () => {
+  const bookName = '冒烟测试世界';
+  const loadBook = async () => (await savedWorldbooks()).find((b) => b.name === bookName);
+  const openEditor = async () => {
+    click('#btn-worldbooks');
+    await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
+    const card = $$('#wb-page-grid .char-card').find((c) => c.textContent.includes(bookName));
+    click(buttonByText(card, '编辑'));
+    await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
+    click('#wb-tab-entries');
+    await sleep(100);
+  };
+
+  // --- 列表页搜索：按**条目里的关键词**也能搜到（只认书名就漏一半） ---
+  click('#btn-worldbooks');
+  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
+  setValue('#wb-page-search', '火种');
+  await sleep(150);
+  check('列表页按关键词能搜到这本书', $$('#wb-page-grid .char-card').length === 1,
+    `剩 ${$$('#wb-page-grid .char-card').length} 张卡`);
+  setValue('#wb-page-search', '这个词哪本书都不会有');
+  await sleep(150);
+  check('搜不到时卡片清空、给的是「没有匹配的世界」',
+    $$('#wb-page-grid .char-card').length === 0 &&
+    $('#wb-page-empty .page-empty-title').textContent === '没有匹配的世界',
+    $('#wb-page-empty .page-empty-title').textContent);
+  setValue('#wb-page-search', '');
+  await sleep(150);
+
+  await openEditor();
+  const before = (await loadBook()).entries.length;
+
+  // --- 建一条，把六个字段都改成非默认值 ---
+  click('#btn-new-entry');
+  setValue('#wb-e-title', '字段往返');
+  setValue('#wb-e-keys', '门, 钥匙');
+  setValue('#wb-e-keys2', '夜晚');
+  setValue('#wb-e-logic', 'AND_ALL');
+  setValue('#wb-e-order', '410');
+  setValue('#wb-e-prob', '40');
+  setValue('#wb-e-content', '字段往返用的正文');
+  await sleep(120);
+  click('#btn-save-wb');
+  await sleep(400);
+
+  const savedEntry = ((await loadBook()).entries || []).find((e) => e.title === '字段往返');
+  check('新条目落盘了', !!savedEntry);
+  if (!savedEntry) return;
+  check('关键词按逗号拆成数组落盘', JSON.stringify(savedEntry.keys) === JSON.stringify(['门', '钥匙']),
+    JSON.stringify(savedEntry.keys));
+  check('附加关键词落盘', JSON.stringify(savedEntry.secondaryKeys) === JSON.stringify(['夜晚']),
+    JSON.stringify(savedEntry.secondaryKeys));
+  check('附加关键词逻辑落盘（不是被退回默认的 AND_ANY）', savedEntry.selectiveLogic === 'AND_ALL', savedEntry.selectiveLogic);
+  check('插入顺序落盘（空值不该兜成 100）', savedEntry.order === 410, String(savedEntry.order));
+  check('触发概率落盘（空值不该兜成 100）', savedEntry.probability === 40, String(savedEntry.probability));
+  check('正文落盘', savedEntry.content === '字段往返用的正文', savedEntry.content);
+
+  // --- 重开编辑器：表单要按落盘那份回填 ---
+  click('#btn-close-worldbooks');
+  await waitFor('回到世界书列表', () => shown('#view-worldbooks'));
+  await openEditor();
+  const row = $$('#wb-entry-list .wb-entry').find((r) => r.textContent.includes('字段往返'));
+  check('重开之后左栏里有刚才那条', !!row);
+  if (row) click(row);
+  await sleep(150);
+  check('重开之后六栏都按落盘值回填',
+    byId('wb-e-title').value === '字段往返' &&
+    byId('wb-e-keys').value === '门, 钥匙' &&
+    byId('wb-e-keys2').value === '夜晚' &&
+    byId('wb-e-logic').value === 'AND_ALL' &&
+    byId('wb-e-order').value === '410' &&
+    byId('wb-e-prob').value === '40',
+    `${byId('wb-e-keys2').value} / ${byId('wb-e-logic').value} / ${byId('wb-e-order').value} / ${byId('wb-e-prob').value}`);
+
+  // --- 停用 + 状态筛选 ---
+  setChecked('#wb-e-enabled', false);
+  await sleep(150);
+  const rowNow = $$('#wb-entry-list .wb-entry').find((r) => r.textContent.includes('字段往返'));
+  check('停用之后行上带「停用」徽章', !!rowNow && rowNow.textContent.includes('停用'),
+    rowNow ? rowNow.textContent.replace(/\s+/g, ' ') : '(找不到那一行)');
+
+  setValue('#wb-state', 'disabled');
+  await sleep(150);
+  check('筛选「已停用」只剩它', $$('#wb-entry-list .wb-entry').length === 1,
+    `${$$('#wb-entry-list .wb-entry').length} 行`);
+
+  setValue('#wb-state', 'constant');
+  await sleep(150);
+  check('筛选「常驻条目」时一条都没有，并给出「没有匹配的条目」',
+    $$('#wb-entry-list .wb-entry').length === 0 &&
+    $('#wb-entry-list').textContent.includes('没有匹配的条目'),
+    $('#wb-entry-list').textContent.trim());
+  setValue('#wb-state', 'all');
+  await sleep(150);
+
+  // 停用是「这一条」的开关，和六个字段一样要走草稿 → 保存
+  click('#btn-save-wb');
+  await sleep(400);
+  const disabledEntry = ((await loadBook()).entries || []).find((e) => e.title === '字段往返');
+  check('停用状态落盘（enabled: false）', !!disabledEntry && disabledEntry.enabled === false,
+    disabledEntry ? String(disabledEntry.enabled) : '(条目不见了)');
+
+  // --- 预览命中：干净的草稿照跑，脏的草稿先拒绝 ---
+  const t1 = $('#toast');
+  t1.classList.add('hidden');
+  t1.textContent = '';
+  click('#btn-preview-wb');
+  await sleep(400);
+  check('草稿是干净的就能预览（不会被「先保存」挡住）',
+    !!$('#toast').textContent.trim() && !$('#toast').textContent.includes('未保存的改动'),
+    $('#toast').textContent);
+
+  setValue('#wb-e-content', '字段往返用的正文（改了没保存）');
+  await sleep(120);
+  click('#btn-preview-wb');
+  await sleep(400);
+  check('草稿脏了就先拒绝预览、让人先保存',
+    $('#toast').textContent.includes('未保存的改动'), $('#toast').textContent);
+
+  // --- 「正文是空的」要被数进保存提示（以前只数「没关键词」那一种） ---
+  click('#btn-new-entry');
+  setValue('#wb-e-title', '空正文');
+  setValue('#wb-e-keys', '空正文测试');
+  await sleep(120);
+  click('#btn-save-wb');
+  await sleep(400);
+  check('保存提示点名「正文是空的」',
+    $('#toast').textContent.includes('正文是空的'), $('#toast').textContent);
+  check('仍然报的是「已保存」（提示不拦保存）',
+    $('#toast').textContent.includes('已保存'), $('#toast').textContent);
+
+  // --- 收尾：把两条临时条目删掉，别留给后面的场景 ---
+  for (const title of ['空正文', '字段往返']) {
+    const target = $$('#wb-entry-list .wb-entry').find((r) => r.textContent.includes(title));
+    if (target) click(target.querySelector('.wb-entry-del'));
+    await sleep(120);
+  }
+  click('#btn-save-wb');
+  await sleep(400);
+  const cleaned = (await loadBook()).entries.map((e) => e.title);
+  check('临时条目都删干净了，书回到原来的条目数',
+    cleaned.length === before && !cleaned.includes('字段往返') && !cleaned.includes('空正文'),
+    JSON.stringify(cleaned));
+
+  click('#btn-close-worldbooks');
+  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
+});
+
+// ---------------------------------------------------------------------------
+//  场景：世界书扫描遇到 null 历史占位
+//
+//  导入 / 旧版本留下的历史里可能夹着 null（memory.js、suggestionsUi.js 早就加了
+//  `m &&` 那一层）。世界书这条扫描路径以前没有，于是历史里只要有一个 null：
+//   · 发消息直接失败（prepareCompletion 里世界书这步不降级，抛错就整轮没了）
+//   · 右栏「命中 N 条」永远是空的
+//   · 「预览命中」弹的是 `Cannot read properties of null (reading 'role')`
+//  这里直接对着真模块喂一份带 null 的历史。
+// ---------------------------------------------------------------------------
+await scenario('世界书：历史里的 null 占位不炸扫描', async () => {
+  const castMod = await import(new URL('js/data/cast.js', document.baseURI).href);
+  const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
+
+  const convo = (stateMod.state.conversations || []).find((c) => c.id === stateMod.state.activeId);
+  check('拿到当前会话', !!convo);
+  if (!convo) return;
+
+  const poisoned = {
+    ...convo,
+    messages: [null, { role: 'user', content: '翁法罗斯到底是个什么样的地方？' }, undefined,
+      { role: 'assistant', content: '它有十二泰坦。' }, null]
+  };
+
+  const history = castMod.worldbookScanHistory(poisoned);
+  check('扫描历史跳过 null / undefined 占位', history.length === 2, `拿到 ${history.length} 条`);
+
+  let threw = null;
+  try { await castMod.matchWorldbookSections(poisoned); } catch (err) { threw = err; }
+  check('matchWorldbookSections 不会因为 null 历史抛错', !threw, threw && threw.message);
+
+  let threw2 = null;
+  try { await castMod.worldbookHitCount(poisoned); } catch (err) { threw2 = err; }
+  check('worldbookHitCount 也不会抛错（右栏「命中 N 条」还有数）', !threw2, threw2 && threw2.message);
+});
+
+// ---------------------------------------------------------------------------
 //  场景 11.5：AI 生成角色 —— 角色库那一侧
 //
 //  假后端认「system 里有『你是一位角色设定师』」（见 tools/smoke-test.js）。

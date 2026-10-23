@@ -24,6 +24,8 @@ import {
   WORLDBOOK_SCAN_DEPTH,
   recursiveDepthSetting
 } from '../data/library.js';
+// 「能扫的历史」只有一份：发送 / 右栏计数 / 这里的预览共用（见 data/cast.js）
+import { worldbookScanHistory } from '../data/cast.js';
 import { renderWorldbookPage } from './worldbookList.js';
 import { renderAll } from './redraw.js';
 import { initWorldbookLayout, syncWorldbookLayout, resetWorldbookLayout, revealWorldbookEntry, setWorldbookPanel, worldbookEntryVisible } from './worldbookLayout.js';
@@ -357,9 +359,17 @@ async function saveWorldbook() {
     return;
   }
 
-  // 既没关键词也不是常驻的条目永远不会被注入：提醒但不阻止保存，
-  // 提醒并进保存结果那条 toast（弹两条只有后一条看得见）。
-  const dead = draft.entries.filter((e) => !e.constant && !(Array.isArray(e.keys) && e.keys.length));
+  // 永远注入不了的条目，两类原因分开数（弹两条 toast 只有后一条看得见，所以并进这一条）：
+  //   ① 正文是空的 —— 命中了也没东西可塞，`entryMatches` 直接判 false；
+  //   ② 既没关键词也不是常驻 —— 根本不会被挑中。
+  // ⚠️ 以前只数了 ②，于是「填了关键词、忘写正文」这种最常见的漏，保存后一句提示都没有。
+  const noBody = draft.entries.filter((e) => !String(e.content || '').trim()).length;
+  const noTrigger = draft.entries.filter(
+    (e) => String(e.content || '').trim() && !e.constant && !(Array.isArray(e.keys) && e.keys.length)
+  ).length;
+  const reasons = [];
+  if (noBody) reasons.push(`${noBody} 条正文是空的`);
+  if (noTrigger) reasons.push(`${noTrigger} 条没有关键词也不是常驻`);
 
   const name = draft.name;
   commitDraft(book.id);
@@ -372,7 +382,7 @@ async function saveWorldbook() {
   // 失败提示由 persistLibrary 弹（「世界书没能写进磁盘…」），
   // 这里再弹一条会把那条更具体的盖掉。
   if (!(await persistLibrary())) return;
-  const tail = dead.length ? ` · ${dead.length} 条没有关键词也不是常驻，永远不会被注入` : '';
+  const tail = reasons.length ? ` · ${reasons.join('、')}，永远不会被注入` : '';
   showToast(`「${name}」已保存${tail}`, 'ok');
 }
 
@@ -1555,9 +1565,9 @@ async function previewWorldbook() {
     return;
   }
 
-  const history = convo.messages.filter(
-    (m) => (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
-  );
+  // 扫描口径和真发请求时完全一致（同一个函数）：历史里的 null 占位会被跳过，
+  // 否则这里会在 try 之前抛 TypeError，用户只看到一句看不懂的报错。
+  const history = worldbookScanHistory(convo);
 
   if (!history.length) {
     showToast('这个会话还没有消息，先聊两句再看预览', 'error');

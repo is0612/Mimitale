@@ -121,3 +121,40 @@ test('大量命中不因统计时展开数组而超出参数数量上限', () =>
   assert.equal(result.rounds, 1);
   assert.equal(result.recursiveCount, 0);
 });
+
+// 一个会话可以同时绑好几本书，而条目 id 只在**一本书内**唯一：
+// 同一个 lorebook 文件导两次（或导出工具写了固定 id）就能造出撞 id 的两条。
+// 以前 seen 直接存 entry.id，撞了之后第二本书那条永远不会被递归轮带出来 —— 不报错，
+// 只是「设定怎么没生效」。带上 worldbookId 之后按「书 + id」认。
+test('跨书同 id 的条目不会被递归轮吞掉', () => {
+  const root = entry('dup', { worldbookId: 'A', keys: ['alpha'], content: 'beta', recursive: true });
+  const fromB = entry('dup', { worldbookId: 'B', keys: ['beta'], content: 'B 的设定' });
+
+  const result = matchWorldbookEntries([root, fromB], 'alpha', { recursiveDepth: 1 });
+  assert.deepEqual(result.hits.map((e) => `${e.worldbookId}:${e.id}`), ['A:dup', 'B:dup']);
+  assert.equal(result.recursiveCount, 1, '第二本那条是在递归轮里带出来的');
+
+  // 没带 worldbookId（单书场景 / 直接调这个模块）时仍旧按 id 去重，别把同一条塞两遍
+  const bare = matchWorldbookEntries(
+    [{ ...root, worldbookId: undefined }, { ...fromB, worldbookId: undefined }],
+    'alpha',
+    { recursiveDepth: 1 }
+  );
+  assert.deepEqual(bare.hits.map((e) => e.id), ['dup']);
+});
+
+test('跨书同 id 的条目各自抽签，不共用一次概率结果', () => {
+  const a = entry('dup', { worldbookId: 'A', keys: ['alpha'], probability: 50 });
+  const b = entry('dup', { worldbookId: 'B', keys: ['alpha'], probability: 50 });
+
+  const oldRandom = Math.random;
+  let draws = 0;
+  Math.random = () => { draws += 1; return 0.1; }; // 10 < 50 → 都过
+  try {
+    const result = matchWorldbookEntries([a, b], 'alpha');
+    assert.equal(draws, 2, '两条各自抽一次，不能共用缓存');
+    assert.equal(result.hits.length, 2);
+  } finally {
+    Math.random = oldRandom;
+  }
+});
