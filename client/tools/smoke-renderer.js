@@ -2326,6 +2326,52 @@ await scenario('设置：清空数字框等于没改，不静默夹到下限', a
 });
 
 // ---------------------------------------------------------------------------
+//  设置：生成参数输超范围 → 归一化层夹回，并说一句
+//
+//  `min` / `max` 只是原生属性，手输 99 照样进得去；以前它会原样落盘、原样发给厂商，
+//  换回一个用户完全看不懂的 400（「temperature must be <= 2」）。现在夹在
+//  main/providers.js 的 normalizeSettings 里（load / save 都过它）。
+// ---------------------------------------------------------------------------
+await scenario('设置：生成参数越界被夹回并说明', async () => {
+  click('#btn-settings');
+  await waitFor('设置页打开', () => shown('#view-settings'));
+
+  const readSetting = async (key) => ((await window.mimitale.getSettings()).settings || {})[key];
+  const beforeTemp = Number(await readSetting('temperature')) || 0.7;
+  const beforeTokens = Number(await readSetting('maxTokens')) || 512;
+
+  // 数字框的即时保存挂在 change 上（setValue 只派 input），这里自己派一次
+  const commit = (id, value) => {
+    const box = byId(id);
+    box.value = value;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const settle = async (key, want) => {
+    for (let i = 0; i < 60; i += 1) {
+      if (Number(await readSetting(key)) === want) return true;
+      await sleep(50);
+    }
+    return false;
+  };
+
+  commit('s-temp', '99');
+  check('温度 99 被夹回 2', await settle('temperature', 2), `盘上现在是 ${await readSetting('temperature')}`);
+  check('提示说了「超出允许范围」', /超出允许范围/.test($('#toast').textContent), $('#toast').textContent);
+  check('输入框跟着显示夹回后的值', byId('s-temp').value === '2', byId('s-temp').value);
+
+  commit('s-maxtokens', '1');
+  check('回复上限 1 被夹到下限 64', await settle('maxTokens', 64), `盘上现在是 ${await readSetting('maxTokens')}`);
+
+  // 收尾：还原成进这个场景之前的值（后面的场景还等着它们）
+  commit('s-temp', String(beforeTemp));
+  commit('s-maxtokens', String(beforeTokens));
+  const restoredTemp = await settle('temperature', beforeTemp);
+  const restoredTokens = await settle('maxTokens', beforeTokens);
+  check('还原成功', restoredTemp && restoredTokens,
+    `温度 ${await readSetting('temperature')} / 上限 ${await readSetting('maxTokens')}`);
+});
+
+// ---------------------------------------------------------------------------
 //  场景 9.10：拉取模型列表失败时，「地址写错」不能被说成「这家没有这个接口」
 //
 //  真 bug：判据里除了状态码还有一段中文关键词匹配，而 main/http.js 给 404 写的

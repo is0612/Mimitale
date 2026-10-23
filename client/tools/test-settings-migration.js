@@ -215,6 +215,38 @@ test('saveSettings: queued patches are snapshots and recover after failure', asy
   assert.equal((await saveSettings({ theme: 'dark' })).theme, 'dark');
 });
 
+// 生成参数的范围：界面上 min/max 只是属性，手输越界拦不住；磁盘上还能被手改。
+// 夹在归一化这一层，是唯一同时覆盖「界面保存 / 手改文件 / 直接调 saveSettings」的闸门。
+// 不夹的后果是 temperature=99 原样发给厂商，换回一个用户看不懂的 400。
+test('生成参数越界会在归一化这一层被夹回合法范围', () => {
+  const out = normalizeSettings({ ...legacy(1), temperature: 99, topP: -3, maxTokens: 999999 });
+  assert.equal(out.temperature, 2, '温度上限 2');
+  assert.equal(out.topP, 0, 'top_p 下限 0');
+  assert.equal(out.maxTokens, 32000, '回复上限 32000');
+
+  const low = normalizeSettings({ ...legacy(1), temperature: -1, maxTokens: 1 });
+  assert.equal(low.temperature, 0, '温度下限 0');
+  assert.equal(low.maxTokens, 64, '回复上限下限 64');
+
+  // 正常值不许被顺手改掉；缺键 / 脏值退回默认
+  const kept = normalizeSettings({ ...legacy(1), temperature: 0.35, topP: 0.8, maxTokens: 2048 });
+  assert.equal(kept.temperature, 0.35);
+  assert.equal(kept.topP, 0.8);
+  assert.equal(kept.maxTokens, 2048);
+  const dirty = normalizeSettings({ ...legacy(1), temperature: 'abc', topP: null, maxTokens: '' });
+  assert.equal(dirty.temperature, DEFAULT_SETTINGS.temperature);
+  assert.equal(dirty.topP, DEFAULT_SETTINGS.topP);
+  assert.equal(dirty.maxTokens, DEFAULT_SETTINGS.maxTokens);
+});
+
+test('深度思考开关只认布尔：磁盘上手写成 "false" 也算关掉', () => {
+  assert.equal(normalizeSettings({}).thinking, true, '缺键 = 默认开');
+  assert.equal(normalizeSettings({ thinking: true }).thinking, true);
+  assert.equal(normalizeSettings({ thinking: false }).thinking, false);
+  assert.equal(normalizeSettings({ thinking: 'false' }).thinking, false, '手改文件写成字符串不能反着来');
+  assert.equal(normalizeSettings({ thinking: 'true' }).thinking, true);
+});
+
 test('清理临时目录', () => {
   try {
     fs.rmSync(tmpRoot, { recursive: true, force: true });

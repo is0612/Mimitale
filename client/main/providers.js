@@ -279,6 +279,25 @@ function normalizeSettings(saved) {
   s.embeddingProviderId = typeof raw.embeddingProviderId === 'string' ? raw.embeddingProviderId.trim().slice(0, 60) : '';
   s.embeddingModel = typeof raw.embeddingModel === 'string' ? raw.embeddingModel.trim().slice(0, 120) : '';
 
+  // 生成参数：界面是 number 输入框，但 min/max 只是属性 —— 手输越界、手改 config.json、
+  // 或者以后某个调用方直接 saveSettings({temperature:99}) 都拦不住，最后会原样发进厂商接口，
+  // 换回一个用户完全看不懂的 400（「temperature must be <= 2」这类）。
+  // 所以范围夹在归一化这一层：load / save / 迁移全都过它，是唯一的真闸门。
+  // ⚠️ 夹的范围要和 renderer 的 settings.js（numberFrom）和预设那条（main/presets.js 的
+  //    optNumber）一致，否则同一个键在不同入口有不同答案。
+  // ⚠️ 空 / null 要退回默认，不能靠 Number('') === 0 蒙混过去：清空「回复上限」若被当成 0
+  //    再夹到下限，就变成「莫名只有 64 token」，比越界更隐蔽。
+  const clampNumber = (value, min, max, fallback) => {
+    if (value === null || value === undefined || value === '') return fallback;
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+  };
+  s.temperature = clampNumber(raw.temperature, 0, 2, DEFAULT_SETTINGS.temperature);
+  s.topP = clampNumber(raw.topP, 0, 1, DEFAULT_SETTINGS.topP);
+  s.maxTokens = Math.round(clampNumber(raw.maxTokens, 64, 32000, DEFAULT_SETTINGS.maxTokens));
+  // 「深度思考」只认布尔：磁盘上手写成字符串 "false" 时，`!== false` 会读成 true，开关就反了
+  s.thinking = !(raw.thinking === false || raw.thinking === 'false');
+
   // 世界书递归深度，0 = 关（条目勾了也不连锁）。
   // ⚠️ 迁移优先于磁盘上的值：旧配置里这个键一定是显式的 3，不在这里拦，migrateRecursiveDepth 就白算了。
   const depth = Number(raw.worldbookRecursiveDepth);

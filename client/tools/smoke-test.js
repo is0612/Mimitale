@@ -4740,17 +4740,18 @@ app.whenReady().then(async () => {
           }
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }
           await nap(150);`,
-        // 生成参数（稿子屏 2）：入口在「⋯」菜单里，点它 = 把右栏切到第二个页签。
-        // ⚠️ 2026-10-12 晚之前它是一个**独立浮层**（#gen-drawer，盖住右栏、还把对话列挤窄）；
-        //    现在是右栏里的页签 —— 图里要看的正是「两个页签长什么样、
-        //    滑块有没有被通用 input 规则顶成大高个、数值文字有没有跟轨道打架」。
+        // 生成参数：在**设置页**（左导航「生成参数」）。⚠️ 别按老代码再找「⋯ 菜单 → 生成参数」
+        // 或右栏页签 —— 那一套已经下线了，选择器不存在时出图是静默退化的（截当前屏，不报错）。
+        // 这张图要看的：四格里数字框的尺寸、勾选框和数字框混排时的行对齐。
         genParams: `
           const $ = (s) => document.querySelector(s);
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
-          $('#btn-more')?.click();
-          await nap(300);
-          $('#btn-gen-params')?.click();
-          await nap(450);
+          // ⚠️ 别再找 #btn-gen-params —— 右栏那套「生成参数页签」已经下线了（点它是空操作，
+          //    出图会悄悄退化成「原样截当前屏」）。现在唯一的入口是设置页左导航。
+          $('#btn-settings')?.click();
+          await nap(400);
+          $('[data-target="sec-params"]')?.click();
+          await nap(350);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 剧情选项：整条测试跑完正好停在场景 21 的会话里（最新回复带选项），
         // 这里只需要确认在聊天视图、把 toast 收掉，就能截到「消息下面的选项块」。

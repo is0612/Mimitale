@@ -64,7 +64,14 @@ export function initSettings(opts = {}) {
       const value = key === 'thinking' ? input.checked : Number(input.value);
       if (key !== 'thinking' && (!input.value.trim() || !Number.isFinite(value))) return;
       try {
-        state.settings = await api.saveSettings({ [key]: value });
+        const saved = await api.saveSettings({ [key]: value });
+        state.settings = saved;
+        // 越界值由主进程归一化夹回合法范围（温度 0–2 / top_p 0–1 / 回复上限 64–32000）。
+        // 不说一句的话，输入 99 会悄悄变成 2，用户只会觉得「我填的东西被吃了」。
+        const stored = saved[key];
+        if (key !== 'thinking' && Number(stored) !== value) {
+          showToast(`超出允许范围，已按 ${stored} 保存`, 'ok');
+        }
         document.dispatchEvent(new CustomEvent('mimitale:generation-settings-changed'));
       } catch (err) { showToast((err && err.message) || '生成参数保存失败', 'error'); }
     });

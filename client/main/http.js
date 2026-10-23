@@ -14,7 +14,8 @@ function buildHeaders(settings) {
     'Content-Type': 'application/json',
     Accept: 'text/event-stream',
     // ⚠️ 显式带 User-Agent：部分服务商前面的 WAF 对没有 UA 的请求直接拒绝（403 / 406），而不是接口错误码。
-    'User-Agent': 'Mimitale/1.0 (+https://github.com/ls546280821/Mimitale)'
+    // 地址跟着 origin 走，别写死旧仓库名（换过一次仓库）。
+    'User-Agent': 'Mimitale/1.0 (+https://github.com/is0612/Mimitale)'
   };
   if (settings.apiKey) {
     headers.Authorization = `Bearer ${settings.apiKey}`;
