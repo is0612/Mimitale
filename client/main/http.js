@@ -9,13 +9,16 @@ const { URL } = require('node:url');
 
 const { DEFAULT_BASE_URL, DEFAULT_MODEL } = require('./providers.js');
 
+// ⚠️ 只在这里写一次：部分服务商前面的 WAF 对没有 UA 的请求直接拒绝（403 / 406），
+// 而不是接口错误码，所以要显式带。地址跟着仓库走 —— 换过一次仓库，当时散在三处的
+// 副本只有一处跟着改了，另外两处（本机桥接的聊天和生图）一直指着旧地址。
+const USER_AGENT = 'Mimitale/1.0 (+https://github.com/is0612/Mimitale)';
+
 function buildHeaders(settings) {
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'text/event-stream',
-    // ⚠️ 显式带 User-Agent：部分服务商前面的 WAF 对没有 UA 的请求直接拒绝（403 / 406），而不是接口错误码。
-    // 地址跟着 origin 走，别写死旧仓库名（换过一次仓库）。
-    'User-Agent': 'Mimitale/1.0 (+https://github.com/is0612/Mimitale)'
+    'User-Agent': USER_AGENT
   };
   if (settings.apiKey) {
     headers.Authorization = `Bearer ${settings.apiKey}`;
@@ -501,7 +504,7 @@ function streamChat({ settings, messages, onDelta, onReasoning, signal, onReques
 /** 本机桥接聊天：POST /chat_with_image，非流式，一次返回全文，免 API Key。
  *  响应是单个 JSON { text, image, draw_reason }；image 是 base64 PNG（null = 本轮没出图）。
  *  出图要卸文字模型再拉图像模型，一轮可能 30~40 秒，所以超时给得宽（默认 300 秒）。 */
-function bridgeChat({ settings, messages, characterContext, noImage, signal, timeoutMs = 300000 }) {
+function bridgeChat({ settings, messages, characterContext, noImage, signal, timeoutMs = 300000, onRequest }) {
   return new Promise((resolve, reject) => {
     let target;
     try {
@@ -533,6 +536,13 @@ function bridgeChat({ settings, messages, characterContext, noImage, signal, tim
 
     const payload = Buffer.from(JSON.stringify(body), 'utf8');
 
+    // 和 streamChat 同一个口径：请求真正发出前把定稿的 body 交出去（「请求记录」用它）。
+    // ⚠️ 少了这一处，本机桥接模式下「请求记录」永远是空的 —— 界面只说「还没记录」，
+    // 用户看不出这是个已知缺口，只会以为功能坏了。
+    if (typeof onRequest === 'function') {
+      try { onRequest(body, target.href); } catch (err) { /* 记录失败不能拖垮请求 */ }
+    }
+
     const req = transport.request(
       {
         protocol: target.protocol,
@@ -543,7 +553,7 @@ function bridgeChat({ settings, messages, characterContext, noImage, signal, tim
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          'User-Agent': 'Mimitale/1.0 (+https://github.com/ls546280821/Mimitale)',
+          'User-Agent': USER_AGENT,
           'Content-Length': payload.length
         }
       },
@@ -636,7 +646,7 @@ function bridgeDraw({ baseUrl, text, characterContext, preset, timeoutMs = 30000
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
-          'User-Agent': 'Mimitale/1.0 (+https://github.com/ls546280821/Mimitale)',
+          'User-Agent': USER_AGENT,
           'Content-Length': payload.length
         }
       },

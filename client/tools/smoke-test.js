@@ -68,7 +68,7 @@ const { normalizePreset } = require('../main/presets.js');
 //   · http.js 的 streamChat —— onRequest 是不是在请求发出去**之前**就触发了。
 //     这条只能在这儿验：页面看不到真正发出去的东西，而假后端根本不发网络请求。
 const { recordRequest, listRequests, clearRequests, MAX_ENTRIES: MAX_LOGGED_REQUESTS } = require('../main/request-log.js');
-const { streamChat } = require('../main/http.js');
+const { streamChat, bridgeChat } = require('../main/http.js');
 // 面板字段的类型/范围/变化规则/分组：主进程和渲染层共用的那一份
 const {
   clampFieldValue,
@@ -4165,6 +4165,49 @@ async function probeRequestLog(result) {
           top_p: seen.body.top_p
         })
       : '没有拿到 body'
+  );
+
+  // --- 1b) 本机桥接这条路也要交出来 ---
+  // 桥接是另一条完全独立的请求路径（POST /chat_with_image，非流式），以前没接 onRequest，
+  // 于是用桥接的机器打开「请求记录」永远是空的，界面只说「还没记录」，看不出是缺口。
+  let bridgeSeen = null;
+  const bridgePending = bridgeChat({
+    settings: { baseUrl: 'http://127.0.0.1:1', temperature: 0.42, maxTokens: 2048 },
+    messages: [{ role: 'user', content: '桥接记录我' }],
+    noImage: true,
+    onRequest: (body, url) => {
+      bridgeSeen = { body, url };
+    }
+  }).catch(() => {
+    // 连不上是预期：要看的是 body
+  });
+  await Promise.race([bridgePending, new Promise((resolve) => setTimeout(resolve, 2000))]);
+
+  push(
+    '请求记录：本机桥接这条路也交了 body（不然用桥接的人打开永远是空的）',
+    !!(bridgeSeen && Array.isArray(bridgeSeen.body.messages) && bridgeSeen.body.temperature === 0.42),
+    bridgeSeen ? JSON.stringify(bridgeSeen.body).slice(0, 120) : 'onRequest 没被调用'
+  );
+  push(
+    '请求记录：桥接交出来的是它真正发的那个地址',
+    !!bridgeSeen && /\/chat$/.test(String(bridgeSeen.url || '')),
+    bridgeSeen ? String(bridgeSeen.url) : '没有拿到 url'
+  );
+
+  // --- 1c) User-Agent 只有一处定义 ---
+  // 换仓库时散在三处的副本只改了一处（本机桥接的聊天和生图一直指着旧地址）。
+  // 这属于「字符串对不上、不报错」那类，只能靠断言钉住。
+  const httpSrc = fs.readFileSync(path.join(__dirname, '..', 'main', 'http.js'), 'utf8');
+  const uaHits = httpSrc.match(/Mimitale\/1\.0 \(\+https:\/\/github\.com\/[^)]*\)/g) || [];
+  push(
+    '请求头：User-Agent 只有一处定义（散成副本就会各自漂走）',
+    uaHits.length === 1,
+    `找到 ${uaHits.length} 处`
+  );
+  push(
+    '请求头：User-Agent 不再指向旧仓库',
+    uaHits.length > 0 && !uaHits.some((ua) => ua.includes('ls546280821')),
+    uaHits.join(' / ') || '没找到'
   );
 
   // --- 2) 环形缓冲 ---

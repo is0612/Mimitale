@@ -327,6 +327,10 @@ function snapshotConvo(convo) {
     panel: { ...(convoPanel(convo) || {}) },
     panelFields: [...convoPanelFields(convo)],
     panelDefs: JSON.parse(JSON.stringify(convoPanelDefs(convo))),
+    // ⚠️ 「哪些字段是手改过的」必须一起存：它带着手改时间戳，AI 只有在比自己更新时才
+    // 覆盖该字段。不存的话，读档后仍留着**存档之后**那个时间戳 —— 恢复出来的旧值
+    // 于是被永久锁死（AI 再也更新不了它），而且界面上完全看不出来。
+    panelManual: { ...(convo.panelManual || {}) },
     options: [...(Array.isArray(convo.options) ? convo.options : [])],
     // false 是「这张卡明确不要剧情选项」，不能被吞成 null（null = 没配过）
     optionsSpec: convo.optionsSpec === false ? false : convo.optionsSpec ? { ...convo.optionsSpec } : null,
@@ -362,6 +366,14 @@ async function restoreCheckpoint(id) {
   const convo = activeConvo();
   if (!convo) return;
 
+  // ⚠️ 生成中不能读档：读档会把整段 messages 换掉，而流式回调是按「当前会话的最后一条
+  // 消息」继续追加分片的 —— 换掉之后那些分片会写进**恢复出来的另一条消息**，再被保存。
+  // 删除会话 / 清空 / 删消息 / 分支都有同一道守卫，别只给它们加。
+  if (state.streaming) {
+    showToast('正在生成回答，先点「停止生成」再读档');
+    return;
+  }
+
   const point = (convo.checkpoints || []).find((c) => c.id === id);
   if (!point) return;
 
@@ -384,6 +396,11 @@ async function restoreCheckpoint(id) {
   // 保持三态：false = 明确关掉，null/缺省 = 没配过，对象 = 具体配置
   convo.optionsSpec = data.optionsSpec === false ? false : data.optionsSpec || null;
   convo.summaries = data.summaries || [];
+  // 手改标记跟着快照走；老存档没有这个字段（那时还没存），就保持现状不动 ——
+  // 宁可多保护几个字段，也不要凭空把「手改过」的记录抹掉。
+  if (data.panelManual && typeof data.panelManual === 'object') {
+    convo.panelManual = { ...data.panelManual };
+  }
   // 存档时是 null 就恢复成 null，不能因为「现在有玩家角色」把存档前的状态留错
   convo.player = data.player || null;
   convo.updatedAt = now();

@@ -50,6 +50,10 @@ function formatRagSection(items, character, me, charMacro) {
 export async function recallSection(convo) {
   const settings = state.settings || {};
   if (!convo || isPlainChatConvo(convo) || settings.ragEnabled !== true || !settings.embeddingProviderId) return '';
+  // ⚠️ 没选向量模型就当没开：main 的 endpointFor 会回落到「该提供商的第一个模型」（通常
+  // 是聊天模型），于是每轮都往 /embeddings 打一次注定 400 的请求、再在控制台留一条报错。
+  // 检索本来就是「捞不到就算了」，但在配置不全时连这一发都不该发。
+  if (!settings.embeddingModel) return '';
 
   const history = convoContextMessages(convo);
   if (history.length < 2) return '';

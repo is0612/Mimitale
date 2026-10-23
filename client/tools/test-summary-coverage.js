@@ -148,6 +148,7 @@ app.whenReady().then(async () => {
       .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
     const sum = read('renderer/js/views/summarize.js');
     const memUi = read('renderer/js/views/memoryUi.js');
+    const mainSrc = read('renderer/js/main.js');
     const wiring = [
       ['summarize.js 不再用会砍最早几条的 buildTranscript', !/\bbuildTranscript\(/.test(sum)],
       ['summarize.js 两处都按实际条数记 end', (sum.match(/end:\s*start\s*\+\s*covered/g) || []).length === 2],
@@ -155,7 +156,17 @@ app.whenReady().then(async () => {
       // memoryUi.js 的「重新生成某段」同样用超长时会砍最早几条的 buildTranscript，
       // 只是它写回的是 target.text（不动 start/end）—— 上一轮改到这就断了，特别钉住
       ['memoryUi.js 重新生成也用 buildTranscriptFromStart', !/\bbuildTranscript\(/.test(memUi) && /\bbuildTranscriptFromStart\(/.test(memUi)],
-      ['removeMessage 删之前先挪覆盖点', /shiftSummariesForRemoval\(convo,\s*index\);\s*convo\.messages\.splice\(index,\s*1\)/.test(read('renderer/js/views/convoActions.js'))]
+      ['removeMessage 删之前先挪覆盖点', /shiftSummariesForRemoval\(convo,\s*index\);\s*convo\.messages\.splice\(index,\s*1\)/.test(read('renderer/js/views/convoActions.js'))],
+      // 读档会把整段 messages 换掉：生成中允许它，流式分片就会写进恢复出来的另一条消息。
+      // 删除会话 / 清空 / 删消息 / 分支都有这道守卫，读档以前没有。
+      ['读档前先挡住「正在生成」', /if \(state\.streaming\) \{[\s\S]{0,200}?再读档[\s\S]{0,80}?return;/.test(memUi)],
+      // 「手改过」带时间戳，AI 只有比自己新时才覆盖该字段。存档点不存它，读档后恢复出来的
+      // 旧值会一直被存档之后那个时间戳保护着 —— 静默失去更新能力。
+      ['存档点连「手改过」的标记一起存', /panelManual:\s*\{[^}]*convo\.panelManual/.test(memUi)],
+      ['读档时把「手改过」的标记还原回去', /if \(data\.panelManual && typeof data\.panelManual === 'object'\)\s*\{\s*convo\.panelManual\s*=/.test(memUi)],
+      // summaryBusy 是运行态却长在会话对象上，会被整对象写进 conversations.json。
+      // 关窗 / 崩溃卡在摘要中途 → 磁盘留下 true → 重开后头部与按钮永久卡住。
+      ['读盘时清掉卡住的 summaryBusy', /delete convo\.summaryBusy/.test(mainSrc)]
     ];
     for (const [name, pass] of wiring) {
       results.push({ name, pass });

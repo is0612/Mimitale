@@ -14,6 +14,7 @@
     "audit": "node tools/check-dom-ids.js && node tools/audit-buttons.js && node tools/check-imports.js && node tools/check-icons.js",
     "audit:css": "node tools/audit-radius.js && node tools/audit-font.js && node tools/audit-spacing.js && node tools/audit-css-dead.js",
     "test:theme": "node --test tools/test-theme-tokens.js",
+    "test:summary": "electron --no-sandbox tools/test-summary-coverage.js",
     "test:pet": "node tools/test-pet-window.js && node tools/test-pet-store.js",
     "test:png": "node tools/test-png.js",
     "test:ui": "node --test tools/test-ui-controls.js tools/test-ui-components.js",

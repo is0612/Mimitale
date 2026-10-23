@@ -12,7 +12,15 @@ const source = (file) => fs.readFileSync(path.join(__dirname, '..', 'renderer/js
 function harness() {
   const card = { id: 'npc', name: 'Bound NPC' };
   const calls = [];
-  const state = { settings: { ragEnabled: true, embeddingProviderId: 'embedding', showDate: false, maxTurns: 20 } };
+  const state = { settings: {
+    ragEnabled: true,
+    embeddingProviderId: 'embedding',
+    // 向量模型必填：main 的 endpointFor 在模型为空时会回落到「该提供商的第一个模型」
+    // （通常是聊天模型），于是每轮都往 /embeddings 打一次注定失败的请求。
+    embeddingModel: 'embed-model',
+    showDate: false,
+    maxTurns: 20
+  } };
   const context = vm.createContext({
     console, state,
     asArray: (value) => Array.isArray(value) ? value : [],
@@ -78,6 +86,13 @@ function harness() {
   state.settings.ragEnabled = false;
   assert.equal(await context.recallSection(gm), '');
   assert.equal(calls.length, before);
+
+  // 没选向量模型 = 配置没配全，连请求都不该发（以前会拿聊天模型去打 /embeddings）
+  state.settings.ragEnabled = true;
+  state.settings.embeddingModel = '';
+  assert.equal(await context.recallSection(gm), '', '没选向量模型时不注入也不发请求');
+  assert.equal(calls.length, before, 'missing embedding model never calls embeddings');
+  state.settings.embeddingModel = 'embed-model';
 
   const candidates = (entry) => collectCandidates({ worldbookIds: ['book'], books: [{ id: 'book', entries: [entry] }] });
   assert.deepEqual(candidates({ id: 'entry', enabled: false, content: 'disabled secret' }), []);

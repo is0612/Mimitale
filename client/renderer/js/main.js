@@ -699,6 +699,12 @@ async function init() {
     absorbTopLevelIntoPlayer(convo);
     // 「玩家挑的卡」和世界书同名副本撞了 → 并回「我」，同一个人只留一张卡（幂等）。
     mergePlayerOwnedFields(convo);
+    // summaryBusy 是**纯运行态**（摘要请求正在跑），但它长在 convo 上，保存时整个会话
+    // 对象一起写进 conversations.json。关窗 / 崩溃正好卡在摘要中途，磁盘上就留下 true，
+    // 重开后头部常驻「正在整理记忆…」、记忆面板的「立即压缩」和「重新生成」永久禁用，
+    // 界面上没有任何地方能把它解开。所以读盘时一律清掉 —— 真在跑的摘要属于当前进程，
+    // 重新打开时它早就不存在了。
+    delete convo.summaryBusy;
     // 选项是程序写进去的，读盘时只要保证形状对（不是数组就当没有）
     if (!Array.isArray(convo.options)) convo.options = [];
     // 剧情选项默认「全都开、4 条」；老会话在读盘时补一次（快照语义：已配过的不动）。

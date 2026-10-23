@@ -713,6 +713,14 @@ function registerIpc() {
           characterContext: request.characterContext,
           // noImage：只要文字的场景传它，否则桥接可能卸模型出图再热回来，白等几十秒还占显存
           noImage: request.noImage === true,
+          // 桥接模式一样要留一份「发出去的原文」，否则「请求记录」在这条路上永远是空的
+          onRequest: (body, url) =>
+            recordRequest({
+              requestId,
+              providerName: endpoint.providerName,
+              url,
+              body
+            }),
           signal
         });
         return {
