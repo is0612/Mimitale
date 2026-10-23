@@ -162,6 +162,8 @@
 
 * {
   box-sizing: border-box;
+  margin:0;
+  padding:0;
 }
 
 html {
@@ -7160,8 +7162,8 @@ m-button.btn-new > .mi-btn__control:hover {
 
 .provider-card-badge {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7175,7 +7177,7 @@ m-button.btn-new > .mi-btn__control:hover {
 .provider-card-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
   flex: 1 1 auto;
 }
