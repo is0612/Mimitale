@@ -3701,9 +3701,200 @@ m-button.btn-new > .mi-btn__control:hover {
   height: 42px;
 }
 
-.sidebar-foot #btn-settings {
+/* ---- 账号条（2026-10-23）：左边「我是谁」、右边设置齿轮 ----
+   原来底部最后一行就是「设置」那一颗，接登录前把它挪到右下、左边让出账号位。
+   ⚠️ 齿轮是**图标按钮**（.icon-btn），不走 m-button —— 组件只管「一行文字 + variant」。
+   收起成图标轨时竖排：上头像、下齿轮，文字整块藏掉。 */
+.sidebar-account {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
   margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.account-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.account-btn:hover {
+  background: var(--bg-item, var(--bg-card));
+}
+
+/* 未登录时是人形图标；登录后换成头像图或名字首字（views/account.js） */
+.account-avatar {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-item, var(--bg-card));
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  user-select: none;
+}
+
+.account-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.account-avatar svg {
+  width: 14px;
+  height: 14px;
+}
+
+.account-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 名字和那句状态都会撞上窄侧栏，各自截断，别让它们把行高撑破 */
+.account-name,
+.account-sub {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.account-name {
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.account-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.account-settings {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+
+.account-settings:hover {
+  background: var(--bg-item, var(--bg-card));
+  color: var(--text);
+}
+
+/* 在设置页时齿轮亮着（.active 由 views/viewSwitch.js 铺，和其它入口同一套语义） */
+.account-settings.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-border-soft);
+}
+
+/* ---- 登录后的账号格（2026-10-23）：整行只有「头像 + 用户名」，点一下往上弹菜单 ----
+   ⚠️ 状态挂在 .sidebar-account 上（data-logged-in），不是挂在按钮上 ——
+   要同时藏掉副标题和齿轮两颗兄弟节点。 */
+.sidebar-account[data-logged-in='1'] .account-settings {
+  display: none;
+}
+
+.sidebar-account[data-logged-in='1'] .account-sub {
+  display: none;
+}
+
+.sidebar-account[data-logged-in='1'] .account-btn {
   min-height: 44px;
+  gap: 10px;
+}
+
+.sidebar-account[data-logged-in='1'] .account-avatar {
+  width: 30px;
+  height: 30px;
+}
+
+/* 账号菜单：默认往上弹（它在屏幕最底下）。
+   ⚠️ 绝对定位的参照是 .sidebar-account，所以那边得有 position: relative。 */
+.account-menu {
+  position: absolute;
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 46;
+  min-width: 0;
+  animation: account-menu-in 0.14s ease-out;
+}
+
+@keyframes account-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 收起态：账号格只有 34px 宽，菜单得比它宽、并且往右伸出去（侧栏没有 overflow: hidden） */
+.sidebar.collapsed .account-menu {
+  right: auto;
+  width: 172px;
+}
+
+/* 菜单行：图标 + 文字 + 右侧快捷键 */
+.menu-item-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  color: var(--text-faint);
+}
+
+.menu-item-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.menu-pop .menu-item:hover .menu-item-icon,
+.menu-pop .menu-item:focus-visible .menu-item-icon {
+  color: currentColor;
+}
+
+.menu-item-label {
+  flex: 1 1 auto;
+}
+
+.menu-kbd {
+  flex: 0 0 auto;
+  margin-left: 12px;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
 }
 
 .story-eyebrow {
@@ -3871,14 +4062,33 @@ m-button.btn-new > .mi-btn__control:hover {
   padding-top: 18px;
 }
 
-.sidebar.collapsed .sidebar-foot #btn-settings {
-  margin: 0;
-  min-height: 34px;
+/* 收起态：账号条竖成一列图标（头像在上、齿轮在下），文字整块藏掉 ——
+   只藏「设置」那颗是不够的，账号格本身就是两行字。 */
+.sidebar.collapsed .sidebar-account {
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 8px;
+  width: 100%;
 }
 
-.sidebar.collapsed .sidebar-foot #btn-settings > .mi-btn__control {
-  border: 0;
+.sidebar.collapsed .account-btn {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
   padding: 0;
+  justify-content: center;
+}
+
+.sidebar.collapsed .account-text {
+  display: none;
+}
+
+.sidebar.collapsed .account-settings {
+  width: 34px;
+  height: 34px;
 }
 
 /* 整列只有一张景色和一层共同遮罩；各区域不再分别叠色。 */
@@ -7657,6 +7867,180 @@ m-button.btn-new > .mi-btn__control:hover {
   padding-top: 0;
 }
 
+/* ------------------------------ 设置页 · 用户信息（2026-10-23） ------------------------------ */
+/* 未登录时整块换掉：不摆一堆半空的表单，只给一句说明 + 一颗按钮 */
+.user-guest {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+
+.user-guest-title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.user-guest-desc {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.user-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* 资料头：头像 + 名字 + 邮箱；点整颗头像就换图 */
+.user-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.user-avatar {
+  position: relative;
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-input);
+  color: var(--text-faint);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.user-avatar:hover {
+  border-color: var(--border-hover);
+}
+
+.user-avatar-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: var(--fs-xl);
+}
+
+.user-avatar-img img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+/* 「换」只在悬停时浮出来，平时不挡头像 */
+.user-avatar-edit {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .45);
+  color: #fff;
+  font-size: var(--fs-sm);
+  opacity: 0;
+  transition: opacity .15s;
+}
+
+.user-avatar:hover .user-avatar-edit {
+  opacity: 1;
+}
+
+.user-head-copy {
+  min-width: 0;
+}
+
+.user-name {
+  margin: 0;
+  font-size: var(--fs-lg);
+  color: var(--text);
+}
+
+.user-email {
+  margin: 4px 0 0;
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-since {
+  margin: 4px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* 没有注册时间就整行不占地方 */
+.user-since:empty {
+  display: none;
+}
+
+/* 每一小块（用户名 / 邮箱 / 密码 / 凭证）之间用一条细线分开 */
+.user-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.user-block-title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* 输入框 + 右边一颗按钮 */
+.user-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-inline m-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.user-inline m-button {
+  flex: 0 0 auto;
+}
+
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 凭证预览：锁 16:10（canvas 画的是 1024×640），免得它跳一下 */
+.user-voucher-frame {
+  width:640px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  overflow: hidden;
+}
+
+.user-voucher-frame img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
 
 /* ======================================================================
    九、弹窗与杂项
@@ -8818,6 +9202,275 @@ m-button.btn-new > .mi-btn__control:hover {
   font-size: var(--fs-sm);
   color: var(--text);
   word-break: break-word;
+}
+
+
+/* ------------------------------ 账号弹窗（登录 / 注册 / 凭证） ------------------------------ */
+/* 2026-10-23 新加：五块面板共用一张卡片，一次只显示一块（没 .hidden 的那块）。
+   卡片比通用 700px 窄一档 —— 这里全是单列表单，宽了只会让视线来回跑。 */
+.account-card {
+  max-width: 460px;
+}
+
+.account-body,
+.account-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 校验码那一行：输入框吃掉剩余宽度，图固定 112×40（和主进程画的那张同尺寸） */
+.account-captcha-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-captcha-row m-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.account-captcha {
+  flex: 0 0 auto;
+  width: 112px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.account-captcha img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.account-captcha:hover {
+  border-color: var(--border-hover);
+}
+
+/* 「填验证码 + 获取验证码」同一行；按钮不跟着挤（倒计时文案长度会变） */
+.account-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-code-row m-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.account-code-row m-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* 错误行平时是空的：:empty 藏掉，不给没出错的表单凭空多一行间距 */
+.account-error {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--danger-text);
+}
+
+.account-error:empty {
+  display: none;
+}
+
+.account-hint-dev {
+  color: var(--accent);
+}
+
+/* 底部那排小链接（注册 / 凭证登录 / 退出） */
+.account-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.account-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+
+.account-link:hover {
+  color: var(--accent);
+}
+
+/* 一段说明文字（凭证登录页） */
+.account-copy {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+/* 凭证码：等宽 + 拉开一点字距，手抄时不容易串行 */
+.account-code-input > input {
+  font-family: Consolas, "Courier New", monospace;
+  letter-spacing: .08em;
+}
+
+/* 「或者」分隔：两条细线夹一个字，把「手输码」和「导入图片」分开放 */
+.account-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.account-or::before,
+.account-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* 导入那颗按钮下面那句提醒：比正文再淡一档，别抢按钮的注意力 */
+.account-import-help {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* 「导入凭证图片」：ghost 按钮是 bg-card 底 + 一层淡阴影，可它正好坐在**同样颜色**
+   的弹窗卡片上 —— 不给描边就只剩一行字，看不出是能点的。这里单独补一层边。 */
+.account-import-btn > .mi-btn__control {
+  border-color: var(--border);
+  background: transparent;
+}
+
+.account-import-btn > .mi-btn__control:hover {
+  background: var(--bg-input);
+  border-color: var(--border-hover);
+}
+
+/* ---- 注册第二步：挑头像 ---- */
+.account-avatar-pick {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.account-avatar-slot {
+  position: relative;
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-input);
+  color: var(--text-faint);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.account-avatar-slot:hover {
+  border-color: var(--border-hover);
+}
+
+.account-avatar-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: var(--fs-xl);
+  color: var(--text-faint);
+}
+
+.account-avatar-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+/* 「换」只在悬停时浮出来，平时不挡头像 */
+.account-avatar-edit {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .45);
+  color: #fff;
+  font-size: var(--fs-sm);
+  opacity: 0;
+  transition: opacity .15s;
+}
+
+.account-avatar-slot:hover .account-avatar-edit {
+  opacity: 1;
+}
+
+.account-avatar-copy {
+  min-width: 0;
+}
+
+.account-avatar-title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.account-avatar-desc {
+  margin: 4px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+/* 弹窗里的小人图标（未设头像时） */
+.account-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ------------------------------ 意见反馈弹窗（2026-10-23 预留） ------------------------------ */
+.modal-card.feedback-card {
+  max-width: 520px;
+}
+
+.feedback-kinds {
+  display: flex;
+  gap: 8px;
+}
+
+.feedback-kind {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+
+.feedback-kind:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+
+.feedback-kind.active {
+  color: var(--accent);
+  border-color: var(--accent-border-soft);
+  background: var(--accent-soft);
 }
 
 

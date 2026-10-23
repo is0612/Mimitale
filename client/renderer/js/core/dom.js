@@ -27,6 +27,17 @@ export const el = {
   btnClear: $('btn-clear'),
   btnCopyAll: $('btn-copy-all'),
   btnSettings: $('btn-settings'),
+  // 账号格：内容和状态由 views/account.js 铺
+  btnAccount: $('btn-account'),
+  accountAvatar: $('account-avatar'),
+  accountName: $('account-name'),
+  accountSub: $('account-sub'),
+  // 账号菜单（登录后点头像弹出来的那一层）：容器、三项、以及开合状态挂在容器上
+  sidebarAccount: $('sidebar-account'),
+  accountMenu: $('account-menu'),
+  btnAccountSettings: $('btn-account-open-settings'),
+  btnAccountFeedback: $('btn-account-feedback'),
+  btnAccountMenuLogout: $('btn-account-menu-logout'),
   btnFolder: $('btn-folder'),
   btnChars: $('btn-chars'),
   btnWorldbooks: $('btn-worldbooks'),

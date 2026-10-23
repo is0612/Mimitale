@@ -12,6 +12,8 @@ import { fillSelect } from '../ui/controls.js';
 import { openPetSection } from './petSettings.js';
 // 外观那一组（见 index.html 的 #sec-appearance），同样单向 import
 import { renderAppearanceForm } from './appearance.js';
+// 设置页第一栏「用户信息」的内容在 views/userSettings.js（账号资料 / 头像 / 密码 / 凭证）
+import { renderUserSection } from './userSettings.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { providers, providerById, isBridgeProvider } from '../data/providers.js';
@@ -46,7 +48,9 @@ export function initSettings(opts = {}) {
   if (typeof opts.refreshModelSwitch === 'function') refreshModelSwitch = opts.refreshModelSwitch;
   if (typeof opts.afterSettingsSave === 'function') afterSettingsSave = opts.afterSettingsSave;
 
-  el.btnSettings.addEventListener('click', openSettings);
+  // ⚠️ 包一层，别直接 `addEventListener('click', openSettings)` ——
+  //    那样事件对象会当成 section 参数传进去（见 openSettings 的注释）。
+  el.btnSettings.addEventListener('click', () => openSettings());
   // 「返回」= 不保存直接走
   el.btnBackSettings.addEventListener('click', leaveSettings);
   el.btnSaveSettings.addEventListener('click', () => saveSettings(false));
@@ -146,8 +150,8 @@ export function setEditingProvider(id) {
 // 分组导航：一个版块 = 一组，点左栏只显示那一组。当前选中不落盘（只是「刚才翻到哪了」），
 // 但同一次运行里离开再进来会回到原样（currentSectionId）。
 
-/** 这次运行里选中哪一组（存 section 的 id）。默认第一组「模型服务」 */
-let currentSectionId = 'sec-models';
+/** 这次运行里选中哪一组（存 section 的 id）。默认第一组「用户信息」（2026-10-23 起） */
+let currentSectionId = 'sec-user';
 
 /** 切到某一组：左栏高亮、右栏只显示对应卡片、内容滚回顶部。id 不认识就什么都不做。 */
 export function showSettingsSection(id) {
@@ -175,6 +179,8 @@ export function showSettingsSection(id) {
 
   // 切到「外观」时回填一次：它读的是内存里的设置，不填会留着上一次的颜色。
   if (id === 'sec-appearance') renderAppearanceForm();
+  // 用户信息这一栏读的是账号状态（可能在登录弹窗里刚变过），每次进来重铺一遍。
+  if (id === 'sec-user') renderUserSection();
 }
 
 /** 兼容名：外部一直按这个名字调用，语义是「切到那一组」 */
@@ -793,9 +799,24 @@ function readSettingsForm() {
   };
 }
 
-export function openSettings() {
-  // 已经在这一屏了：**别重灌表单**，那会把没保存的改动当场冲掉。什么都不做即可。
-  if (currentViewName() === 'settings') return;
+/**
+ * 打开设置页。
+ * @param {string} [section] 指定落到哪一组（比如从账号菜单进来要看「用户信息」）。
+ *   不传就回到这次运行里上次停留的那组。
+ *   ⚠️ 只认字符串。这颗函数**同时**被当成 click 监听器绑在齿轮上（见本文件 init），
+ *      监听器拿到的第一个参数是 PointerEvent —— 不挡一下就会拿事件对象去拼
+ *      `querySelector('#[object PointerEvent]')`，整个设置页当场抛错。
+ */
+export function openSettings(section) {
+  const wanted = typeof section === 'string' ? section : '';
+
+  // 已经在这一屏了：**别重灌表单**，那会把没保存的改动当场冲掉。
+  // 但指定了分组就切过去 —— 从账号菜单点「设置」却停在模型配置上，会让人以为点错了。
+  if (currentViewName() === 'settings') {
+    if (wanted) showSettingsSection(wanted);
+    return;
+  }
+  if (wanted) currentSectionId = wanted;
 
   // 记下来处：保存 / 返回 / Esc 都回到它
   returnView = currentViewName();

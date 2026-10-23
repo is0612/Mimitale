@@ -131,6 +131,22 @@ contextBridge.exposeInMainWorld('mimitale', {
     return () => ipcRenderer.removeListener('chat:reasoning', listener);
   },
 
+  // --- 账号（登录 / 注册 / 凭证）---
+  // ⚠️ 返回形状统一：{ ok: true, ... } / { ok: false, error }，渲染层直接显示 error。
+  // 现在背后是主进程里的假后端（main/account.js），接口按真后端定的。
+  accountSession: () => ipcRenderer.invoke('account:session'),
+  accountCaptcha: () => ipcRenderer.invoke('account:captcha'),
+  accountSendCode: (payload) => ipcRenderer.invoke('account:send-code', payload),
+  accountRegister: (payload) => ipcRenderer.invoke('account:register', payload),
+  accountCompleteProfile: (payload) => ipcRenderer.invoke('account:complete-profile', payload),
+  accountLogin: (payload) => ipcRenderer.invoke('account:login', payload),
+  accountVoucherLogin: (payload) => ipcRenderer.invoke('account:voucher-login', payload),
+  accountLogout: () => ipcRenderer.invoke('account:logout'),
+  accountVoucher: () => ipcRenderer.invoke('account:voucher'),
+  accountUpdateProfile: (payload) => ipcRenderer.invoke('account:update-profile', payload),
+  accountChangePassword: (payload) => ipcRenderer.invoke('account:change-password', payload),
+  accountChangeEmail: (payload) => ipcRenderer.invoke('account:change-email', payload),
+
   // --- 杂项 ---
   copyText: (text) => ipcRenderer.invoke('util:copy', text),
   saveFile: (payload) => ipcRenderer.invoke('util:saveFile', payload),

@@ -71,20 +71,47 @@ async function settlePanelValue(name, expected, timeout = 3000) {
 }
 
 /**
+ * 场景筛选（由宿主用 `var SMOKE_FILTER = {...}` 前置注入）。
+ * 见 tools/smoke-test.js 顶部那段说明：--only / --skip 只用于迭代自查。
+ */
+const SCENARIO_FILTER = typeof SMOKE_FILTER === 'undefined' ? { only: [], skip: [] } : SMOKE_FILTER;
+
+function scenarioSelected(name) {
+  const only = SCENARIO_FILTER.only || [];
+  const skip = SCENARIO_FILTER.skip || [];
+  if (only.length && !only.some((k) => name.includes(k))) return false;
+  if (skip.some((k) => name.includes(k))) return false;
+  return true;
+}
+
+/** 每个场景的墙钟耗时（宿主侧报告里打「最慢的几个」） */
+const timings = [];
+/** 被 --only / --skip 跳过的场景名 */
+const skippedScenarios = [];
+
+/**
  * 每个场景独立 try/catch：一个崩了不影响后面的。
  * 开头 / 结尾那两行 [progress] 只在 `--progress` 时由宿主打出来
  * （跑超时时用它分清「卡死」和「只是还没跑完」）。
  */
 async function scenario(name, fn) {
+  if (!scenarioSelected(name)) {
+    skippedScenarios.push(name);
+    return;
+  }
   currentScenario = name;
+  const t0 = Date.now();
+  const from = results.length;
   console.log(`[progress] ${results.length} 条断言 | 开始场景：${name}`);
   try {
     await fn();
   } catch (err) {
     check('场景没能跑完', false, (err && err.message) || String(err));
   }
+  const ms = Date.now() - t0;
+  timings.push({ name, ms, from, to: results.length });
   currentScenario = '';
-  console.log(`[progress] ${results.length} 条断言 | 完成场景：${name}`);
+  console.log(`[progress] ${results.length} 条断言 | 完成场景：${name}（${ms}ms）`);
 }
 
 function revealEditorControl(node) {
@@ -3782,11 +3809,22 @@ await scenario('当前场景：读取真实状态与归属', async () => {
 
 await scenario('侧栏：入口网格与收起', async () => {
   const sidebar = document.querySelector('.sidebar');
+
+  // 截图 driver（--shot=accountMe）会真的注册一个账号、把登录态留在数据目录里，
+  // 下面那两条「未登录」断言就会红。这里先从账号菜单里退出，让场景自己成立。
+  if (/@/.test(byId('account-sub')?.textContent || '')) {
+    click('#btn-account');
+    await waitFor('账号菜单打开', () => shown('#account-menu'));
+    click('#btn-account-menu-logout');
+    await waitFor('退出上一次的登录', () => byId('account-name')?.textContent.trim() === '未登录');
+  }
   // 232 → 280（2026-10-12 晚）→ 300（底部入口图标 18 / 字 14px 之后需要的列宽）
   check('侧栏宽度 224', Math.round(sidebar.getBoundingClientRect().width) === 224, String(Math.round(sidebar.getBoundingClientRect().width)));
 
   const foot = $$('.sidebar-foot m-button');
-  check('侧栏保留四个创作入口', foot.length === 4, String(foot.length));
+  // 2026-10-23：设置从「第四颗带字入口」收成账号条右边的齿轮（接登录），
+  // 所以这一组只剩三颗创作入口 —— 齿轮在不在、能不能开设置另有断言。
+  check('侧栏保留三个创作入口', foot.length === 3, String(foot.length));
   check('数据按钮位于设置页', !!byId('btn-folder')?.closest('#view-settings'));
   check(
     '每颗都带图标',
@@ -3798,6 +3836,46 @@ await scenario('侧栏：入口网格与收起', async () => {
     !!byId('btn-folder') && byId('btn-folder').textContent.trim() === '打开数据文件夹',
     byId('btn-folder') ? byId('btn-folder').textContent.trim() : '(没有)'
   );
+
+  // --- 2026-10-23：底部最后一行 = 账号 + 设置齿轮 ---
+  {
+    const acct = document.querySelector('.sidebar-account');
+    const acctBtn = byId('btn-account');
+    const gear = byId('btn-settings');
+    check('底部有账号条（账号格 + 齿轮）', !!acct && !!acctBtn && !!gear);
+    check(
+      '账号条排在创作入口下面（最底那一行）',
+      !!acct &&
+        foot.length > 0 &&
+        acct.getBoundingClientRect().top >= foot[foot.length - 1].getBoundingClientRect().bottom - 1
+    );
+    check(
+      '未登录态写「未登录」+ 一句用途',
+      byId('account-name')?.textContent.trim() === '未登录' &&
+        /登录/.test(byId('account-sub')?.textContent || ''),
+      `${byId('account-name')?.textContent}/${byId('account-sub')?.textContent}`
+    );
+    check('未登录头像位是人形图标', !!byId('account-avatar')?.querySelector('svg'));
+    check(
+      '设置是齿轮图标按钮、没有文字',
+      !!gear && !!gear.querySelector('svg') && gear.textContent.trim() === ''
+    );
+    const g = gear ? gear.getBoundingClientRect() : null;
+    const a = acctBtn ? acctBtn.getBoundingClientRect() : null;
+    check(
+      '齿轮在账号右边、同一行',
+      !!g &&
+        !!a &&
+        g.left >= a.right - 1 &&
+        Math.abs(g.top + g.height / 2 - (a.top + a.height / 2)) <= 2,
+      g && a ? `gear@${Math.round(g.left)}/${Math.round(g.top)} acct@${Math.round(a.left)}/${Math.round(a.top)}` : '（没有）'
+    );
+    check(
+      '账号格没把侧栏撑宽（都在 224 之内）',
+      !!acct && acct.getBoundingClientRect().right <= sidebar.getBoundingClientRect().right + 0.5,
+      acct ? String(Math.round(acct.getBoundingClientRect().right)) : '（没有）'
+    );
+  }
 
   // 当前会话左侧那条短竖线是 ::before 画的
   const active = document.querySelector('.convo-item.active');
@@ -3842,13 +3920,14 @@ await scenario('侧栏：入口网格与收起', async () => {
       // 那不是样式变了。颜色仍然必须是透明的 —— 那才是「纯 ghost」的本体。
       // ⚙ 2026-10-16 迁 m-button：边框/背景长在里层 .mi-btn__control 上，宿主本身没边框，
       //    所以要读 b.control（里层原生 button），而不是宿主（否则取到 currentColor）。
+      // ⚙ 2026-10-23：原来为「设置」那颗开的透明边框例外随它一起撤了 —— 它现在是账号条里的齿轮。
       foot.every((b) => {
         const cs = getComputedStyle(b.control);
         return (
           cs.backgroundColor === 'rgba(0, 0, 0, 0)' &&
           parseFloat(cs.borderTopWidth) > 0.5 &&
           cs.borderTopStyle === 'solid' &&
-          (cs.borderTopColor === 'rgba(0, 0, 0, 0)' || b.id === 'btn-settings')
+          cs.borderTopColor === 'rgba(0, 0, 0, 0)'
         );
       }),
       foot.map((b) => `${b.id}${b.classList.contains('active') ? '[active]' : ''} ` +
@@ -3924,8 +4003,8 @@ await scenario('侧栏：入口网格与收起', async () => {
       railMark ? String(Math.round(railMark.getBoundingClientRect().width)) : '（没有）'
     );
     check(
-      '收起后 6 颗入口图标都还在，只是文字藏了',
-      foot.length === 4 &&
+      '收起后 3 颗创作入口图标都还在，只是文字藏了',
+      foot.length === 3 &&
         foot.every((b) => getComputedStyle(b).display !== 'none' && !!b.querySelector('svg')) &&
         foot.every((b) => {
           const label = b.querySelector('.foot-label');
@@ -3938,6 +4017,24 @@ await scenario('侧栏：入口网格与收起', async () => {
       getComputedStyle(document.querySelector('.sidebar-foot')).gridTemplateColumns.split(' ').length === 1,
       getComputedStyle(document.querySelector('.sidebar-foot')).gridTemplateColumns
     );
+    // 2026-10-23：账号条在图标轨里竖成一列 —— 头像一格、齿轮一格，文字整块藏掉。
+    {
+      const acctText = document.querySelector('.account-text');
+      const gearBox = byId('btn-settings')?.getBoundingClientRect();
+      check(
+        '收起后账号格还在（头像那颗仍可点），只是文字藏了',
+        !!byId('btn-account') &&
+          byId('btn-account').getBoundingClientRect().width > 0 &&
+          !!acctText &&
+          getComputedStyle(acctText).display === 'none'
+      );
+      check(
+        '收起后齿轮也在图标轨里、没越界',
+        !!gearBox && gearBox.width > 0 && gearBox.right <= sidebar.getBoundingClientRect().right + 0.5,
+        gearBox ? `${Math.round(gearBox.width)}×${Math.round(gearBox.height)}` : '（没有）'
+      );
+    }
+
     const railAv = byId('rail-avatar');
     check(
       '底部不再重复显示当前会话头像',
@@ -3979,6 +4076,288 @@ await scenario('侧栏：入口网格与收起', async () => {
 //  ⚠️ 场景结束必须把弹窗都关掉、且不留 modal-max：后面的截图/布局断言
 //     都按「弹窗是正常大小」算，留着放大的状态会拍出一张铺满屏幕的图。
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+//  场景：账号弹窗 —— 图形校验码 → 注册两步 → 凭证卡 → 退出 → 凭证登录
+//
+//  ⚠️ 图形码是**图**，自动测试读不到；主进程只在 MIMITALE_ACCOUNT_TEST=1 时把答案
+//     一起回给界面，渲染层把它挂在输入框的 dataset.answer 上（界面上不显示）。
+//  ⚠️ 邮箱带时间戳：冒烟的数据目录是复用的，写死一个值第二次跑就会「已注册」。
+//  ⚠️ 场景结束必须**退出登录并关掉弹窗** —— 后面还有布局和截图断言，
+//     一个盖住界面的弹窗、一个变了的侧栏都会把它们带歪。
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+//  场景：账号全流程 —— 注册 → 左下角菜单 → 设置页用户信息 → 凭证登录
+//
+//  ⚠️ 图形码是**图**，自动测试读不到；主进程只在 MIMITALE_ACCOUNT_TEST=1 时把答案
+//     一起回给界面，渲染层挂在输入框的 dataset.answer 上（界面上不显示）。
+//  ⚠️ 邮箱带时间戳：冒烟的数据目录是复用的，写死一个值第二次跑就会「已注册」。
+//  ⚠️ 场景结束必须**退出登录并关掉弹窗** —— 后面还有布局和截图断言。
+// ---------------------------------------------------------------------------
+await scenario('账号：注册 → 左下角菜单 → 用户信息 → 凭证登录', async () => {
+  const answerOf = (sel) => {
+    const node = $(sel);
+    return node ? String(node.dataset.answer || '') : '';
+  };
+  const fill = (sel, value) => {
+    const node = $(sel);
+    if (!node) return false;
+    node.value = value;
+    return true;
+  };
+  const errText = (sel) => ($(sel) ? $(sel).textContent.trim() : '');
+  const pngSize = (src) =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = () => resolve({ w: 0, h: 0 });
+      img.src = src;
+    });
+  const loggedIn = () => /@/.test($('#account-sub')?.textContent || '');
+
+  // 上一轮（或截图 driver）可能在数据目录里留了登录态：先走菜单退出来
+  if (loggedIn()) {
+    click('#btn-account');
+    await waitFor('已登录时先弹出菜单', () => shown('#account-menu'));
+    click('#btn-account-menu-logout');
+    await waitFor('清掉上一次的登录态', () => !loggedIn());
+  }
+  check('未登录时那颗齿轮还在（否则进不去设置）', getComputedStyle($('#btn-settings')).display !== 'none');
+  check('未登录时点账号格开的是登录窗', true);
+
+  click('#btn-account');
+  await waitFor('账号弹窗打开', () => shown('#account-modal'));
+  await waitFor('校验码图出来', () => /^data:image\/svg\+xml/.test($('#acc-login-captcha-img')?.src || ''));
+  check('未登录时先落在登录面板', shown('#account-pane-login'));
+  check(
+    '校验码是主进程画的 SVG',
+    /^data:image\/svg\+xml/.test($('#acc-login-captcha-img')?.src || ''),
+    ($('#acc-login-captcha-img')?.src || '').slice(0, 34)
+  );
+  check(
+    '登录面板三件事都在（邮箱 / 密码 / 校验码）',
+    !!$('#acc-login-email') && !!$('#acc-login-password') && !!$('#acc-login-captcha')
+  );
+
+  // --- 注册第一步 ---
+  click('#btn-goto-register');
+  await waitFor('切到注册面板', () => shown('#account-pane-register'));
+  await waitFor('注册面板的校验码也出来了', () => !!answerOf('#acc-reg-captcha'));
+
+  const email = `smoke${Date.now()}@example.com`;
+  fill('#acc-reg-email', email);
+
+  // 先故意填错：验「图形码没过，就不给邮箱发验证码」
+  fill('#acc-reg-captcha', 'ZZZZ');
+  click('#btn-account-send-code');
+  await waitFor('错误提示出现', () => errText('#acc-reg-error').length > 0);
+  check('图形码不对时明确拒绝', /校验码/.test(errText('#acc-reg-error')), errText('#acc-reg-error'));
+  check('被拒之后提示里没有验证码', !/\d{6}/.test($('#acc-reg-hint')?.textContent || ''));
+  await waitFor('换了一张新图', () => !!answerOf('#acc-reg-captcha'));
+
+  // 这次填对
+  fill('#acc-reg-captcha', answerOf('#acc-reg-captcha'));
+  click('#btn-account-send-code');
+  await waitFor('验证码发出（演示模式提示）', () => /演示模式/.test($('#acc-reg-hint')?.textContent || ''));
+  const hint = $('#acc-reg-hint')?.textContent || '';
+  check('校验通过后才发码，并且提示里给了码', /验证码是 \d{6}/.test(hint), hint);
+  check('发送按钮进入倒计时', /重新获取/.test($('#btn-account-send-code')?.textContent || ''),
+    $('#btn-account-send-code')?.textContent || '');
+
+  const code = (hint.match(/(\d{6})/) || [])[1] || '';
+  fill('#acc-reg-code', code);
+  click('#btn-account-register-next');
+  await waitFor('进注册第二步', () => shown('#account-pane-setup'));
+  check(
+    '第二步要头像 / 用户名 / 密码',
+    !!$('#btn-pick-avatar') && !!$('#acc-setup-name') && !!$('#acc-setup-password')
+  );
+
+  // --- 注册第二步 ---
+  fill('#acc-setup-name', '烟雾测试员');
+  fill('#acc-setup-password', '12345678');
+  fill('#acc-setup-password2', '87654321');
+  click('#btn-account-finish');
+  await waitFor('两次密码不一致的提示', () => errText('#acc-setup-error').length > 0);
+  check('两次密码不一样会被拦下', /不一样/.test(errText('#acc-setup-error')), errText('#acc-setup-error'));
+
+  // 选头像：假 pickImage 回一张 SVG 原图，渲染层应该压成 256×256 的 JPEG 再交给主进程
+  click('#btn-pick-avatar');
+  await waitFor('头像进预览', () => ($('#acc-setup-avatar img')?.src || '').startsWith('data:image/jpeg'));
+  const avatarSize = await pngSize($('#acc-setup-avatar img').src);
+  check('头像压到 256×256', avatarSize.w === 256 && avatarSize.h === 256, `${avatarSize.w}×${avatarSize.h}`);
+
+  fill('#acc-setup-password2', '12345678');
+  click('#btn-account-finish');
+  await waitFor('注册完弹窗自己关掉', () => !shown('#account-modal'));
+  check('侧栏那一格跟着变成用户名', $('#account-name')?.textContent.trim() === '烟雾测试员',
+    $('#account-name')?.textContent);
+  check('侧栏头像用的是刚选那张', ($('#account-avatar img')?.src || '').startsWith('data:image/jpeg'));
+  check('登录后那颗齿轮收进菜单了', getComputedStyle($('#btn-settings')).display === 'none');
+  check('登录后副标题（邮箱）不再占一行', getComputedStyle($('#account-sub')).display === 'none');
+
+  // --- 左下角菜单 ---
+  click('#btn-account');
+  await waitFor('账号菜单弹出', () => shown('#account-menu'));
+  check(
+    '菜单正好三项：设置 / 意见反馈 / 退出登录',
+    $$('#account-menu .menu-item').length === 3,
+    String($$('#account-menu .menu-item').length)
+  );
+  check('菜单里有「设置」并写着快捷键', /Ctrl/.test($('#btn-account-open-settings')?.textContent || ''),
+    $('#btn-account-open-settings')?.textContent?.trim());
+  check('菜单往上弹（贴在账号格上方）', (() => {
+    const menu = $('#account-menu')?.getBoundingClientRect();
+    const btn = $('#btn-account')?.getBoundingClientRect();
+    return !!menu && !!btn && menu.bottom <= btn.top + 1;
+  })());
+
+  // 意见反馈：现在只是占位，点发送要诚实地说没发出去
+  click('#btn-account-feedback');
+  await waitFor('意见反馈弹窗打开', () => shown('#feedback-modal'));
+  check('反馈窗收起了账号菜单', !shown('#account-menu'));
+  fill('#feedback-text', '冒烟用的一条反馈');
+  click('#btn-feedback-send');
+  await waitFor('点发送有回应', () => /还没接上/.test($('#toast')?.textContent || ''));
+  check('没后端时不假装发送成功', /还没接上/.test($('#toast')?.textContent || ''), $('#toast')?.textContent);
+  check('内容没被清掉（用户写的东西留着）', ($('#feedback-text')?.value || '').length > 0);
+  click('#btn-close-feedback');
+  await waitFor('反馈窗关掉', () => !shown('#feedback-modal'));
+
+  // --- 设置 → 用户信息 ---
+  click('#btn-account');
+  await waitFor('菜单再打开', () => shown('#account-menu'));
+  click('#btn-account-open-settings');
+  await waitFor('切到设置页', () => shown('#view-settings'));
+  await waitFor('用户信息那一栏可见', () => shown('#sec-user'));
+  check('用户信息是第一栏（默认就选中它）',
+    $('#sec-user')?.classList.contains('hidden') === false &&
+      document.querySelector('.settings-nav-item.active')?.getAttribute('data-target') === 'sec-user');
+  check('账号菜单点完自己收起', !shown('#account-menu'));
+  check('资料头显示的是用户名', $('#user-name-view')?.textContent.trim() === '烟雾测试员',
+    $('#user-name-view')?.textContent);
+
+  await waitFor('凭证图生成', () => ($('#user-voucher')?.src || '').startsWith('data:image/png'), 6000);
+  const voucher = await pngSize($('#user-voucher').src);
+  check('凭证卡画的是 1024×640', voucher.w === 1024 && voucher.h === 640, `${voucher.w}×${voucher.h}`);
+  const codeOnCard = $('#user-voucher')?.dataset.code || '';
+  check('凭证码是 24 位、4 位一组', /^[A-Z0-9]{4}(-[A-Z0-9]{4}){5}$/.test(codeOnCard), codeOnCard);
+  // ⚠️ 2026-10-23 真踩过：字符集只有 31 个却按 % 32 取，下标 31 拼出 "undefined"，
+  //    码变成 32 位、中间夹一段字母 'ndef-ined'。上一条正则就是为它加的守卫。
+  check(
+    '凭证码里不会混进 undefined 这类脏字',
+    !/undefined|null|nan/i.test(codeOnCard) && codeOnCard.replace(/-/g, '').length === 24,
+    codeOnCard
+  );
+
+  click('#btn-user-export-voucher');
+  await sleep(500);
+  check('导出走的是 PNG 保存通道', /已导出/.test($('#toast')?.textContent || ''), $('#toast')?.textContent);
+
+  // 导出的那张图里必须带着码本身（登录面板「导入凭证图片」靠它，不做 OCR）。
+  // 两条一起验：脏字守卫 + 「这张真图能读回同一个码」。
+  const cardMod = await import(new URL('js/ui/voucherCard.js', document.baseURI).href);
+  const codeInPng = cardMod.readVoucherCodeFromImage($('#user-voucher').src);
+  check(
+    '凭证 PNG 里带着凭证码（导入登录靠它，不是认字）',
+    codeInPng === codeOnCard.replace(/-/g, ''),
+    `读回 ${codeInPng || '(空)'} / 卡面 ${codeOnCard}`
+  );
+  check(
+    '随便一张图不会瞎读出码',
+    cardMod.readVoucherCodeFromImage(
+      'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"/>')
+    ) === '',
+    '非 PNG 应当读不出'
+  );
+
+  // 改用户名：侧栏那一格要跟着变；改完再改回去
+  fill('#user-name-input', '改名试一下');
+  click('#btn-user-save-name');
+  await waitFor('用户名改好', () => $('#account-name')?.textContent.trim() === '改名试一下');
+  check('改用户名后侧栏跟着变', $('#account-name')?.textContent.trim() === '改名试一下');
+  fill('#user-name-input', '烟雾测试员');
+  click('#btn-user-save-name');
+  await waitFor('名字改回来', () => $('#account-name')?.textContent.trim() === '烟雾测试员');
+
+  // 改密码：当前密码错 → 拒绝；对了 → 成功（再改回原密码）
+  fill('#user-pass-current', '错误的密码');
+  fill('#user-pass-new', 'abcdefgh');
+  fill('#user-pass-confirm', 'abcdefgh');
+  click('#btn-user-save-pass');
+  await waitFor('当前密码错会被拦', () => errText('#user-pass-error').length > 0);
+  check('当前密码不对就改不了', /当前密码/.test(errText('#user-pass-error')), errText('#user-pass-error'));
+
+  fill('#user-pass-current', '12345678');
+  click('#btn-user-save-pass');
+  await waitFor('密码改好', () => /密码改好/.test($('#toast')?.textContent || ''));
+  check('密码改成功', /密码改好/.test($('#toast')?.textContent || ''), $('#toast')?.textContent);
+  // 改回来，免得后面凭证登录 / 截图对不上
+  fill('#user-pass-current', 'abcdefgh');
+  fill('#user-pass-new', '12345678');
+  fill('#user-pass-confirm', '12345678');
+  click('#btn-user-save-pass');
+  await sleep(400);
+
+  // 改邮箱：新邮箱 + 图形码 + 验证码
+  await waitFor('邮箱块的校验码出来', () => !!answerOf('#user-email-captcha'));
+  const newEmail = `smoke${Date.now()}b@example.com`;
+  fill('#user-email-input', newEmail);
+  fill('#user-email-captcha', answerOf('#user-email-captcha'));
+  click('#btn-user-send-code');
+  await waitFor('邮箱验证码发出', () => /演示模式/.test($('#user-email-hint')?.textContent || ''));
+  const emailCode = (($('#user-email-hint')?.textContent || '').match(/(\d{6})/) || [])[1] || '';
+  fill('#user-email-code', emailCode);
+  click('#btn-user-save-email');
+  await waitFor('邮箱改好', () => ($('#user-email-view')?.textContent || '').includes(newEmail));
+  check('改邮箱后资料头跟着变', ($('#user-email-view')?.textContent || '').includes(newEmail),
+    $('#user-email-view')?.textContent);
+  check('改邮箱后侧栏副标题也是新邮箱', ($('#account-sub')?.textContent || '').includes(newEmail),
+    $('#account-sub')?.textContent);
+
+  // --- 退出 → 用凭证码登回来 ---
+  click('#btn-account');
+  await waitFor('菜单打开（准备退出）', () => shown('#account-menu'));
+  click('#btn-account-menu-logout');
+  await waitFor('退出后侧栏回到未登录', () => $('#account-name')?.textContent.trim() === '未登录');
+  check('退出登录走的是菜单那一项', $('#account-name')?.textContent.trim() === '未登录');
+
+  click('#btn-account');
+  await waitFor('未登录点开还是登录窗', () => shown('#account-modal'));
+  click('#btn-goto-voucher');
+  await waitFor('切到凭证面板', () => shown('#account-pane-voucher'));
+
+  // --- 先走「导入凭证图片」：不用手抄码 ---
+  // 主进程桩把刚才导出的那张 PNG 原样喂回来（见 smoke-test.js 的 images:pick）。
+  check('凭证面板上有「导入凭证图片」这颗按钮', !!$('#btn-voucher-import'));
+  click('#btn-voucher-import');
+  await waitFor('导入凭证图后直接登进去', () => !shown('#account-modal'), 6000);
+  check('导入凭证图就能登录（不用手抄）', $('#account-name')?.textContent.trim() === '烟雾测试员',
+    $('#account-name')?.textContent);
+
+  // 再退出来，验手输那条路还在（大小写不敏感）
+  click('#btn-account');
+  await waitFor('菜单打开（准备再退一次）', () => shown('#account-menu'));
+  click('#btn-account-menu-logout');
+  await waitFor('退出后可再进凭证面板', () => $('#account-name')?.textContent.trim() === '未登录');
+
+  click('#btn-account');
+  await waitFor('未登录点开还是登录窗', () => shown('#account-modal'));
+  click('#btn-goto-voucher');
+  await waitFor('切到凭证面板', () => shown('#account-pane-voucher'));
+  fill('#acc-voucher-code', codeOnCard.toLowerCase());
+  click('#btn-account-voucher-login');
+  await waitFor('凭证登录成功', () => !shown('#account-modal'));
+  check('凭证码不区分大小写也能登', $('#account-name')?.textContent.trim() === '烟雾测试员',
+    $('#account-name')?.textContent);
+
+  // 收尾：走菜单退出，别把登录态留给后面的场景
+  click('#btn-account');
+  await waitFor('菜单打开（收尾）', () => shown('#account-menu'));
+  click('#btn-account-menu-logout');
+  await waitFor('收尾退出', () => $('#account-name')?.textContent.trim() === '未登录');
+  await waitFor('账号弹窗是关着的', () => !shown('#account-modal'));
+});
+
 await scenario('编辑弹窗的放大按钮', async () => {
   const maxed = (id) => byId(id).classList.contains('modal-max');
   check('预设头上那颗放大按钮还在', !!byId('btn-fs-preset'));
@@ -11646,4 +12025,15 @@ await scenario('消息导航条（轮次刻度）', async () => {
   check('点完当前刻度也跟着切过去', lastMark.classList.contains('is-active'));
 });
 
-return { results, notes, hoverProbe };
+// 筛选一个场景都没匹配上时，「0 条断言 0 条失败」会装成通过 —— 必须显式拦下。
+// （比如 --only=世界書 打成繁体、或者场景名改过之后旧参数还在。）
+if ((SCENARIO_FILTER.only || []).length + (SCENARIO_FILTER.skip || []).length > 0 && !timings.length) {
+  check(
+    '筛选没匹配到任何场景（0 条断言不能算通过）',
+    false,
+    `--only=${(SCENARIO_FILTER.only || []).join(',') || '-'} --skip=${(SCENARIO_FILTER.skip || []).join(',') || '-'}` +
+      ' —— 场景名用子串匹配，先跑 --list 看一眼'
+  );
+}
+
+return { results, notes, hoverProbe, timings, skippedScenarios };

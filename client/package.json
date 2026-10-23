@@ -10,6 +10,7 @@
     "dev": "node tools/dev.js",
     "start:no-sandbox": "electron --no-sandbox .",
     "smoke": "electron --no-sandbox tools/smoke-test.js",
+    "smoke:list": "electron --no-sandbox tools/smoke-test.js --list",
     "diag": "electron --no-sandbox tools/diag-page.js",
     "audit": "node tools/check-dom-ids.js && node tools/audit-buttons.js && node tools/check-imports.js && node tools/check-icons.js",
     "audit:css": "node tools/audit-radius.js && node tools/audit-font.js && node tools/audit-spacing.js && node tools/audit-css-dead.js",

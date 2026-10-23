@@ -33,7 +33,39 @@
         <m-button id="btn-chars" variant="ghost" block data-icon="users" aria-label="打开角色库"><span class="foot-label">角色库</span><span id="foot-chars-count" class="foot-count"></span></m-button>
         <m-button id="btn-worldbooks" variant="ghost" block data-icon="book-open" aria-label="打开世界书"><span class="foot-label">世界书</span><span id="foot-worldbooks-count" class="foot-count"></span></m-button>
         <m-button id="btn-presets" variant="ghost" block data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span><span id="foot-presets-count" class="foot-count"></span></m-button>
-        <m-button id="btn-settings" variant="ghost" block data-icon="settings" aria-label="打开设置"><span class="foot-label">设置</span></m-button>
+
+        <!-- 账号条（2026-10-23）：左边「我是谁」，右边设置齿轮。
+             未登录：人形图标 + 文案 + 右边一颗齿轮；
+             已登录：整行只剩「头像 + 用户名」，点一下往上弹出账号菜单
+                     （设置 / 意见反馈 / 退出登录）—— 齿轮收进菜单里，不再单独占位。
+             ⚠️ 这颗按钮的语义分两种，别写死成「打开登录」：
+                已登录时它开的是菜单（views/account.js 里的 openAccountMenu）。 -->
+        <div id="sidebar-account" class="sidebar-account">
+          <button id="btn-account" class="account-btn" type="button" aria-label="账号（未登录）" aria-haspopup="menu" aria-expanded="false">
+            <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
+            <span class="account-text">
+              <span id="account-name" class="account-name">未登录</span>
+              <span id="account-sub" class="account-sub">登录后同步角色卡</span>
+            </span>
+          </button>
+          <button id="btn-settings" class="icon-btn account-settings" type="button" data-icon="settings" title="设置" aria-label="打开设置"></button>
+
+          <div id="account-menu" class="menu-pop account-menu hidden" role="menu" aria-label="账号菜单">
+            <button id="btn-account-open-settings" class="menu-item" type="button" role="menuitem">
+              <span class="menu-item-icon" aria-hidden="true" data-icon="settings"></span>
+              <span class="menu-item-label">设置</span>
+              <span class="menu-kbd">Ctrl ,</span>
+            </button>
+            <button id="btn-account-feedback" class="menu-item" type="button" role="menuitem">
+              <span class="menu-item-icon" aria-hidden="true" data-icon="message-circle"></span>
+              <span class="menu-item-label">意见反馈</span>
+            </button>
+            <button id="btn-account-menu-logout" class="menu-item menu-item-danger" type="button" role="menuitem">
+              <span class="menu-item-icon" aria-hidden="true" data-icon="logout"></span>
+              <span class="menu-item-label">退出登录</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- 收起态图标轨最下面那颗：当前会话的头像（稿子屏 2，y≈866 那个 20px 方角图）。
@@ -1002,7 +1034,16 @@
 
         <div class="settings-shell">
           <nav class="settings-nav" aria-label="设置分组">
-            <button class="settings-nav-item active" type="button" data-target="sec-models">
+            <!-- 用户信息排第一（2026-10-23）：账号相关的事都收在这一栏，别再塞进「行为」里 -->
+            <button class="settings-nav-item active" type="button" data-target="sec-user">
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="user"></span>
+              <span class="settings-nav-text">
+                <span class="settings-nav-title">用户信息</span>
+                <span class="settings-nav-desc">头像、用户名与密码</span>
+              </span>
+            </button>
+
+            <button class="settings-nav-item" type="button" data-target="sec-models">
               <span class="settings-nav-icon" aria-hidden="true" data-icon="link"></span>
               <span class="settings-nav-text">
                 <span class="settings-nav-title">模型服务</span>
@@ -1064,6 +1105,113 @@
           </nav>
 
           <div class="settings-content page-body settings-body">
+        <!-- 用户信息（2026-10-23）：账号相关的都收在这一栏。
+             ⚠️ 这一栏**没有**「已开 N / M 项」那种统计 —— 它不是开关集合。
+             未登录时整块换成一句说明 + 登录按钮，不显示半空的表单。 -->
+        <section class="panel-section" id="sec-user">
+          <div class="section-head">
+            <span class="section-icon" aria-hidden="true" data-icon="user"></span>
+            <span class="section-heading">
+              <span class="section-title">用户信息</span>
+              <span class="section-desc">点头像就能换；用户名、邮箱和密码都在下面改</span>
+            </span>
+          </div>
+
+          <div id="user-guest" class="user-guest">
+            <p class="user-guest-title">还没登录</p>
+            <p class="user-guest-desc">登录之后可以改资料、导出登录凭证；角色卡和世界书的云同步也在后面。</p>
+            <m-button id="btn-user-login" variant="primary" size="sm">登录 / 注册</m-button>
+          </div>
+
+          <div id="user-body" class="user-body hidden">
+            <div class="user-head">
+              <button id="btn-user-avatar" class="user-avatar" type="button" title="换头像" aria-label="换头像">
+                <span id="user-avatar-img" class="user-avatar-img" data-icon="user"></span>
+                <span class="user-avatar-edit">换</span>
+              </button>
+              <div class="user-head-copy">
+                <p id="user-name-view" class="user-name">—</p>
+                <p id="user-email-view" class="user-email">—</p>
+                <p id="user-since" class="user-since"></p>
+              </div>
+            </div>
+
+            <div class="user-block">
+              <p class="user-block-title">用户名</p>
+              <div class="user-inline">
+                <m-input id="user-name-input" maxlength="20" placeholder="2–20 个字" aria-label="用户名"></m-input>
+                <m-button id="btn-user-save-name" variant="ghost" size="sm">保存</m-button>
+              </div>
+              <p id="user-name-error" class="account-error" role="alert"></p>
+            </div>
+
+            <div class="user-block">
+              <p class="user-block-title">邮箱</p>
+              <p class="field-help">改邮箱要收一封验证码：填新邮箱 → 填校验码 → 点「获取验证码」。</p>
+              <label class="field field-stack">
+                <span class="field-label">新邮箱</span>
+                <m-input id="user-email-input" type="email" placeholder="you@example.com" autocomplete="off" aria-label="新邮箱"></m-input>
+              </label>
+              <div class="field field-stack">
+                <span class="field-label">校验码</span>
+                <div class="account-captcha-row">
+                  <m-input id="user-email-captcha" maxlength="4" placeholder="图上的 4 位" autocomplete="off" spellcheck="false" aria-label="图形校验码"></m-input>
+                  <button id="btn-user-email-captcha" class="account-captcha" type="button" title="看不清？换一张" aria-label="换一张校验码">
+                    <img id="user-email-captcha-img" alt="" draggable="false" />
+                  </button>
+                </div>
+              </div>
+              <div class="field field-stack">
+                <span class="field-label">邮箱验证码</span>
+                <div class="account-code-row">
+                  <m-input id="user-email-code" maxlength="6" inputmode="numeric" placeholder="6 位数字" autocomplete="one-time-code" aria-label="邮箱验证码"></m-input>
+                  <m-button id="btn-user-send-code" variant="ghost" size="sm">获取验证码</m-button>
+                </div>
+                <span id="user-email-hint" class="field-help account-hint"></span>
+              </div>
+              <div class="user-actions">
+                <m-button id="btn-user-save-email" variant="ghost" size="sm">改邮箱</m-button>
+              </div>
+              <p id="user-email-error" class="account-error" role="alert"></p>
+            </div>
+
+            <div class="user-block">
+              <p class="user-block-title">密码</p>
+              <label class="field field-stack">
+                <span class="field-label">当前密码</span>
+                <m-input id="user-pass-current" type="password" autocomplete="current-password" aria-label="当前密码"></m-input>
+              </label>
+              <div class="field-grid">
+                <label class="field">
+                  <span class="field-label">新密码</span>
+                  <m-input id="user-pass-new" type="password" placeholder="至少 8 位" autocomplete="new-password" aria-label="新密码"></m-input>
+                </label>
+                <label class="field">
+                  <span class="field-label">确认新密码</span>
+                  <m-input id="user-pass-confirm" type="password" autocomplete="new-password" aria-label="确认新密码"></m-input>
+                </label>
+              </div>
+              <div class="user-actions">
+                <m-button id="btn-user-save-pass" variant="ghost" size="sm">改密码</m-button>
+              </div>
+              <p id="user-pass-error" class="account-error" role="alert"></p>
+            </div>
+
+            <div class="user-block">
+              <p class="user-block-title">登录凭证</p>
+              <p class="field-help">换电脑或重装之后，凭这张图就能登回来（不用密码）—— 别把它发给别人。</p>
+              <div class="user-voucher-frame">
+                <img id="user-voucher" alt="登录凭证预览" draggable="false" />
+              </div>
+              <div class="user-actions">
+                <m-button id="btn-user-export-voucher" variant="ghost" size="sm">导出凭证图（PNG）</m-button>
+                <m-button id="btn-user-copy-voucher" variant="ghost" size="sm">复制凭证码</m-button>
+              </div>
+              <p id="user-voucher-error" class="account-error" role="alert"></p>
+            </div>
+          </div>
+        </section>
+
         <section class="panel-section" id="sec-support">
           <div class="section-head"><span class="section-heading"><span class="section-title">本地数据</span><span class="section-desc">本机数据管理。</span></span></div>
           <div class="field field-stack"><span class="field-label">本地数据</span><p class="field-help">打开本机数据文件夹，查看或备份应用数据。</p><m-button id="btn-folder" variant="ghost" data-icon="folder" aria-label="打开数据文件夹">打开数据文件夹</m-button></div>
@@ -1714,6 +1862,183 @@
           <m-button id="btn-del-preset" variant="ghost">删除</m-button>
           <m-button id="btn-save-preset" variant="primary">保存</m-button>
           <m-button id="btn-close-preset-2" variant="ghost">关闭</m-button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ================= 账号弹窗（登录 / 注册 / 凭证） =================
+       五块面板共用一张卡片：登录 · 注册第一步（邮箱+验证码）· 注册第二步（头像/用户名/密码）
+       · 凭证登录 · 已登录。一次只显示一块（.account-pane 里没 .hidden 的那块）。
+       ⚠️ 校验码是一张 <img>，src 是主进程拼出来的 data:image/svg+xml（CSP 已放行 data:）。
+          点图片本身就换一张 —— 比旁边再放一颗「换一张」省一行位置。 -->
+  <div id="account-modal" class="modal hidden">
+    <div class="modal-card account-card" role="dialog" aria-modal="true" aria-labelledby="account-title">
+      <header class="modal-head">
+        <div class="modal-heading">
+          <h2 id="account-title">登录</h2>
+          <p id="account-modal-sub" class="modal-sub">登录后可以把角色卡和世界书同步到账号</p>
+        </div>
+        <button id="btn-close-account" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭账号窗口" data-icon="close"></button>
+      </header>
+
+      <div class="modal-body account-body">
+        <!-- ---------- 1. 登录 ---------- -->
+        <section id="account-pane-login" class="account-pane">
+          <label class="field field-stack">
+            <span class="field-label">邮箱</span>
+            <m-input id="acc-login-email" type="email" placeholder="you@example.com" autocomplete="username" aria-label="登录邮箱"></m-input>
+          </label>
+          <label class="field field-stack">
+            <span class="field-label">密码</span>
+            <m-input id="acc-login-password" type="password" placeholder="至少 8 位" autocomplete="current-password" aria-label="登录密码"></m-input>
+          </label>
+          <div class="field field-stack">
+            <span class="field-label">校验码</span>
+            <div class="account-captcha-row">
+              <m-input id="acc-login-captcha" maxlength="4" placeholder="图上的 4 位" autocomplete="off" spellcheck="false" aria-label="图形校验码"></m-input>
+              <button id="btn-login-captcha" class="account-captcha" type="button" title="看不清？换一张" aria-label="换一张校验码">
+                <img id="acc-login-captcha-img" alt="" draggable="false" />
+              </button>
+            </div>
+          </div>
+          <p id="acc-login-error" class="account-error" role="alert"></p>
+          <m-button id="btn-account-login" variant="primary" block>登录</m-button>
+          <div class="account-links">
+            <button id="btn-goto-register" class="account-link" type="button">还没有账号？注册一个</button>
+            <button id="btn-goto-voucher" class="account-link" type="button">用登录凭证登录</button>
+          </div>
+        </section>
+
+        <!-- ---------- 2. 注册第一步：邮箱 + 校验码 + 邮箱验证码 ---------- -->
+        <section id="account-pane-register" class="account-pane hidden">
+          <label class="field field-stack">
+            <span class="field-label">邮箱</span>
+            <m-input id="acc-reg-email" type="email" placeholder="you@example.com" autocomplete="username" aria-label="注册邮箱"></m-input>
+          </label>
+          <div class="field field-stack">
+            <span class="field-label">校验码</span>
+            <div class="account-captcha-row">
+              <m-input id="acc-reg-captcha" maxlength="4" placeholder="图上的 4 位" autocomplete="off" spellcheck="false" aria-label="图形校验码"></m-input>
+              <button id="btn-reg-captcha" class="account-captcha" type="button" title="看不清？换一张" aria-label="换一张校验码">
+                <img id="acc-reg-captcha-img" alt="" draggable="false" />
+              </button>
+            </div>
+            <span class="field-help">校验码通过之后，验证码才会发到你邮箱</span>
+          </div>
+          <div class="field field-stack">
+            <span class="field-label">邮箱验证码</span>
+            <div class="account-code-row">
+              <m-input id="acc-reg-code" maxlength="6" inputmode="numeric" placeholder="6 位数字" autocomplete="one-time-code" aria-label="邮箱验证码"></m-input>
+              <m-button id="btn-account-send-code" variant="ghost">获取验证码</m-button>
+            </div>
+            <span id="acc-reg-hint" class="field-help account-hint"></span>
+          </div>
+          <p id="acc-reg-error" class="account-error" role="alert"></p>
+          <m-button id="btn-account-register-next" variant="primary" block>下一步</m-button>
+          <div class="account-links">
+            <button id="btn-register-back" class="account-link" type="button">已有账号？去登录</button>
+          </div>
+        </section>
+
+        <!-- ---------- 3. 注册第二步：头像 + 用户名 + 密码 ---------- -->
+        <section id="account-pane-setup" class="account-pane hidden">
+          <div class="account-avatar-pick">
+            <button id="btn-pick-avatar" class="account-avatar-slot" type="button" title="选一张头像" aria-label="选一张头像">
+              <span id="acc-setup-avatar" class="account-avatar-preview" data-icon="user"></span>
+              <span class="account-avatar-edit">换</span>
+            </button>
+            <div class="account-avatar-copy">
+              <p class="account-avatar-title">给自己挑一张头像</p>
+              <p class="account-avatar-desc">可以不设，之后再换；图片会压到 256×256 再存</p>
+            </div>
+          </div>
+          <label class="field field-stack">
+            <span class="field-label">用户名</span>
+            <m-input id="acc-setup-name" maxlength="20" placeholder="别人看到的名字，2–20 个字" aria-label="用户名"></m-input>
+          </label>
+          <label class="field field-stack">
+            <span class="field-label">密码</span>
+            <m-input id="acc-setup-password" type="password" placeholder="至少 8 位" autocomplete="new-password" aria-label="设置密码"></m-input>
+          </label>
+          <label class="field field-stack">
+            <span class="field-label">确认密码</span>
+            <m-input id="acc-setup-password2" type="password" placeholder="再输一遍" autocomplete="new-password" aria-label="确认密码"></m-input>
+          </label>
+          <p id="acc-setup-error" class="account-error" role="alert"></p>
+          <m-button id="btn-account-finish" variant="primary" block>完成注册</m-button>
+          <div class="account-links">
+            <button id="btn-setup-back" class="account-link" type="button">返回上一步</button>
+          </div>
+        </section>
+
+        <!-- ---------- 4. 用登录凭证登录 ---------- -->
+        <section id="account-pane-voucher" class="account-pane hidden">
+          <p class="account-copy">
+            把当初导出的那张凭证图拿出来：可以直接<b>导入这张图</b>，
+            也可以把图上那串 <b>24 位凭证码</b>抄进来。
+            用凭证登录不需要密码，所以那张图<b>别发给别人</b>。
+          </p>
+          <label class="field field-stack">
+            <span class="field-label">凭证码</span>
+            <m-input id="acc-voucher-code" class="account-code-input" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" maxlength="34" spellcheck="false" autocomplete="off" aria-label="登录凭证码"></m-input>
+          </label>
+          <p id="acc-voucher-error" class="account-error" role="alert"></p>
+          <m-button id="btn-account-voucher-login" variant="primary" block>用凭证登录</m-button>
+          <p class="account-or"><span>或者</span></p>
+          <m-button id="btn-voucher-import" class="account-import-btn" variant="ghost" block>导入凭证图片（PNG）</m-button>
+          <p class="field-help account-import-help">要当初导出的那张 <b>PNG 原图</b>：截图或聊天软件转发过的图会丢信息，那种只能手动抄码。</p>
+          <div class="account-links">
+            <button id="btn-voucher-back" class="account-link" type="button">回邮箱登录</button>
+          </div>
+        </section>
+
+        <!-- 5. 原来的「已登录：资料 + 凭证」面板 2026-10-23 搬去了**设置页 · 用户信息**
+             （点左下角账号格 → 菜单里没有「我的账号」这一项，账号相关的都在设置第一栏）。
+             登录成功后这个弹窗直接关掉，不再跳一个「我的账号」面板。 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 意见反馈弹窗（2026-10-23 预留） =================
+       现在**没有后端可发**，所以「发送」只给一句提示、内容留在框里不清空 ——
+       星宝的口径是先把这个窗口占上，等服务器接上再把发送接成真的。
+       ⚠️ 接后端时只换 views/feedback.js 里那一处 sendFeedback()，别动这个结构。 -->
+  <div id="feedback-modal" class="modal hidden">
+    <div class="modal-card feedback-card" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
+      <header class="modal-head">
+        <div class="modal-heading">
+          <h2 id="feedback-title">意见反馈</h2>
+          <p class="modal-sub">遇到了什么问题，或者想让它变成什么样</p>
+        </div>
+        <button id="btn-close-feedback" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭意见反馈" data-icon="close"></button>
+      </header>
+
+      <div class="modal-body">
+        <div class="field field-stack">
+          <span class="field-label">类型</span>
+          <div class="feedback-kinds" role="radiogroup" aria-label="反馈类型">
+            <button class="feedback-kind active" type="button" data-kind="bug" role="radio" aria-checked="true">问题</button>
+            <button class="feedback-kind" type="button" data-kind="idea" role="radio" aria-checked="false">建议</button>
+            <button class="feedback-kind" type="button" data-kind="other" role="radio" aria-checked="false">其它</button>
+          </div>
+        </div>
+
+        <label class="field field-stack">
+          <span class="field-label">说两句</span>
+          <m-textarea id="feedback-text" rows="6" placeholder="例如：切到夜间主题之后，消息区的行距忽大忽小" aria-label="反馈内容"></m-textarea>
+        </label>
+
+        <p id="feedback-hint" class="field-help">
+          会附上版本号与系统信息（不用自己写）
+        </p>
+      </div>
+
+      <footer class="modal-foot">
+        <span class="foot-hint">还没接服务器，这条暂时发不出去</span>
+        <div class="foot-actions">
+          <m-button id="btn-feedback-cancel" variant="ghost">关闭</m-button>
+          <m-button id="btn-feedback-send" variant="primary">发送</m-button>
         </div>
       </footer>
     </div>

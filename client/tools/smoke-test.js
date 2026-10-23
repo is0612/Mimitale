@@ -38,6 +38,10 @@ const os = require('os');
 //   所以下面 probeStoreWriteFailure 自己指到临时目录那套照旧生效。）
 process.env.MIMITALE_DATA_DIR = path.join(os.tmpdir(), 'mimitale-smoke-data');
 
+// 账号的图形校验码：主进程只在测试模式下把答案一起回给界面（真后端绝不回）。
+// 没有它，注册 / 登录那几条链路（要填图上的 4 位）一步都走不过去。
+process.env.MIMITALE_ACCOUNT_TEST = '1';
+
 // 设置落盘归一化：和 main.js 的 settings:save 跑的是同一份。
 // 假后端以前只做 Object.assign，等于**跳过**了归一化 —— 归一化里删错一个键
 // （maxTurns 就被 `delete s.maxTurns` 删过）测试照样全绿，真机上却怎么改都不生效。
@@ -92,7 +96,10 @@ const APP_DIR = path.join(__dirname, '..');
 // 兜底超时。⚠️ 它是**整套**的墙钟上限，不是单个场景的 —— 场景越加越多，
 // 2026-09-30 加进「世界书：保存后才生效 / 卡片上删除」之后原来那 90 秒就不够了
 // （跑到「剧情选项」正好卡线，看上去像卡死，其实只是还没跑完）。
-const OVERALL_TIMEOUT_MS = 150000;
+// 2026-10-23 又顶满了：账号场景这批加进来后整套要 ~260s（流式场景每个 5-8s
+// 是大头），150s 时跑到「Esc 链」正好被误杀 —— 加到 300s。
+// 分辨「卡死还是慢」别靠猜：`--progress` 会按场景打印进度。
+const OVERALL_TIMEOUT_MS = 300000;
 
 // --shot-only：**只出图，不跑断言**。
 //
@@ -107,6 +114,51 @@ const OVERALL_TIMEOUT_MS = 150000;
 //    chars / charArt / charEditor / charAttrs / charTextareas / worldbook /
 //    worldbookPage / settings / modelMenu / moreMenu。
 const SHOT_ONLY = process.argv.includes('--shot-only');
+
+// ---------------------------------------------------------------------------
+//  场景筛选（2026-10-23）
+//
+//  为什么要它：整套 1871 条断言跑 90 秒，可改一行世界书代码也得等全场跑完 ——
+//  和当初加 --shot-only 是同一个毛病（见上面那段）：**工具用错了**，不是严谨。
+//  按场景筛过之后，「改世界书」这类活儿只跑十来个场景、两三秒出结果。
+//
+//  用法：
+//    --only=世界书          只跑名字里含「世界书」的场景（子串匹配）
+//    --only=世界书,账号     逗号分隔，命中任一即跑
+//    --skip=账号,桌宠       跳过命中项，其余照跑
+//    --list                 只列出所有场景名（秒出，不开窗口）
+//
+//  ⚠️ 场景之间有先后依赖：后面的场景会蹭前面留下的会话 / 角色 / 世界书。
+//     单独跑某个场景时它是「从干净状态出发」的，断言红了先怀疑这一点，
+//     别急着改代码。所以 --only 只适合**迭代时自查**，
+//     提代码之前的验收仍然要跑整套（报告末尾会提醒）。
+// ---------------------------------------------------------------------------
+const listArg = (name) => {
+  const raw = process.argv.find((a) => a.startsWith(name + '='));
+  if (!raw) return [];
+  return raw
+    .slice(name.length + 1)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+};
+const ONLY = listArg('--only');
+const SKIP = listArg('--skip');
+const FILTERED = ONLY.length > 0 || SKIP.length > 0;
+// --verbose：逐条打印断言。默认只按场景打一行汇总 —— 1871 行刷屏没人看，
+// 想看细节时再加这个参数。
+const VERBOSE = process.argv.includes('--verbose');
+
+// --list：光列场景名。场景名写在 smoke-renderer.js 的 await scenario('...') 上，
+// 这里直接扫源码 —— 不启动窗口，秒回。
+if (process.argv.includes('--list')) {
+  const src = fs.readFileSync(path.join(__dirname, 'smoke-renderer.js'), 'utf8');
+  const names = [...src.matchAll(/await scenario\('([^']+)'/g)].map((m) => m[1]);
+  console.log(`\n  共 ${names.length} 个场景（--only= / --skip= 按名字**子串**匹配，逗号分隔可给多个）：\n`);
+  names.forEach((n, i) => console.log(`  ${String(i + 1).padStart(3)}  ${n}`));
+  console.log('');
+  process.exit(0);
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const clone = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
@@ -898,7 +950,17 @@ function registerStubs() {
         '<circle cx="600" cy="560" r="220" fill="#9db4d8"/>' +
         '</svg>'
     );
-  ipcMain.handle('images:pick', () => ({ canceled: false, dataUrl: PICK_IMAGE }));
+  ipcMain.handle('images:pick', (_event, options) => {
+    // 「导入凭证图片」拿的是**刚才导出的那张凭证 PNG**（tEXt 里带着凭证码）。
+    // 页面里画的卡只有渲染层有，所以这里借导出时交上来的 payload 反手喂回去 ——
+    // 这样「导出 → 导入 → 登录成功」这条真实链路才算真的被跑到，
+    // 不是拿一张假图糊弄过去。其它场景（换头像等）照旧返回 PICK_IMAGE。
+    if (options && /凭证/.test(String(options.title || ''))) {
+      const png = lastExport && String(lastExport.fileName || '').includes('凭证') ? lastExport : null;
+      if (png && png.base64) return { canceled: false, dataUrl: `data:image/png;base64,${png.base64}` };
+    }
+    return { canceled: false, dataUrl: PICK_IMAGE };
+  });
 
   // 批量导入表情图：六个「文件名里带情绪词」的假文件，读回同一张真图。
   // 前三个用英文、后三个用中文 —— 渲染层认情绪的两种输入都要跑到。
@@ -944,6 +1006,31 @@ function registerStubs() {
     exportedPayloads.push(clone(payload));
     return { canceled: false, filePath: 'C:\\fake\\' + ((payload && payload.fileName) || 'export') };
   });
+
+  // --- 账号（登录 / 注册 / 凭证）---
+  // 直接借真主进程那份「假后端」（main/account.js），不另写一套桩：
+  // 密码 scrypt 哈希、凭证码规整、图形码一次性这些真实逻辑也跟着被跑到。
+  // ⚠️ 它写 account.json 到 MIMITALE_DATA_DIR（上面那个临时目录），不碰真数据。
+  const accountApi = require('../main/account.js');
+  const accountCall = (fn) => async (_event, payload) => {
+    try {
+      return { ok: true, ...(await fn(payload)) };
+    } catch (err) {
+      return { ok: false, error: (err && err.message) || '账号操作失败' };
+    }
+  };
+  ipcMain.handle('account:session', accountCall(() => accountApi.getSession()));
+  ipcMain.handle('account:captcha', accountCall(() => accountApi.createCaptcha()));
+  ipcMain.handle('account:send-code', accountCall((payload) => accountApi.sendEmailCode(payload)));
+  ipcMain.handle('account:register', accountCall((payload) => accountApi.register(payload)));
+  ipcMain.handle('account:complete-profile', accountCall((payload) => accountApi.completeProfile(payload)));
+  ipcMain.handle('account:login', accountCall((payload) => accountApi.login(payload)));
+  ipcMain.handle('account:voucher-login', accountCall((payload) => accountApi.loginWithVoucher(payload)));
+  ipcMain.handle('account:logout', accountCall(() => accountApi.logout()));
+  ipcMain.handle('account:voucher', accountCall(() => accountApi.getVoucher()));
+  ipcMain.handle('account:update-profile', accountCall((payload) => accountApi.updateProfile(payload)));
+  ipcMain.handle('account:change-password', accountCall((payload) => accountApi.changePassword(payload)));
+  ipcMain.handle('account:change-email', accountCall((payload) => accountApi.changeEmail(payload)));
 
   // --- 桌宠 ---
   //
@@ -1538,25 +1625,65 @@ function registerStubs() {
 //  跑测试
 // ---------------------------------------------------------------------------
 function report(result, consoleErrors, consoleWarnings, crashed) {
-  const results = (result && result.results) || [];
+  const allResults = (result && result.results) || [];
   const notes = (result && result.notes) || [];
+  const timings = (result && result.timings) || [];
+  const skippedScenarios = (result && result.skippedScenarios) || [];
+
+  // --only / --skip 时把宿主侧那批「事后翻记录」的断言整段排除：
+  // 它们依赖被跳过场景攒下的请求 / 导出记录，在这里必然红，红了也不代表回归。
+  const hostSkipped = FILTERED ? allResults.filter((r) => r.scope === 'host').length : 0;
+  const results = FILTERED ? allResults.filter((r) => r.scope !== 'host') : allResults;
 
   const failed = results.filter((r) => !r.pass);
   const width = results.reduce((m, r) => Math.max(m, r.name.length), 0);
 
+  // 场景名 → 耗时（渲染侧按场景执行顺序记的，和断言的顺序一致）
+  const msOf = new Map(timings.map((t) => [t.name, t.ms]));
+  const fmtMs = (ms) => (ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : Math.round(ms) + 'ms');
+
+  // 断言按场景聚合：默认每个场景打一行（✓ 3/3 · 420ms）。
+  // 1871 条逐条刷屏，真要那一屏得加 --verbose —— 平时只需要知道「哪个场景红了」。
+  const groups = [];
+  for (const r of results) {
+    const name = r.name.split(' · ')[0];
+    let g = groups.find((x) => x.name === name);
+    if (!g) {
+      g = { name, items: [] };
+      groups.push(g);
+    }
+    g.items.push(r);
+  }
+
   console.log('');
   console.log('────────────── 冒烟测试 ──────────────');
 
-  let current = '';
-  for (const r of results) {
-    // 场景名是「场景 · 断言」的形式，切一下方便阅读
-    const group = r.name.split(' · ')[0];
-    if (group !== current) {
-      current = group;
-      console.log(`\n  【${group}】`);
+  // 全绿时只打一行 —— 136 行「✓ 每个场景」没人看，滚过去只剩最后那行有用。
+  // 有红的场景才逐场景展开（这样能看出它前后是哪个场景），想看全量加 --verbose。
+  const showGroups = VERBOSE || failed.length > 0 || !!crashed;
+  if (showGroups) {
+    for (const g of groups) {
+      const bad = g.items.filter((r) => !r.pass);
+      const ms = msOf.has(g.name) ? ` · ${fmtMs(msOf.get(g.name))}` : '';
+      console.log(`  ${bad.length ? '✗' : '✓'} 【${g.name}】 ${g.items.length - bad.length}/${g.items.length}${ms}`);
+      const show = VERBOSE ? g.items : bad;
+      for (const r of show) {
+        const label = r.name.includes(' · ') ? r.name.split(' · ').slice(1).join(' · ') : r.name;
+        console.log(`      ${r.pass ? '✓' : '✗'} ${label.padEnd(width)}${r.pass ? '' : '   ← ' + r.detail}`);
+      }
     }
-    const label = r.name.includes(' · ') ? r.name.split(' · ').slice(1).join(' · ') : r.name;
-    console.log(`    ${r.pass ? '✓' : '✗'} ${label.padEnd(width)}${r.pass ? '' : '   ← ' + r.detail}`);
+  } else {
+    console.log(`  ✓ ${timings.length} 个场景全部通过（想看每个场景的条数和耗时加 --verbose）`);
+  }
+  // 筛选模式下把「到底跑了哪几个」列出来 —— 一行汇总看不出筛得对不对。
+  // 只列得下 30 个（--skip 时动辄 130 个，全列等于刷屏），再多就让人加 --verbose。
+  if (FILTERED && !VERBOSE && timings.length) {
+    const names = timings.map((t) => t.name);
+    console.log(
+      names.length <= 30
+        ? `    跑的 ${names.length} 个场景：${names.join('、')}`
+        : `    跑了 ${names.length} 个场景（名单加 --verbose 看）`
+    );
   }
 
   console.log('');
@@ -1574,12 +1701,34 @@ function report(result, consoleErrors, consoleWarnings, crashed) {
     consoleErrors.slice(0, 10).forEach((e) => console.log('    ! ' + e));
   }
 
+  // 最慢的场景：整套慢的时候，先看这几个在干什么（固定 sleep 是大头）。
+  const totalMs = timings.reduce((s, t) => s + t.ms, 0);
+  const slowest = [...timings].sort((a, b) => b.ms - a.ms).slice(0, 8).filter((t) => t.ms >= 300);
+  console.log('');
+  if (timings.length) {
+    console.log(
+      `  场景耗时：${timings.length} 个场景合计 ${(totalMs / 1000).toFixed(1)}s` +
+        (slowest.length ? '，最慢的几个：' : '（每个都在 300ms 以内）')
+    );
+    slowest.forEach((t) => console.log(`    ${fmtMs(t.ms).padStart(6)}  ${t.name}`));
+  }
+
   console.log('');
   const passed = results.length - failed.length;
   console.log(`  断言：${passed}/${results.length} 通过` + (failed.length ? `，${failed.length} 条失败` : ''));
   console.log(`  控制台报错：${consoleErrors.length} 条`);
   console.log(`  写操作记录：${calls.length} 次（${[...new Set(calls)].join(', ')}）`);
   if (crashed) console.log(`  ⚠ ${crashed}`);
+  if (skippedScenarios.length) {
+    console.log('');
+    console.log(
+      `  ⚠ 跳过了 ${skippedScenarios.length} 个场景（--only=${ONLY.join(',') || '-'}` +
+        `${SKIP.length ? ' --skip=' + SKIP.join(',') : ''}）—— 这**不是**整套验证，` +
+        '提代码前请跑一次完整的 `npm run smoke`。'
+    );
+    if (hostSkipped) console.log(`      （另外排除了 ${hostSkipped} 条场景外的公共断言：它们靠前序场景的状态，这里本来就不成立）`);
+    if (VERBOSE) skippedScenarios.forEach((n) => console.log(`      - ${n}`));
+  }
 
   const ok = failed.length === 0 && consoleOk && !crashed;
   console.log('');
@@ -4026,6 +4175,12 @@ async function probeStoreWriteFailure(result) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mimitale-smoke-store-'));
   app.setPath('userData', tmp);
 
+  // ⚠️ dataDir() 是**带缓存**的。2026-10-23 加账号场景后，界面那边会写 account.json，
+  //    缓存早就指向冒烟的数据目录了 —— 不重置的话 saveConversations 会写到那边去，
+  //    下面「把 conversations.json.tmp 占成目录让写失败」就完全不起作用（这条断言白跑）。
+  const { resetDataDirCache } = require('../main/data-dir.js');
+  resetDataDirCache();
+
   try {
     const { writeJson, writeJsonNow, saveConversations } = require('../main/store.js');
 
@@ -4099,6 +4254,8 @@ async function probeStoreWriteFailure(result) {
       /* ignore */
     }
     app.setPath('userData', realUserData);
+    // 恢复真实目录之后同样要清缓存，后面的 probe 才看得到真实数据目录
+    resetDataDirCache();
   }
 }
 
@@ -4290,14 +4447,22 @@ app.whenReady().then(async () => {
   let result = null;
   if (!crashed && !SHOT_ONLY) {
     const domScript = fs.readFileSync(path.join(__dirname, 'smoke-renderer.js'), 'utf8');
+    // 场景筛选靠一个前置变量递进去（渲染侧是注入的脚本，没有 process.argv）。
+    // 用 var 声明：渲染侧那段代码在同一个闭包里，var 不受 TDZ 影响。
+    const prelude = `var SMOKE_FILTER = ${JSON.stringify({ only: ONLY, skip: SKIP })};\n`;
     try {
-      result = await win.webContents.executeJavaScript(`(async () => {\n${domScript}\n})()`);
+      result = await win.webContents.executeJavaScript(`(async () => {\n${prelude}${domScript}\n})()`);
     } catch (err) {
       crashed = '页面内脚本执行失败：' + ((err && err.message) || err);
     }
   }
 
   if (!crashed && result) {
+    // 宿主侧这批 probe 是**事后**翻请求记录 / 导出记录做校验的 —— 它们全都依赖
+    // 前面场景攒下来的副作用（chatPayloads、导出记录、灯箱里那张图…）。
+    // 所以给这一段产生的断言打上 scope='host'：--only / --skip 时整段跳过统计，
+    // 否则「只跑世界书」会带出 38 条假失败，看着像回归（2026-10-23 实测）。
+    const hostBase = result.results.length;
     try {
       probeInjection(result);
       probePresets(result);
@@ -4326,6 +4491,7 @@ app.whenReady().then(async () => {
     } catch (err) {
       crashed = '宿主侧验证失败：' + ((err && err.message) || err);
     }
+    for (const r of result.results.slice(hostBase)) r.scope = 'host';
   }
 
   // --shot=<场景>：把窗口显示出来、切到指定界面再截图到 tools/shots/。
@@ -4806,6 +4972,104 @@ app.whenReady().then(async () => {
         // ⚠️ 现有 driver 几乎全是弹层，消息区只有这里能系统性地看到。去气泡改造后
         // 「左右还分不分得清」「多行正文的换行位置对不对」是**只有肉眼能判**的，
         // 所以这个场景必须自己开一个会话（--shot-only 不跑断言，不会替你建会话）。
+        // 账号弹窗 · 登录面板：邮箱 / 密码 / 校验码三行 + 底部两个入口的版式，
+        // 还有那张 SVG 校验码在深色底上到底认不认得出来 —— 只有出图能核。
+        account: `
+          document.querySelector('#btn-account')?.click();
+          await new Promise(r => setTimeout(r, 800));`,
+        // 账号弹窗 · 已登录面板：一路注册到底，看凭证卡预览长什么样。
+        // ⚠️ 这段是模板字符串：注释里不能有反引号，正则里的反斜杠要写两条。
+        // ⚠️ 它会真的往冒烟数据目录写一个账号（邮箱带时间戳，不撞）——
+        //    冒烟场景开头会先退出登录，所以不会影响断言。
+        // 账号弹窗 · 已登录之后：走菜单进「设置 → 用户信息」，顺便看凭证卡在设置页里的样子。
+        // ⚠️ 这段是模板字符串：注释里不能有反引号，正则里的反斜杠要写两条。
+        // ⚠️ 它会真的往冒烟数据目录写一个账号（邮箱带时间戳，不撞）——
+        //    冒烟场景开头会先退出登录，所以不会影响断言。
+        accountMe: `
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          const fill = (sel, v) => { const n = $(sel); if (n) n.value = v; };
+          const loggedIn = () => /@/.test(($('#account-sub') || {}).textContent || '');
+
+          if (loggedIn()) {
+            $('#btn-account')?.click();
+            await nap(400);
+            $('#btn-account-menu-logout')?.click();
+            await nap(700);
+          }
+          $('#btn-account')?.click();
+          await nap(700);
+          $('#btn-goto-register')?.click();
+          await nap(800);
+          fill('#acc-reg-email', 'shot' + Date.now() + '@example.com');
+          fill('#acc-reg-captcha', $('#acc-reg-captcha')?.dataset.answer || '');
+          $('#btn-account-send-code')?.click();
+          await nap(1000);
+          const hint = $('#acc-reg-hint')?.textContent || '';
+          fill('#acc-reg-code', (hint.match(/(\\d{6})/) || [])[1] || '');
+          $('#btn-account-register-next')?.click();
+          await nap(800);
+          fill('#acc-setup-name', '星宝');
+          fill('#acc-setup-password', 'mimitale2026');
+          fill('#acc-setup-password2', 'mimitale2026');
+          $('#btn-account-finish')?.click();
+          await nap(1400);
+          // 走菜单进设置页的用户信息
+          $('#btn-account')?.click();
+          await nap(400);
+          $('#btn-account-open-settings')?.click();
+          await nap(1600);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 左下角账号菜单本身（登录后点账号格弹出来的那层）
+        accountMenu: `
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          const fill = (sel, v) => { const n = $(sel); if (n) n.value = v; };
+          const loggedIn = () => /@/.test(($('#account-sub') || {}).textContent || '');
+
+          if (!loggedIn()) {
+            $('#btn-account')?.click();
+            await nap(700);
+            $('#btn-goto-register')?.click();
+            await nap(800);
+            fill('#acc-reg-email', 'shot' + Date.now() + '@example.com');
+            fill('#acc-reg-captcha', $('#acc-reg-captcha')?.dataset.answer || '');
+            $('#btn-account-send-code')?.click();
+            await nap(1000);
+            const hint = $('#acc-reg-hint')?.textContent || '';
+            fill('#acc-reg-code', (hint.match(/(\\d{6})/) || [])[1] || '');
+            $('#btn-account-register-next')?.click();
+            await nap(800);
+            fill('#acc-setup-name', '星宝');
+            fill('#acc-setup-password', 'mimitale2026');
+            fill('#acc-setup-password2', 'mimitale2026');
+            $('#btn-account-finish')?.click();
+            await nap(1400);
+          }
+          $('#btn-account')?.click();
+          await nap(500);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 凭证登录面板：要看的是「手输码 / 或者 / 导入凭证图片」这三段的间距
+        // 和那颗 ghost 按钮的观感 —— DOM 断言只能说它们在，看着舒不舒服只有图能核。
+        accountVoucher: `
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          const loggedIn = () => /@/.test(($('#account-sub') || {}).textContent || '');
+
+          if (loggedIn()) {
+            $('#btn-account')?.click();
+            await nap(400);
+            $('#btn-account-menu-logout')?.click();
+            await nap(700);
+          }
+          $('#btn-account')?.click();
+          await nap(700);
+          $('#btn-goto-voucher')?.click();
+          await nap(600);
+          const code = $('#acc-voucher-code');
+          if (code) { code.value = 'ABCD-EFGH-JKMN'; code.dispatchEvent(new Event('input', { bubbles: true })); }
+          await nap(200);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         chat: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);

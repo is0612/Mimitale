@@ -17,7 +17,9 @@ const DATA_FILES = [
   'characters.json',
   'worldbooks.json',
   'presets.json',
-  'vectors.json'
+  'vectors.json',
+  // 账号（登录态 / 头像 / 凭证码）。程序搬到别的目录时得跟着走，否则搬完要重新登录。
+  'account.json'
 ];
 
 let cachedDir = null;

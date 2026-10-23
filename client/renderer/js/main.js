@@ -66,6 +66,23 @@ import { initChatImages } from './views/chatImages.js';
 import { initSuggestionsUi, pickOption } from './views/suggestionsUi.js';
 import { initQuickPhrases } from './views/quickPhrases.js';
 import { showView, refreshLibraryPage, initViewSwitch } from './views/viewSwitch.js';
+// 侧栏左下角的账号格与账号弹窗：登录流程接好后在这里注入 openLogin
+import { initAccount, renderAccount } from './views/account.js';
+import {
+  initAccountModal,
+  openAccountModal,
+  closeAccountModal,
+  isAccountModalOpen
+} from './views/accountModal.js';
+// 设置页第一栏「用户信息」：账号资料 / 头像 / 密码 / 凭证
+import { initUserSettings, renderUserSection } from './views/userSettings.js';
+// 意见反馈弹窗：现在只是占位（没后端可发），点「发送」会诚实地说没发出去
+import {
+  initFeedbackModal,
+  openFeedbackModal,
+  closeFeedbackModal,
+  isFeedbackModalOpen
+} from './views/feedback.js';
 import { initCharacterList, renderCharacterPage } from './views/characterList.js';
 import {
   initWorldbook,
@@ -337,10 +354,27 @@ function bindEvents() {
     }
   });
 
+  // 全局快捷键 Ctrl+, = 打开设置（左下角账号菜单里那颗「设置」右侧写的就是它，这里真认）。
+  // 没做成快捷键表：项目里只有这一条全局键，为它造一层调度不划算。
+  document.addEventListener('keydown', (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.key !== ',') return;
+    event.preventDefault();
+    openSettings();
+  });
+
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     // 确认弹窗开着的时候，Esc 只关确认框，不要把手底下的弹窗一起关掉
     if (!el.confirmModal.classList.contains('hidden')) return;
+    // 账号弹窗是最上面那层普通弹窗：先关它
+    if (isAccountModalOpen()) {
+      closeAccountModal();
+      return;
+    }
+    if (isFeedbackModalOpen()) {
+      closeFeedbackModal();
+      return;
+    }
     if (!el.requestsModal.classList.contains('hidden')) {
       closeRequestLog();
       return;
@@ -555,6 +589,23 @@ async function init() {
   initQuickPhrases();
   // 侧边栏的「角色库 / 世界书」入口自己绑（切屏是 viewSwitch 自己的事）。
   initViewSwitch();
+  // 账号：登录成功后弹窗自己关掉，侧栏那一格和设置页「用户信息」都要跟着变。
+  initAccountModal({
+    onSessionChange: (user) => {
+      renderAccount(user);
+      if (user) renderUserSection();
+    }
+  });
+  initUserSettings({ openLogin: () => openAccountModal(), onUserChange: renderAccount });
+  initFeedbackModal();
+  // 左下角那一格：未登录点开登录窗，已登录点开菜单（设置 / 意见反馈 / 退出登录）。
+  // ⚠️ 菜单里的「设置」直接落到「用户信息」那一组 —— 用户点自己的头像再看设置，
+  //    想看的是自己的资料，不是上次停在的模型配置。
+  initAccount({
+    openLogin: () => openAccountModal(),
+    openSettings: () => openSettings('sec-user'),
+    openFeedback: () => openFeedbackModal()
+  }).catch((err) => console.error('读取登录状态失败', err));
   // 角色卡三个按钮都跨分区，动作由入口层交给列表页。
   initCharacterList({
     edit: (id) => openCharacterEditor(id, 'library'),

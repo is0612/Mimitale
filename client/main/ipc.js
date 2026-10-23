@@ -78,6 +78,8 @@ const { normalizePreset } = require('./presets.js');
 const { pngWithTextChunk } = require('./png.js');
 // 记忆检索的向量编解码与排序（纯函数，独立成模块便于测试）
 const { encodeVector, decodeVector, rankBySimilarity, collectCandidates } = require('./vectors.js');
+// 账号体系（现在是假后端；服务器到位后把这一个 require 换成走网络的实现）
+const accountApi = require('./account.js');
 // 「这一轮到底发出去了什么」—— 只存内存的环形缓冲，见 main/request-log.js
 const { recordRequest, listRequests, clearRequests, MAX_ENTRIES: MAX_LOGGED_REQUESTS } = require('./request-log.js');
 // 桌宠：通道注册在这里，实现都在 main/pet-*.js（窗口 / 数据 / 发言）
@@ -954,6 +956,35 @@ function registerIpc() {
       return { ok: false, error: (err && err.message) || '打开链接失败' };
     }
   });
+
+  /**
+   * --- 账号（登录 / 注册 / 凭证）---
+   * ⚠️ 现在背后是 main/account.js 那个**假后端**（服务器还没买）。通道名和返回形状
+   *    按真后端定，将来只换实现，preload 与渲染层都不用动。
+   * 统一形状：成功 { ok: true, ... } / 失败 { ok: false, error: '中文原因' } ——
+   * 渲染层直接把 error 拿去显示，不用自己翻译。
+   */
+  const accountCall = (fn) => async (_event, payload) => {
+    try {
+      const result = await fn(payload);
+      return { ok: true, ...(result || {}) };
+    } catch (err) {
+      return { ok: false, error: (err && err.message) || '账号操作失败' };
+    }
+  };
+
+  ipcMain.handle('account:session', accountCall(() => accountApi.getSession()));
+  ipcMain.handle('account:captcha', accountCall(() => accountApi.createCaptcha()));
+  ipcMain.handle('account:send-code', accountCall((payload) => accountApi.sendEmailCode(payload)));
+  ipcMain.handle('account:register', accountCall((payload) => accountApi.register(payload)));
+  ipcMain.handle('account:complete-profile', accountCall((payload) => accountApi.completeProfile(payload)));
+  ipcMain.handle('account:login', accountCall((payload) => accountApi.login(payload)));
+  ipcMain.handle('account:voucher-login', accountCall((payload) => accountApi.loginWithVoucher(payload)));
+  ipcMain.handle('account:logout', accountCall(() => accountApi.logout()));
+  ipcMain.handle('account:voucher', accountCall(() => accountApi.getVoucher()));
+  ipcMain.handle('account:update-profile', accountCall((payload) => accountApi.updateProfile(payload)));
+  ipcMain.handle('account:change-password', accountCall((payload) => accountApi.changePassword(payload)));
+  ipcMain.handle('account:change-email', accountCall((payload) => accountApi.changeEmail(payload)));
 
   /**
    * 生图：走 OpenAI 的 /images/generations，只支持「同步返回图片」的服务商（和聊天是两套配置）。
