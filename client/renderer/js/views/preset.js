@@ -86,6 +86,10 @@ export function openPresetEditor(id) {
     note: preset.note || '',
     tags: Array.isArray(preset.tags) ? [...preset.tags] : [],
     content: preset.content || '',
+    // 条目只在导入的预设（酒馆那类）里出现，编辑器没有编辑界面 —— 这里只留一份计数给
+    // 「另带 N 条条目」那行提示用。⚠️ 保存时不写回：Object.assign 里没有 entries，
+    // 书里的条目原样保留（别为了提示把它带进白名单）。
+    entries: Array.isArray(preset.entries) ? preset.entries.slice() : [],
     enabled: preset.enabled !== false,
     global: preset.global === true,
     temperature: preset.temperature,
@@ -104,6 +108,7 @@ export function newPreset() {
     note: '',
     tags: [],
     content: '',
+    entries: [],
     enabled: true,
     global: false,
     temperature: null,
@@ -128,6 +133,7 @@ export function openPresetDraft(fields) {
     note: String(f.note || '').trim(),
     tags: Array.isArray(f.tags) ? f.tags.filter((t) => typeof t === 'string' && t.trim()) : [],
     content: String(f.content || ''),
+    entries: [],
     enabled: true,
     global: false,
     temperature: null,
@@ -151,9 +157,27 @@ function fillForm() {
   el.pr.temperature.value = Number.isFinite(d.temperature) ? String(d.temperature) : '';
   el.pr.maxTokens.value = Number.isFinite(d.maxTokens) ? String(d.maxTokens) : '';
   if (el.pr.topP) el.pr.topP.value = Number.isFinite(d.topP) ? String(d.topP) : '';
+  renderEntriesHint();
   baseline = snapshot();
   el.pr.footHint.textContent = '预设只保存在你自己电脑上';
   el.pr.footHint.classList.remove('pr-dirty');
+}
+
+/**
+ * 「这条预设另带 N 条条目」那行。
+ *
+ * 条目只在导入的预设里出现（酒馆那类把规则拆成 key/content），编辑器没有编辑界面。
+ * 不显示的话，一个「正文为空、只靠条目生效」的预设看上去就是个坏掉的空预设 ——
+ * 尤其是保存条件放开之后（见 savePreset）。
+ */
+function renderEntriesHint() {
+  const node = el.pr.entriesHint;
+  if (!node) return;
+  const count = Array.isArray(draft && draft.entries) ? draft.entries.length : 0;
+  node.classList.toggle('hidden', !count);
+  node.textContent = count
+    ? `还带着 ${count} 条条目：有关键词的命中才注入，没关键词的每轮都带（条目不能在这个编辑器里改，导出 JSON 能看到原文）。`
+    : '';
 }
 
 function showEditor(subText) {
@@ -214,8 +238,11 @@ async function savePreset() {
     el.pr.name.focus();
     return;
   }
-  if (!draft.content.trim()) {
-    showToast('指令正文是空的 —— 写上「回复要遵循什么规则」才有用', 'error');
+  // 只有条目、没有正文的预设是合法的（酒馆那类预设常这么组织），保存时不能拦。
+  // ⚠️ 以前这里只认正文，于是「导入的条目型预设」连改个名字 / 停用都做不到 ——
+  //    提示还写着「指令正文是空的」，看着像用户自己填错了。
+  if (!draft.content.trim() && !(Array.isArray(draft.entries) && draft.entries.length)) {
+    showToast('正文是空的 —— 写上「回复要遵循什么规则」才有用', 'error');
     el.pr.content.focus();
     return;
   }

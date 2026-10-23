@@ -283,7 +283,9 @@ function makeStore() {
             id: 'pe-const',
             title: '常驻条目',
             keys: [],
-            content: '这条每轮都带上。',
+            // 带两个宏：编辑器里写着「发送时会替换成角色名和你的名字」，
+            // 宿主侧 probePresets 会验它到请求里已经不是字面量了。
+            content: '这条每轮都带上。{{char}} 看着 {{user}} 走进来。',
             constant: true,
             enabled: true
           },
@@ -304,6 +306,26 @@ function makeStore() {
         content: '这场对话默认带上这一条。',
         global: true,
         tags: []
+      },
+      // 第四条：别人分享的「只有条目、没有正文」的形态（酒馆那类把规则拆成 key/content）。
+      // 它连改名字都存不了的话，等于导入进来就是个死东西 —— 见 smoke-renderer 的
+      // 「预设：只有条目的预设」场景。
+      {
+        id: 'pr-entry-only',
+        name: '只有条目的预设',
+        description: '',
+        content: '',
+        tags: [],
+        entries: [
+          {
+            id: 'pe-only',
+            title: '唯一一条',
+            keys: [],
+            content: '只靠这一条生效。',
+            constant: true,
+            enabled: true
+          }
+        ]
       }
     ]
   };
@@ -461,6 +483,7 @@ if (SHOT_ONLY) seedForShots();
 
 const calls = []; // 记录渲染层请求过的写操作，方便排查
 let chatPayloads = []; // 每次发给模型的完整消息（按顺序留着，供宿主侧断言用）
+let chatSampling = []; // 每次请求带的采样覆盖（payload.sampling）—— 预设设了温度 / top_p 的证据
 // 预设导入的「待发文件」队列：预先塞几批，点一次导入消费一批。
 // 真实现里这来自用户选的文件，测试没有文件框，所以改成预先摆好。
 // 顺序要对上 smoke-renderer.js 里那两个导入场景的先后。
@@ -1042,6 +1065,7 @@ function registerStubs() {
   ipcMain.handle('chat:send', async (event, payload) => {
     remember('chat:send');
     chatPayloads.push(clone((payload && payload.messages) || []));
+    chatSampling.push(clone((payload && payload.sampling) || null));
     const requestId = (payload && payload.requestId) || 'req-smoke';
     const model = (payload && payload.model) || 'test-model';
 
@@ -2050,6 +2074,19 @@ function probePresets(result) {
     detail: constOk ? '' : '常驻条目的正文没进提示词'
   });
 
+  // 宏：编辑器里明确写着「可以用 {{char}} / {{user}}，发送时会替换成角色名和你的名字」。
+  // 模型收到字面量，就是这句承诺没兑现 —— 而它在界面上看不出任何异常（要翻请求记录才发现）。
+  const macroLeft = !!presetBlob && presetBlob.includes('{{char}} 看着');
+  result.results.push({
+    name: '预设：正文 / 条目里的宏在注入前被替换成真名',
+    pass: !!presetBlob && !macroLeft && /看着 你 走进来/.test(presetBlob),
+    detail: macroLeft
+      ? '提示词里还留着 {{char}} 字面量'
+      : presetBlob
+        ? '宏换掉了，但没换成 `你`（{{user}} 的默认值）'
+        : '没找到预设那一块'
+  });
+
   // 有关键词但这一轮没提到的条目不该带上（否则整份预设每轮全烧一遍 token）
   const keySkipped = !!presetBlob && !presetBlob.includes('说到「暗号」才带上这条。');
   result.results.push({
@@ -2114,6 +2151,19 @@ function probePresets(result) {
     name: '预设：采样参数走请求参数，不往消息里塞',
     pass: !fakeEndpointSampling,
     detail: fakeEndpointSampling ? '采样参数被当成文本塞进了消息' : ''
+  });
+
+  // 「设过」的方向：smoke-renderer 在编辑「带条目的预设」时把温度填成 0.55，
+  // 绑上它的那一轮请求里就必须带着 temperature=0.55。
+  // ⚠️ 以前这里只验了「不设 = 不干预」，而「设了到底有没有生效」没人看 ——
+  //    `dialoguePresetSampling` 接错字段（比如把 maxTokens 写成 max_tokens）也不会红。
+  const tempValues = chatSampling.filter((s) => s && Number.isFinite(s.temperature)).map((s) => s.temperature);
+  result.results.push({
+    name: '预设：设过的温度会跟着请求发出去',
+    pass: tempValues.length > 0 && tempValues.every((v) => v === 0.55),
+    detail: tempValues.length
+      ? `请求里的温度：${tempValues.join(' / ')}`
+      : '没有任何一次请求带 temperature —— 预设的采样没生效'
   });
 }
 

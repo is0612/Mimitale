@@ -243,8 +243,10 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   }
 
   // 预设是独立整块，紧跟扮演规则；⚠️ 刻意放在 if 外面 —— 纯聊天也能用预设。
+  // 正文 / 条目里允许写 {{char}} / {{user}}（编辑器里就是这么承诺的），所以拼完要过一遍宏，
+  // 否则模型收到的是字面量 `{{char}}`。GM 下 charMacro 落成「叙述者」，和世界书段一致。
   const presetText = dialoguePresetSection(convo, history);
-  if (presetText) parts.push(presetText);
+  if (presetText) parts.push(applyMacros(presetText, character, me, charMacro));
 
   // 玩家角色：只有写了设定才注入（上面那句规则已交代名字）。
   const player = convoPlayer(convo);

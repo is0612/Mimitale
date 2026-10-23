@@ -9596,6 +9596,9 @@ await scenario('预设：编辑已有预设并落盘', async () => {
   setValue('#pr-content', '最前面的总则。（改过了）');
   check('改了之后底部亮出「有未保存的改动」', byId('pr-foot-hint').classList.contains('pr-dirty'));
 
+  // 顺手给一条采样参数：宿主侧会拿它验「设过的温度真的跟着请求发出去了」
+  setValue('#pr-temperature', '0.55');
+
   // 关掉要被问一句 —— 点「取消」，弹窗留着
   click('#btn-close-preset');
   await waitFor('弹出「放弃改动」确认框', () => shown('#confirm-modal'));
@@ -9612,6 +9615,10 @@ await scenario('预设：编辑已有预设并落盘', async () => {
   const edited = saved.find((p) => p.id === 'pr-entries');
   check('改动落盘了', edited && edited.content.includes('改过了'), edited && edited.content);
 
+  // 采样参数：填过的落盘，没填的留 null（null = 用全局，别兜成 0）
+  check('填过的温度落盘成 0.55', edited && edited.temperature === 0.55, edited && String(edited.temperature));
+  check('没填的回复上限留 null（不覆盖全局）', edited && edited.maxTokens === null, edited && String(edited.maxTokens));
+
   // 条目要活下来：归一化白名单漏一个字段就会被静默丢掉
   check('条目数没丢', edited && Array.isArray(edited.entries) && edited.entries.length === 2, edited && JSON.stringify(edited.entries));
   const keyEntry = edited && (edited.entries || []).find((e) => e.id === 'pe-key');
@@ -9619,6 +9626,58 @@ await scenario('预设：编辑已有预设并落盘', async () => {
   check('关键词条目没被当成常驻', keyEntry && keyEntry.constant !== true);
   const constEntry = edited && (edited.entries || []).find((e) => e.id === 'pe-const');
   check('无关键词的条目被当常驻', constEntry && constEntry.constant === true);
+});
+
+// ---------------------------------------------------------------------------
+//  预设：只有条目、没有正文的（别人分享的酒馆预设常见形态）
+//
+//  编辑器没有条目编辑界面，所以这种预设**必须**能「只改名字 / 只改开关」存下来 ——
+//  以前保存条件只认正文，于是它连改个名字都会被「指令正文是空的」拦住，
+//  看上去像用户自己填错了。同时得让人知道它凭什么有效（那行「还带着 N 条条目」）。
+// ---------------------------------------------------------------------------
+await scenario('预设：只有条目的预设（导入形态）', async () => {
+  click('#btn-presets');
+  await waitFor('预设页出来了', () => shown('#view-presets'));
+
+  const card = await waitFor('找到「只有条目的预设」卡', () =>
+    $$('#preset-page-grid .preset-row').find((c) => {
+      const t = c.querySelector('.preset-row-name');
+      return t && t.textContent.trim() === '只有条目的预设';
+    })
+  );
+  check('列表里有「只有条目的预设」', !!card);
+  if (!card) return;
+  click(buttonByText(card, '编辑'));
+  await waitFor('编辑弹窗打开了', () => shown('#preset-modal'));
+
+  check('正文那一栏是空的（这条只有条目）', byId('pr-content').value === '', byId('pr-content').value);
+  const hint = byId('pr-entries-hint');
+  check('有一行说明「还带着 N 条条目」',
+    !!hint && !hint.classList.contains('hidden') && /1 条条目/.test(hint.textContent),
+    hint ? hint.textContent : '(没有这行)');
+
+  // 只改名字 —— 以前这一步会被「指令正文是空的」拦下
+  setValue('#pr-name', '只有条目的预设（改过名）');
+  click('#btn-save-preset');
+  await waitFor('保存后弹窗关上', () => !shown('#preset-modal'));
+
+  const saved = (await window.mimitale.getPresets()).presets || [];
+  const renamed = saved.find((p) => p.id === 'pr-entry-only');
+  check('只有条目的预设能只改名字就保存', !!renamed && renamed.name === '只有条目的预设（改过名）',
+    renamed && renamed.name);
+  check('正文仍然是空的（没有凭空编一段）', !!renamed && renamed.content === '', renamed && renamed.content);
+  check('条目没被保存动作弄丢', !!renamed && Array.isArray(renamed.entries) && renamed.entries.length === 1,
+    renamed && JSON.stringify(renamed.entries && renamed.entries.length));
+
+  // 改回去，别影响后面读名字的断言
+  click(buttonByText(
+    $$('#preset-page-grid .preset-row').find((c) => c.textContent.includes('只有条目的预设')),
+    '编辑'
+  ));
+  await waitFor('编辑弹窗重开', () => shown('#preset-modal'));
+  setValue('#pr-name', '只有条目的预设');
+  click('#btn-save-preset');
+  await waitFor('弹窗关上', () => !shown('#preset-modal'));
 });
 
 // ---------------------------------------------------------------------------

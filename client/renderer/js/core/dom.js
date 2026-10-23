@@ -307,6 +307,7 @@ export const el = {
     tags: $('pr-tags'),
     note: $('pr-note'),
     content: $('pr-content'),
+    entriesHint: $('pr-entries-hint'),
     enabled: $('pr-enabled'),
     global: $('pr-global'),
     temperature: $('pr-temperature'),
