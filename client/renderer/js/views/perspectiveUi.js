@@ -24,6 +24,7 @@ import {
   isGmMode
 } from '../data/narration.js';
 import { isPlainChatConvo } from '../data/cast.js';
+import { DEFAULT_OPTIONS_COUNT } from '../data/suggestions.js';
 import { renderHeader } from './header.js';
 
 /** 铺预设勾选列表。⚠️ `dialoguePresetIds` 为 null = 没手动配过（照全局预勾），动一格即转手动；已删 / 停用的 id 静默跳过，只留一行提示。 */
@@ -114,6 +115,55 @@ function writePresetSelection(convo, ids) {
   persistConversations(0);
 }
 
+// --- 剧情选项（跟对话框走，和角色无关）---
+
+/** 「每轮给几个」的档位；1 条没得选、6 条会把输入框那一行顶掉，只留 2~5 */
+const OPTION_COUNT_CHOICES = [2, 3, 4, 5];
+
+/** 老会话可能存着 1 或 6（旧版是 1~6 数字输入），夹到最近的档而不是一律重置成 4 */
+function setOptionsCount(value) {
+  const wanted = Number(value);
+  const target = OPTION_COUNT_CHOICES.reduce(
+    (best, n) => (Math.abs(n - wanted) < Math.abs(best - wanted) ? n : best),
+    OPTION_COUNT_CHOICES[0]
+  );
+  const radios = el.pOptionsCount
+    ? el.pOptionsCount.querySelectorAll('input[type="radio"]')
+    : [];
+  for (const radio of radios) radio.checked = Number(radio.value) === target;
+}
+
+/** 读当前选中的档位；一个都没选中（标记被别处改坏）时兜回默认值 */
+function optionsCountValue() {
+  const checked = el.pOptionsCount
+    ? el.pOptionsCount.querySelector('input[type="radio"]:checked')
+    : null;
+  const value = Number(checked && checked.value);
+  return OPTION_COUNT_CHOICES.includes(value) ? value : DEFAULT_OPTIONS_COUNT;
+}
+
+/** 开关关着就整块收起来（省得看着以为在生效） */
+function renderOptionsConfig() {
+  if (!el.pOptionsConfig) return;
+  el.pOptionsConfig.classList.toggle('hidden', !el.pOptionsOn.checked);
+}
+
+/** 把剧情选项写回会话并落盘（关掉存 false，和「没配过」的 null 区分开） */
+function applyOptionsSpec() {
+  const convo = activeConvo();
+  if (!convo) return;
+  if (el.pOptionsOn.checked) {
+    convo.optionsSpec = {
+      count: optionsCountValue(),
+      hint: String(el.pOptionsHint.value || '').trim().slice(0, 200)
+    };
+  } else {
+    convo.optionsSpec = false;
+  }
+  convo.updatedAt = now();
+  persistConversations(0);
+}
+
 function openPerspectiveModal() {
   const convo = activeConvo();
   if (!convo) {
@@ -131,6 +181,13 @@ function openPerspectiveModal() {
   setFieldVisible(el.pNarration, !plain);
   setFieldVisible(el.pPace, !plain);
   fillPresetList(convo);
+
+  // 剧情选项：跟角色无关、所有对话框都能配。没配过（null）按默认开 4 条。
+  const spec = convo.optionsSpec;
+  el.pOptionsOn.checked = !!spec && typeof spec === 'object';
+  setOptionsCount((spec && typeof spec === 'object' && spec.count) || DEFAULT_OPTIONS_COUNT);
+  el.pOptionsHint.value = (spec && typeof spec === 'object' && spec.hint) || '';
+  renderOptionsConfig();
 
   el.perspectiveModal.classList.remove('hidden');
 }
@@ -177,6 +234,13 @@ export function initPerspectiveUi() {
   el.pNarration.addEventListener('change', applyPerspectiveFromForm);
   el.pPace.addEventListener('change', applyPerspectiveFromForm);
   el.pGm.addEventListener('change', applyPerspectiveFromForm);
+  // 剧情选项：开关切换要顺带收起/展开配置区；文本用 change（失焦）落盘，别每敲一下存一次
+  el.pOptionsOn.addEventListener('change', () => {
+    renderOptionsConfig();
+    applyOptionsSpec();
+  });
+  el.pOptionsCount.addEventListener('change', applyOptionsSpec);
+  el.pOptionsHint.addEventListener('change', applyOptionsSpec);
   // 预设列表的勾选自己管落盘 —— 只在这里绑一次（见 commitPresetChoice 上的注释）
   el.pPresetList.addEventListener('change', commitPresetChoice);
 }

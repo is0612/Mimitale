@@ -158,7 +158,7 @@ function worldbookCharacterPayload(character) {
 }
 
 /**
- * 世界书导出成酒馆 lorebook 的形状（导入那边认的就是这个）。⚠️ opening / characters / cover 也一起导出（酒馆规范没有这几个键，别家会忽略）：少了它们「导出再导回」会丢开场白和全部 NPC。
+ * 世界书导出成酒馆 lorebook 的形状（导入那边认的就是这个）。⚠️ characters（角色副本）也一起导出（酒馆规范没有这个键，别家会忽略）：少了它「导出再导回」会丢全部 NPC。
  */
 export function worldbookPayload(book) {
   const entries = {};
@@ -185,8 +185,6 @@ export function worldbookPayload(book) {
   });
 
   const payload = { name: book.name || '未命名世界', description: book.description || '', entries };
-  if (typeof book.opening === 'string' && book.opening) payload.opening = book.opening;
-  if (typeof book.cover === 'string' && book.cover) payload.cover = book.cover;
   const cast = asArray(book.characters);
   if (cast.length) payload.characters = cast.map(worldbookCharacterPayload);
   return payload;
@@ -195,16 +193,14 @@ export function worldbookPayload(book) {
 /** v2 角色卡内嵌书使用数组条目；与独立 ST 世界书的对象条目格式分开。 */
 export function characterBookPayload(book) {
   const lorebook = worldbookPayload(book);
-  const { opening, characters: cast, cover } = lorebook;
+  const cast = lorebook.characters;
   return {
     name: lorebook.name,
     description: lorebook.description,
-    // mimitale 私有字段：酒馆不认，但导入链路认（见 main/worldbook-parse.js）；少了 cover 导回来就没封面
+    // mimitale 私有字段：酒馆不认，但导入链路认（见 main/worldbook-parse.js）
     extensions: {
       mimitale: {
-        ...(opening ? { opening } : {}),
-        ...(cast ? { characters: cast } : {}),
-        ...(cover ? { cover } : {})
+        ...(cast ? { characters: cast } : {})
       }
     },
     entries: Object.values(lorebook.entries).map((entry) => ({

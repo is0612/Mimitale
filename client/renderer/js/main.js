@@ -25,7 +25,6 @@ import { initPetSettings, openPetSection } from './views/petSettings.js';
 import { currentEndpoint, isBridgeProvider } from './data/providers.js';
 import { convoUserName, speakerName } from './data/cast.js';
 import { characters, worldbooks, dialoguePresets } from './data/library.js';
-import { optionsSpecFromCharacter, defaultOptionsSpec } from './data/suggestions.js';
 import {
   normalizePanelDefs,
   cleanAssistantText,
@@ -713,16 +712,9 @@ async function init() {
     delete convo.summaryBusy;
     // 选项是程序写进去的，读盘时只要保证形状对（不是数组就当没有）
     if (!Array.isArray(convo.options)) convo.options = [];
-    // 剧情选项默认「全都开、4 条」；老会话在读盘时补一次（快照语义：已配过的不动）。
-    if (!convo.optionsSpec || typeof convo.optionsSpec !== 'object') {
-      const bound = convo.characterId
-        ? asArray(state.characters).find((c) => c && c.id === convo.characterId)
-        : null;
-      convo.optionsSpec = bound
-        ? optionsSpecFromCharacter(bound)
-        : asArray(convo.worldbookIds).length
-          ? defaultOptionsSpec()
-          : null;
+    // 剧情选项跟对话框走、默认开 4 条；老会话读盘时补一次（快照语义：false=关、已配过的不动）。
+    if (convo.optionsSpec == null) {
+      convo.optionsSpec = { count: 4, hint: '' };
     }
     // 预设绑定：数组 = 手动配过（空数组 = 显式「一条都不要」）；
     // 非空字符串 = 老数据，迁成一条；其它/缺失 = null，自动跟随全局预设。

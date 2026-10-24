@@ -9,12 +9,6 @@ const MAX_AVATAR_CHARS = 18000000; // ≈ 13MB 的 PNG，留足余量
 // 属性归一化用共享的那一份（主进程 / 渲染层 / 冒烟测试同一份）
 const { normalizePanelFields } = require('./panel-fields.js');
 
-// 剧情选项：每轮给几个。上下限和渲染层的 MAX_OPTIONS 对齐。
-const MIN_OPTIONS = 1;
-const MAX_OPTIONS = 6;
-// 默认 4 条；想彻底关掉得在角色编辑器里取消开关（那时存的是 `false`）。
-const DEFAULT_OPTIONS = 4;
-
 // 每张表情图都是 base64，所以要有上限。
 const MAX_EXPRESSIONS = 60;
 const MAX_EXPRESSION_NAME = 24;
@@ -65,27 +59,6 @@ function normalizeAlternateGreetings(value) {
 
 function newCharacterId() {
   return `c${Date.now().toString(36)}${Math.floor(Math.random() * 9000 + 1000)}`;
-}
-
-/** 剧情选项的配置归一化。
- * ⚠️ `false` 必须原样返回：它是「这张卡不要选项」的唯一记号，丢了会让关掉的角色存盘后变回默认开。 */
-function normalizeOptionsSpec(value) {
-  if (value === false) return false;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return { count: DEFAULT_OPTIONS, hint: '' };
-  }
-
-  // ⚠️ 不能直接 Number()：Number(null) 和 Number('') 都是 0，会被夹成 1 条。
-  const rawCount =
-    value.count === null || value.count === undefined || value.count === ''
-      ? NaN
-      : Number(value.count);
-  const count = Number.isFinite(rawCount)
-    ? Math.max(MIN_OPTIONS, Math.min(MAX_OPTIONS, Math.round(rawCount)))
-    : DEFAULT_OPTIONS;
-  const hint = typeof value.hint === 'string' ? value.hint.trim().slice(0, 200) : '';
-
-  return { count, hint };
 }
 
 /** 属性归一化交给 main/panel-fields.js（三方共用一份，条数上限也在那边）。 */
@@ -176,8 +149,6 @@ function normalizeCharacter(raw, source) {
       : [],
     // ⚠️ 少了这一行，界面上填的属性一存盘就没了。
     attributes: normalizeAttributes(r.attributes),
-    // 只有 `false` 才表示「这张卡明确不要剧情选项」。
-    optionsSpec: normalizeOptionsSpec(r.optionsSpec),
     // 导入带 character_book 的角色卡时自动绑上，之后用户也能自己加/删。只能一本，绑上就一直生效。
     worldbookIds: normalizeWorldbookIds(r.worldbookIds),
     // ⚠️ 白名单式，必须显式保留否则一存盘就丢；只在显式 true 时写出来。
@@ -193,11 +164,9 @@ module.exports = {
   normalizeAttributes,
   normalizeExpressions,
   normalizeAlternateGreetings,
-  normalizeOptionsSpec,
   normalizeWorldbookIds,
   newCharacterId,
   MAX_AVATAR_CHARS,
   MAX_CHARACTER_WORLDBOOKS,
-  MAX_EXPRESSIONS,
-  DEFAULT_OPTIONS
+  MAX_EXPRESSIONS
 };

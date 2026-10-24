@@ -530,33 +530,6 @@
                 这里填的是<b>初始值</b>；进游戏之后在面板里改的是<b>这一局的当前值</b>，不会动到角色卡。
               </span>
 
-              <!-- 剧情选项：每轮让 AI 给出几个可点选项，点一下就当玩家回复发出去。
-                   **默认开着**（4 条）—— 取消勾选才是这个角色不要选项。 -->
-              <div class="char-switch-card">
-                <label class="check">
-                  <input id="c-options-on" type="checkbox" />
-                  <span>剧情选项（每轮给几个可点选项，点一下就当你说这句话发出去）</span>
-                </label>
-                <div id="c-options-config" class="c-options-config hidden">
-                  <div class="field">
-                    <span class="field-label">每轮给几个</span>
-                    <!-- 固定四档单选：1 条等于没得选，6 条会把输入框那一行顶掉，
-                         实际会用的就 2~5。别改回数字输入框 —— 那样 0 / 12 都得再兜一次底。 -->
-                    <div id="c-options-count" class="opt-choices" role="radiogroup" aria-label="每轮给几个剧情选项">
-                      <label class="opt-choice"><input type="radio" name="c-options-count" value="2" /><span>2</span></label>
-                      <label class="opt-choice"><input type="radio" name="c-options-count" value="3" /><span>3</span></label>
-                      <label class="opt-choice"><input type="radio" name="c-options-count" value="4" /><span>4</span></label>
-                      <label class="opt-choice"><input type="radio" name="c-options-count" value="5" /><span>5</span></label>
-                    </div>
-                  </div>
-                  <div class="field">
-                    <span class="field-label">额外要求（可选）</span>
-                    <m-input id="c-options-hint"
-                             placeholder="比如：语气轻松些、总有一条冒险的选择"></m-input>
-                  </div>
-                </div>
-              </div>
-
               <!-- 在状态栏显示：只对**世界书副本**有意义。
                    一本酒馆十来号 NPC，默认全列会把入口条挤爆；想看谁的状态就勾谁。
                    副本的「人设立不立得住」由描述/性格决定，跟这个开关无关 ——
@@ -668,19 +641,16 @@
                「导出」则搬到了列表卡片右上角（同日）。
                统计仍然只在这里出现一次（原来页头 / 书籍头 / 书籍设置右栏三份重复）。 -->
           <div class="wb-bookbar" id="wb-bookbar">
-            <button id="wb-bookbar-cover" class="wb-bookbar-cover" type="button"
-                    title="换封面（在「书籍设置」里）" aria-label="去书籍设置换封面"></button>
             <h2 id="wb-bookbar-name" class="wb-bookbar-name">世界书</h2>
             <span id="wb-bookbar-sub" class="wb-bookbar-sub"></span>
             <div class="wb-bookbar-actions">
               <m-button id="btn-preview-wb" variant="ghost" size="sm">预览命中</m-button>
               <span id="wb-save-state" class="save-pill" data-state="saved">所有更改已保存</span>
-              <m-button id="btn-save-wb" variant="primary" size="sm" title="把这本书的书名 / 开场白 / 条目写进磁盘">保存</m-button>
+              <m-button id="btn-save-wb" variant="primary" size="sm" title="把这本书的书名 / 条目写进磁盘">保存</m-button>
             </div>
           </div>
 
           <nav class="wb-tabs" id="wb-tabs" aria-label="世界书分区">
-            <button type="button" class="wb-tab" id="wb-tab-settings" aria-controls="wb-panel-settings">书籍设置</button>
             <button type="button" class="wb-tab" id="wb-tab-entries" aria-controls="wb-panel-entries">条目 <span class="wb-tab-n" id="wb-tab-entries-n"></span></button>
             <button type="button" class="wb-tab" id="wb-tab-characters" aria-controls="wb-panel-characters">本书角色 <span class="wb-tab-n" id="wb-tab-characters-n"></span></button>
           </nav>
@@ -688,6 +658,13 @@
           <!-- 屏 1 · 条目：列表 336 | 正文 640（居中，两侧留白） | 本条属性 248 -->
           <div class="wb-work" id="wb-panel-entries">
             <aside class="wb-list">
+              <!-- 书名改在这里（书籍设置屏撤了，见 worldbook.js） -->
+              <div class="wb-name-cell">
+                <label class="field field-stack">
+                  <span class="field-label">书名</span>
+                  <m-input id="wb-name" placeholder="世界书名称" aria-label="世界书名称"></m-input>
+                </label>
+              </div>
               <div class="wb-list-tools">
                 <m-input class="wb-search" id="wb-search" type="search" placeholder="搜索条目" aria-label="搜索条目"></m-input>
                 <m-select class="wb-state" id="wb-state" aria-label="条目状态筛选">
@@ -706,6 +683,10 @@
                           title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</m-button>
                 <m-button id="btn-wb-add-event" variant="ghost" size="sm"
                           title="新建一条「事件」条目：填上关键词，聊到就把这段演出来">＋ 事件</m-button>
+              </div>
+              <!-- 危险动作放最下面（后果越重越靠下） -->
+              <div class="wb-list-danger">
+                <m-button id="btn-del-worldbook" variant="danger" size="sm" block>删除本书</m-button>
               </div>
             </aside>
 
@@ -840,70 +821,7 @@
             </div>
           </div>
 
-          <!-- 屏 2 · 书籍设置：左两张稿纸（封面与书名 / 开场白）| 右本书信息 + 删除 -->
-          <div class="wb-set" id="wb-panel-settings" hidden>
-            <main class="wb-set-main">
-              <div class="wb-measure">
-                <section class="wb-sheet">
-                  <div class="wb-sheet-head">
-                    <span class="wb-sheet-no">1</span>
-                    <h2 class="wb-sheet-name">封面与书名</h2>
-                  </div>
-                  <div class="wb-sheet-body wb-cover-cell">
-                    <!-- 封面：铺在世界书列表卡片上的那张 2:3 竖版图（和角色形象同一个比例，
-                         走同一个裁剪组件）。点击上传 → 结果先落**草稿**，点页头「保存」才写盘。
-                         2026-10-20 重排：封面放大到 132px、和右栏同高，书名贴顶、动作贴底 ——
-                         原来三样东西挤在 96px 宽的一条里，右下角空出一大片。 -->
-                    <button id="wb-cover" class="wb-cover-frame" type="button"
-                            title="点击上传封面（2:3 竖版，铺在世界书列表的卡片上）" aria-label="上传世界书封面">
-                      <span class="wb-cover-empty">点击上传</span>
-                    </button>
-                    <div class="wb-cover-side">
-                      <label class="field field-stack wb-book-name">
-                        <span class="field-label">书名</span>
-                        <m-input id="wb-name" placeholder="世界书名称" aria-label="世界书名称"></m-input>
-                        <span class="field-help">列表卡片上压着封面显示，页头和会话里也用它。</span>
-                      </label>
-                      <div class="wb-cover-actions">
-                        <m-button id="btn-clear-wb-cover" variant="ghost" size="sm" class="hidden">清除封面</m-button>
-                        <span class="wb-cover-tip">2:3 竖版 · 点左边的图换一张</span>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section class="wb-sheet wb-sheet-lead">
-                  <div class="wb-sheet-head">
-                    <span class="wb-sheet-no">2</span>
-                    <h2 class="wb-sheet-name">开场白</h2>
-                    <span id="wb-opening-count" class="wb-sheet-count"></span>
-                  </div>
-                  <m-textarea id="wb-opening" rows="7" spellcheck="false" placeholder="进这个世界时自动作为第一条消息。留空则让 AI 按设定现生成一段开局。"></m-textarea>
-                  <details class="wb-fold">
-                    <summary>这一栏怎么写</summary>
-                    <div class="wb-fold-body">
-                      <p>进这个世界的第一条消息。写清三件事：<b>你在哪</b>、<b>你手上有什么</b>、<b>周围人怎么看你</b> —— 这三样齐了，第一轮不用模型替你补设定。</p>
-                      <p>留一句没说完的话，比把剧情写满更容易接上。</p>
-                    </div>
-                  </details>
-                </section>
-              </div>
-            </main>
-
-            <aside class="wb-set-aside">
-              <div class="wb-aside-card">
-                <h3>本书信息</h3>
-                <dl id="wb-book-facts" class="wb-facts"></dl>
-              </div>
-              <div class="wb-danger">
-                <h3>删除这本书</h3>
-                <p id="wb-danger-hint">删除会连同这本书的条目和角色副本一起删掉，不可恢复。想留底先在列表卡片上点「导出」。</p>
-                <m-button id="btn-del-worldbook" variant="danger" size="sm">删除本书</m-button>
-              </div>
-            </aside>
-          </div>
-
-          <!-- 屏 3 · 本书角色：从角色库复制进来的独立副本（书里没有角色时给一张引导卡） -->
+          <!-- 屏 2 · 本书角色：从角色库复制进来的独立副本（书里没有角色时给一张引导卡） -->
           <div class="wb-chars-panel" id="wb-panel-characters" hidden>
             <div class="wb-chars-inner">
               <div class="wb-chars-bar">
@@ -2085,6 +2003,32 @@
             </span>
           </span>
         </label>
+
+        <!-- 剧情选项：跟着对话框走（每轮给几个可点选项，点一下就当玩家回复发出去）。
+             之前长在角色卡的「属性」里，现在改到这里，跟角色无关、只服务这一场对话。 -->
+        <div class="field field-stack">
+          <label class="check">
+            <input id="p-options-on" type="checkbox" />
+            <span>剧情选项（每轮给几个可点选项，点一下就当你说这句话发出去）</span>
+          </label>
+          <div id="p-options-config" class="c-options-config">
+            <label class="field">
+              <span class="field-label">每轮给几个</span>
+              <!-- 固定四档单选：1 条等于没得选，6 条会把输入框那一行顶掉，实际会用的就 2~5 -->
+              <div id="p-options-count" class="opt-choices" role="radiogroup" aria-label="每轮给几个剧情选项">
+                <label class="opt-choice"><input type="radio" name="p-options-count" value="2" /><span>2</span></label>
+                <label class="opt-choice"><input type="radio" name="p-options-count" value="3" /><span>3</span></label>
+                <label class="opt-choice"><input type="radio" name="p-options-count" value="4" /><span>4</span></label>
+                <label class="opt-choice"><input type="radio" name="p-options-count" value="5" /><span>5</span></label>
+              </div>
+            </label>
+            <label class="field">
+              <span class="field-label">额外要求（可选）</span>
+              <m-input id="p-options-hint"
+                       placeholder="比如：语气轻松些、总有一条冒险的选择"></m-input>
+            </label>
+          </div>
+        </div>
 
         <p class="field-help perspective-note">
           这些设置都会写进发给模型的消息里，<strong>不影响已经生成的回答</strong>；改完从下一条回复开始生效。

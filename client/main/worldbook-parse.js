@@ -12,10 +12,6 @@ const MAX_WORLDBOOK_KEYS = 200;
 const MAX_WORLDBOOK_CHARACTERS = 50;
 // 导入外部文件用更严的副本数上限（自己库里仍是 50）
 const MAX_IMPORTED_WORLDBOOK_CHARACTERS = 30;
-const MAX_WORLDBOOK_OPENING = 4000;
-// 封面（dataURL）字符上限。⚠️ 比角色的 1800 万严得多：worldbooks.json 是整库覆盖写，
-// 几 MB 封面乘几十本会让每次保存都卡；渲染层已压到 ~200KB，20 倍余量只拦畸形文件。
-const MAX_WORLDBOOK_COVER = 4000000;
 
 /** 把一条 entry 的不同写法（ST 的 key/keys、constant…）归一化成内部格式 */
 function normalizeWorldbookEntry(raw) {
@@ -145,21 +141,10 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
     }
   }
 
-  const opening = r.opening ?? own.opening;
-  // 封面：dataURL，两个位置都认（独立书在顶层，内嵌书在 extensions.mimitale）。
-  // 必须是 data:image/ 开头，超限就当没有。
-  const rawCover = r.cover ?? own.cover;
-  const cover = typeof rawCover === 'string' && rawCover.startsWith('data:image/') && rawCover.length <= MAX_WORLDBOOK_COVER
-    ? rawCover
-    : '';
   const genId = typeof makeId === 'function' ? makeId : () => `w${Date.now().toString(36)}`;
   return {
     id: id || genId(),
     name: name.slice(0, 120),
-    // 进世界时的第一条消息；留空则由界面让模型现生成
-    opening: typeof opening === 'string' ? opening.slice(0, MAX_WORLDBOOK_OPENING) : '',
-    // 空串 = 无封面，卡片那边退回「世」字占位块
-    cover,
     entries,
     characters,
     createdAt: Number(r.createdAt) || Date.now(),
@@ -208,8 +193,6 @@ module.exports = {
   MAX_WORLDBOOK_ENTRIES,
   MAX_WORLDBOOK_CHARACTERS,
   MAX_IMPORTED_WORLDBOOK_CHARACTERS,
-  MAX_WORLDBOOK_OPENING,
-  MAX_WORLDBOOK_COVER,
   normalizeWorldbook,
   worldbookFromCharacterBook,
   worldbookFromLorebook,

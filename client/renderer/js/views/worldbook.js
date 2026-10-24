@@ -1,4 +1,4 @@
-// 世界书编辑器：左栏选书、中栏列条目、右栏编辑。书名 / 开场白 / 条目都是草稿（wbDrafts），
+// 世界书编辑器：左栏选书、中栏列条目、右栏编辑。书名 / 条目都是草稿（wbDrafts），
 // 点页头「保存」才写回并落盘；跨视图编排（角色编辑）由 initWorldbook 注入。
 
 import { api } from '../core/api.js';
@@ -8,7 +8,6 @@ import { uid, now, activeConvo } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear } from '../ui/build.js';
-import { pickAndCrop } from '../ui/imageCrop.js';
 import { showView, currentViewName } from './viewSwitch.js';
 import { persistLibrary, persistConversations } from '../data/persist.js';
 import { seedWorldbookCharactersIntoConvos, syncCopyAttrsFromSource } from '../data/panel.js';
@@ -30,43 +29,6 @@ import { initWorldbookLayout, syncWorldbookLayout, resetWorldbookLayout, revealW
 function syncEditorLayout() {
   const book = currentWorldbook();
   syncWorldbookLayout(book, currentDraft(), book ? worldbookCharacters(book).length : 0);
-  renderBookFacts();
-}
-
-/** 「书籍设置」右侧的本书信息卡：条目 / 启用 / 常驻 / 字数 / 角色 / 最后修改。
- *  标题由 HTML 里的 <h3> 提供，这里只铺下面的行。 */
-function renderBookFacts() {
-  const host = el.wb.bookFacts;
-  if (!host) return;
-  const book = currentWorldbook();
-  if (!book) { host.replaceChildren(); return; }
-  const draft = currentDraft();
-  const entries = draft?.entries || [];
-  const on = entries.filter((entry) => entry.enabled !== false).length;
-  const constant = entries.filter((entry) => entry.constant).length;
-  const words = entries.reduce((sum, entry) => sum + String(entry.content || '').length, 0);
-  const modified = book.updatedAt
-    ? new Date(book.updatedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: false })
-    : '—';
-  const rows = [
-    ['条目', `${entries.length} 条 · ${on} 启用`],
-    ['常驻条目', `${constant} 条`],
-    ['本书角色', `${worldbookCharacters(book).length} 个`],
-    ['总字数', `${words.toLocaleString()} 字`],
-    ['最后修改', modified]
-  ];
-  const frag = document.createDocumentFragment();
-  for (const [dt, dd] of rows) {
-    const row = document.createElement('div');
-    row.className = 'wb-fact';
-    const name = document.createElement('dt');
-    name.textContent = dt;
-    const value = document.createElement('dd');
-    value.textContent = dd;
-    row.append(name, value);
-    frag.appendChild(row);
-  }
-  host.replaceChildren(frag);
 }
 
 // --- 入口层注入的跨视图编排动作 ---
@@ -116,14 +78,6 @@ export function initWorldbook(opts = {}) {
   el.wb.btnPreview.addEventListener('click', runAsync(previewWorldbook));
   el.wb.btnAddChars.addEventListener('click', openWorldbookCharPicker);
   el.wb.btnNewChar.addEventListener('click', newWorldbookCharacter);
-  // 书籍条封面缩略 = 通往「书籍设置」的捷径；上传入口**只有设置屏那一个**，
-  // 别在 28×42 的缩略图上再挂一套裁剪流程。
-  if (el.wb.bookbarCover) {
-    el.wb.bookbarCover.addEventListener('click', () => {
-      setWorldbookPanel('settings');
-      el.wb.cover?.focus({ preventScroll: true });
-    });
-  }
   // 「AI 生成」：按这本书的设定生成一个 NPC 副本，结果同样落到角色编辑器草稿里，
   // 和「＋ 新建」同一条路，看过再保存。
   if (el.wb.btnAiChar) {
@@ -143,21 +97,10 @@ export function initWorldbook(opts = {}) {
     if (event.target === el.wbPicker.modal) closeWorldbookCharPicker();
   });
 
-  // 书名 / 开场白 / 条目都只写草稿 + 举「未保存」的旗子，点「保存」才写回并落盘。
+  // 书名 / 条目都只写草稿 + 举「未保存」的旗子，点「保存」才写回并落盘。
   el.wb.name.addEventListener('input', () => {
     if (!currentDraft()) return;
     stashWorldbookName();
-    markDraftDirty();
-  });
-
-  // 封面：点击框上传 / 更换，旁边那颗清除。和书名一样只动草稿，点「保存」才落盘。
-  if (el.wb.cover) el.wb.cover.addEventListener('click', runAsync(pickWorldbookCover));
-  if (el.wb.btnClearCover) el.wb.btnClearCover.addEventListener('click', clearWorldbookCover);
-
-  el.wb.opening.addEventListener('input', () => {
-    const draft = currentDraft();
-    if (!draft) return;
-    draft.opening = el.wb.opening.value.slice(0, 4000);
     markDraftDirty();
   });
 
@@ -205,7 +148,7 @@ const WB_NEW_ENTRY_DEFAULTS = {
 let editingWorldbookId = null; // 世界书编辑器里当前选中的书
 let editingEntryId = null; // 编辑器里当前选中的条目
 
-/** 编辑器草稿：bookId → { name, opening, entries, dirty }，每本书各留一份。
+/** 编辑器草稿：bookId → { name, entries, dirty }，每本书各留一份。
  *  **不含 characters**（角色副本直接改直接落盘，两边才不会互相踩）。 */
 const wbDrafts = new Map();
 
@@ -220,8 +163,6 @@ function draftFor(book) {
   if (!draft) {
     draft = {
       name: book.name || '未命名世界书',
-      opening: book.opening || '',
-      cover: typeof book.cover === 'string' ? book.cover : '',
       entries: cloneEntries(book.entries),
       dirty: false
     };
@@ -311,8 +252,6 @@ function commitDraft(bookId) {
   if (!book || !draft) return false;
 
   book.name = String(draft.name || '').trim().slice(0, 120) || '未命名世界书';
-  book.opening = String(draft.opening || '').slice(0, 4000);
-  book.cover = String(draft.cover || '');
   book.entries = cloneEntries(draft.entries);
   book.updatedAt = now();
 
@@ -326,7 +265,7 @@ function discardDrafts() {
   wbDrafts.clear();
 }
 
-/** 把「正在编辑的这本书」保存到磁盘：粒度是**整本书**（书名 + 开场白 + 所有条目）。
+/** 把「正在编辑的这本书」保存到磁盘：粒度是**整本书**（书名 + 所有条目）。
  *  条目不是独立对象，拆成「保存条目」会让人以为存过了其实没存。 */
 async function saveWorldbook() {
   const book = currentWorldbook();
@@ -390,82 +329,11 @@ function currentEntry() {
   return draft.entries.find((e) => e.id === editingEntryId) || null;
 }
 
-// 封面：2:3 竖版图，复用 ui/imageCrop.js（按目标尺寸输出）。
-// 它是草稿的一部分（不是立刻落盘的外挂字段），点「保存」才写回，不保存关掉就还原。
-
-// 输出 800×1200（2:3）。⚠️ 改比例要三处一起改：这里、style.css 的 .wb-cover-frame、
-// .wb-card-cover 的 aspect-ratio。
-const WB_COVER_RATIO = 2 / 3;
-const WB_COVER_WIDTH = 800;
-
-/** 画编辑器里那个封面框（有图 / 空 两态） */
-function renderWorldbookCover() {
-  syncEditorLayout();
-  const box = el.wb.cover;
-  if (!box) return;
-
-  const draft = currentDraft();
-  const cover = draft && typeof draft.cover === 'string' ? draft.cover : '';
-
-  box.innerHTML = '';
-  if (cover) {
-    const img = document.createElement('img');
-    img.src = cover;
-    img.alt = '';
-    box.appendChild(img);
-  } else {
-    const span = document.createElement('span');
-    span.className = 'wb-cover-empty';
-    span.textContent = '点击上传';
-    box.appendChild(span);
-  }
-
-  box.classList.toggle('has', !!cover);
-  box.title = cover
-    ? '点击更换封面'
-    : '点击上传封面（2:3 竖版，铺在世界书列表的卡片上）';
-  if (el.wb.btnClearCover) el.wb.btnClearCover.classList.toggle('hidden', !cover);
-}
-
-/** 点击封面框：选图 → 裁剪 → 落进草稿（不落盘） */
-async function pickWorldbookCover() {
-  const draft = currentDraft();
-  if (!draft) return;
-
-  const cropped = await pickAndCrop({
-    aspect: WB_COVER_RATIO,
-    outWidth: WB_COVER_WIDTH,
-    title: '裁剪世界书封面',
-    hint: '世界书列表上铺满整张卡的就是这一块',
-    pickTitle: '选一张封面'
-  });
-  if (!cropped) return;
-
-  // 浮层是异步的，回来时重新取一次草稿 —— 别写进已经切走的那一本
-  const target = currentDraft();
-  if (!target) return;
-  target.cover = cropped;
-  markDraftDirty();
-  renderWorldbookCover();
-  showToast('封面已更换，记得点「保存」', 'ok');
-}
-
-/** 清除封面（退回「世」字占位块）—— 同样只动草稿 */
-function clearWorldbookCover() {
-  const draft = currentDraft();
-  if (!draft || !draft.cover) return;
-  draft.cover = '';
-  markDraftDirty();
-  renderWorldbookCover();
-  showToast('封面已清除，记得点「保存」');
-}
-
-/** 把世界书表单里的内容写进草稿（书名 + 开场白）。不落盘，只改内存里的那一份 */
+/** 把世界书表单里的内容写进草稿（书名）。不落盘，只改内存里的那一份 */
 function stashWorldbookName() {
   const draft = currentDraft();
   if (!draft || el.wb.bookWrap.classList.contains('hidden')) return;
   draft.name = (el.wb.name.value.trim() || '未命名世界书').slice(0, 120);
-  draft.opening = el.wb.opening.value.slice(0, 4000);
 }
 
 /** 关键词输入框 → 关键词数组（逗号分隔，中英文逗号都认） */
@@ -637,7 +505,6 @@ function selectWorldbook(id) {
   if (!book) {
     editingEntryId = null;
     showEntryForm(false);
-    renderWorldbookCover();
     renderWorldbookChars();
     renderDirtyHint();
     return;
@@ -646,8 +513,6 @@ function selectWorldbook(id) {
   // 有草稿就显示草稿（切走再切回来不会丢没保存的改动），没有就按当前内容新拷一份
   const draft = draftFor(book);
   el.wb.name.value = draft.name;
-  el.wb.opening.value = draft.opening;
-  renderWorldbookCover();
   el.wb.entryCount.textContent = wbEntryCountText(draft.entries);
   // 底部提示写的是**落盘过的**书名：一眼分得清「界面上在改什么」和「盘上是什么」
   el.wb.footHint.textContent = `「${book.name}」只保存在你自己电脑上`;
@@ -1034,10 +899,8 @@ function openWorldbooksModal(targetId) {
   if (from !== 'wbEditor') editorReturnView = from;
 
   selectWorldbook(next);
-  // 每次进来都停在「书籍设置」：这是「这本书长什么样」的那一屏，也是新书第一站。
-  // ⚠️ 别恢复上次停在哪 —— 上次可能是三天前为了改一条条目点进去的，
-  //    今天点「编辑」是想看书本身（2026-10-20 星宝要求）。
-  setWorldbookPanel('settings');
+  // 每次都落在「条目」屏（书籍设置屏已经撤了，书名改在条目左栏顶部）。
+  setWorldbookPanel('entries');
   renderWorldbookChars();
 
   showView('wbEditor');
@@ -1086,8 +949,6 @@ export async function createWorldbook() {
   const book = {
     id: `w${uid()}`,
     name: '新世界书',
-    opening: '',
-    cover: '',
     entries: [],
     characters: [],
     createdAt: now(),

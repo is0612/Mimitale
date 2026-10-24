@@ -19,7 +19,6 @@ let layout;
 
 const PANEL_KEYS = [
   ['entries', '条目'],
-  ['settings', '书籍设置'],
   ['characters', '本书角色']
 ];
 
@@ -51,7 +50,6 @@ export function initWorldbookLayout({ onFilter }) {
     bookWrap: document.getElementById('wb-book-wrap'),
     name: document.getElementById('wb-bookbar-name'),
     sub: document.getElementById('wb-bookbar-sub'),
-    cover: document.getElementById('wb-bookbar-cover'),
     totalWords: document.getElementById('wb-total-words'),
     tabEntryCount: document.getElementById('wb-tab-entries-n'),
     tabCharCount: document.getElementById('wb-tab-characters-n'),
@@ -59,9 +57,7 @@ export function initWorldbookLayout({ onFilter }) {
     keysCount: document.getElementById('wb-keys-count'),
     entryWords: document.getElementById('wb-e-words'),
     entryKeyCount: document.getElementById('wb-e-keycount'),
-    openingCount: document.getElementById('wb-opening-count'),
     charHint: document.getElementById('wb-chars-hint'),
-    dangerHint: document.getElementById('wb-danger-hint'),
     bookId: null
   };
   setWorldbookPanel('entries');
@@ -123,33 +119,6 @@ export function syncWorldbookLayout(book, draft, characterCount) {
   // 分区标签上的角标：数字挂在哪一屏，就是在说「那一屏里有几个」
   layout.tabEntryCount.textContent = String(total);
   layout.tabCharCount.textContent = String(chars);
-
-  // 书籍条左端那颗封面缩略（28×42，2:3 和封面框同一个比例）。
-  // 点它 = 去「书籍设置」换封面 —— 那里才是唯一的上传入口，不在这里再放一份。
-  const cover = draft?.cover || '';
-  if (layout.cover.dataset.cover !== cover) {
-    layout.cover.dataset.cover = cover;
-    layout.cover.replaceChildren();
-    if (cover) {
-      const image = document.createElement('img');
-      image.src = cover;
-      image.alt = '';
-      layout.cover.append(image);
-    } else layout.cover.textContent = '世';
-  }
-
-  // 开场白那张稿纸右上角的字数
-  if (layout.openingCount) {
-    const opening = String(draft?.opening || '');
-    layout.openingCount.textContent = opening ? `${opening.length} 字` : '';
-  }
-
-  // 「删除这本书」那张卡上说清后果 —— 数字跟着草稿走，不是跟上一次保存的那份
-  if (layout.dangerHint) {
-    layout.dangerHint.textContent = chars
-      ? `会连同 ${total} 条条目和 ${chars} 个角色副本一起删掉，不可恢复。想留底先在列表卡片上点「导出」。`
-      : `会连同 ${total} 条条目一起删掉，不可恢复。想留底先在列表卡片上点「导出」。`;
-  }
 
   // 「本书角色」屏右上角那句：数字 + 一句「副本是副本」
   if (layout.charHint) {

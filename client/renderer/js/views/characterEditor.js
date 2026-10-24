@@ -21,7 +21,6 @@ import {
   newWorldbookCharId
 } from '../data/library.js';
 import { persistCharacters, persistConversations, persistLibrary } from '../data/persist.js';
-import { optionsSpecFromCharacter, DEFAULT_OPTIONS_COUNT } from '../data/suggestions.js';
 import { currentWorldbook, renderWorldbookChars, focusWorldbook, openWorldbookEditor, createWorldbook } from './worldbook.js';
 import { renderCharacterPage } from './characterList.js';
 import { renderCharAttrs, initCharAttrsUi } from './charAttributes.js';
@@ -419,14 +418,6 @@ function fillCharForm(character) {
   charAttrs = characterAttrs(character);
   renderCharAttrs(charAttrs);
 
-  // 剧情选项：没配过的卡（老卡/导入/新建）也算开、默认 4 条，只有卡上明确 `false` 才是关。
-  // 见 data/suggestions.js 的 optionsSpecFromCharacter。
-  const optSpec = optionsSpecFromCharacter(character);
-  el.c.optionsOn.checked = !!optSpec;
-  setOptionsCount((optSpec && optSpec.count) || DEFAULT_OPTIONS_COUNT);
-  el.c.optionsHint.value = optSpec ? optSpec.hint || '' : '';
-  renderOptionsConfig();
-
   // 「在状态栏显示」只有世界书副本用得上；角色库的卡绑进单角色会话时永远显示状态，整块收起来
   el.c.showInPanel.checked = character.showInPanel === true;
   renderShowInPanelBox();
@@ -468,39 +459,6 @@ function applyAiFill(fields) {
     written += 1;
   }
   return written;
-}
-
-/** 剧情选项的配置区：开关关着就整块收起来（省得看着以为在生效） */
-function renderOptionsConfig() {
-  if (!el.c.optionsConfig) return;
-  el.c.optionsConfig.classList.toggle('hidden', !el.c.optionsOn.checked);
-}
-
-/** 「每轮给几个」的档位；1 条没得选、6 条会把输入框那一行顶掉，只留 2~5 */
-const OPTION_COUNT_CHOICES = [2, 3, 4, 5];
-
-/**
- * 老卡可能存着 1 或 6（旧版是 1~6 数字输入），夹到最近的档而不是一律重置成 4。
- */
-function setOptionsCount(value) {
-  const wanted = Number(value);
-  const target = OPTION_COUNT_CHOICES.reduce(
-    (best, n) => (Math.abs(n - wanted) < Math.abs(best - wanted) ? n : best),
-    OPTION_COUNT_CHOICES[0]
-  );
-  const radios = el.c.optionsCount
-    ? el.c.optionsCount.querySelectorAll('input[type="radio"]')
-    : [];
-  for (const radio of radios) radio.checked = Number(radio.value) === target;
-}
-
-/** 读当前选中的档位；一个都没选中（标记被别处改坏）时兜回默认值 */
-function optionsCountValue() {
-  const checked = el.c.optionsCount
-    ? el.c.optionsCount.querySelector('input[type="radio"]:checked')
-    : null;
-  const value = Number(checked && checked.value);
-  return OPTION_COUNT_CHOICES.includes(value) ? value : DEFAULT_OPTIONS_COUNT;
 }
 
 /** 「在状态栏显示」只给世界书作用域用；角色库的卡永远显示状态，整块收起 */
@@ -858,12 +816,6 @@ function stashCharForm() {
     .slice(0, MAX_EXPRESSIONS);
   if (expressions.length) character.expressions = expressions;
   else delete character.expressions;
-  // 剧情选项关掉要写 `false`（不是 null）：主进程把「没这个字段」当成默认开 4 条
-  if (el.c.optionsOn.checked) {
-    character.optionsSpec = { count: optionsCountValue(), hint: el.c.optionsHint.value.trim().slice(0, 200) };
-  } else {
-    character.optionsSpec = false;
-  }
   // showInPanel 只对世界书副本写；角色库的卡写了也没用（单角色会话永远显示状态，见 cast.js）
   if (charEditorScope === 'worldbook') {
     character.showInPanel = el.c.showInPanel.checked === true;
@@ -1405,8 +1357,6 @@ export function initCharacterEditor(injected) {
     },
     apply: applyAiFill
   });
-
-  if (el.c.optionsOn) el.c.optionsOn.addEventListener('change', renderOptionsConfig);
 
   if (el.c.btnFirstTemplate) el.c.btnFirstTemplate.addEventListener('click', applyFirstMesTemplate);
 

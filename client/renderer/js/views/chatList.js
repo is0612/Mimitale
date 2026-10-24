@@ -18,7 +18,6 @@ import { seedIdentity, seedPanelFromCharacters } from '../data/panel.js';
 import { applyMacros } from '../data/messages.js';
 import { convoUserName } from '../data/cast.js';
 import { persistConversations } from '../data/persist.js';
-import { optionsSpecFromCharacter } from '../data/suggestions.js';
 import { renderHeader } from './header.js';
 import { renderAll } from './redraw.js';
 import { switchConvo, removeConvo } from './convoActions.js';
@@ -315,11 +314,6 @@ export async function applyCharacterChoice(characterId) {
   // 卡上声明过属性 / 身份四项就种进状态面板：漏了身份四项，模型不知道年龄（会把 16 岁写成 21 岁）
   seedIdentity(convo, next.name, next.id);
   seedPanelFromCharacters(convo, [next]);
-
-  // ⚠️ 用**复制**而不是引用：之后改角色卡不该悄悄改掉正在进行的这一局。
-  // 卡上没配过的（老卡、导入的卡）按默认来：开、4 条；只有卡上明确写了 false 才不开。
-  convo.optionsSpec = optionsSpecFromCharacter(next);
-  if (!convo.optionsSpec) convo.options = [];
 
   if (untouched) {
     // ⚠️ 多条开场白（语料里 424/1341 张卡都有）先让用户挑：那是同一个场景的不同入场剧本，

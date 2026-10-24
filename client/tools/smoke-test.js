@@ -457,29 +457,10 @@ function seedForShots() {
     card('c-shot-5', '分组测试角色', { tags: ['原神'] }),
     card('c-shot-6', '分组改名角色'),
     card('c-shot-7', '自带世界书测试', { worldbookIds: ['w-test'] }),
-    card('c-shot-8', '选项测试角色', { optionsSpec: { count: 3, hint: '语气轻松些' } })
+    card('c-shot-8', '选项测试角色')
   ];
 
-  // 出图用的世界封面：天空渐变（上深下亮）+ 一轮日/月 + 一层山影。
-  // 真机上这一块就是用户自己传的图（2:3），卡片按 object-fit: cover 铺 ——
-  // 所以这里给 2:3 正好。
-  const shotCover = (hue, moonX) =>
-    'data:image/svg+xml;charset=utf-8,' +
-    encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">` +
-        `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1">` +
-        `<stop offset="0" stop-color="hsl(${hue},42%,8%)"/>` +
-        `<stop offset="1" stop-color="hsl(${hue},58%,42%)"/>` +
-        `</linearGradient></defs>` +
-        `<rect width="300" height="450" fill="url(#s)"/>` +
-        `<circle cx="${moonX}" cy="168" r="30" fill="hsl(${hue},82%,76%)" opacity="0.9"/>` +
-        `<path d="M0 450 L0 318 Q74 276 150 316 T300 288 L300 450 Z" fill="rgba(4,6,10,0.92)"/>` +
-        `</svg>`
-    );
-
-  // 世界书页要出图：**带封面和不带封面的两种卡片都要看得到**，
-  // 所以三本带封面（其中一本有角色副本 → 卡片小字会写成「N 条设定 · N 个角色」）
-  // 加一本不带的。
+  // 出图用的世界书条目：世界书现在没有封面 / 开场白了，卡片里只看条目和角色副本
   const wbEntry = (id, title, keys) => ({
     id,
     title,
@@ -501,8 +482,6 @@ function seedForShots() {
     {
       id: 'w-shot-1',
       name: '灰港',
-      opening: '',
-      cover: shotCover(205, 220),
       entries: [wbEntry('e-s1-1', '小镇广场', ['广场']), wbEntry('e-s1-2', '港口的雾', ['雾']), wbEntry('e-s1-3', '老船锚酒馆', ['酒馆'])],
       characters: [
         { id: 'wc-s1', name: '老板娘', avatar: '' },
@@ -512,23 +491,19 @@ function seedForShots() {
     {
       id: 'w-shot-3',
       name: '星轨学院',
-      opening: '',
-      cover: shotCover(250, 90),
       entries: [wbEntry('e-s3-1', '天文台', ['天文台']), wbEntry('e-s3-2', '星轨课', ['星轨'])],
       characters: []
     },
     {
       id: 'w-shot-4',
       name: '沙海商路',
-      opening: '',
-      cover: shotCover(28, 150),
       entries: [wbEntry('e-s4-1', '绿洲', ['绿洲'])],
       characters: []
     }
   );
 
   // 两本书：一本有内容，一本空的 —— 卡片上的「N 条设定 · N 个角色 / N 条设定」两种写法都看得到
-  store.worldbooks.push({ id: 'w-shot-2', name: '新世界书', entries: [], characters: [], opening: '' });
+  store.worldbooks.push({ id: 'w-shot-2', name: '新世界书', entries: [], characters: [] });
 }
 
 if (SHOT_ONLY) seedForShots();
@@ -2010,7 +1985,7 @@ async function probeLightboxClick(win, result) {
  * 而这条链路（角色卡属性 → 会话面板 → 系统提示词）正是这个功能的全部意义。
  *
  * 注意：不看「最后一条」，而是把每次请求都收进来找。
- * 因为世界里没写开场白时，进世界会立刻多发一次「生成开局」的请求，
+ * 因为进世界会立刻多发一次「生成开局」的请求（开场白已经撤了，开局一律现生成），
  * 那次是不带状态面板的 —— 只认最后一条会误判。
  */
 function probeInjection(result) {
@@ -2736,7 +2711,6 @@ function probeImport(result) {
   const castBook = {
     name: '带 NPC 的世界书',
     description: '验证书里的角色副本能不能跟着进来',
-    opening: '你在校门口站着，行李箱放在脚边。',
     entries: {
       0: { uid: 0, comment: '规则', key: [], content: '玩家不是世界中心。', constant: true, order: 5 }
     },
@@ -2761,8 +2735,6 @@ function probeImport(result) {
       castImported.characters[0].personality === '温和可靠' &&
       typeof castImported.characters[0].id === 'string' && !!castImported.characters[0].id,
     castImported && castImported.characters[0] ? JSON.stringify(castImported.characters[0]) : '没有书');
-  push('导入：书里的开场白也留下了', !!castImported && castImported.opening === castBook.opening,
-    castImported ? `opening=${JSON.stringify(castImported.opening)}` : '没有书');
   push('导入：NPC 不会被当成新的角色卡塞进角色库', (castOut.characters || []).length === 0,
     `roles=${(castOut.characters || []).length}`);
   push('导入：书里没有 characters 时也不会凭空造副本',
@@ -3144,8 +3116,7 @@ function probeWorldbookStore(result) {
     id: 'w-keep',
     name: '字段保全测试书',
     opening: '进来就会看到的第一句话',
-    entries: [
-      {
+    entries: [      {
         id: 'e-keep',
         title: '会递归的条目',
         keys: ['关键词'],
@@ -3183,7 +3154,7 @@ function probeWorldbookStore(result) {
 
   push('世界书落盘：书本身的 id / name 保留', back.id === 'w-keep' && back.name === '字段保全测试书',
     `id=${back.id} name=${back.name}`);
-  push('世界书落盘：opening 没被丢掉（白名单漏过）', back.opening === '进来就会看到的第一句话', JSON.stringify(back.opening));
+  push('世界书落盘：opening 已经撤掉（白名单不再收）', !('opening' in back), JSON.stringify(back.opening));
   push('世界书落盘：条目数对', (back.entries || []).length === 2, `entries=${(back.entries || []).length}`);
   push('世界书落盘：recursive 没被重置成 false（白名单漏过）', e0.recursive === true, `recursive=${e0.recursive}`);
   push('世界书落盘：disable:true 读成 enabled:false', e1.enabled === false, `enabled=${e1.enabled}`);
@@ -3983,8 +3954,8 @@ function probeWorldbookDeepSplit(result) {
  * 为什么非要这么绕：`worldbookPayload` 住在渲染层（导出按钮按的是它），
  * 而 `importFiles` 住在主进程（导入按钮走的是它），宿主侧没法直接 require
  * 渲染层的 ESM。以前这条断言根本不存在，于是「导出只写 name/description/entries」
- * 一直没被发现 —— 表现是**导出一本带 NPC 的世界书再导回来，开场白没了、
- * 书里的 NPC 一个不剩**，而那两样正是分享一份世界书时最想要的。
+ * 一直没被发现 —— 表现是**导出一本带 NPC 的世界书再导回来，书里的 NPC 一个不剩**，
+ * 而那正是分享一份世界书时最想要的。
  *
  * 同时验「书里的 NPC 不会被当成新的角色卡塞进角色库」：导入结果里
  * `characters` 是「新增的角色卡」，世界书的 NPC 只该住在书里。
@@ -3994,7 +3965,6 @@ async function probeWorldbookExportRoundTrip(win, result) {
 
   const source = {
     name: '往返用世界书',
-    opening: '你在校门口站着，行李箱放在脚边。',
     entries: [
       {
         title: '世界规则（常驻）',
@@ -4043,19 +4013,18 @@ async function probeWorldbookExportRoundTrip(win, result) {
       const payload = JSON.parse(text);
       const cast = Array.isArray(payload.characters) ? payload.characters : [];
       shapeOk =
-        payload.opening === source.opening &&
         Object.keys(payload.entries || {}).length === 2 &&
         cast.length === 2 &&
         cast[0].name === '顾言' &&
         cast[1].name === '林夏';
-      shapeDetail = `opening=${JSON.stringify(payload.opening)} 条目=${Object.keys(payload.entries || {}).length} characters=${cast
+      shapeDetail = `条目=${Object.keys(payload.entries || {}).length} characters=${cast
         .map((c) => c.name)
         .join('、')}`;
     } catch (err) {
       shapeDetail = '导出的 JSON 解析失败：' + ((err && err.message) || err);
     }
   }
-  push('导出：世界书带上了开场白和书里的 NPC', shapeOk, shapeOk ? '' : shapeDetail);
+  push('导出：世界书带上了书里的 NPC', shapeOk, shapeOk ? '' : shapeDetail);
 
   // 把页面刚导出的那份字节喂进真实的导入链路
   let backOk = false;
@@ -4074,21 +4043,18 @@ async function probeWorldbookExportRoundTrip(win, result) {
       backOk =
         !!b &&
         (b.entries || []).length === 2 &&
-        b.opening === source.opening &&
         cast.length === 2 &&
         cast[0].name === '顾言' &&
         cast[0].personality === '温和可靠' &&
         (back.characters || []).length === 0;
-      backDetail = `书=${b && b.name} 条目=${b ? (b.entries || []).length : 0} opening=${
-        b ? JSON.stringify(b.opening) : 'null'
-      } NPC=${cast.map((c) => c.name).join('、')} 新增角色卡=${(back.characters || []).length} errors=${JSON.stringify(
+      backDetail = `书=${b && b.name} 条目=${b ? (b.entries || []).length : 0} NPC=${cast.map((c) => c.name).join('、')} 新增角色卡=${(back.characters || []).length} errors=${JSON.stringify(
         back.errors
       )}`;
     } catch (err) {
       backDetail = '往返崩了：' + ((err && err.message) || err);
     }
   }
-  push('导出 → 导入：世界书的开场白和 NPC 都还在（真往返）', backOk, backOk ? '' : backDetail);
+  push('导出 → 导入：世界书的 NPC 都还在（真往返）', backOk, backOk ? '' : backDetail);
 
   // NPC 的 id 在导入时要重发（同一毫秒里连导两次会撞车），而且两个 NPC 不能重号 ——
   // 不然同一次导入里的两个副本会互相顶掉。这段逻辑住在渲染层，所以在这儿验。
@@ -4703,37 +4669,8 @@ app.whenReady().then(async () => {
           const go = line && Array.from(line.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (go) go.click();
           await nap(700);
-          // ⚠️ 进编辑器默认落在「书籍设置」，这一屏要看条目工作台得自己切过去
-          document.querySelector('#wb-tab-entries')?.click();
+          // 进编辑器就落在「条目」屏（设置屏撤了），不用再切
           await new Promise(r => setTimeout(r, 300));`,
-        // 世界书编辑器的「书籍设置」分区：书名那格在这儿（`wb-name`，页面规则原来给的是
-        // 34px 这个**没有档位对应**的高度，迁组件时要决定靠向哪一档）。没有这个场景的话
-        // 改完看不见 —— 2026-10-16 加。
-        wbBookSettings: `
-          const t = document.querySelector('#toast');
-          if (t) { t.classList.add('hidden'); t.textContent = ''; }
-          const $$ = (s) => Array.from(document.querySelectorAll(s));
-          const $ = (s) => document.querySelector(s);
-          const nap = (ms) => new Promise(r => setTimeout(r, ms));
-          $('#btn-chars')?.click(); await nap(400);
-          const wbCard = $$('#char-page-grid .char-card').find(c => c.textContent.includes('自带世界书测试')) || $$('#char-page-grid .char-card')[0];
-          const wbEditBtn = wbCard && Array.from(wbCard.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (wbEditBtn) wbEditBtn.click();
-          await nap(550);
-          $('#char-section-tab-worldbook')?.click(); await nap(250);
-          if (!$$('#c-wb-list .cwb-row').length) {
-            $('#c-wb-add-btn')?.click(); await nap(350);
-            const row = $$('.cwb-picker-row')[0];
-            if (row) row.click();
-            await nap(400);
-          }
-          const line = $$('#c-wb-list .cwb-row')[0];
-          const go = line && Array.from(line.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (go) go.click();
-          await nap(700);
-          document.querySelector('#wb-tab-settings')?.click();
-          await nap(350);
-          if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 世界书编辑器的「本书角色」分区（2026-10-18 起它有了自己的一屏）：
         // 动作行 + 卡片网格 / 空态引导卡 —— 卡片里「本书副本」那枚标最容易挤掉。
         wbChars: `
@@ -5980,22 +5917,6 @@ app.whenReady().then(async () => {
             scenario: pair('#c-scenario'),
             first: pair('#c-first'),
             example: pair('#c-example'),
-            // 剧情选项的四颗单选（2026-10-19 起是单选框，不再是数字输入框）：
-            // 档位对不对、和下面「额外要求」的输入框左缘对不对齐 —— 差了 10px
-            // 在缩略图上几乎看不出来，所以给数字。
-            optProbe: (() => {
-              const group = document.querySelector('#c-options-count');
-              if (!group) return '(无)';
-              const pills = Array.from(group.querySelectorAll('.opt-choice > span'));
-              const hint = document.querySelector('#c-options-hint');
-              if (!pills.length) return '(没有单选项)';
-              return {
-                pills: pills.map((n) => n.textContent.trim()).join(','),
-                pillLeft: Math.round(pills[0].getBoundingClientRect().left),
-                hintLeft: hint ? Math.round(hint.getBoundingClientRect().left) : null,
-                pillH: Math.round(pills[0].getBoundingClientRect().height)
-              };
-            })(),
             // 左栏「有没有长出栏内滚动条」：这是 V2 布局的一条硬要求
             // （左栏固定、右列独立滚动），光看截图那根细细的滚动条很容易看漏。
             // scrollHeight > clientHeight 就是长了，给数字比看图可靠。
@@ -6025,7 +5946,6 @@ app.whenReady().then(async () => {
         console.log(`  弹窗卡片=${probe.modal}`);
         if (probe.selProbe) console.log(`  下拉几何=${JSON.stringify(probe.selProbe)}`);
         if (probe.attrProbe) console.log(`  属性行控件=${JSON.stringify(probe.attrProbe)}`);
-        if (probe.optProbe) console.log(`  剧情选项单选=${JSON.stringify(probe.optProbe)}`);
         if (probe.iconProbe) console.log(`  图标注入=${JSON.stringify(probe.iconProbe)}`);
         if (probe.cardProbe) console.log(`  卡片/工具条控件=${JSON.stringify(probe.cardProbe)}`);
         if (shotArg === 'charTextareas') {

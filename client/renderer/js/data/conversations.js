@@ -38,9 +38,10 @@ export function createConvo(activate) {
     panelDefs: {},
     panelManual: {},
     // 剧情选项：options = 这轮的可点选项（点完就清），optionsSpec = 每轮给几个 + 额外要求。
-    // 新会话是 null；绑角色 / 进世界时由 optionsSpecFromCharacter() 填（没配过的角色默认「开、4 条」）。
+    // 跟**对话框**走、和角色无关（在视角设置里配）；新会话默认开 4 条，关掉存 false。
+    // count 默认 4 须和 suggestions.js 的 DEFAULT_OPTIONS_COUNT 对齐。
     options: [],
-    optionsSpec: null,
+    optionsSpec: { count: 4, hint: '' },
     // 视角设置：叙述模式、推进节奏、GM 模式。
     // ⚠️ 纯聊天用不上这两个档（见 data/messages.js 文件头），但仍写默认值：万一被切成 GM 模式，默认档直接可用。
     narrationMode: DEFAULT_NARRATION_MODE,
@@ -82,8 +83,8 @@ export function branchSkeleton(convo, cut) {
     panelDefs: JSON.parse(JSON.stringify(convoPanelDefs(convo))),
     // 「手改过」的标记也跟着走 —— 新线里那些手改的值同样不该被 AI 顶掉
     panelManual: { ...(convo.panelManual || {}) },
-    // 剧情选项配置跟着走；这一轮的选项本身不搬（新线还没生成过）
-    optionsSpec: convo.optionsSpec ? { ...convo.optionsSpec } : null,
+    // 剧情选项配置跟着走（false = 关也要原样带过去）；这一轮的选项本身不搬（新线还没生成过）
+    optionsSpec: convo.optionsSpec ? { ...convo.optionsSpec } : false,
     options: [],
     messages: JSON.parse(JSON.stringify(convo.messages.slice(0, cut))),
     // 摘要不搬：它压的是「最早那批消息」，而新会话里这批是原样留着的，搬过去等于同一段被记两遍。

@@ -10,8 +10,6 @@ import { uid, now, activeConvo } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { characterById, characterWorldbooks, worldbookCharacters } from '../data/library.js';
 import { seedIdentity, seedPanelFromCharacters, mergePlayerOwnedFields } from '../data/panel.js';
-import { applyMacros } from '../data/messages.js';
-import { optionsSpecFromCharacter } from '../data/suggestions.js';
 import { convoUserName, convoPlayer, worldbookCast } from '../data/cast.js';
 import { gmRuleText } from '../data/narration.js';
 import { ensureConvoEndpoint } from '../data/providers.js';
@@ -71,11 +69,6 @@ export function startWorldPlay(input, name = '') {
   applyPlayerIdentity(convo, draft);
   const pickedCard = draft.card;
 
-  // ⚠️ 用复制（和绑卡那套一致）：改卡不该悄悄改掉正在玩的这一局。
-  // 没选卡（自己写的主角或留空）也给默认的 4 条。
-  convo.optionsSpec = optionsSpecFromCharacter(pickedCard);
-  if (!convo.optionsSpec) convo.options = [];
-
   // ⚠️ 先种「你自己」再种书里角色：同名以先出现的为准，自己卡上的「金币」不会被书里的盖掉。
   seedIdentity(convo, draft.name, 'player');
   if (pickedCard) seedPanelFromCharacters(convo, [pickedCard], 'player');
@@ -85,19 +78,7 @@ export function startWorldPlay(input, name = '') {
   //    否则同一个人占两张状态卡、属性存两份。
   mergePlayerOwnedFields(convo);
 
-  // 开场：书里写了就用书里的（多本取第一本写了的）；都没写就让模型按设定现生成一段
-  const opening = books.map((book) => String(book.opening || '').trim()).find(Boolean) || '';
-  if (opening) {
-    convo.messages = [
-      {
-        role: 'assistant',
-        content: applyMacros(opening, null, draft.name, '叙述者'),
-        at: now(),
-        greeting: true
-      }
-    ];
-  }
-
+  // 开场白已经撤了（改从角色卡取，见 startCharacterChat）；这里交给模型按设定现生成一段
   closePlayerModal();
   showView('chat');
   renderAll({ forceScroll: true });
@@ -106,8 +87,8 @@ export function startWorldPlay(input, name = '') {
   showToast(`进入「${convo.title}」—— 你是「${convoUserName(convo)}」`, 'ok');
   el.input.focus();
 
-  // 没写开场白就去生成一段。失败也不影响玩，只是开局空着
-  if (!opening) generateWorldOpening(convo, books);
+  // 生成开局。失败也不影响玩，只是开局空着
+  generateWorldOpening(convo, books);
 }
 
 /** ⚠️ 身份要在绑卡**之前**落到会话上：自动插入的开场白里 {{user}} 得用刚填的名字。 */

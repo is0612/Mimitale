@@ -389,7 +389,6 @@ m-button.btn-new > .mi-btn__control {
 .char-expr-del:focus-visible,
 .char-card-world:focus-visible,
 .check > input[type="checkbox"]:focus-visible,
-.wb-cover-frame:focus-visible,
 .panel-all:focus-visible,
 .accent-swatch:focus-visible,
 .seg-btn:focus-visible,
@@ -1132,7 +1131,6 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 .char-expr-thumb img,
 .msg-avatar img,
 .wb-picker-avatar img,
-.wb-cover-frame img,
 .panel-avatar img,
 .sc-avatar img,
 .cast-card-avatar img {
@@ -9861,11 +9859,8 @@ m-button.btn-new > .mi-btn__control:hover {
   max-width: 760px;
 }
 
-/* 开关打开后露出来的两行：每轮给几个 / 额外要求。
-   ⚠️ 以前是 `140px minmax(0,1fr)` 两栏并排，而里面每个 .field 自己又是
-   「152px 标签 + 控件」的两栏 —— 两层两栏套在一起，「每轮给几个」的标签
-   被挤在 140px 里溢出、「额外要求」只剩两百来像素。现在一行一项。 */
-#view-char-editor .c-options-config {
+/* 开关打开后露出来的两行：每轮给几个 / 额外要求（标签在左、控件在右） */
+#perspective-modal .c-options-config {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
@@ -9874,27 +9869,24 @@ m-button.btn-new > .mi-btn__control:hover {
   border-top: 1px solid var(--border-soft);
 }
 
-/* 每轮给几个：四个固定档做成单选按钮组 */
-#view-char-editor .c-options-config > .field {
-  /* 这两行是「左边一行标签 + 右边一个矮控件」。.field 默认 align-items:start，
-     标签会贴着控件顶边 —— 32px 的药丸、44px 的输入框上看着就是浮在上面。
-     编辑页其余字段都是 .field-stack（标签在上），只有这里需要中线对齐。 */
+/* 标签和矮控件（32px 药丸 / 44px 输入框）中线对齐，别让标签贴顶浮在上面 */
+#perspective-modal .c-options-config > .field {
   align-items: center;
 }
 
-#view-char-editor .opt-choices {
+#perspective-modal .opt-choices {
   display: flex;
   gap: 8px;
 }
 
-#view-char-editor .opt-choice {
+#perspective-modal .opt-choice {
   position: relative;
   display: inline-flex;
 }
 
 /* 原生 radio 铺满整块但透明 —— 点击、聚焦、键盘选择都还是它自己；
    ⚠️ 别用 display:none / visibility:hidden：那样 Tab 和方向键都跳不到。 */
-#view-char-editor .opt-choice > input {
+#perspective-modal .opt-choice > input {
   position: absolute;
   inset: 0;
   margin: 0;
@@ -9902,7 +9894,7 @@ m-button.btn-new > .mi-btn__control:hover {
   cursor: pointer;
 }
 
-#view-char-editor .opt-choice > span {
+#perspective-modal .opt-choice > span {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -9916,18 +9908,18 @@ m-button.btn-new > .mi-btn__control:hover {
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
-#view-char-editor .opt-choice:hover > span {
+#perspective-modal .opt-choice:hover > span {
   color: var(--text);
   border-color: var(--border-strong);
 }
 
-#view-char-editor .opt-choice > input:checked + span {
+#perspective-modal .opt-choice > input:checked + span {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-soft);
 }
 
-#view-char-editor .opt-choice > input:focus-visible + span {
+#perspective-modal .opt-choice > input:focus-visible + span {
   box-shadow: var(--focus-ring);
 }
 
@@ -9988,33 +9980,6 @@ m-button.btn-new > .mi-btn__control:hover {
   padding: 10px 24px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
-}
-
-/* 28×42 —— 和封面框同一个 2:3 比例，只是缩到「书脊」那么大。
-   它是个按钮，但**不是第二个上传入口**：点了去「书籍设置」那一屏换。 */
-#view-wb-editor .wb-bookbar-cover {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 42px;
-  padding: 0;
-  overflow: hidden;
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  color: var(--accent);
-  background: var(--accent-soft);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-#view-wb-editor .wb-bookbar-cover img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 #view-wb-editor .wb-bookbar-name {
@@ -10142,6 +10107,15 @@ m-button.btn-new > .mi-btn__control:hover {
   gap: 8px;
 }
 
+/* 书名改在条目左栏顶部（书籍设置屏撤了） */
+#view-wb-editor .wb-name-cell {
+  flex: none;
+  padding: 2px 0 6px;
+}
+#view-wb-editor .wb-name-cell .field {
+  margin: 0;
+}
+
 /* flex item 的 min-width 初值是 auto（= min-content），不归零收不下来 */
 #view-wb-editor .wb-search {
   flex: 1 1 auto;
@@ -10199,6 +10173,13 @@ m-button.btn-new > .mi-btn__control:hover {
 
 #view-wb-editor .wb-entry-actions m-button > .mi-btn__control {
   padding: 6px 8px;
+}
+
+/* 删除本书：危险动作放左栏最底，跟「＋ 条目」那排隔一条边线 */
+#view-wb-editor .wb-list-danger {
+  flex: none;
+  padding: 10px 0 14px;
+  border-top: 1px solid var(--border-soft);
 }
 
 /* 行：两行两列（名称 + 徽章 / 关键词 + 「字数 · 顺序」），右边一列专给 ×。
@@ -10685,132 +10666,6 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* ==========================================================================
-   屏 2 · 书籍设置（左两张稿纸 | 右本书信息 + 删除）
-   ========================================================================== */
-
-#view-wb-editor .wb-set {
-  display: grid;
-  flex: 1;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  min-height: 0;
-}
-
-#view-wb-editor .wb-set-main {
-  min-width: 0;
-  min-height: 0;
-  padding: 16px 24px 24px;
-  overflow-y: auto;
-}
-
-#view-wb-editor .wb-set-aside {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  padding: 14px 16px 16px;
-  overflow-y: auto;
-  background: var(--bg-side);
-  border-left: 1px solid var(--border);
-}
-
-/* 危险区贴底：位置稳定、不占正文宽度（改版前它是横在左栏下面的一条红杠） */
-#view-wb-editor .wb-set-aside .wb-danger {
-  margin-top: auto;
-}
-
-/* 封面 + 书名（2026-10-20 重排）：
-   左边一张 132×198 的封面（2:3，和列表卡同一个比例），右栏贴顶放书名、贴底放
-   「清除封面 + 一行说明」，两边同高。改版前三样东西挤在 96px 宽的一条里，
-   书名框拉得老长、右下角空出一大片 —— 看着像没排完。 */
-#view-wb-editor .wb-cover-cell {
-  display: flex;
-  align-items: flex-start;
-  gap: 18px;
-}
-
-#view-wb-editor .wb-cover-frame {
-  position: relative;
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 132px;
-  aspect-ratio: 2 / 3;
-  padding: 0;
-  overflow: hidden;
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  background: var(--bg-input);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-#view-wb-editor .wb-cover-frame:hover {
-  border-color: var(--border-hover);
-}
-
-#view-wb-editor .wb-cover-frame.has {
-  border-color: var(--border-soft);
-  border-style: solid;
-}
-
-/* align-self: stretch 让右栏跟封面同高 —— 封面是这一格里最高的那个，
-   于是「清除封面」自动落到封面的下沿，不会吊在半空。 */
-#view-wb-editor .wb-cover-side {
-  display: flex;
-  flex: 1 1 auto;
-  align-self: stretch;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-#view-wb-editor .wb-cover-side .field {
-  align-self: stretch;
-  margin: 0;
-}
-
-#view-wb-editor .wb-cover-side .field-label {
-  padding-top: 0;
-}
-
-/* 封面的两个附注（清除 / 尺寸提示）排一行，贴在封面下沿那一线上 */
-#view-wb-editor .wb-cover-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-
-#view-wb-editor .wb-cover-tip {
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-}
-
-#view-wb-editor .wb-danger {
-  flex: none;
-  padding: 14px 16px;
-  background: var(--danger-bg);
-  border: 1px solid var(--danger-border);
-  border-radius: var(--radius);
-}
-
-#view-wb-editor .wb-danger h3 {
-  margin: 0 0 6px;
-  font-size: var(--fs-sm);
-  color: var(--danger-text);
-}
-
-#view-wb-editor .wb-danger p {
-  margin: 0 0 12px;
-  font-size: var(--fs-xs);
-  color: var(--text-dim);
-}
-
-/* ==========================================================================
    屏 3 · 本书角色（卡片网格 + 空态引导卡）
    ========================================================================== */
 
@@ -11046,26 +10901,5 @@ m-button.btn-new > .mi-btn__control:hover {
 
   #view-wb-editor .wb-ident {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  /* 书籍设置同理：320 的右栏在窄窗下会把稿纸压成一条缝 */
-  #view-wb-editor .wb-set {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
-
-  #view-wb-editor .wb-set-aside {
-    flex-direction: row;
-    padding: 12px 16px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border-top: 1px solid var(--border);
-    border-left: 0;
-  }
-
-  #view-wb-editor .wb-set-aside > .wb-aside-card,
-  #view-wb-editor .wb-set-aside > .wb-danger {
-    flex: 1 0 240px;
-    margin-top: 0;
   }
 }

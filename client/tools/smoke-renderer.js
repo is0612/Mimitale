@@ -116,7 +116,7 @@ async function scenario(name, fn) {
 
 function revealEditorControl(node) {
   if (node.closest('#view-wb-editor')) {
-    const panel = node.closest('#wb-panel-settings, #wb-panel-characters, #wb-panel-entries');
+    const panel = node.closest('#wb-panel-characters, #wb-panel-entries');
     if (panel?.hidden) byId(panel.id.replace('wb-panel-', 'wb-tab-'))?.click();
   }
   if (node.closest('#char-form')) {
@@ -4623,9 +4623,9 @@ await scenario('世界书：新建条目', async () => {
   // ⚠️ btn-close-worldbooks（返回）2026-10-19 挪到左上角并改成图标按钮，
   //    图标按钮按约定不套 m-button，所以从这张表里去掉。
   // ⚠️ btn-export-wb 2026-10-20 从书籍条去掉了（搬到列表卡片上），也去掉。
-  const WB_BTN_IDS = ['btn-save-wb','btn-clear-wb-cover','btn-add-wb-chars','btn-ai-wb-char','btn-new-wb-char','btn-sync-wb-attrs','btn-preview-wb','btn-del-worldbook','btn-new-entry','btn-wb-entry-template','btn-wb-add-event','btn-del-entry'];
+  const WB_BTN_IDS = ['btn-save-wb','btn-add-wb-chars','btn-ai-wb-char','btn-new-wb-char','btn-sync-wb-attrs','btn-preview-wb','btn-del-worldbook','btn-new-entry','btn-wb-entry-template','btn-wb-add-event','btn-del-entry'];
   const wbBad = WB_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
-  check('世界书编辑器 12 颗按钮都是 m-button 宿主', wbBad.length === 0, wbBad.join(', ') || '全部是');
+  check('世界书编辑器 11 颗按钮都是 m-button 宿主', wbBad.length === 0, wbBad.join(', ') || '全部是');
   check('编辑器里没有「导出」按钮', !byId('btn-export-wb'));
   // 2026-10-20：保存从页头右上搬到书籍条右侧 —— 书籍条三屏共用，位置在任何
   // tab 都固定，且紧挨脏状态胶囊。页头只剩「返回 / 标题 / 全文 N 字」。
@@ -4637,13 +4637,14 @@ await scenario('世界书：新建条目', async () => {
   check('页头不再有面包屑', !byId('wb-crumb'));
   check('页头右侧只剩字数', [...document.querySelectorAll('#view-wb-editor .wb-head .page-actions > *')]
     .every((node) => node === byId('wb-total-words')), [...document.querySelectorAll('#view-wb-editor .wb-head .page-actions > *')].map((n) => n.id || n.className).join(','));
-  // 每次进编辑器都停在「书籍设置」，不恢复上次停在哪一屏
-  check('进编辑器默认在「书籍设置」',
-    !byId('wb-panel-settings').hidden && byId('wb-panel-entries').hidden,
-    `settings=${!byId('wb-panel-settings').hidden} entries=${!byId('wb-panel-entries').hidden}`);
+  // 每次进编辑器都落在「条目」屏（书籍设置屏已经撤了）
+  check('进编辑器默认在「条目」屏',
+    !byId('wb-panel-entries').hidden && byId('wb-panel-characters').hidden,
+    `entries=${!byId('wb-panel-entries').hidden} chars=${!byId('wb-panel-characters').hidden}`);
+  check('「书籍设置」屏已经不存在了', !byId('wb-panel-settings') && !byId('wb-tab-settings'));
   click('#wb-tab-entries');
   await sleep(120);
-  check('切到「条目」屏', !byId('wb-panel-entries').hidden && byId('wb-panel-settings').hidden);
+  check('切到「条目」屏', !byId('wb-panel-entries').hidden);
   // ⚠️ 同角色编辑器：JS 渲染的 .btn 还在这页上（NPC 属性面板共用同一套），
   //    「没有原生 .btn」要等 JS 侧调用点迁完才能上。
   check('条目行按钮的内边距落在里层（6px 8px）', getComputedStyle(byId('btn-new-entry').control).paddingLeft === '8px', getComputedStyle(byId('btn-new-entry').control).padding);
@@ -4684,8 +4685,8 @@ await scenario('世界书：新建条目', async () => {
   check('条目屏是三栏（列表 / 正文 / 属性）',
     getComputedStyle($('#wb-panel-entries')).gridTemplateColumns.split(/\s+/).length === 3,
     getComputedStyle($('#wb-panel-entries')).gridTemplateColumns);
-  check('书籍设置与本书角色不挤占条目编辑区',
-    byId('wb-panel-settings').hidden && byId('wb-panel-characters').hidden);
+  check('本书角色不挤占条目编辑区',
+    byId('wb-panel-characters').hidden);
   check('正文列比条目列表宽（它才是主工作区）',
     wbRect('.wb-doc').width > wbRect('.wb-list').width,
     `正文 ${Math.round(wbRect('.wb-doc').width)} vs 列表 ${Math.round(wbRect('.wb-list').width)}`);
@@ -4715,17 +4716,18 @@ await scenario('世界书：新建条目', async () => {
   check('行上的 × 垂直居中（上下留白相等）',
     !!rowBox && !!delBox && Math.abs((delBox.top - rowBox.top) - (rowBox.bottom - delBox.bottom)) <= 2,
     rowBox && delBox ? `上 ${Math.round(delBox.top - rowBox.top)} / 下 ${Math.round(rowBox.bottom - delBox.bottom)}` : '找不到条目行');
-  check('书籍设置和本书角色各自独立分区',
-    $('#wb-panel-settings').contains(byId('wb-name')) &&
-    $('#wb-panel-settings').contains(byId('wb-opening')) &&
+  check('本书角色有自己独立的分区',
     $('#wb-panel-characters').contains(byId('wb-char-list')));
-  check('条目列表栏里不再有书级字段',
-    !$('.wb-list').contains(byId('wb-name')) && !$('.wb-list').contains(byId('wb-opening')),
-    '书名 / 开场白还留在 .wb-list 里');
-  check('书籍条只剩「预览命中」，删除本书留在设置屏',
+  // 书名改在条目左栏顶部；删除本书也落在这里（不再有设置屏）
+  check('书名改在条目左栏顶部',
+    $('.wb-list').contains(byId('wb-name')) && !$('#wb-bookbar').contains(byId('wb-name')));
+  check('删除本书在左栏底部',
+    $('.wb-list').contains(byId('btn-del-worldbook')) &&
+    byId('btn-del-worldbook').closest('.wb-list-danger') !== null);
+  check('书籍条只剩「预览命中」和「保存」',
     !byId('btn-export-wb') &&
     $('#wb-bookbar').contains(byId('btn-preview-wb')) &&
-    $('#wb-panel-settings').contains(byId('btn-del-worldbook')));
+    $('#wb-bookbar').contains(byId('btn-save-wb')));
   // 统计去重：全书统计只在书籍条出现一次，页头只留字数
   check('书籍条一行读完这本书（条 / 启用 / 常驻 / 角色）',
     /条/.test(byId('wb-bookbar-sub').textContent) && /角色/.test(byId('wb-bookbar-sub').textContent),
@@ -4741,9 +4743,11 @@ await scenario('世界书：新建条目', async () => {
     `${aside.scrollHeight} / ${aside.clientHeight}`);
   check('「＋ 条目」跟着条目列表走', $('.wb-list').contains(byId('btn-new-entry')));
   const draftText = byId('wb-e-content').value;
-  click('#wb-tab-settings');
-  check('书籍设置切换后只显示书级字段', !byId('wb-panel-settings').hidden && byId('wb-panel-entries').hidden);
+  click('#wb-tab-characters');
+  await sleep(120);
+  check('切到「本书角色」后条目屏收起来了', byId('wb-panel-characters').hidden === false && byId('wb-panel-entries').hidden);
   click('#wb-tab-entries');
+  await sleep(120);
   check('世界书分区切换保留条目草稿', byId('wb-e-content').value === draftText);
   setValue('#wb-search', '世界总览');
   check('世界书搜索过滤条目列表', $$('#wb-entry-list .wb-entry').length === 1);
@@ -6866,61 +6870,6 @@ await scenario('导入：重发 id 时绑定要跟着走', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 20b：导入的角色卡自带世界书时，用这张卡的立绘补封面
-//
-//  这条走不了 UI：整个导入在文件框后面，中间态点不到。所以直接拿真模块来调
-//  seedBookCovers（导出就是为了这个）。要点是「只补空封面」和「图裁不出来别崩」。
-// ---------------------------------------------------------------------------
-await scenario('导入：自带世界书拿角色立绘当封面', async () => {
-  let mod = null;
-  try {
-    mod = await import(new URL('js/views/characterImport.js', document.baseURI).href);
-  } catch (err) {
-    check('导入模块能加载', false, (err && err.message) || String(err));
-  }
-  if (!mod || typeof mod.seedBookCovers !== 'function') {
-    check('导入模块导出了 seedBookCovers', false, typeof (mod && mod.seedBookCovers));
-    return;
-  }
-  check('导入模块导出了 seedBookCovers', true);
-
-  // 造一张真 PNG（不写死 base64：画布出图永远能解码）
-  const canvas = document.createElement('canvas');
-  canvas.width = 6;
-  canvas.height = 6;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#c33';
-  ctx.fillRect(0, 0, 6, 6);
-  const AVATAR = canvas.toDataURL('image/png');
-
-  const books = [
-    { id: 'wb-a', name: '卡里自带的世界书', cover: '' },
-    { id: 'wb-b', name: '本来就有封面的', cover: 'data:image/png;base64,KEEP' }
-  ];
-  const chars = [
-    { id: 'c-a', name: '带立绘的', avatar: AVATAR, worldbookIds: ['wb-a'] },
-    { id: 'c-b', name: '有书没立绘', avatar: '', worldbookIds: ['wb-b'] }
-  ];
-
-  await mod.seedBookCovers(books, chars);
-
-  check('空封面被角色立绘补上了', String(books[0].cover).startsWith('data:image/'),
-    String(books[0].cover).slice(0, 40));
-  check('补的是 2:3 的裁切图（不是原图直传）', books[0].cover !== AVATAR);
-  check('书里自己带的封面不动', books[1].cover === 'data:image/png;base64,KEEP', books[1].cover);
-
-  // 没立绘 / 没绑书 → 不动，也不该抛
-  const lonely = [{ id: 'wb-c', name: '没人认领', cover: '' }];
-  let ok = true;
-  try {
-    await mod.seedBookCovers(lonely, []);
-  } catch (err) {
-    ok = false;
-  }
-  check('找不到归属角色时留空、不抛错', ok && lonely[0].cover === '', String(lonely[0].cover));
-});
-
-// ---------------------------------------------------------------------------
 //  场景 21：剧情选项（每轮给几个可点选项，点一下就当玩家回复发出去）
 //
 //  这是「互动模板」里最特别的一块：选项不是一次性的建议，而是跟着最新一条
@@ -6928,7 +6877,7 @@ await scenario('导入：自带世界书拿角色立绘当封面', async () => {
 //  玩家点一下就当作自己说了那句话；不满意还能「换一批」。
 // ---------------------------------------------------------------------------
 await scenario('剧情选项', async () => {
-  // --- 1) 在角色编辑器里开剧情选项 ---
+  // --- 1) 建一个角色、开一局（剧情选项不再长在角色卡上，改到「视角设置」里配）---
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   click('#btn-new-char');
@@ -6938,39 +6887,12 @@ await scenario('剧情选项', async () => {
   setValue('#c-name', NAME);
   await sleep(80);
 
-  // 剧情选项现在**默认就是开的**（4 条）—— 所有角色（角色卡 / 世界书副本 /
-  // 进世界时自己写的主角）一律如此，只有明确取消勾选才没有。
-  check('默认就开着剧情选项', byId('c-options-on').checked === true, String(byId('c-options-on').checked));
-  // 2026-10-19：数量从数字输入框改成四颗单选框（2/3/4/5）—— 读 .value 那套不再成立
-  const optionRadios = () => Array.from(byId('c-options-count').querySelectorAll('input[type="radio"]'));
-  check(
-    '只有 2 / 3 / 4 / 5 四档',
-    optionRadios().map((r) => r.value).join(',') === '2,3,4,5',
-    optionRadios().map((r) => r.value).join(',')
-  );
-  check(
-    '默认每轮给 4 条',
-    byId('c-options-count').querySelector('input[value="4"]').checked === true,
-    optionRadios().map((r) => `${r.value}:${r.checked}`).join(' ')
-  );
-  check('开着时配置区是展开的', shown('#c-options-config'));
-
-  click('#c-options-count input[value="3"]');
-  setValue('#c-options-hint', '语气轻松些，总有一条冒险的选择');
+  // 角色编辑器「属性」里不再有剧情选项这一块
+  check('角色编辑器里没有剧情选项了', !byId('c-options-on') && !byId('c-options-count'));
 
   click('#btn-save-char');
   await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'), 8000);
   await sleep(150);
-
-  const saved = await savedCharacters();
-  const mine = saved.find((c) => c.name === NAME);
-  check(
-    '选项配置落盘了（没被白名单丢掉）',
-    !!mine && !!mine.optionsSpec && mine.optionsSpec.count === 3 && mine.optionsSpec.hint === '语气轻松些，总有一条冒险的选择',
-    JSON.stringify(mine && mine.optionsSpec)
-  );
-
-  // --- 2) 用这个角色开一个会话 → 配置该跟过来 ---
   click('#btn-close-chars');
   await sleep(150);
   const card = $$('#char-page-grid .char-card').find((c) => String(c.textContent || '').includes(NAME));
@@ -6978,6 +6900,42 @@ await scenario('剧情选项', async () => {
   await startChatWith(card);
   await waitFor('切到聊天视图', () => shown('#view-chat'), 8000);
   await sleep(300);
+
+  // --- 2) 在「视角设置」里配剧情选项（跟会话走，和角色无关）---
+  click('#btn-perspective');
+  await waitFor('视角设置弹窗打开', () => shown('#perspective-modal'));
+
+  // 新会话默认就是开的（4 条）
+  check('默认就开着剧情选项', byId('p-options-on').checked === true, String(byId('p-options-on').checked));
+  // 数量是四颗单选框（2/3/4/5）—— 读 .value 那套不成立
+  const optionRadios = () => Array.from(byId('p-options-count').querySelectorAll('input[type="radio"]'));
+  check(
+    '只有 2 / 3 / 4 / 5 四档',
+    optionRadios().map((r) => r.value).join(',') === '2,3,4,5',
+    optionRadios().map((r) => r.value).join(',')
+  );
+  check(
+    '默认每轮给 4 条',
+    byId('p-options-count').querySelector('input[value="4"]').checked === true,
+    optionRadios().map((r) => `${r.value}:${r.checked}`).join(' ')
+  );
+  check('开着时配置区是展开的', shown('#p-options-config'));
+
+  click('#p-options-count input[value="3"]');
+  setValue('#p-options-hint', '语气轻松些，总有一条冒险的选择');
+  // hint 监听的是 change（失焦才写盘），setValue 只派 input，手动补一次
+  byId('p-options-hint').dispatchEvent(new Event('change', { bubbles: true }));
+  await sleep(250);
+
+  const convos0 = await window.mimitale.getConversations();
+  const c0 = convos0.conversations.find((c) => c.id === convos0.activeId);
+  check(
+    '选项配置写到会话上了（不再写角色卡）',
+    !!c0 && !!c0.optionsSpec && c0.optionsSpec.count === 3 && c0.optionsSpec.hint === '语气轻松些，总有一条冒险的选择',
+    JSON.stringify(c0 && c0.optionsSpec)
+  );
+  click('#btn-close-perspective');
+  await sleep(150);
 
   // --- 3) 发一条 → 回复里带选项 → 面板出现可点按钮 ---
   setValue('#input', '选项测试：随便说点什么');
@@ -7178,10 +7136,9 @@ await scenario('剧情选项', async () => {
 // ---------------------------------------------------------------------------
 //  场景 21b：剧情选项的默认值与「关掉」这条路
 //
-//  以前默认是不开：新建的卡、导入的卡、进世界时自己写的主角，全都没有剧情选项。
-//  现在统一默认开、每轮 4 条。关掉要在角色编辑器里取消勾选，而且**必须写 false** ——
-//  主进程的 normalizeCharacter 把「没有这个字段 / null」当成「没配过」→ 回落到默认开，
-//  所以写 null 的话一存盘又变回开着的（这里把这条往返钉死）。
+//  现在剧情选项跟会话走（在「视角设置」里配），新会话默认开、每轮 4 条。
+//  关掉 = 在视角设置里取消勾选，写 false（不是 null —— 读盘补默认只补 null，
+//  false 是「显式关」要保留）。
 // ---------------------------------------------------------------------------
 await scenario('剧情选项：默认开、关掉要写 false', async () => {
   click('#btn-chars');
@@ -7193,44 +7150,41 @@ await scenario('剧情选项：默认开、关掉要写 false', async () => {
   setValue('#c-name', NAME);
   await sleep(80);
 
-  check('新建的卡默认开着剧情选项', byId('c-options-on').checked === true, String(byId('c-options-on').checked));
-  check(
-    '默认每轮 4 条',
-    byId('c-options-count').querySelector('input[value="4"]').checked === true,
-    Array.from(byId('c-options-count').querySelectorAll('input')).map((r) => `${r.value}:${r.checked}`).join(' ')
-  );
-
-  click('#c-options-on'); // 取消勾选 = 这张卡不要剧情选项
-  await sleep(80);
-  check('取消勾选后配置区收起来', !shown('#c-options-config'));
-
   click('#btn-save-char');
   await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'), 8000);
   await sleep(150);
-
-  const saved = await savedCharacters();
-  const mine = saved.find((c) => c.name === NAME);
-  check(
-    '「关掉」落盘成 false（不是 null/undefined，否则会被归一化变回默认开）',
-    !!mine && mine.optionsSpec === false,
-    JSON.stringify(mine && mine.optionsSpec)
-  );
-
-  // 用这张卡开一局：会话上不该有剧情选项
   click('#btn-close-chars');
   await sleep(150);
   const card = $$('#char-page-grid .char-card').find((c) => String(c.textContent || '').includes(NAME));
-  check('关掉选项的角色也出现在列表里', !!card);
+  check('角色出现在列表里', !!card);
   await startChatWith(card);
   await waitFor('切到聊天视图', () => shown('#view-chat'), 8000);
   await sleep(300);
 
+  // 视角设置里取消勾选 = 这一场不要剧情选项
+  click('#btn-perspective');
+  await waitFor('视角设置弹窗打开', () => shown('#perspective-modal'));
+  check('新会话默认开着剧情选项', byId('p-options-on').checked === true, String(byId('p-options-on').checked));
+
+  click('#p-options-on'); // 取消勾选
+  await sleep(80);
+  check('取消勾选后配置区收起来', !shown('#p-options-config'));
+  await sleep(200);
+
   const convo = await activeConvo();
   check(
-    '关掉的卡开的会话 optionsSpec 是 null（不注入剧情选项）',
-    !!convo && convo.optionsSpec === null,
+    '「关掉」落盘成 false（不是 null/undefined）',
+    !!convo && convo.optionsSpec === false,
     JSON.stringify(convo && convo.optionsSpec)
   );
+  click('#btn-close-perspective');
+  await sleep(120);
+
+  // 关掉之后发一条：这条请求不该带「【剧情选项】」指令（probeInjection 靠「存在没带选项指令的请求」来验）
+  setValue('#input', '关掉剧情选项后随便说一句');
+  click('#btn-send');
+  await waitFor('回复完成', () => byId('btn-send').getAttribute('data-mode') === 'send', 12000);
+  await sleep(200);
 });
 
 // ---------------------------------------------------------------------------
@@ -8017,88 +7971,6 @@ await scenario('世界书：删除本书', async () => {
 
   click('#btn-close-worldbooks');
   await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
-});
-
-// ---------------------------------------------------------------------------
-//  场景 26c：世界书封面（2026-10-14 新增的功能）
-//
-//  封面是**草稿的一部分** —— 和书名 / 开场白同一条规矩：点「保存」才写盘、
-//  才在列表卡上露头。这条场景把这条规矩钉住，同时验证两个容易静默失效的点：
-//    · 裁剪输出的比例是 2:3（800×1200，和角色形象同为 2:3 但小一档）；
-//    · **落盘白名单**。normalizeWorldbook 是白名单式的，加字段忘了同步就是
-//      「界面上看得见、重启就没了」—— 这种 bug 不报错，只有落盘断言能抓住。
-// ---------------------------------------------------------------------------
-await scenario('世界书：封面', async () => {
-  const NAME = '封面测试世界';
-  const diskBook = async () => (await savedWorldbooks()).find((b) => b.name === NAME);
-
-  // 造一本新书：角色编辑器 → ＋ 新建（建书 + 绑定 + 直接进编辑器）
-  click('#btn-chars');
-  await waitFor('切到角色库', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
-  click('#char-section-tab-worldbook');
-  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
-  click('#c-wb-new-btn');
-  await waitFor('世界书编辑器打开', () => shown('#view-wb-editor'));
-  await sleep(150);
-  setValue('#wb-name', NAME);
-  await sleep(120);
-
-  check('新书一开始是「点击上传」', !!byId('wb-cover').querySelector('.wb-cover-empty'));
-  check('没图的时候「清除」是藏着的', byId('btn-clear-wb-cover').classList.contains('hidden'));
-
-  // 传封面：点框 → 弹裁剪浮层 → 「用这块」
-  click('#wb-cover');
-  await waitFor('封面裁剪浮层弹出来了', () => !!byId('crop-layer'));
-  check('裁剪标题是「裁剪世界书封面」', byId('crop-layer').textContent.includes('裁剪世界书封面'));
-  click('#crop-ok');
-  // dataURL 的解码是异步的，等到宽度出来再断言，别读到 0
-  await waitFor('封面按 800 宽落进框里', () => {
-    const i = byId('wb-cover').querySelector('img');
-    return !!i && i.naturalWidth === 800;
-  });
-
-  const cvImg = byId('wb-cover').querySelector('img');
-  check(
-    '封面按 2:3 裁（800×1200）',
-    !!cvImg && cvImg.naturalWidth === 800 && cvImg.naturalHeight === 1200,
-    cvImg ? `${cvImg.naturalWidth}×${cvImg.naturalHeight}` : '框里没图'
-  );
-  check('有图之后「清除」露出来了', !byId('btn-clear-wb-cover').classList.contains('hidden'));
-
-  // 保存 —— 到这一刻才该写盘
-  click('#btn-save-wb');
-  await sleep(350);
-
-  click('#btn-close-worldbooks');
-  await waitFor('世界书编辑器关闭', () => !shown('#view-wb-editor'));
-  await sleep(200);
-
-  const saved = await diskBook();
-  check(
-    '封面落盘了（normalizeWorldbook 的白名单里有 cover）',
-    !!saved && String(saved.cover).startsWith('data:image/'),
-    String(saved && saved.cover).slice(0, 24)
-  );
-
-  // 再进去一次：封面该从盘上读回来、填进框里
-  await openWorldbookEditor(NAME);
-  await sleep(250);
-  check('重新打开时封面框里有图（从盘上读回来了）', !!byId('wb-cover').querySelector('img'));
-
-  // 清除：同样只动草稿，保存后才落盘
-  click('#btn-clear-wb-cover');
-  await sleep(150);
-  check('点「清除」后框里回到「点击上传」', !!byId('wb-cover').querySelector('.wb-cover-empty'));
-  click('#btn-save-wb');
-  await sleep(350);
-  click('#btn-close-worldbooks');
-  await waitFor('世界书编辑器关闭（第二次）', () => !shown('#view-wb-editor'));
-  await sleep(200);
-
-  const after = await diskBook();
-  check('清除也落了盘（cover 是空串）', !!after && after.cover === '', JSON.stringify(after && after.cover));
 });
 
 // ---------------------------------------------------------------------------

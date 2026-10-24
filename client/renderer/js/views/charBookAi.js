@@ -23,10 +23,9 @@ import { CONFIG } from '../core/config.js';
 import { api } from '../core/api.js';
 import { h } from '../ui/build.js';
 import { showToast } from '../ui/toast.js';
-import { worldbooks, worldbookById, characterPortrait } from '../data/library.js';
+import { worldbooks, worldbookById } from '../data/library.js';
 import { extractJsonBlock, generationText, resolveGenTarget } from './aiGen.js';
 import { appendEntriesToBookDraft } from './worldbook.js';
-import { cropTopToDataUrl } from '../ui/imageCrop.js';
 
 // --- 提示词 ---
 
@@ -510,23 +509,6 @@ export function resetCharBookAi() {
   setStatus('');
 }
 
-// 封面：2:3 竖版，和「导入角色卡」补封面的尺寸一致（见 views/characterImport.js 的 BOOK_COVER_*）
-const BOOK_COVER_ASPECT = 2 / 3;
-const BOOK_COVER_WIDTH = 800;
-
-/** 建书时顺手拿这张卡的形象当封面 —— 一眼认得出是哪个世界。
- *  没有形象 / 裁不出来就留空，别让一张坏图连累保存。 */
-async function bookCoverFrom(character) {
-  const image = characterPortrait(character);
-  if (!image || !image.startsWith('data:image/')) return '';
-  try {
-    return await cropTopToDataUrl(image, { aspect: BOOK_COVER_ASPECT, outWidth: BOOK_COVER_WIDTH });
-  } catch (err) {
-    console.warn('[charBookAi] 世界书封面没能从角色形象生成', err);
-    return '';
-  }
-}
-
 /** 世界书里重名时往后挂序号：「XX的世界书 2」 */
 function uniqueBookName(base) {
   const taken = new Set(worldbooks().map((b) => String(b.name || '')));
@@ -593,9 +575,6 @@ export async function materializeCharBook(character, options) {
     book = {
       id: `w${uid()}`,
       name: uniqueBookName(`${String(character.name || '角色').trim() || '角色'}的世界书`),
-      opening: '',
-      // 有形象就顺手当封面；没有就留空
-      cover: await bookCoverFrom(character),
       entries: pending.slice(),
       characters: [],
       createdAt: now(),

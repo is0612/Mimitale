@@ -168,9 +168,6 @@ function pickEntries(book, prompt, budget) {
 function buildBookContext(book, prompt) {
   const parts = [`【世界：${book.name}】`];
 
-  const opening = String(book.opening || '').trim();
-  if (opening) parts.push(`【开场白】\n${opening.slice(0, 800)}`);
-
   const copies = worldbookCharacters(book);
   if (copies.length) {
     const names = copies.map((c) => c.name).filter(Boolean).join('、');

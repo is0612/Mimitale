@@ -110,21 +110,6 @@ function optionBodyLines() {
   ];
 }
 
-/** 默认的剧情选项配置（没在角色卡上关掉的角色都用它） */
-export function defaultOptionsSpec() {
-  return { count: DEFAULT_OPTIONS_COUNT, hint: '' };
-}
-
-/**
- * 角色卡上的剧情选项配置 → 这个会话该用的配置。⚠️ 卡上明确关了（optionsSpec === false）→ null；配过 → 复制一份（改卡不该动到进行中的这一局）；没配过 / 没卡 → 默认 4 条。
- */
-export function optionsSpecFromCharacter(character) {
-  const spec = character && character.optionsSpec;
-  if (spec === false) return null;
-  if (spec && typeof spec === 'object' && !Array.isArray(spec)) return { ...spec };
-  return defaultOptionsSpec();
-}
-
 /** 当前会话要不要每轮出剧情选项（存在会话上，跟面板走） */
 function convoOptionsSpec(convo) {
   const spec = convo && convo.optionsSpec;
