@@ -57,12 +57,6 @@ export function worldbookCharacters(book) {
   return asArray(book && book.characters);
 }
 
-/** 世界书封面（2:3 竖版 dataURL）。⚠️ 和 characterPortrait 不同，这里只看值：没设过就是没有，退回「世」字占位块 */
-export function worldbookCover(book) {
-  const cover = book && book.cover;
-  return typeof cover === 'string' ? cover : '';
-}
-
 /** 世界书角色副本 id：单独前缀，避免和角色库 / 会话的 id 看混 */
 export function newWorldbookCharId() {
   return `wc${uid()}`;
@@ -75,10 +69,10 @@ export function convoWorldbookIds(convo) {
 
 /**
  * 角色自带的世界书（按 id 解析成书）。
- * ⚠️ 停用（worldbookEnabled === false）一律当没有；绑过但已删的 id 也滤掉。
+ * ⚠️ 绑过但已删的 id 一律滤掉（角色上的悬空 id 不做清理，见 worldbook.js）。
  */
 export function characterWorldbooks(character) {
-  if (!character || character.worldbookEnabled === false) return [];
+  if (!character) return [];
   return asArray(character.worldbookIds).map(worldbookById).filter(Boolean);
 }
 

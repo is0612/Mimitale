@@ -172,9 +172,7 @@ function characterFromCard(card, avatar, source, fallbackName, makeWorldbookId, 
       creator: d.creator,
       characterVersion: d.character_version,
       tags: d.tags,
-      attributes,
-      // 自带世界书开关；缺省 true，没这个字段的卡不受影响
-      worldbookEnabled: typeof ext.worldbookEnabled === 'boolean' ? ext.worldbookEnabled : true
+      attributes
     },
     source
   );

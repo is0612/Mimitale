@@ -58,14 +58,13 @@ export function assistantPersona(convo) {
   return String((entry && entry.persona) || '').trim();
 }
 
-// 实际注入哪些世界书：会话绑了就只用会话的，没绑才用角色自带的（开关要开）。
+// 实际注入哪些世界书：会话绑了就只用会话的，没绑才用角色自带的（绑上就一直生效，没有开关）。
 export function effectiveWorldbookIds(convo) {
   const convoIds = convoWorldbookIds(convo);
   if (convoIds.length) return convoIds;
 
   const character = characterForConvo(convo);
   if (!character) return [];
-  if (character.worldbookEnabled === false) return [];
 
   return asArray(character.worldbookIds);
 }

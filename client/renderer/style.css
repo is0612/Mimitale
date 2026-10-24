@@ -7298,15 +7298,11 @@ m-button.btn-new > .mi-btn__control:hover {
   white-space: nowrap;
 }
 
-/* 卡片网格：列宽自适应，窗口变窄自动减列。
-   ⚠️ 角色库和世界书**必须同一组数** —— 以前一个是 198、一个是 240，
-   切换页面时卡片宽度和每行列数都会变，像两个产品。改一处就得改另一处；
-   现在直接并列写出同一个值，比对时一眼能看出是否一致。 */
-.char-grid,
-.wb-grid {
+/* 卡片网格：列宽自适应，窗口变窄自动减列。 */
+.char-grid {
   display: grid;
   /* 216 = 1440 窗口下正好 5 列（5×216 + 4×18 = 1152 ≤ 正文 1168）；
-     再大 4px 就会掉成 4 列 —— 角色库以前 198 / 世界书 240 的差异就是从这里来的。 */
+     再大 4px 就会掉成 4 列。 */
   grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
   gap: 18px;
 }
@@ -7650,24 +7646,6 @@ m-button.btn-new > .mi-btn__control:hover {
   object-fit: cover;
   display: block;
   cursor: zoom-in;
-}
-
-/* 没封面：深灰占位块 + 一个半透明的「世」字。
-   ⚠️ 别改回 entityTone 那套渐变色 —— 76px 的小方块上好看，
-      铺成 2:3 的大色块就太吵，而且会让人误以为那是一张图。 */
-.wb-card-cover.is-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(to bottom, #26292e, #1c1f23);
-}
-
-.wb-card-glyph {
-  font-size: 30px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.34);
-  letter-spacing: 0.06em;
-  user-select: none;
 }
 
 /* 进入世界前创建玩家自己的角色 */

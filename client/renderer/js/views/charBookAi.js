@@ -514,8 +514,8 @@ export function resetCharBookAi() {
 const BOOK_COVER_ASPECT = 2 / 3;
 const BOOK_COVER_WIDTH = 800;
 
-/** 建书时顺手拿这张卡的形象当封面 —— 世界书列表里一眼认得出是哪个世界。
- *  没有形象 / 裁不出来就留空（卡片退回「世」字占位块），别让一张坏图连累保存。 */
+/** 建书时顺手拿这张卡的形象当封面 —— 一眼认得出是哪个世界。
+ *  没有形象 / 裁不出来就留空，别让一张坏图连累保存。 */
 async function bookCoverFrom(character) {
   const image = characterPortrait(character);
   if (!image || !image.startsWith('data:image/')) return '';
@@ -576,6 +576,14 @@ export async function materializeCharBook(character, options) {
   let book = null;
   if (madeFor && madeFor.charId === character.id) {
     book = worldbooks().find((b) => b.id === madeFor.bookId) || null;
+  }
+
+  // 🔴 自带世界书只能有一本（2026-10-24）：这张卡已经绑了一本，就把补的设定并进那一本，
+  // 不再另建 —— 另建的话主进程写盘时会把新 id 裁掉，界面显示 2 本、重启变 1 本。
+  if (!book) {
+    const boundId = (Array.isArray(character.worldbookIds) ? character.worldbookIds : [])[0];
+    book = boundId ? worldbooks().find((b) => b.id === boundId) || null : null;
+    if (book) madeFor = { charId: character.id, bookId: book.id };
   }
 
   if (book) {

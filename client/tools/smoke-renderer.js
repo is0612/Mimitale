@@ -282,6 +282,59 @@ function shown(sel) {
   return !!node && !node.classList.contains('hidden');
 }
 
+/**
+ * 打开某本世界书的编辑器。
+ *
+ * 世界书没有独立入口了：只能从角色的「自带世界书」进。这里开一张**草稿**角色
+ * （不保存、不落盘，不给角色库加卡）、绑上目标书，再点行上的「编辑」。
+ * ⚠️ 每次调用都会换一张新草稿 —— 上一次的草稿没有改动提示，直接覆盖不会弹框。
+ */
+async function openWorldbookEditor(bookName) {
+  click('#btn-chars');
+  await waitFor('切到角色库', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
+  click('#char-section-tab-worldbook');
+  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
+
+  click('#c-wb-add-btn');
+  await waitFor('绑定浮层出现', () => !!$('.cwb-picker'));
+  const row = $$('.cwb-picker-row').find((r) => r.textContent.includes(bookName));
+  if (!row) throw new Error(`绑定浮层里没有「${bookName}」`);
+  click(row);
+  await waitFor('绑定完成', () => $$('#c-wb-list .cwb-row').some((r) => r.textContent.includes(bookName)));
+
+  const line = $$('#c-wb-list .cwb-row').find((r) => r.textContent.includes(bookName));
+  click(buttonByText(line, '编辑'));
+  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
+}
+
+/**
+ * 造一张**已保存**的角色卡并绑上一本书，返回角色名。
+ * 世界书没有列表页之后，卡封面那颗「进入世界」是唯一的进世界入口。
+ */
+async function createCharBoundTo(bookName, charName) {
+  click('#btn-chars');
+  await waitFor('切到角色库', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
+  setValue('#c-name', charName);
+
+  click('#char-section-tab-worldbook');
+  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
+  click('#c-wb-add-btn');
+  await waitFor('绑定浮层出现', () => !!$('.cwb-picker'));
+  const row = $$('.cwb-picker-row').find((r) => r.textContent.includes(bookName));
+  if (!row) throw new Error(`绑定浮层里没有「${bookName}」`);
+  click(row);
+  await waitFor('绑定完成', () => $$('#c-wb-list .cwb-row').some((r) => r.textContent.includes(bookName)));
+
+  click('#btn-save-char');
+  await waitFor('角色保存完成', () => byId('char-save-state').dataset.state === 'saved');
+  click('#btn-close-chars');
+  await waitFor('回到角色库', () => shown('#view-chars'));
+}
+
 async function savedCharacters() {
   const res = await window.mimitale.getCharacters();
   return (res && res.characters) || [];
@@ -3839,8 +3892,9 @@ await scenario('侧栏：入口网格与收起', async () => {
   check('侧栏宽度 224', Math.round(sidebar.getBoundingClientRect().width) === 224, String(Math.round(sidebar.getBoundingClientRect().width)));
 
   const foot = $$('.sidebar-foot m-button');
-  // 这一组只剩三颗创作入口 —— 设置不在侧栏（入口在登录后的账号菜单里）。
-  check('侧栏保留三个创作入口', foot.length === 3, String(foot.length));
+  // 这一组只剩两颗创作入口 —— 设置不在侧栏（入口在登录后的账号菜单里），
+  // 世界书也没有独立入口了（挂在角色的「自带世界书」上）。
+  check('侧栏保留两个创作入口', foot.length === 2, String(foot.length));
   check('数据按钮位于设置页', !!byId('btn-folder')?.closest('#view-settings'));
   check(
     '每颗都带图标',
@@ -4014,8 +4068,8 @@ await scenario('侧栏：入口网格与收起', async () => {
       railMark ? String(Math.round(railMark.getBoundingClientRect().width)) : '（没有）'
     );
     check(
-      '收起后 3 颗创作入口图标都还在，只是文字藏了',
-      foot.length === 3 &&
+      '收起后 2 颗创作入口图标都还在，只是文字藏了',
+      foot.length === 2 &&
         foot.every((b) => getComputedStyle(b).display !== 'none' && !!b.querySelector('svg')) &&
         foot.every((b) => {
           const label = b.querySelector('.foot-label');
@@ -4541,10 +4595,7 @@ await scenario('世界书：递归扫描', async () => {
   await waitFor('回复完成', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
   await sleep(250);
 
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
+  await openWorldbookEditor('冒烟测试世界');
   await sleep(150);
 
   click('#btn-preview-wb');
@@ -4565,59 +4616,7 @@ await scenario('世界书：递归扫描', async () => {
 //  场景 16：世界书 —— 新建条目 + 「保存后才生效」
 // ---------------------------------------------------------------------------
 await scenario('世界书：新建条目', async () => {
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-  check('种子里那本世界书有卡片', $$('#wb-page-grid .char-card').length === 1);
-
-  // --- 网格末尾那张「添加世界书」卡（2026-10-20）---
-  const wbAdd = $('#wb-page-grid .lib-add-card');
-  check('世界书网格末尾有「添加世界书」卡', !!wbAdd);
-  check('添加卡不算进卡片数量（故意不挂 .char-card）',
-    !!wbAdd && !wbAdd.classList.contains('char-card') &&
-    $$('#wb-page-grid > *').length === $$('#wb-page-grid .char-card').length + 1,
-    `网格子节点 ${$$('#wb-page-grid > *').length} 个 / 卡片 ${$$('#wb-page-grid .char-card').length} 张`);
-  check('添加卡是网格最后一项', !!wbAdd && $('#wb-page-grid').lastElementChild === wbAdd);
-  const wbAddText = wbAdd ? [...wbAdd.querySelectorAll('button')].map((b) => b.textContent.trim()).join(' / ') : '';
-  check('添加卡里是「导入世界书 / ＋ 新建世界书」两颗',
-    wbAddText === '导入世界书 / ＋ 新建世界书', wbAddText);
-
-  // 这两颗按钮是**转发**页头那颗的 click（业务只写一份）。验证转发真的通：
-  // 在页头按钮上挂一个捕获阶段的探针，把事件拦下来 —— 既证明「点的是同一条路」，
-  // 又不会真的新建一本把后面的场景搅乱。
-  const headNewBook = byId('btn-new-worldbook');
-  let forwarded = 0;
-  const spyForward = (event) => { forwarded += 1; event.stopImmediatePropagation(); };
-  headNewBook.addEventListener('click', spyForward, true);
-  click(buttonByText(wbAdd, '＋ 新建世界书'));
-  await sleep(60);
-  headNewBook.removeEventListener('click', spyForward, true);
-  check('添加卡上的按钮走的就是页头那颗（转发 1 次）', forwarded === 1, `转发 ${forwarded} 次`);
-
-  // --- 列表卡片上的「导出」---
-  // 2026-10-20：先是从编辑器书籍条搬到列表卡片（右上角悬停浮出的小圆钮），
-  // 同日又改成**和角色卡列表完全一样** —— 操作行里一颗普通按钮，夹在「编辑 / 游玩」中间。
-  // 两处长得不一样只会让人多找一遍。
-  const listCard = $$('#wb-page-grid .char-card')[0];
-  const listExport = buttonByText(listCard, '导出');
-  const wbActions = listCard.querySelector('.char-card-actions');
-  check('世界书卡片操作行里有「导出」', !!listExport, wbActions.textContent.replace(/\s+/g, ' '));
-  check('「导出」排在「编辑」和「游玩」中间（和角色卡列表同位）',
-    wbActions.textContent.replace(/\s+/g, '') === '编辑导出游玩', wbActions.textContent.replace(/\s+/g, ''));
-  check('「导出」不再悬在卡片右上角', !!listExport && getComputedStyle(listExport).position !== 'absolute',
-    listExport && getComputedStyle(listExport).position);
-  check('右上角只剩 ×', !!listCard.querySelector('.char-card-del'));
-  if (listExport) {
-    const t0 = $('#toast');
-    if (t0) { t0.classList.add('hidden'); t0.textContent = ''; }
-    click(listExport);
-    await sleep(400);
-    check('卡片上的「导出」会写文件', $('#toast').textContent.includes('已导出'), $('#toast').textContent);
-    // 导出不该顺带开大图 / 进编辑器
-    check('点「导出」不会进编辑器', shown('#view-worldbooks') && !shown('#view-wb-editor'));
-  }
-
-  click(buttonByText(listCard, '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
+  await openWorldbookEditor('冒烟测试世界');
 
   // 2026-10-16：这一页 14 颗 .btn 全换 <m-button>。`.wb-entry-actions` 那三颗的
   // 内边距（6px 8px）写在**里层**上 —— 写到宿主上不报错，只是按钮瘦不下来。
@@ -4627,7 +4626,7 @@ await scenario('世界书：新建条目', async () => {
   const WB_BTN_IDS = ['btn-save-wb','btn-clear-wb-cover','btn-add-wb-chars','btn-ai-wb-char','btn-new-wb-char','btn-sync-wb-attrs','btn-preview-wb','btn-del-worldbook','btn-new-entry','btn-wb-entry-template','btn-wb-add-event','btn-del-entry'];
   const wbBad = WB_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
   check('世界书编辑器 12 颗按钮都是 m-button 宿主', wbBad.length === 0, wbBad.join(', ') || '全部是');
-  check('编辑器里不再有「导出」（只在列表卡片上）', !byId('btn-export-wb'));
+  check('编辑器里没有「导出」按钮', !byId('btn-export-wb'));
   // 2026-10-20：保存从页头右上搬到书籍条右侧 —— 书籍条三屏共用，位置在任何
   // tab 都固定，且紧挨脏状态胶囊。页头只剩「返回 / 标题 / 全文 N 字」。
   const wbSaveBtn = byId('btn-save-wb');
@@ -4812,20 +4811,15 @@ await scenario('世界书：放弃未保存的改动', async () => {
 
   const names = (await savedWorldbooks()).map((b) => b.name);
   check('放弃之后改的名字没落盘', !names.includes('改了一半的名字'), JSON.stringify(names));
-  check('列表页卡片还是落盘过的那个名字',
-    $$('#wb-page-grid .wb-card-name').some((n) => n.textContent === '冒烟测试世界'),
-    JSON.stringify($$('#wb-page-grid .wb-card-name').map((n) => n.textContent)));
+  check('关掉之后回到角色编辑器（书是从那儿进的）', shown('#view-char-editor'));
 });
 
 // ---------------------------------------------------------------------------
 //  场景 11：世界书 —— 新建「本书角色」，同时验证编辑器没被世界书弹窗盖住
 // ---------------------------------------------------------------------------
 await scenario('世界书：本书角色', async () => {
-  // 上一条场景把弹窗关掉了，这里自己从列表页开进去
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
+  // 上一条场景把弹窗关掉了，这里自己从角色的「自带世界书」开进去
+  await openWorldbookEditor('冒烟测试世界');
 
   click('#btn-new-wb-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
@@ -4881,30 +4875,10 @@ await scenario('世界书：条目字段往返与状态筛选', async () => {
   const bookName = '冒烟测试世界';
   const loadBook = async () => (await savedWorldbooks()).find((b) => b.name === bookName);
   const openEditor = async () => {
-    click('#btn-worldbooks');
-    await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-    const card = $$('#wb-page-grid .char-card').find((c) => c.textContent.includes(bookName));
-    click(buttonByText(card, '编辑'));
-    await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
+    await openWorldbookEditor(bookName);
     click('#wb-tab-entries');
     await sleep(100);
   };
-
-  // --- 列表页搜索：按**条目里的关键词**也能搜到（只认书名就漏一半） ---
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-  setValue('#wb-page-search', '火种');
-  await sleep(150);
-  check('列表页按关键词能搜到这本书', $$('#wb-page-grid .char-card').length === 1,
-    `剩 ${$$('#wb-page-grid .char-card').length} 张卡`);
-  setValue('#wb-page-search', '这个词哪本书都不会有');
-  await sleep(150);
-  check('搜不到时卡片清空、给的是「没有匹配的世界」',
-    $$('#wb-page-grid .char-card').length === 0 &&
-    $('#wb-page-empty .page-empty-title').textContent === '没有匹配的世界',
-    $('#wb-page-empty .page-empty-title').textContent);
-  setValue('#wb-page-search', '');
-  await sleep(150);
 
   await openEditor();
   const before = (await loadBook()).entries.length;
@@ -4936,7 +4910,7 @@ await scenario('世界书：条目字段往返与状态筛选', async () => {
 
   // --- 重开编辑器：表单要按落盘那份回填 ---
   click('#btn-close-worldbooks');
-  await waitFor('回到世界书列表', () => shown('#view-worldbooks'));
+  await waitFor('回到角色编辑器', () => shown('#view-char-editor'));
   await openEditor();
   const row = $$('#wb-entry-list .wb-entry').find((r) => r.textContent.includes('字段往返'));
   check('重开之后左栏里有刚才那条', !!row);
@@ -5146,7 +5120,7 @@ await scenario('AI 生成角色：角色库', async () => {
     // 期望值自己算，不走 characterWorldbooks —— 拿被测函数当判据就等于没验
     const shouldHave = (name) => {
       const c = byName.get(name);
-      if (!c || c.worldbookEnabled === false) return false;
+      if (!c) return false;
       return (Array.isArray(c.worldbookIds) ? c.worldbookIds : []).some((id) => liveBookIds.has(id));
     };
 
@@ -5465,10 +5439,7 @@ await scenario('AI 补充：确认后重写五栏', async () => {
 //  也因此不同（见 tools/smoke-test.js）—— 落盘的名字对不上就说明没带上下文。
 // ---------------------------------------------------------------------------
 await scenario('AI 生成 NPC：依据世界书', async () => {
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
+  await openWorldbookEditor('冒烟测试世界');
 
   check('世界书里有「AI 生成」按钮', !!byId('btn-ai-wb-char'));
 
@@ -5524,13 +5495,7 @@ await scenario('AI 生成 NPC：依据世界书', async () => {
 //  回世界书编辑器能看见，点「保存」才进磁盘。这条验的就是这三步。
 // ---------------------------------------------------------------------------
 await scenario('AI 补设定：副本并进这本书的草稿', async () => {
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-
-  const bookCard = $$('#wb-page-grid .char-card').find((c) => c.textContent.includes('冒烟测试世界'));
-  check('列表里有「冒烟测试世界」这张卡', !!bookCard);
-  click(buttonByText(bookCard, '编辑'));
-  await waitFor('世界书编辑器打开', () => shown('#view-wb-editor'));
+  await openWorldbookEditor('冒烟测试世界');
 
   const bookBefore = (await savedWorldbooks()).find((b) => b.name === '冒烟测试世界');
   check('磁盘上有那本测试书', !!bookBefore);
@@ -5604,10 +5569,11 @@ await scenario('AI 补设定：副本并进这本书的草稿', async () => {
 //  场景 12：进入世界 —— 玩家角色弹窗
 // ---------------------------------------------------------------------------
 await scenario('进入世界：用角色卡当自己', async () => {
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-
-  click(buttonByText($$('#wb-page-grid .char-card')[0], '游玩'));
+  // 书不再有列表页，「游玩」只剩角色卡封面那颗「进入世界」
+  await createCharBoundTo('冒烟测试世界', '进世界的角色');
+  const worldCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('进世界的角色'));
+  check('绑了书的角色卡上有「进入世界」', !!worldCard && !!worldCard.querySelector('.char-card-world'));
+  click(worldCard.querySelector('.char-card-world'));
   await waitFor('玩家角色弹窗打开', () => shown('#player-modal'));
   check('弹窗里有角色名输入框', !!byId('player-name'));
 
@@ -6644,8 +6610,10 @@ await scenario('角色：绑定自带的世界书', async () => {
   check('没绑定时这块也显示出来', shown('#c-worldbook-box'));
   check('没绑定时有「＋ 绑定」按钮', shown('#c-wb-add-btn'));
   check('没绑定时清单是空状态提示', $$('#c-wb-list .cwb-row').length === 0);
-  check('没绑定时开关藏起来（开着也没意义）', !shown('#c-wb-switch'));
-  check('空状态给了引导文字', String(byId('c-wb-list').textContent || '').includes('点「＋ 绑定」'));
+  // 只能绑一本、绑上就一直生效 —— 「启用」开关已经整个撤掉了
+  check('没有「启用自带的世界书」开关了', !byId('c-wb-switch') && !byId('c-wb-enabled'));
+  check('空状态给了引导文字', String(byId('c-wb-list').textContent || '').includes('点「＋ 新建」'));
+  check('没绑定时也有「＋ 新建」按钮（世界书只能从这张卡长出来）', shown('#c-wb-new-btn'));
 
   // 点「＋ 绑定」→ 浮层列出可选的库
   click('#c-wb-add-btn');
@@ -6666,8 +6634,12 @@ await scenario('角色：绑定自带的世界书', async () => {
   check('绑定后清单里有一行', $$('#c-wb-list .cwb-row').length === 1);
   check('行里是那本书的名字',
     String($$('#c-wb-list .cwb-row')[0].textContent || '').includes('冒烟测试世界'));
-  check('绑定后开关出现了', shown('#c-wb-switch'));
-  check('绑定后开关默认是开的', byId('c-wb-enabled').checked === true);
+  // 🔴 自带世界书只能一本：绑上之后两个入口都灰掉，别再让人点出「第二本」
+  check('绑了一本后「＋ 绑定」灰掉', byId('c-wb-add-btn').disabled === true);
+  check('绑了一本后「＋ 新建」也灰掉', byId('c-wb-new-btn').disabled === true);
+  check('灰掉时给了「先解绑」的提示',
+    String(byId('c-wb-add-btn').title || '').includes('先解绑'),
+    String(byId('c-wb-add-btn').title || ''));
   check('说明文字提到「单独聊天会带上」',
     String(byId('c-wb-hint').textContent || '').includes('单独跟它聊天时会带上'),
     String(byId('c-wb-hint').textContent || '').slice(0, 60));
@@ -6696,16 +6668,7 @@ await scenario('角色：绑定自带的世界书', async () => {
     check('返回后那行「已绑世界书」还在', $$('#c-wb-list .cwb-row').length === 1);
   }
 
-  // 关掉开关 → 说明跟着变
-  setChecked('#c-wb-enabled', false);
-  await sleep(150);
-  check('关掉开关后说明改成「已停用」',
-    String(byId('c-wb-hint').textContent || '').includes('已停用'),
-    String(byId('c-wb-hint').textContent || '').slice(0, 60));
-
-  // 存盘 → 两个字段都要落盘（归一化白名单最容易漏）
-  setChecked('#c-wb-enabled', true);
-  await sleep(100);
+  // 存盘 → worldbookIds 要落盘（归一化白名单最容易漏）
   click('#btn-save-char');
   await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'), 8000);
   await sleep(200);
@@ -6715,7 +6678,9 @@ await scenario('角色：绑定自带的世界书', async () => {
   check('worldbookIds 落盘了（没被归一化丢掉）',
     !!saved && Array.isArray(saved.worldbookIds) && saved.worldbookIds.length === 1,
     JSON.stringify(saved && saved.worldbookIds));
-  check('worldbookEnabled 落盘了', !!saved && saved.worldbookEnabled === true,
+  // 开关撤了：磁盘上不该再有这个字段（归一化白名单里已经删除）
+  check('磁盘上不再写 worldbookEnabled',
+    !!saved && !('worldbookEnabled' in saved),
     JSON.stringify(saved && saved.worldbookEnabled));
 
   // 解绑 → 清单回到空状态
@@ -6723,9 +6688,8 @@ await scenario('角色：绑定自带的世界书', async () => {
     click($$('#c-wb-list .cwb-row')[0].querySelector('.cwb-row-del'));
     await waitFor('解绑后清单空掉', () => $$('#c-wb-list .cwb-row').length === 0, 8000);
     await sleep(150);
-    check('解绑后开关又藏起来', !shown('#c-wb-switch'));
     check('解绑后回到空状态提示',
-      String(byId('c-wb-list').textContent || '').includes('点「＋ 绑定」'));
+      String(byId('c-wb-list').textContent || '').includes('点「＋ 新建」'));
   }
 });
 
@@ -7970,128 +7934,89 @@ await scenario('状态卡：点头像查看与编辑', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 26：切世界书时，编辑器残留的旧表单不能盖到刚切过去的那一本。
+//  场景 26：改了一半关掉 —— 草稿不能粘到下一次
 //
-//  老根因：stash 写的是 currentWorldbook()，此时已被改成新书，旧书名会写进新书。
-//  现在书名 / 开场白 / 条目**按书各存一份草稿**（「保存后才生效」），
-//  结构上就没有「旧表单盖到新书」这条路了 —— 这条场景改成钉住新语义：
-//    · 改了一半的名字不会跑到列表页的卡片上（没保存就不算数）；
-//    · 新建的书用自己的默认名，不继承上一本残留的输入；
-//    · 切回原来那本，没保存的改动还在（草稿是按书存的，不是全局一个）；
-//    · 点「保存」之后才真的落盘，两本书各是各的名字。
+//  书名 / 开场白 / 条目都是「保存后才生效」的草稿。关编辑器时草稿整份丢掉，
+//  再进来必须按**落盘那份**回填，不能拿着上一次没保存的输入。
 // ---------------------------------------------------------------------------
-await scenario('世界书：切书时旧表单不能盖住新书', async () => {
-  const namesOnPage = () => $$('#wb-page-grid .wb-card-name').map((n) => n.textContent);
-  const cardNamed = (name) => $$('#wb-page-grid .char-card').find((c) => c.title === name);
+await scenario('世界书：改一半关掉不残留草稿', async () => {
+  const diskNames = async () => (await savedWorldbooks()).map((b) => b.name);
 
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-
-  // 打开种子里那本，改名「甲书」—— 故意**不保存**，留一份脏草稿
-  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
+  // 打开种子那本，改名「甲书」—— 故意不保存
+  await openWorldbookEditor('冒烟测试世界');
   await sleep(150);
   setValue('#wb-name', '甲书');
   await sleep(200);
   check('书名已经改成「甲书」', $('#wb-name').value === '甲书', `输入框里是「${$('#wb-name').value}」`);
-  check('没保存之前列表页上还没改名', !namesOnPage().includes('甲书'), JSON.stringify(namesOnPage()));
+  check('没保存之前磁盘上还没改名', !(await diskNames()).includes('甲书'), JSON.stringify(await diskNames()));
 
-  // 新建一本：它得用自己的默认名，不能被输入框里残留的「甲书」盖掉
-  click('#btn-new-worldbook');
-  await sleep(300);
+  // 关掉（有脏草稿会先问一句），再进来：草稿不能粘到下一次
+  click('#btn-close-worldbooks');
+  await waitFor('弹放弃确认框', () => shown('#confirm-modal'));
+  click('#confirm-ok');
+  await waitFor('编辑器关闭', () => !shown('#view-wb-editor'));
+
+  await openWorldbookEditor('冒烟测试世界');
+  await sleep(150);
   check(
-    '新建的书用自己的默认名（没继承上一本的）',
-    $('#wb-name').value === '新世界书',
+    '重开时输入框是落盘过的名字（草稿没残留）',
+    $('#wb-name').value === '冒烟测试世界',
     `输入框里是「${$('#wb-name').value}」`
   );
 
-  // 切回「甲书」那本：草稿是按书存的，没保存的改动不该被切没了
-  click(buttonByText(cardNamed('冒烟测试世界'), '编辑'));
-  await sleep(300);
-  check(
-    '切回原来那本，没保存的书名还在（草稿按书各存一份）',
-    $('#wb-name').value === '甲书',
-    `输入框里是「${$('#wb-name').value}」`
-  );
-
-  // 保存它 —— 到这一刻列表页才该改名叫「甲书」
-  click('#btn-save-wb');
-  await sleep(350);
-  check('保存之后列表页上才改名', namesOnPage().includes('甲书'), JSON.stringify(namesOnPage()));
-
-  // 给新建的那本起个自己的名字并保存
-  click(buttonByText(cardNamed('新世界书'), '编辑'));
-  await sleep(300);
-  check(
-    '新建的那本还在，名字还是它自己的默认名',
-    $('#wb-name').value === '新世界书',
-    `输入框里是「${$('#wb-name').value}」`
-  );
-  setValue('#wb-name', '乙书');
+  // 这一回真的改名并保存，才算数
+  setValue('#wb-name', '甲书');
   await sleep(120);
   click('#btn-save-wb');
   await sleep(350);
-  check(
-    '两本书各是各的名字',
-    namesOnPage().includes('甲书') && namesOnPage().includes('乙书'),
-    JSON.stringify(namesOnPage())
-  );
+  check('点保存之后才落盘', (await diskNames()).includes('甲书'), JSON.stringify(await diskNames()));
+
+  // 改回原名 —— 后面的场景都按「冒烟测试世界」找书
+  setValue('#wb-name', '冒烟测试世界');
+  await sleep(120);
+  click('#btn-save-wb');
+  await sleep(350);
+  check('名字改回去了', (await diskNames()).includes('冒烟测试世界'), JSON.stringify(await diskNames()));
 
   click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
-  await sleep(400);
-  const names = (await savedWorldbooks()).map((b) => b.name);
-  check(
-    '两本书的名字都各自落盘了（没有互相覆盖）',
-    names.includes('甲书') && names.includes('乙书'),
-    JSON.stringify(names)
-  );
+  await waitFor('编辑器关闭', () => !shown('#view-wb-editor'));
 });
 
 // ---------------------------------------------------------------------------
-//  场景 26b：世界书列表页卡片右上角的删除 ×
+//  场景 26b：删掉一本书
 //
-//  以前这里是**故意没有** × 的（怕「攒了很多条目一下删没了」），删除只留在编辑器里。
-//  现在跟角色卡对齐：悬停浮出、点一下弹确认框 —— 确认框里会把条目数 / 角色副本数 /
-//  被几个会话用着都摆出来，危险的部分靠确认框兜，不靠藏起来。
+//  列表页卡片没了，删除只剩编辑器里那颗「删除本书」。危险部分靠确认框兜 ——
+//  框里会把条目数 / 角色副本数 / 被几个会话用着都摆出来。
+//  顺带把「角色编辑器 → ＋ 新建」（建书 + 自动绑定 + 直接进编辑器）走一遍。
 // ---------------------------------------------------------------------------
-await scenario('世界书：卡片上删除', async () => {
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
+await scenario('世界书：删除本书', async () => {
+  click('#btn-chars');
+  await waitFor('切到角色库', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
+  click('#char-section-tab-worldbook');
+  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
+  click('#c-wb-new-btn');
+  await waitFor('新书直接进编辑器', () => shown('#view-wb-editor'));
+  check('新书一出场就绑在这张卡上', $$('#c-wb-list .cwb-row').length >= 1);
 
-  // 先造一本一次性的书，走真实的「新建 + 保存」
-  click('#btn-new-worldbook');
-  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
   setValue('#wb-name', '待删的临时世界');
   click('#btn-save-wb');
-  await sleep(300);
-  click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
-  await sleep(200);
+  await sleep(350);
+  check('新书落盘了', (await savedWorldbooks()).some((b) => b.name === '待删的临时世界'));
 
-  const namesOnPage = () => $$('#wb-page-grid .wb-card-name').map((n) => n.textContent);
-  const card = $$('#wb-page-grid .char-card').find((c) => c.title === '待删的临时世界');
-  check('新建的书出现在列表页上', !!card, JSON.stringify(namesOnPage()));
-  if (!card) return;
-
-  const del = card.querySelector('.char-card-del');
-  check('世界书卡片右上角有删除 ×', !!del);
-  if (!del) return;
-
-  // 和角色卡同一套：平时透明、鼠标移上来（或键盘 Tab 到）才浮出来
-  check('删除 × 平时是透明的（悬停才浮出）',
-    parseFloat(getComputedStyle(del).opacity) === 0, getComputedStyle(del).opacity);
-
-  del.click();
+  click('#btn-del-worldbook');
   await waitFor('删除先弹确认框', () => shown('#confirm-modal'));
   check('确认框里点明了删的是哪本',
     byId('confirm-message').textContent.includes('待删的临时世界'), byId('confirm-message').textContent);
   click('#confirm-ok');
   await sleep(350);
 
-  check('卡片被删掉了', !namesOnPage().includes('待删的临时世界'), JSON.stringify(namesOnPage()));
   const after = (await savedWorldbooks()).map((b) => b.name);
-  check('卡片上删除也落了盘', !after.includes('待删的临时世界'), JSON.stringify(after));
+  check('书从磁盘上没了', !after.includes('待删的临时世界'), JSON.stringify(after));
+
+  click('#btn-close-worldbooks');
+  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
 });
 
 // ---------------------------------------------------------------------------
@@ -8105,13 +8030,16 @@ await scenario('世界书：卡片上删除', async () => {
 // ---------------------------------------------------------------------------
 await scenario('世界书：封面', async () => {
   const NAME = '封面测试世界';
-  const cardNamed = (name) => $$('#wb-page-grid .char-card').find((c) => c.title === name);
+  const diskBook = async () => (await savedWorldbooks()).find((b) => b.name === NAME);
 
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-
-  // 新建一本。还没保存，所以列表页上暂时没有它 —— 断言卡片的事都放到保存之后
-  click('#btn-new-worldbook');
+  // 造一本新书：角色编辑器 → ＋ 新建（建书 + 绑定 + 直接进编辑器）
+  click('#btn-chars');
+  await waitFor('切到角色库', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
+  click('#char-section-tab-worldbook');
+  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
+  click('#c-wb-new-btn');
   await waitFor('世界书编辑器打开', () => shown('#view-wb-editor'));
   await sleep(150);
   setValue('#wb-name', NAME);
@@ -8139,18 +8067,15 @@ await scenario('世界书：封面', async () => {
   );
   check('有图之后「清除」露出来了', !byId('btn-clear-wb-cover').classList.contains('hidden'));
 
-  // 保存 —— 到这一刻卡片上才该有封面
+  // 保存 —— 到这一刻才该写盘
   click('#btn-save-wb');
   await sleep(350);
-  const card = () => cardNamed(NAME);
-  check('卡片上有封面图了', !!card() && !!card().querySelector('.wb-card-cover img'));
-  check('有封面时不再显示「世」字占位块', !!card() && !card().querySelector('.wb-card-glyph'));
 
   click('#btn-close-worldbooks');
   await waitFor('世界书编辑器关闭', () => !shown('#view-wb-editor'));
   await sleep(200);
 
-  const saved = (await savedWorldbooks()).find((b) => b.name === NAME);
+  const saved = await diskBook();
   check(
     '封面落盘了（normalizeWorldbook 的白名单里有 cover）',
     !!saved && String(saved.cover).startsWith('data:image/'),
@@ -8158,8 +8083,7 @@ await scenario('世界书：封面', async () => {
   );
 
   // 再进去一次：封面该从盘上读回来、填进框里
-  click(buttonByText(cardNamed(NAME), '编辑'));
-  await waitFor('世界书编辑器又打开了', () => shown('#view-wb-editor'));
+  await openWorldbookEditor(NAME);
   await sleep(250);
   check('重新打开时封面框里有图（从盘上读回来了）', !!byId('wb-cover').querySelector('img'));
 
@@ -8173,29 +8097,21 @@ await scenario('世界书：封面', async () => {
   await waitFor('世界书编辑器关闭（第二次）', () => !shown('#view-wb-editor'));
   await sleep(200);
 
-  check('卡片退回「世」字占位块', !!card() && !!card().querySelector('.wb-card-glyph'));
-  const after = (await savedWorldbooks()).find((b) => b.name === NAME);
+  const after = await diskBook();
   check('清除也落了盘（cover 是空串）', !!after && after.cover === '', JSON.stringify(after && after.cover));
 });
 
 // ---------------------------------------------------------------------------
-//  场景 26d：角色库 / 世界书列表共用同一副卡片和工具条
+//  场景 26d：角色库的卡片、工具条，以及两个编辑器页头同高
 //
-//  2026-10-18：两块列表从「各写一套卡片 + 列宽 198/240」合并成
-//  ui/build.js 的 libraryCard()。这里钉三件最容易悄悄分叉的事：
-//    · 两个网格的列数 / 列宽 / 间距必须一样；
-//    · 名字在封面**下方**（不再压在图里），两边的卡片结构同构；
-//    · 工具条（搜索 + 计数）两边都有，搜不到时空态说的是「没有匹配」。
+//  卡片结构钉两件事：名字在封面**下方**（不压在图里）、封面里挂的是头像。
+//  工具条钉搜索 + 计数 + 「没有匹配的角色」空态。
 // ---------------------------------------------------------------------------
-await scenario('两个列表：同一副卡片和工具条', async () => {
-  const cols = (grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean);
-
+await scenario('角色库：卡片、工具条与页头高度', async () => {
   click('#btn-chars');
   await waitFor('切到角色库页面', () => shown('#view-chars'));
   check('角色库有搜索工具条', !!$('#char-page-search') && !!$('#char-page-count'));
 
-  const charCols = cols($('#char-page-grid'));
-  const charGap = getComputedStyle($('#char-page-grid')).columnGap;
   const charCard = $('#char-page-grid .char-card');
   check('角色卡的结构是「封面 → 名字」', !!charCard &&
     !!charCard.querySelector('.wb-card-cover .char-card-avatar') &&
@@ -8227,32 +8143,6 @@ await scenario('两个列表：同一副卡片和工具条', async () => {
   check('清空搜索后角色卡片都回来', $$('#char-page-grid .char-card').length === allChars,
     `${$$('#char-page-grid .char-card').length} / ${allChars}`);
 
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-  check('世界书有同一副工具条', !!$('#wb-page-search') && !!$('#wb-page-count'));
-
-  const wbCols = cols($('#wb-page-grid'));
-  check('两个列表的列数一致', wbCols.length === charCols.length,
-    `角色 ${charCols.length} 列 / 世界书 ${wbCols.length} 列`);
-  // 列宽允许一条滚动条的差：角色库 8 张卡会把 page-body 撑出竖向滚动条，
-  // 世界书 5 张不撑 —— 两边的可用宽度本来就差 ~10px，1fr 自然分得略不同。
-  check('两个列表的列宽一致（不算滚动条占位）',
-    Math.abs(parseFloat(wbCols[0]) - parseFloat(charCols[0])) <= 16,
-    `${charCols[0]} vs ${wbCols[0]}`);
-  check('两个列表的列间距一致', getComputedStyle($('#wb-page-grid')).columnGap === charGap,
-    `${charGap} vs ${getComputedStyle($('#wb-page-grid')).columnGap}`);
-
-  const wbCard = $('#wb-page-grid .char-card');
-  check('世界书卡的结构也是「封面 → 名字」', !!wbCard &&
-    !!wbCard.querySelector('.wb-card-cover') &&
-    !!wbCard.querySelector('.char-card-name'));
-  if (wbCard) {
-    const cover = wbCard.querySelector('.wb-card-cover').getBoundingClientRect();
-    const name = wbCard.querySelector('.char-card-name').getBoundingClientRect();
-    check('世界书名字也在封面下方', name.top >= cover.bottom - 1,
-      `封面底 ${Math.round(cover.bottom)} / 名字顶 ${Math.round(name.top)}`);
-  }
-
   // 角色编辑页的「全文 N 字」：数字来自五个写作栏 + 高级设置三栏，别再漏一处
   click('#btn-chars');
   await waitFor('回到角色库', () => shown('#view-chars'));
@@ -8269,10 +8159,7 @@ await scenario('两个列表：同一副卡片和工具条', async () => {
   await waitFor('回到角色库（收尾）', () => shown('#view-chars'));
 
   // 两个编辑器的页头同高：角色页原来是三行（78px），世界书是一行（56px）
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面（页头对比）', () => shown('#view-worldbooks'));
-  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书编辑器打开（页头对比）', () => shown('#view-wb-editor'));
+  await openWorldbookEditor('冒烟测试世界');
   const wbHeadHeight = Math.round($('#view-wb-editor .page-head').getBoundingClientRect().height);
   check('两个编辑器的页头同高', Math.abs(charHeadHeight - wbHeadHeight) <= 2,
     `角色 ${charHeadHeight}px / 世界书 ${wbHeadHeight}px`);
@@ -9499,19 +9386,22 @@ await scenario('Markdown：渲染边界', async () => {
 //      → 别人的书被静默改名 + 覆盖开场白，而且立刻落盘。
 // ---------------------------------------------------------------------------
 await scenario('Esc 链与弹窗清理', async () => {
-  // 世界书编辑器要从列表页点「编辑」进去（侧栏那个按钮只切页面）
-  const openBookEditor = async () => {
-    click('#btn-worldbooks');
-    await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-    click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-    await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
-  };
+  const openBookEditor = () => openWorldbookEditor('冒烟测试世界');
 
   // --- 三个以前漏掉的弹窗 ---
   await openBookEditor();
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await waitFor('Esc 关掉世界书弹窗', () => !shown('#view-wb-editor'));
   check('Esc 关得掉世界书弹窗', !shown('#view-wb-editor'));
+
+  // 世界书是从角色编辑器进的，关掉它之后停在这一屏上 —— 先把这屏收掉，
+  // 否则下面按 Esc 时先关的是角色编辑器（页面判定排在弹窗判定前面），记忆弹窗反而关不掉
+  if (shown('#view-char-editor')) {
+    click('#btn-back-char');
+    await sleep(200);
+    if (shown('#confirm-modal')) click('#confirm-ok');
+    await waitFor('回到角色库', () => shown('#view-chars'));
+  }
 
   await clickMoreItem('#btn-memory');
   await waitFor('记忆弹窗打开', () => shown('#memory-modal'));
@@ -9536,6 +9426,15 @@ await scenario('Esc 链与弹窗清理', async () => {
   click(buttonByText(card, '编辑'));
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
+  // 🔴 自带世界书只允许一本：这张卡要是已经绑了，「＋ 绑定」是灰的点不动 —— 先解绑再测浮层
+  click('#char-section-tab-worldbook');
+  await sleep(150);
+  const boundDel = $('#c-wb-list .cwb-row .cwb-row-del');
+  if (boundDel) {
+    click(boundDel);
+    await waitFor('解绑完成', () => $$('#c-wb-list .cwb-row').length === 0);
+  }
+
   click('#c-wb-add-btn');
   await waitFor('选书浮层出现', () => !!$('.cwb-picker'));
   check('「＋ 绑定」会弹出选书浮层', !!$('.cwb-picker'));
@@ -9554,10 +9453,16 @@ await scenario('Esc 链与弹窗清理', async () => {
 
   // --- 删掉当前正在编辑的那本世界书：编辑器必须真的切到另一本 ---
   const namesBefore = (await savedWorldbooks()).map((w) => w.name);
-  await openBookEditor();
 
-  click('#btn-new-worldbook'); // 新建一本，它会成为「当前编辑」的那本
-  await waitFor('新建的世界书进编辑器', () => $('#wb-name').value === '新世界书', 3000);
+  // 造一本可删的书：角色编辑器 → ＋ 新建（建书 + 绑定 + 直接进它的编辑器）
+  click('#btn-chars');
+  await waitFor('切到角色库', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
+  click('#char-section-tab-worldbook');
+  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
+  click('#c-wb-new-btn');
+  await waitFor('新建的世界书进编辑器', () => shown('#view-wb-editor'), 3000);
   setValue('#wb-name', '待删的书');
   click('#btn-del-worldbook');
   await waitFor('删除前先确认', () => shown('#confirm-modal'));
@@ -11322,10 +11227,7 @@ await scenario('请求记录：列表、原文 JSON、清空', async () => {
 //  和「套用模板」里那条**常驻**的「事件表」配套：前者给地图、后者给开关。
 // ---------------------------------------------------------------------------
 await scenario('世界书：＋ 事件', async () => {
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页面', () => shown('#view-worldbooks'));
-  click(buttonByText($$('#wb-page-grid .char-card')[0], '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
+  await openWorldbookEditor('冒烟测试世界');
 
   const before = $$('#wb-entry-list .wb-entry').length;
   click('#btn-wb-add-event');
@@ -11941,26 +11843,6 @@ await scenario('批量：角色库与世界书的选择态', async () => {
     $$('#char-page-grid .char-card').every((c) => !c.classList.contains('is-selectable'))
   );
   check('退出选择态后「添加」卡回到末尾', !!$('#char-page-grid .lib-add-card'));
-
-  // ---- 世界书 ----
-  click('#btn-worldbooks');
-  await waitFor('切到世界书页', () => shown('#view-worldbooks'));
-  await sleep(120);
-
-  click('#btn-wb-batch');
-  await sleep(100);
-  check('世界书也能进选择态', shown('#wb-batch-active') && !shown('#wb-batch-normal'));
-  check('世界书选择态里「添加」卡也收起来', !$('#wb-page-grid .lib-add-card'));
-  const books = $$('#wb-page-grid .char-card');
-  check('世界书卡片也成了可点选的格子', books.length > 0 && books[0].classList.contains('is-selectable'));
-
-  books[0].click();
-  await sleep(80);
-  check('选中一本书之后计数用「本」', byId('wb-batch-count').textContent.includes('本'), byId('wb-batch-count').textContent);
-
-  click('#btn-wb-batch-exit');
-  await sleep(100);
-  check('世界书取消后也退干净', shown('#wb-batch-normal') && !shown('#wb-batch-active'));
 });
 
 // ---------------------------------------------------------------------------

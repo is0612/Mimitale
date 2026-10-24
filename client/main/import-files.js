@@ -109,12 +109,10 @@ function importFiles(opts) {
     }
 
     // 角色卡。内嵌世界书：给它一个正式 id 存进世界书库，并**自动绑到这个角色**上。
-    // 一张卡自带的书就是给这张卡用的，导入即可用；
-    // 不想要的话，在角色编辑器里关掉开关或者解绑就行。
+    // 一张卡自带的书就是给这张卡用的，导入即可用；不想要的话在角色编辑器里解绑。
     if (parsed.worldbook) {
       worldbooks.push(parsed.worldbook);
       parsed.character.worldbookIds = [parsed.worldbook.id];
-      parsed.character.worldbookEnabled = true;
     }
     characters.push(parsed.character);
   }

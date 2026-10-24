@@ -363,7 +363,7 @@ export function openAiGenModal(options = {}) {
   targetBook = scope === 'worldbook' ? bookFor(options.bookId) : null;
 
   if (scope === 'worldbook' && !targetBook) {
-    showToast('找不到这本书，先在世界书列表里打开它', 'error');
+    showToast('找不到这本书，先从角色的世界书里打开它', 'error');
     return;
   }
 

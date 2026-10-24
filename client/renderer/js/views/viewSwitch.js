@@ -5,20 +5,18 @@
 // ⚠️ 设置页不在这里 import：那边单向 import 本模块
 
 import { el } from '../core/dom.js';
-import { characters, worldbooks, dialoguePresets } from '../data/library.js';
+import { characters, dialoguePresets } from '../data/library.js';
 import { renderCharacterPage } from './characterList.js';
-import { renderWorldbookPage } from './worldbookList.js';
 import { renderPresetPage } from './presetList.js';
 
 let currentView = 'chat';
 
-const VIEWS = ['chat', 'chars', 'charEditor', 'worldbooks', 'wbEditor', 'presets', 'settings'];
+const VIEWS = ['chat', 'chars', 'charEditor', 'wbEditor', 'presets', 'settings'];
 
 const VIEW_PARTS = [
   { name: 'chat', view: 'viewChat', btn: null },
   { name: 'chars', view: 'viewChars', btn: 'btnChars' },
   { name: 'charEditor', view: 'viewCharEditor', btn: null },
-  { name: 'worldbooks', view: 'viewWorldbooks', btn: 'btnWorldbooks' },
   { name: 'wbEditor', view: 'viewWbEditor', btn: null },
   { name: 'presets', view: 'viewPresets', btn: 'btnPresets' },
   // 切换之前先由 views/settings.js 刷新；设置没有侧栏按钮（入口在账号菜单里）
@@ -35,7 +33,6 @@ export function currentViewName() {
 function renderFootCounts() {
   const parts = [
     [el.footCharsCount, characters().length],
-    [el.footWorldbooksCount, worldbooks().length],
     [el.footPresetsCount, dialoguePresets().length]
   ];
   for (const [node, count] of parts) {
@@ -57,7 +54,6 @@ export function showView(name) {
   }
 
   if (name === 'chars') renderCharacterPage();
-  else if (name === 'worldbooks') renderWorldbookPage();
   else if (name === 'presets') renderPresetPage();
   else if (name === 'chat') el.input.focus();
   renderFootCounts();
@@ -65,7 +61,6 @@ export function showView(name) {
 
 export function refreshLibraryPage() {
   if (currentView === 'chars') renderCharacterPage();
-  else if (currentView === 'worldbooks') renderWorldbookPage();
   else if (currentView === 'presets') renderPresetPage();
   // 数量变了但没切屏时也要更新
   renderFootCounts();
@@ -73,6 +68,5 @@ export function refreshLibraryPage() {
 
 export function initViewSwitch() {
   el.btnChars.addEventListener('click', () => showView('chars'));
-  el.btnWorldbooks.addEventListener('click', () => showView('worldbooks'));
   if (el.btnPresets) el.btnPresets.addEventListener('click', () => showView('presets'));
 }

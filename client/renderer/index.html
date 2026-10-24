@@ -31,7 +31,6 @@
       <div class="sidebar-foot">
         <div class="sidebar-section-title">创作空间</div>
         <m-button id="btn-chars" variant="ghost" block data-icon="users" aria-label="打开角色库"><span class="foot-label">角色库</span><span id="foot-chars-count" class="foot-count"></span></m-button>
-        <m-button id="btn-worldbooks" variant="ghost" block data-icon="book-open" aria-label="打开世界书"><span class="foot-label">世界书</span><span id="foot-worldbooks-count" class="foot-count"></span></m-button>
         <m-button id="btn-presets" variant="ghost" block data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span><span id="foot-presets-count" class="foot-count"></span></m-button>
 
         <!-- 账号条：未登录是人形图标 + 文案，点一下开登录窗；
@@ -585,8 +584,10 @@
                 <div class="cwb-head-actions">
                   <!-- 「AI 补设定」（2026-10-20）：读这张卡补几条世界设定，保存角色时才建书。
                        只给角色库的卡用 —— 世界书副本进世界时注入的是那本书，自带书不生效。 -->
-                  <m-button id="c-wb-ai-btn" variant="ghost" size="sm">AI 补设定</m-button>
                   <m-button id="c-wb-add-btn" variant="ghost" size="sm">＋ 绑定</m-button>
+                  <!-- 世界书只能从这张卡长出来：新建 → 自动绑定 → 直接进编辑器 -->
+                  <m-button id="c-wb-new-btn" variant="ghost" size="sm" title="新建一本世界书并绑定给这个角色">＋ 新建</m-button>
+                  <m-button id="c-wb-ai-btn" variant="ghost" size="sm">AI 补设定</m-button>
                 </div>
               </div>
               <div id="c-wb-list" class="cwb-list"></div>
@@ -594,13 +595,8 @@
                 <p id="c-wb-ai-status" class="field-help cwb-ai-status"></p>
                 <div id="c-wb-ai-list" class="cwb-ai-list hidden"></div>
               </div>
-              <label class="check" id="c-wb-switch">
-                <input id="c-wb-enabled" type="checkbox" checked />
-                <span class="check-text">
-                  <span class="check-title">启用自带的世界书</span>
-                  <span class="check-desc" id="c-wb-desc"></span>
-                </span>
-              </label>
+              <!-- 只能绑一本，所以没有「启用」开关了：绑上就一直生效（2026-10-24） -->
+              <p class="field-help" id="c-wb-desc"></p>
               <p class="field-help" id="c-wb-hint"></p>
             </div>
 
@@ -641,51 +637,7 @@
         </div>
       </section>
 
-      <!-- 视图三：世界书列表页 -->
-      <section id="view-worldbooks" class="view hidden" aria-label="世界书">
-        <header class="page-head">
-          <div class="page-heading">
-            <h1 class="page-title">世界书</h1>
-            <p id="wb-page-sub" class="page-sub"></p>
-          </div>
-          <div class="page-actions">
-            <m-button id="btn-import-lorebook" variant="ghost" size="sm">导入世界书</m-button>
-            <m-button id="btn-new-worldbook" variant="primary" size="sm">＋ 新建世界书</m-button>
-          </div>
-        </header>
-
-        <div class="page-body">
-          <!-- 同角色库：搜索 + 计数（只筛书名 / 条目名 / 关键词，不发请求） -->
-          <div class="lib-toolbar">
-            <label class="lib-search" for="wb-page-search">
-              <span data-icon="search" aria-hidden="true"></span>
-              <m-input id="wb-page-search" type="search" placeholder="搜索书名、条目或关键词" aria-label="搜索世界书"></m-input>
-            </label>
-            <span id="wb-page-count" class="lib-count"></span>
-            <!-- 和角色库那一组是同一套（见上方 char-batch-* 的注释） -->
-            <div id="wb-batch-normal" class="lib-batch">
-              <m-button id="btn-wb-batch" variant="ghost" size="sm">批量操作</m-button>
-            </div>
-            <div id="wb-batch-active" class="lib-batch hidden">
-              <span id="wb-batch-count" class="lib-batch-count">已选 0 本</span>
-              <m-button id="btn-wb-select-all" variant="ghost" size="sm">全选</m-button>
-              <m-button id="btn-wb-batch-export" variant="ghost" size="sm" title="每本一个 .json（酒馆 lorebook），选一个文件夹存进去">导出</m-button>
-              <m-button id="btn-wb-batch-delete" variant="danger" size="sm">删除</m-button>
-              <m-button id="btn-wb-batch-exit" variant="ghost" size="sm">取消</m-button>
-            </div>
-          </div>
-          <div id="wb-page-grid" class="wb-grid" role="list"></div>
-          <div id="wb-page-empty" class="page-empty hidden">
-            <div class="page-empty-title">还没有世界书</div>
-            <p class="page-empty-hint">
-              点右上角「导入世界书」选一个酒馆的 lorebook JSON，<br />
-              或者点「＋ 新建世界书」自己写一个世界。
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <!-- 视图八：编辑世界书（A 稿「条目工作台」）
+      <!-- 编辑世界书（A 稿「条目工作台」）
            一天里九成时间在写条目，所以这一屏是一台三栏工具：左列表 / 中正文 / 右本条属性。
            书本身很少改，于是它退成一条 64px 的信息条；书籍设置 / 本书角色 是两个二级屏。
            垂直预算（1440×900）：页头 56 + 书籍条 64 + 分区标签 44 = 164

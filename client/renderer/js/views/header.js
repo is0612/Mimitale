@@ -117,7 +117,7 @@ export function renderHeader() {
   const convoBooks = convoBookIds.map((id) => worldbookById(id)).filter(Boolean);
   const charBookIds = character && Array.isArray(character.worldbookIds) ? character.worldbookIds : [];
   const charBooks = charBookIds.map((id) => worldbookById(id)).filter(Boolean);
-  const effectiveBooks = convoBooks.length ? convoBooks : character && character.worldbookEnabled !== false ? charBooks : [];
+  const effectiveBooks = convoBooks.length ? convoBooks : charBooks;
   const storyContext = document.getElementById('story-context');
   if (storyContext) storyContext.textContent = effectiveBooks.length
     ? `故事进行中 / ${effectiveBooks.map(book => book.name).join(' · ')}`
@@ -140,12 +140,7 @@ export function renderHeader() {
   }
 
   if (convoBooks.length && charBooks.length) {
-    el.convoMeta.textContent +=
-      character.worldbookEnabled === false
-        ? ' · 角色自带的书已关掉'
-        : ' · 角色自带的书不生效（世界优先）';
-  } else if (!convoBooks.length && charBooks.length && character.worldbookEnabled === false) {
-    el.convoMeta.textContent += ` · 自带世界书 ${charBooks.map((b) => b.name).join('、')}（已关掉）`;
+    el.convoMeta.textContent += ' · 角色自带的书不生效（世界优先）';
   }
 
   // 视角只在偏离默认时显示为标题旁的小胶囊。

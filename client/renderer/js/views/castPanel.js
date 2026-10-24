@@ -204,10 +204,7 @@ export function renderCastPanel() {
       el.castFootBook.textContent = `世界书 · ${books.map((b) => b.name).join('、')}`;
     } else if (charBooks.length) {
       const names = charBooks.map((b) => b.name).join('、');
-      el.castFootBook.textContent =
-        character.worldbookEnabled === false
-          ? `世界书 · ${names}（已关掉）`
-          : `世界书 · ${names}（角色自带）`;
+      el.castFootBook.textContent = `世界书 · ${names}（角色自带）`;
     } else {
       // 一本都没有就空着 —— 与其写一句「没有绑定世界书」占着脚注，不如什么都不说
       el.castFootBook.textContent = '';

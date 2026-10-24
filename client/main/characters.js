@@ -22,7 +22,9 @@ const MAX_EXPRESSION_KEYWORDS = 8;
 // 情绪键（英文短标识），给 <emo> 标签用
 const MAX_EXPRESSION_KEY = 16;
 
-const MAX_CHARACTER_WORLDBOOKS = 50;
+// 🔴 角色的「自带世界书」只允许一本（2026-10-24 星宝要求）：多出来的写盘时直接丢掉，
+// 别让界面能绑、重启后又只剩一本。
+const MAX_CHARACTER_WORLDBOOKS = 1;
 
 // 语料实测单卡最多 29 条，给 50 足够宽松。
 const MAX_ALTERNATE_GREETINGS = 50;
@@ -176,10 +178,8 @@ function normalizeCharacter(raw, source) {
     attributes: normalizeAttributes(r.attributes),
     // 只有 `false` 才表示「这张卡明确不要剧情选项」。
     optionsSpec: normalizeOptionsSpec(r.optionsSpec),
-    // 导入带 character_book 的角色卡时自动绑上，之后用户也能自己加/删。
+    // 导入带 character_book 的角色卡时自动绑上，之后用户也能自己加/删。只能一本，绑上就一直生效。
     worldbookIds: normalizeWorldbookIds(r.worldbookIds),
-    // 缺省视为开启；只有显式 false 才算关。
-    worldbookEnabled: r.worldbookEnabled !== false,
     // ⚠️ 白名单式，必须显式保留否则一存盘就丢；只在显式 true 时写出来。
     ...(r.showInPanel === true ? { showInPanel: true } : {}),
     source: ['png', 'json', 'manual'].includes(r.source) ? r.source : fallbackSource,

@@ -456,7 +456,7 @@ function seedForShots() {
     }),
     card('c-shot-5', '分组测试角色', { tags: ['原神'] }),
     card('c-shot-6', '分组改名角色'),
-    card('c-shot-7', '自带世界书测试', { worldbookIds: ['w-test'], worldbookEnabled: true }),
+    card('c-shot-7', '自带世界书测试', { worldbookIds: ['w-test'] }),
     card('c-shot-8', '选项测试角色', { optionsSpec: { count: 3, hint: '语气轻松些' } })
   ];
 
@@ -2329,16 +2329,6 @@ function probeExports(result) {
   // 而且导出的卡也可能内嵌 character_book，光看 `"entries"` 会误配到角色卡上。
   // 独立导出的书顶层是 name + entries 对象，且没有 chara_card_v2 那套字段。
   const charExport = exportedPayloads.find((p) => p.text && p.text.includes('chara_card_v2'));
-  const wbExport = exportedPayloads.find((p) => {
-    if (!p.text || String(p.fileName || '').indexOf('.json') < 0) return false;
-    try {
-      const parsed = JSON.parse(p.text);
-      return !!parsed && typeof parsed.name === 'string' && !!parsed.entries &&
-        !Array.isArray(parsed.entries) && !parsed.data && !parsed.spec;
-    } catch (err) {
-      return false;
-    }
-  });
   const convoExport = exportedPayloads.find((p) => String(p.fileName || '').endsWith('.md'));
 
   // --- 角色卡 ---
@@ -2380,29 +2370,8 @@ function probeExports(result) {
   });
 
   // --- 世界书 ---
-  let bookOk = false;
-  let bookDetail = '没有导出记录';
-  if (wbExport) {
-    try {
-      const book = JSON.parse(wbExport.text);
-      const first = Object.values(book.entries || {})[0];
-      bookOk =
-        !!book.name &&
-        !!first &&
-        'key' in first &&
-        'keysecondary' in first &&
-        'disable' in first &&
-        String(wbExport.fileName).endsWith('.json');
-      bookDetail = `name=${book.name} 首个条目字段=${first ? Object.keys(first).join(',') : '无'}`;
-    } catch (err) {
-      bookDetail = 'JSON 解析失败：' + ((err && err.message) || err);
-    }
-  }
-  result.results.push({
-    name: '导出：世界书是酒馆认的 lorebook 形状',
-    pass: bookOk,
-    detail: bookOk ? '' : bookDetail
-  });
+  // 世界书没有导出入口了（书只能从角色的「自带世界书」进，不再有列表页卡片），
+  // 酒馆 lorebook 形状的验证由上面那组「导出 → 导入真往返」负责（它直接调 worldbookPayload）。
 
   // --- 会话 ---
   const md = String((convoExport && convoExport.text) || '');
@@ -2428,9 +2397,8 @@ function probeExports(result) {
     try {
       const card = JSON.parse(String(charExport.text || '{}'));
       const book = card.data && card.data.character_book;
-      const own = (card.data && card.data.extensions && card.data.extensions.mimitale) || {};
-      boundOk = !!book && !!book.name && own.worldbookEnabled === true;
-      boundDetail = `character_book=${book ? `「${book.name}」` : 'null'} worldbookEnabled=${own.worldbookEnabled}`;
+      boundOk = !!book && !!book.name;
+      boundDetail = `character_book=${book ? `「${book.name}」` : 'null'}`;
     } catch (err) {
       boundDetail = '角色卡 JSON 解析失败：' + ((err && err.message) || err);
     }
@@ -2742,8 +2710,8 @@ function probeImport(result) {
       !!char && !!book && Array.isArray(char.worldbookIds) && char.worldbookIds.length === 1 &&
         char.worldbookIds[0] === book.id,
       char ? `worldbookIds=${JSON.stringify(char.worldbookIds)} bookId=${book && book.id}` : '没有角色');
-    push('导入：自带世界书的开关默认是开的', !!char && char.worldbookEnabled === true,
-      char ? `worldbookEnabled=${char.worldbookEnabled}` : '没有角色');
+    push('导入：不再写 worldbookEnabled（开关已撤）', !char || !('worldbookEnabled' in char),
+      char ? Object.keys(char).join(',') : '没有角色');
     push('导入：temp 字段 worldbook 没有留在角色上', !!char && !('worldbook' in char),
       char ? Object.keys(char).join(',') : '没有角色');
 
@@ -3515,7 +3483,6 @@ function probeBatchLibrary(result) {
   const chatExport = read('renderer/js/views/chatExport.js');
   const cardImport = read('main/card-import.js');
   const editor = read('renderer/js/views/characterEditor.js');
-  const worldbook = read('renderer/js/views/worldbook.js');
   const charList = read('renderer/js/views/characterList.js');
   const page = read('renderer/index.html');
 
@@ -3536,12 +3503,8 @@ function probeBatchLibrary(result) {
     /export async function deleteCharactersByIds/.test(editor) && /unbound\.push\(\[convo, convo\.characterId\]\)/.test(editor)
   );
   push(
-    '批量删除世界书：一次写盘 + 编辑器切走不留在被删的书上',
-    /export async function deleteWorldbooksByIds/.test(worldbook) && /editingTarget/.test(worldbook)
-  );
-  push(
-    '两页工具条都写了批量按钮组',
-    /id="char-batch-active"/.test(page) && /id="wb-batch-active"/.test(page)
+    '角色库工具条写了批量按钮组',
+    /id="char-batch-active"/.test(page)
   );
 }
 
@@ -4667,12 +4630,23 @@ app.whenReady().then(async () => {
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
-          $('#btn-worldbooks')?.click();
-          await nap(450);
-          const card = $$('#wb-page-grid .char-card')[0];
-          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (btn) btn.click();
-          await nap(650);
+          // 世界书没有列表页：从角色的「自带世界书」进
+          $('#btn-chars')?.click(); await nap(400);
+          const wbCard = $$('#char-page-grid .char-card').find(c => c.textContent.includes('自带世界书测试')) || $$('#char-page-grid .char-card')[0];
+          const wbEditBtn = wbCard && Array.from(wbCard.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbEditBtn) wbEditBtn.click();
+          await nap(550);
+          $('#char-section-tab-worldbook')?.click(); await nap(250);
+          if (!$$('#c-wb-list .cwb-row').length) {
+            $('#c-wb-add-btn')?.click(); await nap(350);
+            const row = $$('.cwb-picker-row')[0];
+            if (row) row.click();
+            await nap(400);
+          }
+          const wbLine = $$('#c-wb-list .cwb-row')[0];
+          const wbGo = wbLine && Array.from(wbLine.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbGo) wbGo.click();
+          await nap(700);
           const entry = $('#wb-entry-list .wb-entry');
           if (entry) entry.click();
           await nap(450);
@@ -4704,34 +4678,32 @@ app.whenReady().then(async () => {
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-appearance"]')?.click();
           await new Promise(r => setTimeout(r, 300));`,
-        // 世界书列表页（2026-10-14 卡片改成「封面铺满整卡」之后补的场景）：
-        // 封面卡 / 「世」字占位块两种形态、书名压在封面上的那层压暗、右上角那颗
-        // 悬停才浮出来的 × —— 全是要看图才认得出来的东西。
-        worldbooks: `
-          const t = document.querySelector('#toast');
-          if (t) { t.classList.add('hidden'); t.textContent = ''; }
-          document.querySelector('#btn-worldbooks')?.click();
-          await new Promise(r => setTimeout(r, 450));
-          // 悬停态在图里看不出来，把第一张卡的 × 直接点亮
-          // （「导出」2026-10-20 已改成操作行里的一颗常显按钮，不用再点亮）
-          const card = document.querySelector('#wb-page-grid .char-card');
-          const del = card && card.querySelector('.char-card-del');
-          if (del) del.style.opacity = '1';`,
         // 世界书编辑器的左栏：封面块在最上面（书的脸），下面才是书名 / 开场白 / 本书角色。
         // 打开一本**带封面的**，否则看到的还是空框。
         worldbookEditor: `
           const t = document.querySelector('#toast');
           if (t) { t.classList.add('hidden'); t.textContent = ''; }
-          document.querySelector('#btn-worldbooks')?.click();
-          await new Promise(r => setTimeout(r, 400));
-          // 卡片上的两颗按钮是组件（m-button），里层那颗才是 button ——
-          // 按元素上的 btn 类名找，从 2026-10-16 那批组件化之后就已经找不到了。
-          const cards = Array.from(document.querySelectorAll('#wb-page-grid .char-card'));
-          const card = cards.find(c => c.querySelector('.wb-card-cover img')) || cards[0];
-          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (btn) btn.click();
-          await new Promise(r => setTimeout(r, 600));
-          // ⚠️ 2026-10-20 起进编辑器默认落在「书籍设置」，这一屏要看条目工作台得自己切过去
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          // 世界书没有列表页了：从角色的「自带世界书」进
+          $('#btn-chars')?.click(); await nap(400);
+          const wbCard = $$('#char-page-grid .char-card').find(c => c.textContent.includes('自带世界书测试')) || $$('#char-page-grid .char-card')[0];
+          const wbEditBtn = wbCard && Array.from(wbCard.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbEditBtn) wbEditBtn.click();
+          await nap(550);
+          $('#char-section-tab-worldbook')?.click(); await nap(250);
+          if (!$$('#c-wb-list .cwb-row').length) {
+            $('#c-wb-add-btn')?.click(); await nap(350);
+            const row = $$('.cwb-picker-row')[0];
+            if (row) row.click();
+            await nap(400);
+          }
+          const line = $$('#c-wb-list .cwb-row')[0];
+          const go = line && Array.from(line.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (go) go.click();
+          await nap(700);
+          // ⚠️ 进编辑器默认落在「书籍设置」，这一屏要看条目工作台得自己切过去
           document.querySelector('#wb-tab-entries')?.click();
           await new Promise(r => setTimeout(r, 300));`,
         // 世界书编辑器的「书籍设置」分区：书名那格在这儿（`wb-name`，页面规则原来给的是
@@ -4740,32 +4712,54 @@ app.whenReady().then(async () => {
         wbBookSettings: `
           const t = document.querySelector('#toast');
           if (t) { t.classList.add('hidden'); t.textContent = ''; }
-          document.querySelector('#btn-worldbooks')?.click();
-          await new Promise(r => setTimeout(r, 400));
-          // 卡片上的两颗按钮是组件（m-button），里层那颗才是 button ——
-          // 按元素上的 btn 类名找，从 2026-10-16 那批组件化之后就已经找不到了。
-          const cards = Array.from(document.querySelectorAll('#wb-page-grid .char-card'));
-          const card = cards.find(c => c.querySelector('.wb-card-cover img')) || cards[0];
-          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (btn) btn.click();
-          await new Promise(r => setTimeout(r, 600));
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-chars')?.click(); await nap(400);
+          const wbCard = $$('#char-page-grid .char-card').find(c => c.textContent.includes('自带世界书测试')) || $$('#char-page-grid .char-card')[0];
+          const wbEditBtn = wbCard && Array.from(wbCard.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbEditBtn) wbEditBtn.click();
+          await nap(550);
+          $('#char-section-tab-worldbook')?.click(); await nap(250);
+          if (!$$('#c-wb-list .cwb-row').length) {
+            $('#c-wb-add-btn')?.click(); await nap(350);
+            const row = $$('.cwb-picker-row')[0];
+            if (row) row.click();
+            await nap(400);
+          }
+          const line = $$('#c-wb-list .cwb-row')[0];
+          const go = line && Array.from(line.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (go) go.click();
+          await nap(700);
           document.querySelector('#wb-tab-settings')?.click();
-          await new Promise(r => setTimeout(r, 350));
+          await nap(350);
           if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 世界书编辑器的「本书角色」分区（2026-10-18 起它有了自己的一屏）：
         // 动作行 + 卡片网格 / 空态引导卡 —— 卡片里「本书副本」那枚标最容易挤掉。
         wbChars: `
           const t = document.querySelector('#toast');
           if (t) { t.classList.add('hidden'); t.textContent = ''; }
-          document.querySelector('#btn-worldbooks')?.click();
-          await new Promise(r => setTimeout(r, 400));
-          const cards = Array.from(document.querySelectorAll('#wb-page-grid .char-card'));
-          const card = cards.find(c => c.querySelector('.wb-card-cover img')) || cards[0];
-          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (btn) btn.click();
-          await new Promise(r => setTimeout(r, 600));
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-chars')?.click(); await nap(400);
+          const wbCard = $$('#char-page-grid .char-card').find(c => c.textContent.includes('自带世界书测试')) || $$('#char-page-grid .char-card')[0];
+          const wbEditBtn = wbCard && Array.from(wbCard.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbEditBtn) wbEditBtn.click();
+          await nap(550);
+          $('#char-section-tab-worldbook')?.click(); await nap(250);
+          if (!$$('#c-wb-list .cwb-row').length) {
+            $('#c-wb-add-btn')?.click(); await nap(350);
+            const row = $$('.cwb-picker-row')[0];
+            if (row) row.click();
+            await nap(400);
+          }
+          const line = $$('#c-wb-list .cwb-row')[0];
+          const go = line && Array.from(line.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (go) go.click();
+          await nap(700);
           document.querySelector('#wb-tab-characters')?.click();
-          await new Promise(r => setTimeout(r, 350));
+          await nap(350);
           if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         panel: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -4875,28 +4869,25 @@ app.whenReady().then(async () => {
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
-          $('#btn-worldbooks')?.click();
-          await nap(450);
-          const card = $$('#wb-page-grid .char-card')[0];
-          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (btn) btn.click();
-          await nap(650);
+          // 世界书没有列表页：从角色的「自带世界书」进
+          $('#btn-chars')?.click(); await nap(400);
+          const wbCard = $$('#char-page-grid .char-card').find(c => c.textContent.includes('自带世界书测试')) || $$('#char-page-grid .char-card')[0];
+          const wbEditBtn = wbCard && Array.from(wbCard.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbEditBtn) wbEditBtn.click();
+          await nap(550);
+          $('#char-section-tab-worldbook')?.click(); await nap(250);
+          if (!$$('#c-wb-list .cwb-row').length) {
+            $('#c-wb-add-btn')?.click(); await nap(350);
+            const row = $$('.cwb-picker-row')[0];
+            if (row) row.click();
+            await nap(400);
+          }
+          const wbLine = $$('#c-wb-list .cwb-row')[0];
+          const wbGo = wbLine && Array.from(wbLine.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbGo) wbGo.click();
+          await nap(700);
           $('#wb-e-content')?.dispatchEvent(new Event('input', { bubbles: true }));
           await nap(200);
-          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
-        // 世界书列表页本身（卡片 + 右上角删除 × + 「有未保存的改动」提示同款药丸）。
-        // 删除键平时是 opacity:0、悬停才浮出来 —— 截图没有指针，
-        // 所以这里直接把透明度拨上去，只为出图（不动生产样式）。
-        worldbookPage: `
-          const $$ = (s) => Array.from(document.querySelectorAll(s));
-          const $ = (s) => document.querySelector(s);
-          const nap = (ms) => new Promise(r => setTimeout(r, ms));
-          $('#btn-worldbooks')?.click();
-          await nap(500);
-          const card = $$('#wb-page-grid .char-card')[0];
-          const del = card && card.querySelector('.char-card-del');
-          if (del) del.style.opacity = '1';
-          await nap(250);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 预设列表页（卡片 + 右上角删除 ×）与预设编辑器（字段一列、采样参数折叠区）
         presets: `
@@ -5348,12 +5339,23 @@ app.whenReady().then(async () => {
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
-          $('#btn-worldbooks')?.click();
-          await nap(450);
-          const card = $$('#wb-page-grid .char-card')[0];
-          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (btn) btn.click();
-          await nap(650);
+          // 世界书没有列表页：从角色的「自带世界书」进
+          $('#btn-chars')?.click(); await nap(400);
+          const wbCard = $$('#char-page-grid .char-card').find(c => c.textContent.includes('自带世界书测试')) || $$('#char-page-grid .char-card')[0];
+          const wbEditBtn = wbCard && Array.from(wbCard.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbEditBtn) wbEditBtn.click();
+          await nap(550);
+          $('#char-section-tab-worldbook')?.click(); await nap(250);
+          if (!$$('#c-wb-list .cwb-row').length) {
+            $('#c-wb-add-btn')?.click(); await nap(350);
+            const row = $$('.cwb-picker-row')[0];
+            if (row) row.click();
+            await nap(400);
+          }
+          const wbLine = $$('#c-wb-list .cwb-row')[0];
+          const wbGo = wbLine && Array.from(wbLine.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbGo) wbGo.click();
+          await nap(700);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 同上，换成预设编辑器 —— 它的卡片是 `width: min(720px, 94vw)`，
         // 「放大宽度没铺满」就是这么来的，单独留一张盯着宽度。

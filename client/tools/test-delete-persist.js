@@ -7,8 +7,8 @@
 //  只把 userData 指到一个临时目录，绝不碰真实的 %APPDATA%\Mimitale。
 //
 //  验的是六条：
-//    A 卡片 × 删角色            B 编辑弹窗里「删除角色」
-//    C 世界书编辑器里「删除本书」 D 关窗口（beforeunload）之后重新开窗读回来
+//    A 角色编辑页「删除角色」     B 世界书编辑器「删除本书」（从角色的自带世界书进）
+//    C 离开编辑器之后磁盘不动     D 关窗口（beforeunload）之后重新开窗读回来
 //    E characters.json 设成只读 → 两次都失败 → 界面必须回滚、报错、磁盘不动
 //    F 只读 1 秒后自动放开 → 渲染层的延迟重试应该救回来（用户无感）
 // ============================================================================
@@ -47,9 +47,9 @@ function seed() {
     path.join(TMP, 'characters.json'),
     JSON.stringify({
       characters: [
-        { id: 'c1', name: '甲角色', description: '第一个' },
-        { id: 'c2', name: '乙角色', description: '第二个' },
-        { id: 'c3', name: '丙角色', description: '第三个' }
+        { id: 'c1', name: '甲角色', description: '第一个', worldbookIds: ['w1'] },
+        { id: 'c2', name: '乙角色', description: '第二个', worldbookIds: ['w1'] },
+        { id: 'c3', name: '丙角色', description: '第三个', worldbookIds: ['w2'] }
       ]
     }, null, 2)
   );
@@ -132,16 +132,24 @@ app.whenReady().then(async () => {
   check('A 列表剩 2 张卡', A && A.cards === 2, String(A && A.cards));
   check('A 磁盘只剩 c2,c3（被删的 c1 没复活）', diskChars() === 'c2,c3', diskChars());
 
-  // --- B. 世界书编辑页里「删除本书」--------------------------------------
+  // --- B. 世界书编辑器里「删除本书」--------------------------------------
+  // 世界书没有列表页了，只能从角色的「自带世界书」进（乙角色绑着书一）
   const B = await win.webContents.executeJavaScript(`(async () => {
     const nap = (ms) => new Promise(r => setTimeout(r, ms));
     const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i += 1) { if (fn()) return true; await nap(100); } return false; };
-    document.querySelector('#btn-worldbooks').click();
-    await until(() => document.querySelector('#wb-page-grid .char-card'), 3000);
-    await nap(300);
-    const card = document.querySelector('#wb-page-grid .char-card');
-    const edit = Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-    edit.click();
+    const openEditor = (name) => Array.from(
+      document.querySelectorAll('#char-page-grid .char-card')
+    ).find((c) => c.textContent.includes(name));
+
+    const card = openEditor('乙角色');
+    if (!card) return { ok:false, why:'找不到乙角色的卡' };
+    Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑').click();
+    await until(() => !document.querySelector('#view-char-editor').classList.contains('hidden'), 3000);
+    document.querySelector('#char-section-tab-worldbook').click();
+    await until(() => document.querySelector('#char-section-worldbook') && !document.querySelector('#char-section-worldbook').hidden, 3000);
+    const row = Array.from(document.querySelectorAll('#c-wb-list .cwb-row')).find(r => r.textContent.includes('书一'));
+    if (!row) return { ok:false, why:'自带世界书清单里没有「书一」' };
+    row.querySelector('.cwb-row-edit').click();
     await until(() => !document.querySelector('#view-wb-editor').classList.contains('hidden'), 3000);
     if (document.querySelector('#view-wb-editor').classList.contains('hidden')) return { ok:false, why:'编辑器没打开' };
     const btn = document.querySelector('#btn-del-worldbook');
@@ -150,21 +158,26 @@ app.whenReady().then(async () => {
     const m = document.querySelector('#confirm-modal');
     if (!m || m.classList.contains('hidden')) return { ok:false, why:'确认框没出现' };
     document.querySelector('#confirm-ok').click(); await nap(1200);
-    return { ok:true, left: document.querySelectorAll('#wb-page-grid .char-card').length };
+    // 删完不会自动离开编辑器（只是切到下一本），点「返回」才回角色编辑器
+    const back = document.querySelector('#btn-close-worldbooks'); if (back) back.click();
+    await nap(700);
+    // 回到角色编辑器，那张清单里不该再有「书一」
+    const rows = Array.from(document.querySelectorAll('#c-wb-list .cwb-row'));
+    return { ok:true, left: rows.length, texts: rows.map((r) => r.textContent) };
   })()`);
   log('[B 世界书编辑页删本书]', JSON.stringify(B), '→ 磁盘 =', diskBooks());
   check('B 世界书「删除本书」真的删掉了', B && B.ok === true, JSON.stringify(B));
-  check('B 列表剩 1 本', B && B.left === 1, String(B && B.left));
+  check('B 回到角色编辑器，清单里那本没了', B && B.left === 0, JSON.stringify(B && B.texts));
   check('B 磁盘只剩 w2', diskBooks() === 'w2', diskBooks());
 
   // --- C. 离开编辑器之后再确认一次磁盘 -----------------------------------
+  // B 段已经退回角色编辑器，这里只要离开它、回到列表，再核一次盘
   await win.webContents.executeJavaScript(`(async () => {
     const nap = (ms) => new Promise(r => setTimeout(r, ms));
-    const x = document.querySelector('#btn-close-worldbooks'); if (x) x.click();
+    const back = document.querySelector('#btn-back-char'); if (back) back.click();
     await nap(500);
-    document.querySelector('#btn-worldbooks').click(); await nap(400);
   })()`);
-  log('[C 关弹窗后] 磁盘 characters =', diskChars(), '| worldbooks =', diskBooks());
+  log('[C 关掉编辑器后] 磁盘 characters =', diskChars(), '| worldbooks =', diskBooks());
   check('C 关掉编辑器之后磁盘没被改回去', diskChars() === 'c2,c3' && diskBooks() === 'w2',
     `${diskChars()} / ${diskBooks()}`);
 
@@ -176,15 +189,25 @@ app.whenReady().then(async () => {
   const win2 = await openWindow();
   const D = await win2.webContents.executeJavaScript(`(async () => {
     const nap = (ms) => new Promise(r => setTimeout(r, ms));
+    const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i += 1) { if (fn()) return true; await nap(100); } return false; };
     document.querySelector('#btn-chars').click(); await nap(400);
     const chars = document.querySelectorAll('#char-page-grid .char-card').length;
-    document.querySelector('#btn-worldbooks').click(); await nap(400);
-    const books = document.querySelectorAll('#wb-page-grid .char-card').length;
-    return { chars, books };
+
+    const card = Array.from(document.querySelectorAll('#char-page-grid .char-card')).find((c) => c.textContent.includes('丙角色'));
+    if (!card) return { chars, books: -1, why: '找不到丙角色的卡' };
+    Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑').click();
+    await until(() => !document.querySelector('#view-char-editor').classList.contains('hidden'), 3000);
+    document.querySelector('#char-section-tab-worldbook').click();
+    await until(() => document.querySelector('#char-section-worldbook') && !document.querySelector('#char-section-worldbook').hidden, 3000);
+    const rows = Array.from(document.querySelectorAll('#c-wb-list .cwb-row'));
+    const name = rows[0] ? rows[0].querySelector('.cwb-row-name').textContent : '';
+    document.querySelector('#btn-back-char').click(); await nap(300);
+    return { chars, books: rows.length, name };
   })()`);
   log('[D 重开窗口看到]', JSON.stringify(D));
   check('D 重开窗口：删掉的角色没回来', D && D.chars === 2, JSON.stringify(D));
-  check('D 重开窗口：删掉的世界书没回来', D && D.books === 1, JSON.stringify(D));
+  check('D 重开窗口：删掉的世界书没回来（丙角色只剩书二）', D && D.books === 1 && D.name === '书二',
+    JSON.stringify(D));
 
   // --- E. 模拟「一直被占着」：characters.json 设成只读，删了就该失败 ---
   const cf = path.join(TMP, 'characters.json');

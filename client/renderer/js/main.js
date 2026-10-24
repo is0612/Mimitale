@@ -19,7 +19,7 @@ import { initModelMenu } from './ui/modelMenu.js';
 import { initSelects } from './ui/select.js';
 import { defineComponents } from './components/index.js';
 
-import { persistLibrary, markCharactersLoaded, markWorldbooksLoaded, markPresetsLoaded, conversationsSavePayload, flushLibrariesNow } from './data/persist.js';
+import { markCharactersLoaded, markWorldbooksLoaded, markPresetsLoaded, conversationsSavePayload, flushLibrariesNow } from './data/persist.js';
 import { refreshPetCache, speakNow } from './data/petContext.js';
 import { initPetSettings, openPetSection } from './views/petSettings.js';
 import { currentEndpoint, isBridgeProvider } from './data/providers.js';
@@ -48,7 +48,6 @@ import { initMemoryUi, closeMemoryModal } from './views/memoryUi.js';
 import { initPanelUi } from './views/panelUi.js';
 import { initCastPanel } from './views/castPanel.js';
 import { initStateCards } from './views/stateCard.js';
-import { initWorldbookList, renderWorldbookPage } from './views/worldbookList.js';
 import { initPresetList } from './views/presetList.js';
 import { initPresetIo, exportPreset } from './views/presetIO.js';
 import {
@@ -84,16 +83,9 @@ import {
   closeFeedbackModal,
   isFeedbackModalOpen
 } from './views/feedback.js';
-import { initCharacterList, renderCharacterPage } from './views/characterList.js';
+import { initCharacterList } from './views/characterList.js';
 import {
   initWorldbook,
-  editWorldbookFromPage,
-  deleteWorldbookById,
-  deleteWorldbooksByIds,
-  exportWorldbookById,
-  exportWorldbooksByIds,
-  openWorldbookEditor,
-  renderWorldbookChars,
   closeWorldbookCharPicker,
   leaveWorldbookEditor,
   stashWorldbookForm
@@ -112,7 +104,7 @@ import {
   deleteCharacterById,
   deleteCharactersByIds
 } from './views/characterEditor.js';
-import { initCharacterImport, pickImportFiles, warnImportErrors } from './views/characterImport.js';
+import { initCharacterImport } from './views/characterImport.js';
 import { initAiGen, openAiGenModal } from './views/aiGen.js';
 import { initPresetAi, openPresetAiModal } from './views/presetAi.js';
 import { renderAll } from './views/redraw.js';
@@ -152,16 +144,6 @@ function registerRefreshListeners() {
   onRefresh(renderMessages);
   initStateCards(); // → onRefresh(renderStateCards)
   onRefresh(refreshLibraryPage);
-  // 世界书列表自己不登记重绘，由上面的 refreshLibraryPage 按当前视图分发。
-  initWorldbookList({
-    openEditor: editWorldbookFromPage,
-    remove: deleteWorldbookById,
-    removeMany: deleteWorldbooksByIds,
-    exportMany: exportWorldbooksByIds,
-    // 卡片右上角那颗 ↓：单本导出。编辑器里那颗「导出」已经去掉了（2026-10-20），
-    // 从此「拿走一本书」只在列表页发生 —— 导的永远是盘上那份，不是草稿。
-    exportOne: exportWorldbookById
-  });
   // 预设列表同理：动作跨模块，由入口层注入。
   initPresetList({ openEditor: openPresetEditor, remove: deletePresetById, exportOne: exportPreset });
   // 预设编辑器保存 / 删除后要全量重绘（预设页、视角弹窗都可能跟着变）。
@@ -510,44 +492,6 @@ function bindEvents() {
   });
 }
 
-// ---- 导入世界书（跨视图编排，刻意留在入口层） ----
-
-/** 导入世界书：复用角色导入通道，落点挂在当前这本书下。
- *  刻意留在入口层 —— 它同时动角色库 / 世界书列表 / 角色列表（跨视图编排）。 */
-async function importWorldbooks() {
-  const picked = await pickImportFiles({
-    before: () => stashWorldbookForm(),
-    button: el.wb.btnImport,
-    busyText: '导入中…',
-    idleText: '导入世界书',
-  });
-  if (!picked) return;
-
-  const { freshBooks, freshChars, errors } = picked;
-
-  state.worldbooks = [...worldbooks(), ...freshBooks];
-  if (freshChars.length) state.characters = [...characters(), ...freshChars];
-
-  if (freshBooks.length) {
-    openWorldbookEditor(freshBooks[freshBooks.length - 1].id);
-  } else {
-    renderWorldbookPage();
-  }
-
-  renderCharacterPage();
-  renderWorldbookChars();
-
-  // 写盘失败就别报「已导入」（提示由 persistLibrary 弹）。
-  if (!(await persistLibrary())) return;
-
-  const parts = [];
-  if (freshBooks.length) parts.push(`${freshBooks.length} 本世界书`);
-  if (freshChars.length) parts.push(`${freshChars.length} 个角色`);
-  showToast(`已导入 ${parts.join('，')}`, 'ok');
-
-  warnImportErrors(errors);
-}
-
 // ---- 启动 ----
 
 async function init() {
@@ -639,7 +583,6 @@ async function init() {
   });
   // 世界书编辑器要切「角色编辑器作用域」再开编辑器，动作由入口层注入。
   initWorldbook({
-    importBooks: importWorldbooks,
     stashDraft: () => stashWorldbookForm(),
     openInBook: (id) => openCharacterEditor(id, 'worldbook'),
     draftInBook: () => startCharacterDraftInBook(),
