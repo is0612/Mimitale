@@ -387,6 +387,7 @@ m-button.btn-new > .mi-btn__control {
 .char-expr-default:focus-visible,
 .char-expr-zoom:focus-visible,
 .char-expr-del:focus-visible,
+.char-card-world:focus-visible,
 .check > input[type="checkbox"]:focus-visible,
 .wb-cover-frame:focus-visible,
 .panel-all:focus-visible,
@@ -3703,10 +3704,9 @@ m-button.btn-new > .mi-btn__control:hover {
   height: 42px;
 }
 
-/* ---- 账号条（2026-10-23）：左边「我是谁」、右边设置齿轮 ----
-   原来底部最后一行就是「设置」那一颗，接登录前把它挪到右下、左边让出账号位。
-   ⚠️ 齿轮是**图标按钮**（.icon-btn），不走 m-button —— 组件只管「一行文字 + variant」。
-   收起成图标轨时竖排：上头像、下齿轮，文字整块藏掉。 */
+/* ---- 账号条：整行只有「头像是谁」这一颗 ----
+   未登录显示人形图标 + 文案，已登录显示头像 + 用户名（点它弹账号菜单）。
+   设置只在登录后的账号菜单里，这里不再有齿轮。 */
 .sidebar-account {
   position: relative;
   display: flex;
@@ -3796,30 +3796,9 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--text-faint);
 }
 
-.account-settings {
-  flex: 0 0 auto;
-  color: var(--text-faint);
-}
-
-.account-settings:hover {
-  background: var(--bg-item, var(--bg-card));
-  color: var(--text);
-}
-
-/* 在设置页时齿轮亮着（.active 由 views/viewSwitch.js 铺，和其它入口同一套语义） */
-.account-settings.active {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-color: var(--accent-border-soft);
-}
-
-/* ---- 登录后的账号格（2026-10-23）：整行只有「头像 + 用户名」，点一下往上弹菜单 ----
+/* ---- 登录后的账号格：整行只有「头像 + 用户名」，点一下往上弹菜单 ----
    ⚠️ 状态挂在 .sidebar-account 上（data-logged-in），不是挂在按钮上 ——
-   要同时藏掉副标题和齿轮两颗兄弟节点。 */
-.sidebar-account[data-logged-in='1'] .account-settings {
-  display: none;
-}
-
+   副标题要跟着一起藏。 */
 .sidebar-account[data-logged-in='1'] .account-sub {
   display: none;
 }
@@ -4064,8 +4043,7 @@ m-button.btn-new > .mi-btn__control:hover {
   padding-top: 18px;
 }
 
-/* 收起态：账号条竖成一列图标（头像在上、齿轮在下），文字整块藏掉 ——
-   只藏「设置」那颗是不够的，账号格本身就是两行字。 */
+/* 收起态：账号条只剩头像那一颗，文字整块藏掉 */
 .sidebar.collapsed .sidebar-account {
   flex-direction: column;
   align-items: center;
@@ -4086,11 +4064,6 @@ m-button.btn-new > .mi-btn__control:hover {
 
 .sidebar.collapsed .account-text {
   display: none;
-}
-
-.sidebar.collapsed .account-settings {
-  width: 34px;
-  height: 34px;
 }
 
 /* 整列只有一张景色和一层共同遮罩；各区域不再分别叠色。 */
@@ -7400,6 +7373,31 @@ m-button.btn-new > .mi-btn__control:hover {
   opacity: 1;
 }
 
+/* 封面左下角「进入世界」：只有自带世界书的卡才有这颗。
+   常显不藏 hover —— 藏了就没人找得到第二入口；也不塞进下面那排操作按钮，
+   四颗挤在 216px 里会绷（每颗只剩 43px，两字标签加内边距要 56px）。 */
+.char-card-world {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  /* 同上：封面是 relative 且排在后面，不给 z-index 会被整块盖住 */
+  z-index: 2;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 16, 22, 0.55);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.char-card-world:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
 /* ---- 批量选择态（2026-10-19）----
    整张卡就是一颗勾选框：点哪儿都算选中，所以「编辑 / 聊天」和右上角的 × 都收起来。
    用 visibility 而不是 display:none —— 后者会让卡片矮一截，网格随勾选跳动。
@@ -7412,7 +7410,8 @@ m-button.btn-new > .mi-btn__control:hover {
   transform: none;
 }
 
-.char-card.is-selectable .char-card-actions {
+.char-card.is-selectable .char-card-actions,
+.char-card.is-selectable .char-card-world {
   visibility: hidden;
 }
 

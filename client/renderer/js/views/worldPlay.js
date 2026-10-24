@@ -8,7 +8,7 @@ import { state } from '../core/state.js';
 import { el } from '../core/dom.js';
 import { uid, now, activeConvo } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
-import { characterById, worldbookCharacters } from '../data/library.js';
+import { characterById, characterWorldbooks, worldbookCharacters } from '../data/library.js';
 import { seedIdentity, seedPanelFromCharacters, mergePlayerOwnedFields } from '../data/panel.js';
 import { applyMacros } from '../data/messages.js';
 import { optionsSpecFromCharacter } from '../data/suggestions.js';
@@ -17,7 +17,7 @@ import { gmRuleText } from '../data/narration.js';
 import { ensureConvoEndpoint } from '../data/providers.js';
 import { createConvo } from '../data/conversations.js';
 import { persistConversations } from '../data/persist.js';
-import { getPlayerStart, readPlayerDraft, closePlayerModal, openChatPlayerModal } from './player.js';
+import { getPlayerStart, readPlayerDraft, closePlayerModal, openChatPlayerModal, openPlayerModal } from './player.js';
 import { showView } from './viewSwitch.js';
 import { renderAll } from './redraw.js';
 import { renderMessages, setOpeningBusy } from './chatMessages.js';
@@ -41,7 +41,7 @@ export function startPlayerFlow() {
     closePlayerModal();
     return;
   }
-  if (start.kind === 'world') startWorldPlay(start.book);
+  if (start.kind === 'world') startWorldPlay(start.books, start.name);
   else {
     // ⚠️ startCharacterChat 是 async：不接住 rejection 会变成 unhandled rejection。
     startCharacterChat(start.character).catch((err) => {
@@ -51,16 +51,20 @@ export function startPlayerFlow() {
   }
 }
 
-/** 建会话、装上这个世界、存下玩家自己的角色；世界由 GM 叙述，所以顺手开 GM 模式。 */
-export function startWorldPlay(book) {
-  if (!book) return;
+/**
+ * 建会话、装上这个世界、存下玩家自己的角色；世界由 GM 叙述，所以顺手开 GM 模式。
+ * `books` 是一组世界书（角色卡可能绑了好几本，一起进同一个世界）；`name` 是会话标题。
+ */
+export function startWorldPlay(input, name = '') {
+  const books = (Array.isArray(input) ? input : [input]).filter(Boolean);
+  if (!books.length) return;
 
   const draft = readPlayerDraft() || {};
 
   const convo = createConvo(true);
-  convo.worldbookIds = [book.id];
+  convo.worldbookIds = books.map((book) => book.id);
   convo.gmMode = true;
-  convo.title = book.name;
+  convo.title = name || books.map((book) => book.name).join('、');
   convo.updatedAt = now();
 
   // 选了角色卡就记住是哪张（名字 / 设定仍以输入框为准，选完还能改）
@@ -75,14 +79,14 @@ export function startWorldPlay(book) {
   // ⚠️ 先种「你自己」再种书里角色：同名以先出现的为准，自己卡上的「金币」不会被书里的盖掉。
   seedIdentity(convo, draft.name, 'player');
   if (pickedCard) seedPanelFromCharacters(convo, [pickedCard], 'player');
-  seedPanelFromCharacters(convo, worldbookCharacters(book));
+  for (const book of books) seedPanelFromCharacters(convo, worldbookCharacters(book));
 
   // ⚠️ 种完字段再并：挑的卡可能也在书里当 NPC 副本，撞名时把副本那份收回来，
   //    否则同一个人占两张状态卡、属性存两份。
   mergePlayerOwnedFields(convo);
 
-  // 开场：书里写了就用书里的；没写就让模型按设定现生成一段
-  const opening = String(book.opening || '').trim();
+  // 开场：书里写了就用书里的（多本取第一本写了的）；都没写就让模型按设定现生成一段
+  const opening = books.map((book) => String(book.opening || '').trim()).find(Boolean) || '';
   if (opening) {
     convo.messages = [
       {
@@ -99,11 +103,11 @@ export function startWorldPlay(book) {
   renderAll({ forceScroll: true });
   persistConversations(0);
 
-  showToast(`进入「${book.name}」—— 你是「${convoUserName(convo)}」`, 'ok');
+  showToast(`进入「${convo.title}」—— 你是「${convoUserName(convo)}」`, 'ok');
   el.input.focus();
 
   // 没写开场白就去生成一段。失败也不影响玩，只是开局空着
-  if (!opening) generateWorldOpening(convo, book);
+  if (!opening) generateWorldOpening(convo, books);
 }
 
 /** ⚠️ 身份要在绑卡**之前**落到会话上：自动插入的开场白里 {{user}} 得用刚填的名字。 */
@@ -111,6 +115,15 @@ async function startCharacterChat(character) {
   if (!character) return;
 
   const draft = readPlayerDraft() || {};
+
+  // ⚠️ 玩家名和 TA 同名 = 自己跟自己聊：开场白里的 {{user}} 会替换成同一个名字，
+  //    模型分不清谁是 TA、谁是玩家（表现是「我本来在第三者位置，怎么成了角色本人」）。
+  //    这里只挡下来，弹窗还开着，改个名字再点开始就行。
+  if (draft.name && character.name && draft.name.trim() === String(character.name).trim()) {
+    showToast(`「${character.name}」是你正在聊的人 —— 换成你自己的名字再开始`, 'error');
+    el.playerName.focus();
+    return;
+  }
 
   createConvo(true);
   const convo = activeConvo();
@@ -150,8 +163,31 @@ export function chatWithCharacter(id) {
   openChatPlayerModal(id);
 }
 
+/**
+ * 角色卡的第二条入口：进 TA 的世界。
+ * 用的是这张卡自带的世界书（可能好几本，一起进）；一本都没有就不该走到这儿 ——
+ * 卡片上那颗「进入世界」只在有书时才渲染。
+ */
+export function playCharacterWorld(id) {
+  const character = characterById(id);
+  if (!character) return;
+
+  if (state.streaming) {
+    showToast('正在生成回答，先点「停止生成」再开新世界');
+    return;
+  }
+
+  const books = characterWorldbooks(character);
+  if (!books.length) {
+    showToast('这张卡还没有绑世界书 —— 先去编辑里绑一本', 'error');
+    return;
+  }
+
+  openPlayerModal(books.map((book) => book.id), { label: character.name });
+}
+
 /** 让模型按世界设定写一段开局场景，作为第一条消息放进会话（独立 requestId，不进聊天窗口的流式监听）。 */
-async function generateWorldOpening(convo, book) {
+async function generateWorldOpening(convo, books) {
   const endpoint = ensureConvoEndpoint(convo);
   if (!endpoint || !endpoint.provider.apiKey) {
     // 还没配好模型，就别硬来了 —— 用户配好之后可以自己开个头
@@ -168,8 +204,9 @@ async function generateWorldOpening(convo, book) {
     if (player && player.profile) parts.push(`【玩家角色：${player.name || me}】\n${player.profile}`);
     const cast = worldbookCast(convo);
     if (cast) parts.push(cast);
-    // 开局这段不按关键词，把这本书的设定尽量都带上，免得开局世界是空的
-    const lore = (Array.isArray(book.entries) ? book.entries : [])
+    // 开局这段不按关键词，把这几本书的设定尽量都带上，免得开局世界是空的
+    const lore = books
+      .flatMap((book) => (Array.isArray(book.entries) ? book.entries : []))
       .filter((e) => e && e.enabled !== false && String(e.content || '').trim())
       .slice(0, 40)
       .map((e) => `【${e.title}】\n${String(e.content).trim()}`)

@@ -949,6 +949,7 @@ export function formatPanelForPrompt(convo) {
 
   const renderGroups = (keys) => {
     const lines = [];
+    const shown = new Set();
     let groupCount = 0;
     for (const bucket of grouped(keys)) {
       const filled = bucket.fields.filter((f) => {
@@ -963,9 +964,10 @@ export function formatPanelForPrompt(convo) {
       }
       for (const f of filled) {
         lines.push(`【${label(f.key)}】：${panel[f.key]}`);
+        shown.add(f.key);
       }
     }
-    return { lines, grouped: groupCount > 0 };
+    return { lines, grouped: groupCount > 0, shown };
   };
 
   const dyn = renderGroups(dynamicKeys);
@@ -1021,8 +1023,28 @@ export function formatPanelForPrompt(convo) {
     );
   }
 
-  const body = [PANEL_PROMPT_LEAD, rules.join('\n\n'), dyn.lines.join('\n'), stat.lines.join('\n')]
-    .filter(Boolean);
+  // ⚠️ 只把「有值」的字段列进上面那张表，所以没值的字段得单独点名 ——
+  //    否则模型压根不知道它存在，永远是空的（「启用场景追踪」就是这么失效的：
+  //    种进去的地点/时间/天气一个值没有，表里连名字都不出现）。
+  // ⚠️ 这段必须落在表**后面**：末尾那句「字段名和顺序照上面那份表原样保留」离生成位置最近，
+  //    只说「照上面的表」而不把新字段补进这句话里，模型就会跳过它们。
+  const pending = [];
+  const pendingDynamic = dynamicKeys.filter((key) => !dyn.shown.has(key)).map(label);
+  const pendingStatic = staticKeys.filter((key) => !stat.shown.has(key)).map(label);
+  if (pendingDynamic.length) {
+    pending.push(`这些字段还没有值，这一轮起一并补上（剧情里还没交代的写「未知」），格式同上：${pendingDynamic.join('、')}`);
+  }
+  if (pendingStatic.length) {
+    pending.push(`这些字段同样还没有值，剧情里出现相关内容时补一行：${pendingStatic.join('、')}`);
+  }
+
+  const body = [
+    PANEL_PROMPT_LEAD,
+    rules.join('\n\n'),
+    dyn.lines.join('\n'),
+    stat.lines.join('\n'),
+    pending.join('\n')
+  ].filter(Boolean);
 
   return body.join('\n') + groupNote + legendBlock + '\n\n' + PANEL_PROMPT_TAIL;
 }

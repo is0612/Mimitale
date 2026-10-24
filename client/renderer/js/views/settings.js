@@ -48,9 +48,6 @@ export function initSettings(opts = {}) {
   if (typeof opts.refreshModelSwitch === 'function') refreshModelSwitch = opts.refreshModelSwitch;
   if (typeof opts.afterSettingsSave === 'function') afterSettingsSave = opts.afterSettingsSave;
 
-  // ⚠️ 包一层，别直接 `addEventListener('click', openSettings)` ——
-  //    那样事件对象会当成 section 参数传进去（见 openSettings 的注释）。
-  el.btnSettings.addEventListener('click', () => openSettings());
   // 「返回」= 不保存直接走
   el.btnBackSettings.addEventListener('click', leaveSettings);
   el.btnSaveSettings.addEventListener('click', () => saveSettings(false));
@@ -803,9 +800,10 @@ function readSettingsForm() {
  * 打开设置页。
  * @param {string} [section] 指定落到哪一组（比如从账号菜单进来要看「用户信息」）。
  *   不传就回到这次运行里上次停留的那组。
- *   ⚠️ 只认字符串。这颗函数**同时**被当成 click 监听器绑在齿轮上（见本文件 init），
- *      监听器拿到的第一个参数是 PointerEvent —— 不挡一下就会拿事件对象去拼
- *      `querySelector('#[object PointerEvent]')`，整个设置页当场抛错。
+ *   ⚠️ 只认字符串。调用方可能把它当 click 监听器绑（那样第一个参数是 PointerEvent），
+ *      所以这里必须挡一下，否则会拿事件对象去拼 `querySelector('#[object PointerEvent]')`。
+ * ⚠️ 本函数**不判断登录态**：设置只给登录用户，堵入口是调用方的事
+ *    （现行入口只有账号菜单那一项 + Ctrl+, 快捷键，两处都挡了）。
  */
 export function openSettings(section) {
   const wanted = typeof section === 'string' ? section : '';

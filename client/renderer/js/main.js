@@ -37,6 +37,7 @@ import {
   cutTrailingStatusBlock
 } from './data/panel.js';
 import { createConvo } from './data/conversations.js';
+import { isLoggedIn } from './data/account.js';
 
 import { onRefresh } from './views/refresh.js';
 import { initHeader } from './views/header.js';
@@ -129,7 +130,7 @@ import {
 import { clearConvo } from './views/convoActions.js';
 import { summarizeNow } from './views/summarize.js';
 import { exportCharacterById, exportConversation, exportCharactersByIds } from './views/chatExport.js';
-import { startPlayerFlow, chatWithCharacter } from './views/worldPlay.js';
+import { startPlayerFlow, chatWithCharacter, playCharacterWorld } from './views/worldPlay.js';
 
 // 事件监听器里跑异步动作：出错只落日志，避免变成 unhandled rejection。
 function runAsync(action) {
@@ -354,11 +355,13 @@ function bindEvents() {
     }
   });
 
-  // 全局快捷键 Ctrl+, = 打开设置（左下角账号菜单里那颗「设置」右侧写的就是它，这里真认）。
+  // 全局快捷键 Ctrl+, = 打开设置（账号菜单里那颗「设置」右侧写的就是它，这里真认）。
   // 没做成快捷键表：项目里只有这一条全局键，为它造一层调度不划算。
+  // 未登录时不响应 —— 设置只给登录用户，界面上也没有任何可见入口。
   document.addEventListener('keydown', (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.key !== ',') return;
     event.preventDefault();
+    if (!isLoggedIn()) return;
     openSettings();
   });
 
@@ -577,7 +580,8 @@ async function init() {
   // 加图按钮自己绑；配图成功后要重绘对话区、没配生图要弹设置 —— 都是入口层的动作。
   initChatImages({
     rerender: (opts) => renderAll(opts),
-    openSettings
+    // 未登录没有设置可进：直接把人引到登录窗（生图本来也要登录后才有地方配）
+    openSettings: () => (isLoggedIn() ? openSettings() : openAccountModal())
   });
   // 剧情选项：选用选项 = 发一条消息（入口层编排）。「帮我想想」也走这条路。
   // setOptionsLoading 由选项块自己提供（它才知道那块 DOM 在哪），这里只是转手注入。
@@ -604,12 +608,18 @@ async function init() {
   initAccount({
     openLogin: () => openAccountModal(),
     openSettings: () => openSettings('sec-user'),
-    openFeedback: () => openFeedbackModal()
+    openFeedback: () => openFeedbackModal(),
+    // 退出登录后设置页不该还留在屏幕上（未登录没有设置）
+    afterLogout: () => {
+      if (!el.viewSettings.classList.contains('hidden')) leaveSettings();
+    }
   }).catch((err) => console.error('读取登录状态失败', err));
-  // 角色卡三个按钮都跨分区，动作由入口层交给列表页。
+  // 角色卡四个按钮都跨分区，动作由入口层交给列表页。
   initCharacterList({
     edit: (id) => openCharacterEditor(id, 'library'),
     chat: chatWithCharacter,
+    // 卡上那条「进入世界」：用卡自带的世界书开一局 GM
+    playWorld: playCharacterWorld,
     remove: deleteCharacterById,
     // 单张导出（列表卡片上用）和批量导出（每张一个 JSON）都跨模块，见各自模块的文件头
     exportOne: exportCharacterById,
@@ -664,6 +674,8 @@ async function init() {
   });
 
   api.onPetOpenSettings((payload) => {
+    // 设置只给登录用户：未登录时桌宠菜单里那几项没有可看的东西
+    if (!isLoggedIn()) return;
     openSettings();
     const focus = (payload && payload.focus) || '';
     // 「查看记忆」要直接滚到桌宠那块 —— 折叠着的卡片 scrollIntoView 滚不到位。

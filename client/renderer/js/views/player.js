@@ -26,8 +26,9 @@ let pendingStart = null;
 export function getPlayerStart() {
   if (!pendingStart) return null;
   if (pendingStart.kind === 'world') {
-    const book = worldbookById(pendingStart.bookId);
-    return book ? { kind: 'world', book } : null;
+    // ⚠️ 按 id 每次重新解析：弹窗开着的时候书可能被删（返回空就说明一本都不剩了）
+    const books = pendingStart.bookIds.map((id) => worldbookById(id)).filter(Boolean);
+    return books.length ? { kind: 'world', books, name: pendingStart.name } : null;
   }
   const character = characterById(pendingStart.characterId);
   return character ? { kind: 'chat', character } : null;
@@ -76,7 +77,10 @@ function updatePlayerCharPreview() {
 function renderPlayerCharOptions() {
   if (!el.playerCharField) return;
 
-  const list = characters();
+  // ⚠️ 正在跟谁聊天，就别把 TA 列进「我是谁」：选了等于自己跟自己聊，
+  //    开场白里的 {{user}} 会替换成同一个名字，模型也分不清谁是 TA、谁是玩家。
+  const chatTarget = pendingStart && pendingStart.kind === 'chat' ? pendingStart.characterId : '';
+  const list = characters().filter((c) => c.id !== chatTarget);
   el.playerCharField.classList.toggle('hidden', !list.length);
 
   el.playerChar.innerHTML = '';
@@ -145,15 +149,27 @@ export function openChatPlayerModal(characterId) {
   });
 }
 
-/** 进入某个世界之前：先给这个世界里的自己一个身份 */
-export function openPlayerModal(bookId) {
-  const book = worldbookById(bookId);
-  if (!book) return;
+/**
+ * 进入世界之前：先给这个世界里的自己一个身份。
+ * `input` 可以是一本书的 id，也可以是 id 数组（角色卡绑了多本时一起进，见 character.worldbookIds）；
+ * `label` 只在多本时用来起名 —— 「进入『露西娅』的世界」比罗列一串书名好听。
+ */
+export function openPlayerModal(input, { label = '' } = {}) {
+  const ids = (Array.isArray(input) ? input : [input]).filter(Boolean);
+  const books = ids.map((id) => worldbookById(id)).filter(Boolean);
+  if (!books.length) return;
+
+  // 一本就用书名，多本才需要 label —— 这个名字同时也是会话标题（见 worldPlay 的 startWorldPlay）
+  const name = books.length === 1
+    ? books[0].name
+    : (label ? `${label}的世界` : books.map((b) => b.name).join('、'));
 
   showPlayerModal({
-    pending: { kind: 'world', bookId },
-    title: `进入「${book.name}」`,
-    sub: '先给这个世界里的自己一个身份，然后就可以开始了',
+    pending: { kind: 'world', bookIds: books.map((b) => b.id), name },
+    title: `进入「${name}」`,
+    sub: books.length > 1
+      ? `先给这个世界里的自己一个身份 —— 会同时带上这 ${books.length} 本书的设定`
+      : '先给这个世界里的自己一个身份，然后就可以开始了',
     hint: '进入世界后会自动打开 GM 模式',
     confirmText: '开始游玩'
   });

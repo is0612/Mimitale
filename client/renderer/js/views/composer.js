@@ -16,6 +16,7 @@ import { controlOf } from '../ui/auto-grow.js';
 import { mTextarea, mButton } from '../components/index.js';
 import { persistConversations, beginConversationReplacement, endConversationReplacement } from '../data/persist.js';
 import { ensureConvoEndpoint, isBridgeProvider } from '../data/providers.js';
+import { isLoggedIn } from '../data/account.js';
 import { buildApiMessages, characterContextForConvo, effectiveSampling } from '../data/messages.js';
 import { matchWorldbookSections } from '../data/cast.js';
 import { recallSection } from '../data/rag.js';
@@ -116,11 +117,20 @@ export async function sendMessage(text) {
   // 用当前会话绑定的服务商 + 模型；没绑过就用全局默认
   const endpoint = ensureConvoEndpoint(convo);
   if (!endpoint) {
+    // 未登录进不了设置，别把人往一个不可达的地方引
+    if (!isLoggedIn()) {
+      showToast('登录后才能配置模型服务', 'error');
+      return false;
+    }
     showToast('还没有配置模型服务，请先在设置里添加', 'error');
     openSettings();
     return false;
   }
   if (!endpoint.provider.apiKey && !isBridgeProvider(endpoint.provider)) {
+    if (!isLoggedIn()) {
+      showToast('登录后才能配置模型服务', 'error');
+      return false;
+    }
     showToast(`请先填写「${endpoint.provider.name}」的 API Key`, 'error');
     openSettings();
     return false;

@@ -175,23 +175,27 @@ export function renderCastPanel() {
       h('span', { text: field.label }), h('b', { text: field.value })));
     sceneBlock.appendChild(h('small', { class: 'scene-source', text: '来自本局状态字段 · 随剧情更新' }));
   } else {
-    sceneBlock.appendChild(h('small', { class: 'scene-source', text: '尚无场景信息。启用后，模型将尝试随剧情更新地点、时间与天气。' }));
-    const enable = mButton({
-      variant: 'ghost',
-      size: 'sm',
-      text: '启用场景追踪',
-      onClick: () => {
-        appendPanelFields(convo, ['地点', '时间', '天气'].map(name => ({
-          name, value: '', owner: 'player', group: '当前场景', type: 'text', mode: 'dynamic',
-          hint: '只记录剧情明确给出的当前场景信息；不确定时保留原值，不编造。'
-        })));
-        persistConversations(0);
-        refreshAll();
-      }
-    });
-    const tracking = convoPanelFields(convo).some(key => (convoPanelDef(convo, key) || {}).group === '当前场景');
-    if (!tracking) sceneBlock.appendChild(enable);
-    else sceneBlock.appendChild(h('small', { class: 'scene-source', text: '场景追踪已启用，等待下一次回复提供信息。' }));
+    // 字段种进去但还没值：说明"已启用"和"尚无信息"不能同时说，
+    // 否则用户以为按钮没生效（两句话一起出现就是那个观感）。
+    const tracking = convoPanelFields(convo).some((key) => (convoPanelDef(convo, key) || {}).group === '当前场景');
+    if (tracking) {
+      sceneBlock.appendChild(h('small', { class: 'scene-source', text: '场景追踪已启用，等待下一次回复提供信息。' }));
+    } else {
+      sceneBlock.appendChild(h('small', { class: 'scene-source', text: '尚无场景信息。启用后，模型将尝试随剧情更新地点、时间与天气。' }));
+      sceneBlock.appendChild(mButton({
+        variant: 'ghost',
+        size: 'sm',
+        text: '启用场景追踪',
+        onClick: () => {
+          appendPanelFields(convo, ['地点', '时间', '天气'].map(name => ({
+            name, value: '', owner: 'player', group: '当前场景', type: 'text', mode: 'dynamic',
+            hint: '只记录剧情明确给出的当前场景信息；不确定时保留原值，不编造。'
+          })));
+          persistConversations(0);
+          refreshAll();
+        }
+      }));
+    }
   }
   host.appendChild(sceneBlock);
 

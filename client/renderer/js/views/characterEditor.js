@@ -593,7 +593,7 @@ function renderCharWorldbookBox(character) {
   el.c.wbDesc.textContent = `已绑 ${books.length} 本（共 ${total} 条）：${names}`;
 
   el.c.wbHint.textContent = enabled
-    ? '现在生效。单独跟它聊天时会带上这些设定；但绑进某个世界当角色时不生效 —— 那条会话已经有自己的世界观了。'
+    ? '现在生效。单独跟它聊天时会带上这些设定，角色卡上的「进入世界」也进这几本书；但绑进某个世界当角色时不生效 —— 那条会话已经有自己的世界观了。'
     : '已停用。无论单独聊天、还是绑进某个世界当角色，都不会带入这几本书 —— 这张卡保持干净（绑定关系留着，随时能再打开）。';
 }
 
@@ -632,7 +632,7 @@ function updateCharWorldbookHint(character) {
   el.c.wbDesc.textContent = `已绑 ${books.length} 本（共 ${total} 条）：${names}`;
 
   el.c.wbHint.textContent = enabled
-    ? '现在生效。单独跟它聊天时会带上这些设定；但绑进某个世界当角色时不生效 —— 那条会话已经有自己的世界观了。'
+    ? '现在生效。单独跟它聊天时会带上这些设定，角色卡上的「进入世界」也进这几本书；但绑进某个世界当角色时不生效 —— 那条会话已经有自己的世界观了。'
     : '已停用。无论单独聊天、还是绑进某个世界当角色，都不会带入这几本书 —— 这张卡保持干净（绑定关系留着，随时能再打开）。';
 }
 

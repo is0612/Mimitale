@@ -130,6 +130,7 @@ export function libraryAddCard({ actions }) {
 
 /**
  * 角色库 / 世界书共用的卡片外壳。`onMediaClick` 给了说明图能点开大图（封面包 button，测试按 `.char-card-avatar.clickable` 找）。⚠️ 书名 / 说明 / 操作行同时带两套类名：样式只有一份，旧选择器和冒烟断言别改。
+ * `coverExtra` 落在封面**里面**（和封面那颗 button 做兄弟，不能套进去 —— 嵌套 button 点里层会连带弹大图）。
  */
 export function libraryCard({
   title,
@@ -139,6 +140,7 @@ export function libraryCard({
   mediaText,
   mediaClass,
   coverClass,
+  coverExtra,
   actions,
   extra,
   onMediaClick,
@@ -172,7 +174,7 @@ export function libraryCard({
       title
     },
     extra,
-    h('div', { class: ['wb-card-cover', coverClass] }, mediaBox),
+    h('div', { class: ['wb-card-cover', coverClass] }, mediaBox, coverExtra),
     h('div', { class: 'char-card-name wb-card-name', text: title }),
     h('div', { class: 'char-card-sub wb-card-meta', text: sub, title: subTitle || sub }),
     h('div', { class: 'char-card-actions wb-card-actions' }, actions)

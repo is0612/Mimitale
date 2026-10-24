@@ -4560,17 +4560,19 @@ app.whenReady().then(async () => {
         // 左栏导航 + 右栏限宽居中的整体排版（页头那颗「返回/保存」、卡片间距）
         // 只靠 DOM 断言看不出来。
         settings: `
-          document.querySelector('#btn-settings')?.click();
-          await new Promise(r => setTimeout(r, 700));`,
+          document.querySelector('#btn-account-open-settings')?.click();
+          await new Promise(r => setTimeout(r, 700));
+          document.querySelector('.settings-nav-item[data-target="sec-models"]')?.click();
+          await new Promise(r => setTimeout(r, 250));`,
         // 行为开关分组：主要验证「开关行卡片 + 开关靠右 + 头部统计」。
         settingsBehavior: `
-          document.querySelector('#btn-settings')?.click();
+          document.querySelector('#btn-account-open-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-behavior"]')?.click();
           await new Promise(r => setTimeout(r, 250));`,
         // 语义检索分组：验证开关行卡片的另一种长说明形态。
         settingsRag: `
-          document.querySelector('#btn-settings')?.click();
+          document.querySelector('#btn-account-open-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-rag"]')?.click();
           await new Promise(r => setTimeout(r, 250));`,
@@ -4581,7 +4583,7 @@ app.whenReady().then(async () => {
         // 组件之后，最容易悄悄变的就是**宽度**（外层多了一个宿主盒），而"窄了一截"
         // 在看图上不一定第一眼认出来，有数字就一眼可见。
         selectPop: `
-          document.querySelector('#btn-settings')?.click();
+          document.querySelector('#btn-account-open-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-appearance"]')?.click();
           await new Promise(r => setTimeout(r, 300));
@@ -4651,7 +4653,7 @@ app.whenReady().then(async () => {
         // 生图分组：三个下拉（服务商 / 模型 / 尺寸）。迁移成组件之后「宽度」最容易变，
         // 出图 + 像素对比是唯一靠谱的核法。
         settingsImage: `
-          document.querySelector('#btn-settings')?.click();
+          document.querySelector('#btn-account-open-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-image"]')?.click();
           await new Promise(r => setTimeout(r, 300));`,
@@ -4679,7 +4681,7 @@ app.whenReady().then(async () => {
         // 全是排版密集的地方，「挤成一行」「按钮换行」这类问题 DOM 断言看不出来，
         // 只能靠图。顺手点一次「生成一句」，让预览框里真的有内容（空框看不出高矮）。
         petSettings: `
-          document.querySelector('#btn-settings')?.click();
+          document.querySelector('#btn-account-open-settings')?.click();
           await new Promise(r => setTimeout(r, 900));
           // 2026-10-10 起设置分成「左导航 + 右内容」，桌宠是最后一组 ——
           // 不先切到它，右栏显示的还是「模型服务」（图就白截了）。
@@ -4698,7 +4700,7 @@ app.whenReady().then(async () => {
         // 主题配色 + 明暗 + 聊天区那几样都在这里，
         // 布局（色点会不会换行、分段按钮会不会被 grid 拉满）得靠图看。
         appearance: `
-          document.querySelector('#btn-settings')?.click();
+          document.querySelector('#btn-account-open-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-appearance"]')?.click();
           await new Promise(r => setTimeout(r, 300));`,
@@ -4957,7 +4959,7 @@ app.whenReady().then(async () => {
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
           // ⚠️ 别再找 #btn-gen-params —— 右栏那套「生成参数页签」已经下线了（点它是空操作，
           //    出图会悄悄退化成「原样截当前屏」）。现在唯一的入口是设置页左导航。
-          $('#btn-settings')?.click();
+          $('#btn-account-open-settings')?.click();
           await nap(400);
           $('[data-target="sec-params"]')?.click();
           await nap(350);

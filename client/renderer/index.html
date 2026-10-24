@@ -34,12 +34,11 @@
         <m-button id="btn-worldbooks" variant="ghost" block data-icon="book-open" aria-label="打开世界书"><span class="foot-label">世界书</span><span id="foot-worldbooks-count" class="foot-count"></span></m-button>
         <m-button id="btn-presets" variant="ghost" block data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span><span id="foot-presets-count" class="foot-count"></span></m-button>
 
-        <!-- 账号条（2026-10-23）：左边「我是谁」，右边设置齿轮。
-             未登录：人形图标 + 文案 + 右边一颗齿轮；
-             已登录：整行只剩「头像 + 用户名」，点一下往上弹出账号菜单
-                     （设置 / 意见反馈 / 退出登录）—— 齿轮收进菜单里，不再单独占位。
-             ⚠️ 这颗按钮的语义分两种，别写死成「打开登录」：
-                已登录时它开的是菜单（views/account.js 里的 openAccountMenu）。 -->
+        <!-- 账号条：未登录是人形图标 + 文案，点一下开登录窗；
+             已登录整行只有「头像 + 用户名」，点一下往上弹出账号菜单
+             （设置 / 意见反馈 / 退出登录）。
+             ⚠️ 这颗按钮的语义分两种，别写死成「打开登录」：已登录时开的是菜单。
+             ⚠️ 设置只走账号菜单 —— 未登录不给设置入口，别再加常显的齿轮。 -->
         <div id="sidebar-account" class="sidebar-account">
           <button id="btn-account" class="account-btn" type="button" aria-label="账号（未登录）" aria-haspopup="menu" aria-expanded="false">
             <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
@@ -48,7 +47,6 @@
               <span id="account-sub" class="account-sub">登录后同步角色卡</span>
             </span>
           </button>
-          <button id="btn-settings" class="icon-btn account-settings" type="button" data-icon="settings" title="设置" aria-label="打开设置"></button>
 
           <div id="account-menu" class="menu-pop account-menu hidden" role="menu" aria-label="账号菜单">
             <button id="btn-account-open-settings" class="menu-item" type="button" role="menuitem">

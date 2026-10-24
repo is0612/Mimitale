@@ -73,6 +73,15 @@ export function convoWorldbookIds(convo) {
   return asArray(convo && convo.worldbookIds);
 }
 
+/**
+ * 角色自带的世界书（按 id 解析成书）。
+ * ⚠️ 停用（worldbookEnabled === false）一律当没有；绑过但已删的 id 也滤掉。
+ */
+export function characterWorldbooks(character) {
+  if (!character || character.worldbookEnabled === false) return [];
+  return asArray(character.worldbookIds).map(worldbookById).filter(Boolean);
+}
+
 // --- 预设 ---
 
 /** 用户自建的「预设」。⚠️ 别和 state.presets 搞混 —— 那是第三方模型提供商的内置模板（DeepSeek / 通义 / Kimi…），另一回事 */

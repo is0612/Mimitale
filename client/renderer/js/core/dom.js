@@ -26,7 +26,6 @@ export const el = {
   btnSend: $('btn-send'),
   btnClear: $('btn-clear'),
   btnCopyAll: $('btn-copy-all'),
-  btnSettings: $('btn-settings'),
   // 账号格：内容和状态由 views/account.js 铺
   btnAccount: $('btn-account'),
   accountAvatar: $('account-avatar'),

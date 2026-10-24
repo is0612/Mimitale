@@ -309,14 +309,29 @@ function panelDefByName(defs, name) {
 }
 
 // ---------------------------------------------------------------------------
+//  进设置页的**唯一**入口。
+//  设置只给登录用户：未登录时界面上没有那颗齿轮，唯一可达的是账号菜单里的「设置」
+//  —— 菜单收着（hidden），click() 照样能触发，和以前点隐藏齿轮同一个手法：
+//  这里测的是设置页本身，不是入口权限。
+//  ⚠️ 菜单那一项落到「用户信息」组，而绝大多场景按第 1 组（模型服务）写断言，
+//     所以进来后统一点回模型组。
+// ---------------------------------------------------------------------------
+async function openSettingsPage() {
+  click('#btn-account-open-settings');
+  await waitFor('切到设置页', () => shown('#view-settings'));
+  click('.settings-nav-item[data-target="sec-models"]');
+  await waitFor('停在模型服务组', () => shown('#sec-models'));
+}
+
+// ---------------------------------------------------------------------------
 //  外观：2026-10-12 深夜从**顶栏弹窗**（#appearance-modal）搬进了
-//  设置 → 外观（视图六的 #sec-appearance，星宝：「把头部的外观加入到设置里」）。
+//  设置 → 外观（视图六的 #sec-appearance）。
 //  下面两个小工具把「怎么进去 / 怎么出来」封起来 —— 走的是**真实用户路径**：
-//  点侧栏那颗「设置」→ 点左栏「外观」；出来就点页头的「返回」。
+//  账号菜单里的「设置」→ 点左栏「外观」；出来就点页头的「返回」。
 //  ⚠️ 别再写成 click('#btn-appearance')：那颗按钮已经不存在了。
 // ---------------------------------------------------------------------------
 async function openAppearanceSection() {
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('切到设置页', () => shown('#view-settings'));
   click('.settings-nav-item[data-target="sec-appearance"]');
   await waitFor('切到外观那一组', () => shown('#sec-appearance'));
@@ -607,7 +622,7 @@ await scenario('顶栏：切换模型', async () => {
 //  场景 3：设置页
 // ---------------------------------------------------------------------------
 await scenario('设置页', async () => {
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开', () => shown('#view-settings'));
   check('设置是一个视图、不是弹窗', !!$('#view-settings') && !$('#settings-modal'));
   check('设置页有页头和「返回 / 保存」两颗按钮', !!$('#view-settings .page-head') && !!byId('btn-back-settings') && !!byId('btn-save-settings'));
@@ -681,7 +696,7 @@ await scenario('设置页', async () => {
   check('改「对话轮数」能落盘', turnsSaved === 42, String(turnsSaved));
 
   // 改回去 —— 后面好几个场景都依赖默认的 20 轮
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页再开', () => shown('#view-settings'));
   setValue('#s-max-turns', turnsBefore || '20');
   click('#btn-save-settings');
@@ -698,14 +713,14 @@ await scenario('设置页', async () => {
 //  要守住四件事：
 //   ① 点左栏能切组（一次只显示一组，别的组是真看不见）；
 //   ② 换组**不能让表单失效** —— 没显示的那一组里的值照样读得到、存得住；
-//   ③ 关掉再打开，回到刚才翻到的那一组（本次运行内记住，但不写进 config.json）；
+//   ③ 关掉再打开，落在「用户信息」组（入口是账号菜单那一项，不记上次翻到哪）；
 //   ④ 分组名 old 接口 expandSettingsSection(id) 仍能指定切到某一组。
 // ---------------------------------------------------------------------------
 await scenario('设置：左导航切组', async () => {
   const visible = (node) => !!node && node.offsetParent !== null;
   const beforeTokens = String(((await window.mimitale.getSettings()).settings || {}).maxTokens ?? 8192);
 
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开', () => shown('#view-settings'));
 
   const paramsNav = $('.settings-nav-item[data-target="sec-params"]');
@@ -734,13 +749,14 @@ await scenario('设置：左导航切组', async () => {
   const saved = ((await window.mimitale.getSettings()).settings || {});
   check('没显示的那一组里的值照样落盘', Number(saved.maxTokens) === 2048, String(saved.maxTokens));
 
-  // 关掉再打开：回到刚才那一组
-  click('#btn-settings');
+  // 关掉再打开：入口只有账号菜单那一项，它固定落到「用户信息」组
+  // （这一屏记「上次翻到哪组」的老约定随齿轮一起没了）
+  click('#btn-account-open-settings');
   await waitFor('设置页再开', () => shown('#view-settings'));
   check(
-    '重开回到刚才那一组（参数显示着、模型收着）',
-    visible(byId('sec-params')) && !visible(byId('sec-models')),
-    `params=${visible(byId('sec-params'))} models=${visible(byId('sec-models'))}`
+    '重开落在用户信息组（账号菜单固定落这里）',
+    visible(byId('sec-user')) && !visible(byId('sec-params')),
+    `user=${visible(byId('sec-user'))} params=${visible(byId('sec-params'))}`
   );
 
   const supportNav = $('#view-settings .settings-nav .settings-nav-item[data-target="sec-support"]');
@@ -760,7 +776,7 @@ await scenario('设置：左导航切组', async () => {
 //  场景 3.6：设置是**页面**，不是弹窗（2026-10-09 从弹窗搬过来）
 //
 //  从弹窗变成一屏之后，多出来三件必须守住的事：
-//   ① 侧边栏那颗「设置」要亮起来 —— 页面才有「我现在在哪一屏」这件事；
+//   ① 进设置时侧栏那几颗入口要灭掉 —— 页面才有「我现在在哪一屏」这件事；
 //   ② 保存 / 返回 / Esc 都回到**进来之前那一屏**（弹窗时代是「关掉弹窗」，语义没变）；
 //   ③ 进来之前不一定是聊天 —— 从角色库进来就得回角色库，别写死。
 // ---------------------------------------------------------------------------
@@ -770,12 +786,12 @@ await scenario('设置：是页面，来去都记得从哪来', async () => {
   // --- 从「角色库」进去 ---
   click('#btn-chars');
   await waitFor('切到角色库', () => shown('#view-chars'));
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('切到设置页', () => shown('#view-settings'));
   check('设置页是真的把别的视图藏起来（不是盖一层浮层）', !shown('#view-chat') && !shown('#view-chars'));
   check(
-    '侧边栏「设置」亮着、角色库那颗灭了',
-    byId('btn-settings').classList.contains('active') && !byId('btn-chars').classList.contains('active')
+    '设置没有侧栏按钮要点亮（角色库那颗灭着）',
+    !byId('btn-settings') && !byId('btn-chars').classList.contains('active')
   );
 
   // --- 「返回」原路回角色库 ---
@@ -784,7 +800,7 @@ await scenario('设置：是页面，来去都记得从哪来', async () => {
   check('返回回到进来之前那一屏（角色库），不是硬回聊天', shown('#view-chars') && !shown('#view-settings'));
 
   // --- Esc 是同一个动作 ---
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('再进设置页', () => shown('#view-settings'));
   esc();
   await waitFor('Esc 离开设置页', () => !shown('#view-settings'));
@@ -795,7 +811,7 @@ await scenario('设置：是页面，来去都记得从哪来', async () => {
   // 后面好几个场景都按原来那条算，别在这儿把它换掉。
   click($('#convo-list .convo-item.active') || $('#convo-list .convo-item'));
   await waitFor('切回聊天视图', () => shown('#view-chat'));
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('从聊天进设置', () => shown('#view-settings'));
   click('#btn-save-settings');
   await waitFor('保存后离开设置页', () => !shown('#view-settings'));
@@ -2304,7 +2320,7 @@ await scenario('分支：视角设置要跟着走', async () => {
 //  现在的口径：清空 = 没改，退回原来存着的值。
 // ---------------------------------------------------------------------------
 await scenario('设置：清空数字框等于没改，不静默夹到下限', async () => {
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开', () => shown('#view-settings'));
 
   const before = ((await window.mimitale.getSettings()).settings || {});
@@ -2323,7 +2339,7 @@ await scenario('设置：清空数字框等于没改，不静默夹到下限', a
   await waitFor('探针值已保存', () => !shown('#view-settings'));
   await sleep(150);
 
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开（改完再清）', () => shown('#view-settings'));
   setValue('#s-maxtokens', '');
   setValue('#s-max-turns', '');
@@ -2344,7 +2360,7 @@ await scenario('设置：清空数字框等于没改，不静默夹到下限', a
   );
 
   // 收尾：还原成进这个场景之前的值，后面的场景还等着它们
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页再开', () => shown('#view-settings'));
   setValue('#s-maxtokens', String(beforeMaxTokens));
   setValue('#s-max-turns', String(beforeMaxTurns));
@@ -2360,7 +2376,7 @@ await scenario('设置：清空数字框等于没改，不静默夹到下限', a
 //  main/providers.js 的 normalizeSettings 里（load / save 都过它）。
 // ---------------------------------------------------------------------------
 await scenario('设置：生成参数越界被夹回并说明', async () => {
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开', () => shown('#view-settings'));
 
   const readSetting = async (key) => ((await window.mimitale.getSettings()).settings || {})[key];
@@ -2440,7 +2456,7 @@ await scenario('输入框：发不出去时字要留着', async () => {
   const FILLED = '这段字不能被吃掉';
 
   // --- 路径一：没填 API Key（最常见的第一次发送） ---
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开', () => shown('#view-settings'));
   const keyBefore = byId('p-apikey').value;
   setValue('#p-apikey', '');
@@ -2450,10 +2466,11 @@ await scenario('输入框：发不出去时字要留着', async () => {
 
   setValue('#input', FILLED);
   click('#btn-send');
-  // 走的是「请先填写 XX 的 API Key」那条早退
+  // 走的是「请先填写 XX 的 API Key」那条早退；未登录时更早一步就挡下（提示先登录），
+  // 两条都属于「发不出去」，字同样不能丢。
   await waitFor('弹出缺 Key 的提示', () => {
     const t = byId('toast');
-    return t && /API Key/.test(t.textContent || '');
+    return t && /API Key|登录/.test(t.textContent || '');
   }, 5000);
   check(
     '没填 Key 时，输入框里的字还在（没被静默清掉）',
@@ -2462,14 +2479,14 @@ await scenario('输入框：发不出去时字要留着', async () => {
   );
   // 那条提示确实弹出来了（不是「什么都没发生」）
   check(
-    '并且给出了「先填 API Key」的说法',
-    /API Key/.test((byId('toast') || {}).textContent || ''),
+    '并且说明了为什么发不出去（缺 Key / 要先登录）',
+    /API Key|登录/.test((byId('toast') || {}).textContent || ''),
     JSON.stringify(((byId('toast') || {}).textContent) || '')
   );
 
   // 恢复 Key，别影响后面的场景
   await sleep(200);
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页再开（恢复 Key）', () => shown('#view-settings'));
   setValue('#p-apikey', keyBefore || 'test-key');
   click('#btn-save-settings');
@@ -3319,7 +3336,7 @@ await scenario('给剧情配图（生图）', async () => {
   check('没配生图时不显示「配图」', !actionsOf(lastAssistant()).includes('配图'), JSON.stringify(actionsOf(lastAssistant())));
 
   // --- 去设置里配一组 ---
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开', () => shown('#view-settings'));
   await sleep(150);
 
@@ -3769,7 +3786,7 @@ await scenario('简化右栏与设置参数', async () => {
   check('根布局为sidebar main inspector', panel.parentElement === main.parentElement && panel.previousElementSibling === main && main.previousElementSibling === byId('sidebar'));
   check('右栏不再嵌套在主内容中', !panel.closest('main'));
   const beforeWidth=main.getBoundingClientRect().width;
-  click('#btn-settings'); await sleep(180);
+  await openSettingsPage(); await sleep(180);
   check('进入设置时独立右栏隐藏', getComputedStyle(panel).display === 'none');
   check('设置页释放右栏空间', main.getBoundingClientRect().width > beforeWidth);
   click('#btn-back-settings'); await sleep(180);
@@ -3822,8 +3839,7 @@ await scenario('侧栏：入口网格与收起', async () => {
   check('侧栏宽度 224', Math.round(sidebar.getBoundingClientRect().width) === 224, String(Math.round(sidebar.getBoundingClientRect().width)));
 
   const foot = $$('.sidebar-foot m-button');
-  // 2026-10-23：设置从「第四颗带字入口」收成账号条右边的齿轮（接登录），
-  // 所以这一组只剩三颗创作入口 —— 齿轮在不在、能不能开设置另有断言。
+  // 这一组只剩三颗创作入口 —— 设置不在侧栏（入口在登录后的账号菜单里）。
   check('侧栏保留三个创作入口', foot.length === 3, String(foot.length));
   check('数据按钮位于设置页', !!byId('btn-folder')?.closest('#view-settings'));
   check(
@@ -3837,12 +3853,15 @@ await scenario('侧栏：入口网格与收起', async () => {
     byId('btn-folder') ? byId('btn-folder').textContent.trim() : '(没有)'
   );
 
-  // --- 2026-10-23：底部最后一行 = 账号 + 设置齿轮 ---
+  // --- 底部最后一行 = 账号格（设置只在登录后的账号菜单里，这里没有齿轮）---
   {
     const acct = document.querySelector('.sidebar-account');
     const acctBtn = byId('btn-account');
-    const gear = byId('btn-settings');
-    check('底部有账号条（账号格 + 齿轮）', !!acct && !!acctBtn && !!gear);
+    check(
+      '底部有账号条，而且没有常显的设置齿轮',
+      !!acct && !!acctBtn && !byId('btn-settings'),
+      byId('btn-settings') ? '齿轮还在' : ''
+    );
     check(
       '账号条排在创作入口下面（最底那一行）',
       !!acct &&
@@ -3856,19 +3875,12 @@ await scenario('侧栏：入口网格与收起', async () => {
       `${byId('account-name')?.textContent}/${byId('account-sub')?.textContent}`
     );
     check('未登录头像位是人形图标', !!byId('account-avatar')?.querySelector('svg'));
-    check(
-      '设置是齿轮图标按钮、没有文字',
-      !!gear && !!gear.querySelector('svg') && gear.textContent.trim() === ''
-    );
-    const g = gear ? gear.getBoundingClientRect() : null;
     const a = acctBtn ? acctBtn.getBoundingClientRect() : null;
+    const box = acct ? acct.getBoundingClientRect() : null;
     check(
-      '齿轮在账号右边、同一行',
-      !!g &&
-        !!a &&
-        g.left >= a.right - 1 &&
-        Math.abs(g.top + g.height / 2 - (a.top + a.height / 2)) <= 2,
-      g && a ? `gear@${Math.round(g.left)}/${Math.round(g.top)} acct@${Math.round(a.left)}/${Math.round(a.top)}` : '（没有）'
+      '账号格占满这一行（右边不再挂齿轮）',
+      !!a && !!box && Math.abs(a.right - box.right) <= 1,
+      a && box ? `${Math.round(a.right)} vs ${Math.round(box.right)}` : '（没有）'
     );
     check(
       '账号格没把侧栏撑宽（都在 224 之内）',
@@ -3920,7 +3932,6 @@ await scenario('侧栏：入口网格与收起', async () => {
       // 那不是样式变了。颜色仍然必须是透明的 —— 那才是「纯 ghost」的本体。
       // ⚙ 2026-10-16 迁 m-button：边框/背景长在里层 .mi-btn__control 上，宿主本身没边框，
       //    所以要读 b.control（里层原生 button），而不是宿主（否则取到 currentColor）。
-      // ⚙ 2026-10-23：原来为「设置」那颗开的透明边框例外随它一起撤了 —— 它现在是账号条里的齿轮。
       foot.every((b) => {
         const cs = getComputedStyle(b.control);
         return (
@@ -4017,10 +4028,9 @@ await scenario('侧栏：入口网格与收起', async () => {
       getComputedStyle(document.querySelector('.sidebar-foot')).gridTemplateColumns.split(' ').length === 1,
       getComputedStyle(document.querySelector('.sidebar-foot')).gridTemplateColumns
     );
-    // 2026-10-23：账号条在图标轨里竖成一列 —— 头像一格、齿轮一格，文字整块藏掉。
+    // 收起成图标轨：账号格只剩头像那一颗，文字整块藏掉。
     {
       const acctText = document.querySelector('.account-text');
-      const gearBox = byId('btn-settings')?.getBoundingClientRect();
       check(
         '收起后账号格还在（头像那颗仍可点），只是文字藏了',
         !!byId('btn-account') &&
@@ -4028,11 +4038,10 @@ await scenario('侧栏：入口网格与收起', async () => {
           !!acctText &&
           getComputedStyle(acctText).display === 'none'
       );
-      check(
-        '收起后齿轮也在图标轨里、没越界',
-        !!gearBox && gearBox.width > 0 && gearBox.right <= sidebar.getBoundingClientRect().right + 0.5,
-        gearBox ? `${Math.round(gearBox.width)}×${Math.round(gearBox.height)}` : '（没有）'
-      );
+      check('收起后账号颗没越出图标轨', (() => {
+        const box = byId('btn-account')?.getBoundingClientRect();
+        return !!box && box.width > 0 && box.right <= sidebar.getBoundingClientRect().right + 0.5;
+      })());
     }
 
     const railAv = byId('rail-avatar');
@@ -4121,7 +4130,7 @@ await scenario('账号：注册 → 左下角菜单 → 用户信息 → 凭证�
     click('#btn-account-menu-logout');
     await waitFor('清掉上一次的登录态', () => !loggedIn());
   }
-  check('未登录时那颗齿轮还在（否则进不去设置）', getComputedStyle($('#btn-settings')).display !== 'none');
+  check('未登录时没有设置入口（齿轮早就不在了）', !byId('btn-settings'));
   check('未登录时点账号格开的是登录窗', true);
 
   click('#btn-account');
@@ -4192,7 +4201,7 @@ await scenario('账号：注册 → 左下角菜单 → 用户信息 → 凭证�
   check('侧栏那一格跟着变成用户名', $('#account-name')?.textContent.trim() === '烟雾测试员',
     $('#account-name')?.textContent);
   check('侧栏头像用的是刚选那张', ($('#account-avatar img')?.src || '').startsWith('data:image/jpeg'));
-  check('登录后那颗齿轮收进菜单了', getComputedStyle($('#btn-settings')).display === 'none');
+  check('登录后设置只在账号菜单里，侧栏没有齿轮', !byId('btn-settings'));
   check('登录后副标题（邮箱）不再占一行', getComputedStyle($('#account-sub')).display === 'none');
 
   // --- 左下角菜单 ---
@@ -5124,6 +5133,50 @@ await scenario('AI 生成角色：角色库', async () => {
         Math.abs(w(ctrl) - w(node)) <= 1,
         `宿主 ${Math.round(w(node))} / 里层 ${Math.round(w(ctrl))}`
       );
+    }
+  }
+
+  // 自带世界书的卡多一条入口（封面左下角那颗），没绑书的不该有 ——
+  // 它不走操作行：四颗按钮挤在 216px 里每颗只剩 43px，装不下两字标签。
+  {
+    const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
+    const libMod = await import(new URL('js/data/library.js', document.baseURI).href);
+    const liveBookIds = new Set(libMod.worldbooks().map((b) => b.id));
+    const byName = new Map((stateMod.state.characters || []).map((c) => [String(c.name || '').trim(), c]));
+    // 期望值自己算，不走 characterWorldbooks —— 拿被测函数当判据就等于没验
+    const shouldHave = (name) => {
+      const c = byName.get(name);
+      if (!c || c.worldbookEnabled === false) return false;
+      return (Array.isArray(c.worldbookIds) ? c.worldbookIds : []).some((id) => liveBookIds.has(id));
+    };
+
+    const cards = $$('#char-page-grid .char-card');
+    const names = cards.map((el) => (el.querySelector('.char-card-name') || {}).textContent || '');
+    const wrong = cards.filter((el, i) => !!el.querySelector('.char-card-world') !== shouldHave(names[i].trim()));
+    check(
+      '「进入世界」只在绑了书的卡上出现',
+      cards.length > 0 && wrong.length === 0,
+      `${cards.length} 张卡，对不上：${wrong.map((el) => (el.querySelector('.char-card-name') || {}).textContent).join('、')}`
+    );
+
+    const withBook = cards.find((el) => el.querySelector('.char-card-world'));
+    check('库里有绑了书的卡（不然这条入口没验到）', !!withBook, names.join(' / '));
+    if (withBook) {
+      check('「进入世界」压在封面里（封面的兄弟节点，不是套在封面按钮里）', !!withBook.querySelector('.wb-card-cover > .char-card-world'));
+
+      const book = (byName.get(names[cards.indexOf(withBook)].trim()).worldbookIds || [])
+        .map((id) => libMod.worldbookById(id))
+        .find(Boolean);
+      click(withBook.querySelector('.char-card-world'));
+      await waitFor('「你是谁」弹窗打开（进世界）', () => shown('#player-modal'));
+      check(
+        '进世界的弹窗标题用的是书名',
+        !!book && byId('player-title').textContent.includes(book.name),
+        `${byId('player-title').textContent} / 期望含 ${book && book.name}`
+      );
+      check('确认按钮是「开始游玩」', byId('btn-start-play').textContent.trim() === '开始游玩', byId('btn-start-play').textContent);
+      click('#btn-close-player');
+      await waitFor('关掉「你是谁」弹窗', () => !shown('#player-modal'));
     }
   }
 
@@ -6366,7 +6419,7 @@ await scenario('会话：分支与存档点', async () => {
 // ---------------------------------------------------------------------------
 await scenario('语义检索', async () => {
   // 先在设置里打开并配好
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开', () => shown('#view-settings'));
   await sleep(200);
 
@@ -6405,7 +6458,7 @@ await scenario('语义检索', async () => {
   await sleep(400);
 
   // 负向对照：关掉之后不该再注入
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开', () => shown('#view-settings'));
   await sleep(200);
   click('#s-rag-enabled');
@@ -8710,6 +8763,27 @@ await scenario('面板：静态字段「变了才说」，动态字段每轮维�
   mod.appendPanelFields(legacy, [{ name: '铜板', type: 'meter', min: 0, max: 100, value: '3/100' }]);
   const legacyPrompt = mod.formatPanelForPrompt(legacy);
   check('老数据（无 mode）仍按动态字段每轮维护', legacyPrompt.includes('完整输出一遍'), legacyPrompt);
+
+  // 5) 有值字段 + 空字段混在一起：空的那几个也必须点名。
+  //    「启用场景追踪」种进去的地点/时间/天气一开始没有任何值，而表里只列有值的字段 ——
+  //    不点名模型就不知道它们存在，字段永远是空的（功能等于没启用）。
+  const mixed = { panel: {}, panelFields: [], panelDefs: {}, messages: [], player: null };
+  mod.appendPanelFields(mixed, [
+    { name: '铜板', type: 'meter', min: 0, max: 100, value: '3/100' },
+    { name: '地点', value: '', owner: 'player', group: '当前场景', hint: '只记录剧情明确给出的当前场景信息' },
+    { name: '天气', value: '', owner: 'player', group: '当前场景' }
+  ]);
+  const mixedPrompt = mod.formatPanelForPrompt(mixed);
+  check(
+    '没值的字段也要在提示词里点名（否则永远是空的）',
+    mixedPrompt.includes('地点') && mixedPrompt.includes('天气') && mixedPrompt.includes('还没有值'),
+    mixedPrompt
+  );
+  check(
+    '点名那段落在状态表之后（收尾那句「照上面那份表」才管得到它）',
+    mixedPrompt.includes('【铜板】') && mixedPrompt.indexOf('还没有值') > mixedPrompt.indexOf('【铜板】'),
+    mixedPrompt
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -8847,7 +8921,7 @@ await scenario('聊天：截断续到上限后停下并提示', async () => {
 //  场景：关掉「截断后自动续写」→ 只挂说明，不自己花钱接着写
 // ---------------------------------------------------------------------------
 await scenario('设置：关掉自动续写后不再自己续', async () => {
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开', () => shown('#view-settings'));
   click('#s-autocontinue');
   await sleep(150);
@@ -8877,7 +8951,7 @@ await scenario('设置：关掉自动续写后不再自己续', async () => {
   );
 
   // 改回来，免得影响后面的场景
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页重新打开', () => shown('#view-settings'));
   click('#s-autocontinue');
   await sleep(150);
@@ -10861,6 +10935,15 @@ await scenario('开聊前先定「你是谁」', async () => {
 
   const selfOptions = Array.from(byId('player-char').options).filter((o) => o.value);
   check('开聊前能从角色库挑一张卡当自己', selfOptions.length > 0, `${selfOptions.length} 个可选`);
+  // ⚠️ 正在聊的那个人不能出现在「我是谁」里：选了就成了「自己跟自己聊」，
+  //    开场白里的 {{user}} 全变成 TA 的名字（真实踩过）。
+  const soloName = (soloCard.querySelector('.char-card-name')?.textContent || '').trim();
+  const selfNames = selfOptions.map((o) => o.textContent.trim());
+  check(
+    '「我是谁」下拉里不出现正在聊的那个人',
+    !!soloName && !selfNames.includes(soloName),
+    `TA=${soloName} 下拉=${JSON.stringify(selfNames)}`
+  );
   setValue('#player-char', selfOptions[0].value);
   click('#btn-start-play');
   await waitFor('弹窗关掉并进入对话（挑卡当自己）', () => !shown('#player-modal') && shown('#view-chat'));
@@ -10921,7 +11004,7 @@ await scenario('默认人设：按模型可编辑，并注入没绑卡的对话'
   check('当前有模型可配', !!model, model || '（设置里没有 activeModel）');
 
   // --- 1) 「模型服务」里有一行入口，点开才进编辑弹窗 ---
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页打开', () => shown('#view-settings'));
 
   const hintText = () => (byId('s-assistant-hint') || {}).textContent || '';
@@ -11020,7 +11103,7 @@ await scenario('默认人设：按模型可编辑，并注入没绑卡的对话'
   // --- 4) 换成另一个模型：那一份是空的，刚才那份还在（= 每个模型一份）---
   const convo = stateMod.state.conversations.find((c) => c.id === stateMod.state.activeId);
   if (convo) convo.model = '另一个模型';
-  click('#btn-settings');
+  await openSettingsPage();
   await waitFor('设置页再开一次', () => shown('#view-settings'));
   click('#btn-assistant-persona');
   await waitFor('人设弹窗再开', () => shown('#persona-modal'));

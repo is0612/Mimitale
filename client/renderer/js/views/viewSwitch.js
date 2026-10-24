@@ -21,8 +21,8 @@ const VIEW_PARTS = [
   { name: 'worldbooks', view: 'viewWorldbooks', btn: 'btnWorldbooks' },
   { name: 'wbEditor', view: 'viewWbEditor', btn: null },
   { name: 'presets', view: 'viewPresets', btn: 'btnPresets' },
-  // 切过去之前先由 views/settings.js 刷新，这里只管显隐
-  { name: 'settings', view: 'viewSettings', btn: 'btnSettings' }
+  // 切换之前先由 views/settings.js 刷新；设置没有侧栏按钮（入口在账号菜单里）
+  { name: 'settings', view: 'viewSettings', btn: null }
 ];
 
 // 只读：别拿它去改视图

@@ -3,10 +3,10 @@
 // ============================================================================
 //  views/account.js —— 侧栏左下角那一格「我是谁」
 //
-//  未登录：人形图标 + 「未登录 / 登录后同步角色卡」，点一下开登录弹窗；
-//          右边那颗齿轮直接进设置（这时候还没有菜单，齿轮得留着）。
-//  已登录：整行只剩「头像 + 用户名」（齿轮收进菜单里），点一下往上弹出账号菜单：
-//          设置 / 意见反馈 / 退出登录 —— 对着 DeepSeek 那种左下角做的（2026-10-23）。
+//  未登录：人形图标 + 「未登录 / 登录后同步角色卡」，点一下开登录弹窗。
+//          这时候没有设置入口（设置只给登录用户）。
+//  已登录：整行只剩「头像 + 用户名」，点一下往上弹出账号菜单：
+//          设置 / 意见反馈 / 退出登录。
 //
 //  ⚠️ 这一格自己**不发请求**：菜单三个动作由入口层注入，退出登录走 data/account.js。
 //  ⚠️ 别 import accountModal.js —— 它反过来要用这里的 renderAccount，互相 import 会成环。
@@ -26,7 +26,8 @@ import { resetUserSection } from './userSettings.js';
 const actions = {
   openLogin: null,
   openSettings: null,
-  openFeedback: null
+  openFeedback: null,
+  afterLogout: null
 };
 
 let menuOpen = false;
@@ -58,6 +59,8 @@ async function doLogout() {
     await logout();
     renderAccount(null);
     resetUserSection();
+    // 退出后设置页不该还开着（未登录没有设置）
+    if (actions.afterLogout) actions.afterLogout();
     showToast('已退出登录', 'ok');
   } catch (err) {
     showToast((err && err.message) || '退出失败', 'error');
@@ -72,6 +75,7 @@ export function initAccount(opts = {}) {
   if (typeof opts.openLogin === 'function') actions.openLogin = opts.openLogin;
   if (typeof opts.openSettings === 'function') actions.openSettings = opts.openSettings;
   if (typeof opts.openFeedback === 'function') actions.openFeedback = opts.openFeedback;
+  if (typeof opts.afterLogout === 'function') actions.afterLogout = opts.afterLogout;
   if (!el.btnAccount) return undefined;
 
   el.btnAccount.addEventListener('click', (event) => {

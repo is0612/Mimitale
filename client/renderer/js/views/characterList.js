@@ -1,7 +1,7 @@
 'use strict';
 
 // views/characterList.js —— 角色列表页（卡片 + 批量选择）
-// edit / chat / remove / exportOne / removeMany / exportMany 由入口层注入（都跨了别的分区）
+// edit / chat / playWorld / remove / exportOne / removeMany / exportMany 由入口层注入（都跨了别的分区）
 // ⚠️ 卡片与世界书共用 ui/build.js 的 libraryCard()：两边只允许差在内容
 
 import { el } from '../core/dom.js';
@@ -9,10 +9,18 @@ import { h, libraryAddCard, libraryCard, renderListPage } from '../ui/build.js';
 import { mButton } from '../components/index.js';
 import { entityTone } from '../ui/avatarTone.js';
 import { openLightbox } from '../ui/lightbox.js';
-import { characters, characterPortrait } from '../data/library.js';
+import { characters, characterPortrait, characterWorldbooks } from '../data/library.js';
 import { createBatchSelect } from './batchSelect.js';
 
-let actions = { edit: () => {}, chat: () => {}, remove: () => {}, exportOne: null, removeMany: null, exportMany: null };
+let actions = {
+  edit: () => {},
+  chat: () => {},
+  playWorld: () => {},
+  remove: () => {},
+  exportOne: null,
+  removeMany: null,
+  exportMany: null
+};
 let query = '';
 let batch = null;
 
@@ -37,7 +45,7 @@ function matchesQuery(character, needle) {
 }
 
 export function initCharacterList(injected) {
-  actions = { edit: () => {}, chat: () => {}, remove: () => {}, ...(injected || {}) };
+  actions = { edit: () => {}, chat: () => {}, playWorld: () => {}, remove: () => {}, ...(injected || {}) };
   if (el.charPageSearch) {
     el.charPageSearch.addEventListener('input', (event) => {
       query = event.target.value;
@@ -122,6 +130,24 @@ function characterCard(c) {
   // 铺 2:3 立绘不铺头像（小圆图铺开会糊）；老卡由 characterPortrait 用头像顶上
   const portrait = characterPortrait(c);
 
+  // 自带世界书的卡多一条入口：进 TA 的世界（不带书就整颗不渲染）
+  const books = characterWorldbooks(c);
+  const bookNames = books.map((book) => book.name).join('、');
+  const worldButton = books.length
+    ? h('button', {
+        type: 'button',
+        class: 'char-card-world',
+        text: '进入世界',
+        title: books.length === 1 ? `进入「${bookNames}」` : `进入 TA 的世界（${books.length} 本：${bookNames}）`,
+        'aria-label': `进入「${c.name}」的世界`,
+        onclick: (event) => {
+          // 选择态下整卡是勾选框，这一下不该连带勾选（CSS 里已经藏了，双保险）
+          event.stopPropagation();
+          actions.playWorld(c.id);
+        }
+      })
+    : null;
+
   return libraryCard({
     title: c.name,
     sub: subText,
@@ -129,6 +155,7 @@ function characterCard(c) {
     mediaClass: ['art-edge', entityTone(c.id, c.name)],
     mediaTitle: `${c.name} · 点开看大图`,
     onMediaClick: portrait ? () => openLightbox(portrait, { title: c.name }) : null,
+    coverExtra: worldButton,
     // ⚠️ 图标按钮：外形全靠 .char-card-del，套 m-button 会多一层壳
     extra: h('button', {
       type: 'button',
