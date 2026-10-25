@@ -18,8 +18,7 @@
 let layout;
 
 const PANEL_KEYS = [
-  ['entries', '条目'],
-  ['characters', '本书角色']
+  ['entries', '条目']
 ];
 
 export function initWorldbookLayout({ onFilter }) {
@@ -52,12 +51,10 @@ export function initWorldbookLayout({ onFilter }) {
     sub: document.getElementById('wb-bookbar-sub'),
     totalWords: document.getElementById('wb-total-words'),
     tabEntryCount: document.getElementById('wb-tab-entries-n'),
-    tabCharCount: document.getElementById('wb-tab-characters-n'),
     contentCount: document.getElementById('wb-content-count'),
     keysCount: document.getElementById('wb-keys-count'),
     entryWords: document.getElementById('wb-e-words'),
     entryKeyCount: document.getElementById('wb-e-keycount'),
-    charHint: document.getElementById('wb-chars-hint'),
     bookId: null
   };
   setWorldbookPanel('entries');
@@ -118,14 +115,6 @@ export function syncWorldbookLayout(book, draft, characterCount) {
 
   // 分区标签上的角标：数字挂在哪一屏，就是在说「那一屏里有几个」
   layout.tabEntryCount.textContent = String(total);
-  layout.tabCharCount.textContent = String(chars);
-
-  // 「本书角色」屏右上角那句：数字 + 一句「副本是副本」
-  if (layout.charHint) {
-    layout.charHint.textContent = chars
-      ? `${chars} 个角色 · 副本只属于这本书，改它不动角色卡`
-      : '副本只属于这本书，改它不动角色卡';
-  }
 
   syncEntryCounts();
 }

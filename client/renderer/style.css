@@ -5762,8 +5762,7 @@ m-button.btn-new > .mi-btn__control:hover {
   overflow: hidden;
 }
 
-#view-char-editor #char-form.char-editor-layout[data-editor-section='writing'],
-#view-book-char-editor #bc-char-form.char-editor-layout[data-editor-section='writing'] {
+#view-char-editor #char-form.char-editor-layout[data-editor-section='writing'] {
   grid-template-columns: 220px minmax(0, 1fr) 272px;
 }
 
@@ -6006,15 +6005,10 @@ m-button.btn-new > .mi-btn__control:hover {
    拉到内容高度（上限 160），描述固定 200，表单不会因为一段长描述无限变长。 */
 #view-char-editor #c-desc > textarea,
 #view-book-char-editor #bc-c-desc > textarea { min-height: 200px; }
-#view-char-editor #c-personality > textarea,
-#view-book-char-editor #bc-c-personality > textarea { min-height: 96px; }
-#view-char-editor #c-scenario > textarea,
-#view-book-char-editor #bc-c-scenario > textarea { min-height: 84px; }
-#view-char-editor #c-first > textarea,
-#view-book-char-editor #bc-c-first > textarea { min-height: 128px; }
-#view-char-editor #c-example > textarea,
-#view-book-char-editor #bc-c-example > textarea { min-height: 112px; }
-
+#view-char-editor #c-personality > textarea { min-height: 96px; }
+#view-char-editor #c-scenario > textarea { min-height: 84px; }
+#view-char-editor #c-first > textarea { min-height: 128px; }
+#view-char-editor #c-example > textarea { min-height: 112px; }
 #view-char-editor .attr-add-row,
 #view-char-editor .attr-range,
 #view-char-editor .attr-group-row,
@@ -6054,8 +6048,7 @@ m-button.btn-new > .mi-btn__control:hover {
    五栏连成一张长稿之后，「现在看的是哪一栏 / 哪一栏还空着」需要有个地方交代 ——
    这一列的全部职责就是这个。 */
 
-#view-char-editor .char-field-index,
-#view-book-char-editor .char-field-index {
+#view-char-editor .char-field-index {
   display: none;
   min-width: 0;
   flex-direction: column;
@@ -6067,21 +6060,18 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 只在「角色设定」露头：其余分区没有"栏"可列，留着只会是一列空的 */
-#view-char-editor #char-form[data-editor-section='writing'] .char-field-index,
-#view-book-char-editor #bc-char-form[data-editor-section='writing'] .char-field-index {
+#view-char-editor #char-form[data-editor-section='writing'] .char-field-index {
   display: flex;
 }
 
-#view-char-editor .field-index-title,
-#view-book-char-editor .field-index-title {
+#view-char-editor .field-index-title {
   font-size: var(--fs-xs);
   color: var(--text-faint);
   letter-spacing: 0.06em;
   padding: 0 8px 8px;
 }
 
-#view-char-editor .field-index-item,
-#view-book-char-editor .field-index-item {
+#view-char-editor .field-index-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -6097,35 +6087,30 @@ m-button.btn-new > .mi-btn__control:hover {
   cursor: pointer;
 }
 
-#view-char-editor .field-index-item:hover,
-#view-book-char-editor .field-index-item:hover {
+#view-char-editor .field-index-item:hover {
   background: var(--accent-wash);
   color: var(--text);
 }
 
-#view-char-editor .field-index-item[aria-current='true'],
-#view-book-char-editor .field-index-item[aria-current='true'] {
+#view-char-editor .field-index-item[aria-current='true'] {
   background: var(--accent-soft-strong);
   color: var(--text);
   font-weight: 600;
 }
 
-#view-char-editor .field-index-item:focus-visible,
-#view-book-char-editor .field-index-item:focus-visible {
+#view-char-editor .field-index-item:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
-#view-char-editor .field-index-no,
-#view-book-char-editor .field-index-no {
+#view-char-editor .field-index-no {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
 
-#view-char-editor .field-index-name,
-#view-book-char-editor .field-index-name {
+#view-char-editor .field-index-name {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -6133,8 +6118,7 @@ m-button.btn-new > .mi-btn__control:hover {
   white-space: nowrap;
 }
 
-#view-char-editor .field-index-len,
-#view-book-char-editor .field-index-len {
+#view-char-editor .field-index-len {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
   color: var(--text-faint);
@@ -6142,8 +6126,7 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 已写 / 未写：一个点说完，不另起一列文字 */
-#view-char-editor .field-index-dot,
-#view-book-char-editor .field-index-dot {
+#view-char-editor .field-index-dot {
   flex: 0 0 auto;
   width: 6px;
   height: 6px;
@@ -6151,13 +6134,11 @@ m-button.btn-new > .mi-btn__control:hover {
   background: var(--border-hover);
 }
 
-#view-char-editor .field-index-dot[data-filled='true'],
-#view-book-char-editor .field-index-dot[data-filled='true'] {
+#view-char-editor .field-index-dot[data-filled='true'] {
   background: var(--accent);
 }
 
-#view-char-editor .field-index-block,
-#view-book-char-editor .field-index-block {
+#view-char-editor .field-index-block {
   margin-top: 14px;
   padding: 12px 12px 10px;
   border: 1px solid var(--border-soft);
@@ -6165,23 +6146,20 @@ m-button.btn-new > .mi-btn__control:hover {
   background: var(--bg-elev);
 }
 
-#view-char-editor .field-index-block h3,
-#view-book-char-editor .field-index-block h3 {
+#view-char-editor .field-index-block h3 {
   margin: 0 0 8px;
   font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-dim);
 }
 
-#view-char-editor .field-index-list,
-#view-book-char-editor .field-index-list {
+#view-char-editor .field-index-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-#view-char-editor .field-index-list li,
-#view-book-char-editor .field-index-list li {
+#view-char-editor .field-index-list li {
   display: flex;
   gap: 8px;
   margin: 4px 0;
@@ -6189,8 +6167,7 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--text-faint);
 }
 
-#view-char-editor .field-index-list li::before,
-#view-book-char-editor .field-index-list li::before {
+#view-char-editor .field-index-list li::before {
   content: '';
   flex: 0 0 auto;
   width: 4px;
@@ -9742,6 +9719,103 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--accent);
 }
 
+/* ------------------------------ 角色卡设定 · 人物列表 ------------------------------ */
+/* 「人物列表」分区：头部两颗操作按钮（AI 生成 / ＋ 新建）+ 下方角色副本卡片网格。
+   落在宽内容列里，用和世界书编辑器一致的两列网格。 */
+#view-char-editor .char-book-roles-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#view-char-editor .char-book-roles-btn {
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+#view-char-editor .char-book-roles-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+
+#view-char-editor .char-book-roles-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#view-char-editor .char-book-roles {
+  display: grid;
+  /* 和角色卡列表同一副栅格（.char-grid）：216 = 1440 下正文区正好 5 列 */
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  gap: 18px;
+}
+
+/* 封面左下角「状态栏 · 显示/隐藏」浮标：和「进入世界」同一位置、同一副样子。
+   常显不藏 hover —— 它是每本书各自一份的持久开关，状态要一眼看见。
+   ⚠️ z-index 必需：封面 .wb-card-cover 是 relative 且排在 DOM 后面，不给会被整块盖住。 */
+#view-char-editor .char-book-roles .char-card-show {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 2;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(20, 16, 22, 0.55);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+#view-char-editor .char-book-roles .char-card-show.is-on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+#view-char-editor .char-book-roles .char-card-show:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+#view-char-editor .char-book-roles .wb-char-empty {
+  /* 空态占满整行：它也是网格的子元素，不写这行就只有一格宽 */
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 24px;
+  text-align: center;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-hover);
+  border-radius: var(--radius);
+}
+
+#view-char-editor .char-book-roles .wb-char-empty h3 {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+#view-char-editor .char-book-roles .wb-char-empty p {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+}
+
+#view-char-editor .char-book-roles .wb-char-empty-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
 /* ------------------------------ 编辑角色 · 写作纸 ------------------------------ */
 /* 五张稿纸是同一种东西（写作面）：头是「序号 + 字段名 + 字数角标」，中间通体大框，
    底下一条**可折叠**的写法说明。
@@ -10766,204 +10840,6 @@ m-button.btn-new > .mi-btn__control:hover {
 #view-wb-editor .wb-form-foot-hint {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-}
-
-/* ==========================================================================
-   屏 3 · 本书角色（卡片网格 + 空态引导卡）
-   ========================================================================== */
-
-#view-wb-editor .wb-chars-panel {
-  flex: 1;
-  min-height: 0;
-  padding: 16px 24px 24px;
-  overflow-y: auto;
-}
-
-#view-wb-editor .wb-chars-inner {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-#view-wb-editor .wb-chars-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-#view-wb-editor .wb-chars-hint {
-  margin-left: auto;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-}
-
-#view-wb-editor .wb-char-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-}
-
-#view-wb-editor .wb-char-card {
-  display: flex;
-  flex-direction: column;
-  padding: 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-#view-wb-editor .wb-char-card-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-/* 56×56 —— 卡片上认人靠这张脸，34px 太小（改版前那个尺寸） */
-#view-wb-editor .wb-char-card-avatar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 56px;
-  overflow: hidden;
-  font-size: var(--fs-lg);
-  font-weight: 600;
-  color: var(--accent);
-  background: var(--accent-soft-strong);
-  border-radius: var(--radius-sm);
-}
-
-#view-wb-editor .wb-char-card-avatar img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-#view-wb-editor .wb-char-card-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-size: var(--fs-sm);
-}
-
-#view-wb-editor .wb-char-card-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 「本书副本」：同一张卡在角色卡里还有一份原件，标清楚改的是哪一份 */
-#view-wb-editor .wb-local-tag {
-  flex: none;
-  padding: 0 6px;
-  font-size: var(--fs-xs);
-  font-weight: 400;
-  color: var(--text-faint);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-}
-
-#view-wb-editor .wb-char-card-desc {
-  margin: 8px 0 0;
-  font-size: var(--fs-xs);
-  color: var(--text-dim);
-}
-
-#view-wb-editor .wb-char-card-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-soft);
-}
-
-#view-wb-editor .wb-char-card-show {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-xs);
-  color: var(--text-dim);
-  cursor: pointer;
-  user-select: none;
-}
-
-#view-wb-editor .wb-char-card-show input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
-#view-wb-editor .wb-char-card-show:has(input:checked) {
-  color: var(--accent);
-}
-
-#view-wb-editor .wb-char-card-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-}
-
-#view-wb-editor .wb-char-card-btn {
-  padding: 4px 8px;
-  font-family: inherit;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  background: none;
-  border: 0;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-#view-wb-editor .wb-char-card-btn:hover {
-  color: var(--text);
-  background: var(--border-soft);
-}
-
-#view-wb-editor .wb-char-card-remove:hover {
-  color: var(--danger-text);
-  background: var(--danger-bg);
-}
-
-/* 空态：给一张有引导性的虚线卡，不是一片空白（改版前这里什么都不画，
-   用户不知道这里该有东西、也不知道副本和角色卡是两回事） */
-#view-wb-editor .wb-char-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 32px 24px;
-  text-align: center;
-  background: var(--bg-card);
-  border: 1px dashed var(--border-hover);
-  border-radius: var(--radius);
-}
-
-#view-wb-editor .wb-char-empty h3 {
-  margin: 0;
-  font-size: var(--fs-md);
-  font-weight: 600;
-}
-
-#view-wb-editor .wb-char-empty p {
-  max-width: 420px;
-  margin: 0;
-  font-size: var(--fs-sm);
-  color: var(--text-dim);
-}
-
-#view-wb-editor .wb-char-empty-hint {
   font-size: var(--fs-xs);
   color: var(--text-faint);
 }

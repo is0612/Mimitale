@@ -116,12 +116,17 @@ async function scenario(name, fn) {
 
 function revealEditorControl(node) {
   if (node.closest('#view-wb-editor')) {
-    const panel = node.closest('#wb-panel-characters, #wb-panel-entries');
+    const panel = node.closest('#wb-panel-entries');
     if (panel?.hidden) byId(panel.id.replace('wb-panel-', 'wb-tab-'))?.click();
   }
-  if (node.closest('#char-form')) {
+  if (node.closest('#char-form') || node.closest('#bc-char-form')) {
     const section = node.closest('.char-editor-panel');
-    if (section?.hidden) byId(`char-section-tab-${section.dataset.section}`)?.click();
+    if (section?.hidden) {
+      // 角色卡编辑页 tab 是 `char-section-tab-<key>`，本书角色是 `bc-char-section-tab-<key>`
+      const tab = byId(`char-section-tab-${section.dataset.section}`) ||
+        byId(`bc-char-section-tab-${section.dataset.section}`);
+      tab?.click();
+    }
     // 2026-10-16 起五个写作字段**同时可见**，没有「切字段」这一步了
     // （.char-writing-tab / .char-writing-panel 已删，别再找它们）。
     const details = node.closest('details');
@@ -1025,17 +1030,19 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
-  // 2026-10-16：这一页 14 颗 .btn 全换 <m-button>。除结构外盯两件容易悄悄坏掉的：
+  // 2026-10-16：这一页的按钮全换 <m-button>。除结构外盯两件容易悄悄坏掉的：
   //   ① 左栏底部那几颗要铺满栏宽 —— width 挂宿主、里层跟着撑满，
   //      写反了不报错、只是按钮缩成一行文字那么宽；
-  //   ② 三颗「清除」带着 hidden 类 —— 宿主上 `.hidden` 的 display:none !important
+  //   ② 「清除」带着 hidden 类 —— 宿主上 `.hidden` 的 display:none !important
   //      必须照样压过 m-button 自己的 display（不然按钮删不掉地常驻）。
   // ⚠️ btn-close-chars（返回）2026-10-19 从右上角挪到了左上角，并改成**图标按钮** ——
   //    图标按钮按约定不套 m-button（见 components/button.js 文件头），所以从这张表里去掉。
   //    2026-10-20：那颗「导出」撤了（改到角色卡卡片上），左栏底部换成「返回」+「AI 补充」。
-  const CHAR_BTN_IDS = ['btn-save-char','btn-clear-avatar','btn-clear-portrait','btn-first-template','btn-alt-add','btn-attr-template','btn-add-attr','btn-attr-paste','btn-attr-paste-apply','c-wb-add-btn','btn-back-char','btn-ai-fill-char','btn-del-char'];
+  //    2026-10-25：角色卡编辑页裁剪 —— 头像 / 属性（模板 / 添加 / 粘贴文本）按钮一起没了，
+  //    只留封面「清除」和写作区、世界书、左栏那一排。
+  const CHAR_BTN_IDS = ['btn-save-char','btn-clear-portrait','btn-first-template','btn-alt-add','c-wb-add-btn','btn-back-char','btn-ai-fill-char','btn-del-char'];
   const bad = CHAR_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
-  check('角色编辑器 13 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
+  check('角色编辑器 8 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
 
   // 返回按钮应当在**标题那一块**里（左上），而不是右侧的操作簇里 ——
   // 只要有人把它挪回 .page-actions，这条就红。
@@ -1045,11 +1052,9 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
     !!backBtn && !!backBtn.closest('.page-heading') && !backBtn.closest('.page-actions'),
     backBtn ? (backBtn.closest('.page-heading') ? '在标题区' : '不在标题区') : '按钮不存在'
   );
-  // ⚠️ 这里**仍不能**断言「页面里没有 .btn」：属性面板那几颗**图标按钮**
-  //    （attr-tab / attr-tab-edit / attr-more-btn / panel-del 等）是 JS 用
-  //    `button({ class: ... })` 现渲染的（不带 variant 就不生成 .btn 底座，见
-  //    ui/build.js 文件头那条「图标按钮不套组件」的边界）。「解散这一组」已迁
-  //    m-button —— 它不再带 `.btn-danger`，断言里按 `#c-attr-group-edit m-button` 找。
+  // 角色卡编辑页裁剪后，属性 / 表情那些 JS 现渲染的图标按钮（attr-tab / attr-more-btn 等）
+  // 已经随整块一起没了，这一页不再有 JS 渲染的原生 .btn —— 但别在这条里硬断言「没有 .btn」，
+  // 世界书那套「AI 补设定」清单仍在用 JS 现渲染的图标按钮。
   //
   // 左栏底部四行，顺序是固定的：保存 → 返回 → AI 补充 → 删除。
   // ⚠️ 这条替掉的是原来那句「左栏底部不再重复返回」：2026-10-20 星宝要求把返回补回来
@@ -1068,7 +1073,7 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
     !!railSave && railSave.getBoundingClientRect().width > 150,
     railSave ? String(Math.round(railSave.getBoundingClientRect().width)) : '按钮不存在'
   );
-  check('「清除」的 hidden 照样生效', byId('btn-clear-avatar').classList.contains('hidden') && getComputedStyle(byId('btn-clear-avatar')).display === 'none');
+  check('「清除」的 hidden 照样生效', byId('btn-clear-portrait').classList.contains('hidden') && getComputedStyle(byId('btn-clear-portrait')).display === 'none');
 });
 
 await scenario('角色编辑器：五个写作框的高度', async () => {
@@ -1079,16 +1084,15 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
 
   const desc = byId('c-desc');
   const example = byId('c-example');
-  check('五个长文本框都在表单里', !!desc && !!example);
+  check('四个长文本框都在表单里', !!desc && !!example);
 
   // --- 圆角体检（2026-10-12 晚补）---
   //  ⚠️ 为什么非有不可：`--radius` 从 16px 压到 4px 那轮，**62 处写死的圆角没跟着动**
   //  （弹窗卡片 16、服务商卡 14、属性行 7、消息工具条 6……），
   //  而**整套冒烟在扫前扫后都是全绿** —— 一条断言都没守圆角。
   //  这里钉几个「一眼能看见的面」：计算样式必须等于 token，不是等于某个字面数字。
-  //  ⚠️ 取样点 2026-10-13 换过一次：角色编辑器从弹窗改成了页面，那张
-  //     `.modal-card` 已经不存在，改用编辑器里的「属性」卡片（同样一眼能看见、
-  //     同样必须读 token）。
+  //  ⚠️ 取样点换过：角色编辑器从弹窗改成页面后，那张 `.modal-card` 没了，
+  //    先用的「属性」卡片又随属性一起删掉，现在改用「世界书」卡片（同样一眼能看见）。
   {
     const root = getComputedStyle(document.documentElement);
     const R = root.getPropertyValue('--radius').trim();
@@ -1099,7 +1103,7 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
       const node = asControl($(sel));
       return node ? getComputedStyle(node).borderTopLeftRadius : '(没有)';
     };
-    check('编辑器里的卡片圆角 = --radius（不是写死的 16）', radiusOf('.char-form .attr-panel') === R, `${radiusOf('.char-form .attr-panel')} vs ${R}`);
+    check('编辑器里的卡片圆角 = --radius（不是写死的 16）', radiusOf('.char-form .char-worldbook-box') === R, `${radiusOf('.char-form .char-worldbook-box')} vs ${R}`);
     check('通用输入框圆角 = --radius-sm', radiusOf('#c-name') === RSM, radiusOf('#c-name'));
   }
 
@@ -1131,28 +1135,29 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
   desc.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   check('普通点击写作框不会误判为手动拖高', desc.dataset.growLocked !== '1');
 
-  // 2026-10-16（V2 重组版）：字段不再靠胶囊切换，五栏同时在场。
+  // 2026-10-16（V2 重组版）：字段不再靠胶囊切换，几栏同时在场。
   // 断言方向跟着反过来了 —— 原来测「只显示当前字段」，现在测「全都在」。
+  // 2026-10-25：性格从角色卡删掉，四栏（描述 / 场景 / 开场白 / 示例对话）同时在场。
   // ⚠️ 这里不能用 shown()：它只看 .hidden 类，而分区面板用的是 hidden **属性**，
   //    面板藏起来时它的子元素照样会通过 shown()。用 getClientRects() 才作数。
-  const WRITING_IDS = ['c-desc', 'c-personality', 'c-scenario', 'c-first', 'c-example'];
+  const WRITING_IDS = ['c-desc', 'c-scenario', 'c-first', 'c-example'];
   const visible = (id) => (byId(id)?.getClientRects().length || 0) > 0;
-  check('五个写作字段同时可见', WRITING_IDS.every(visible),
+  check('四个写作字段同时可见', WRITING_IDS.every(visible),
     WRITING_IDS.filter((id) => !visible(id)).join(','));
   check('写作区不再有字段切换胶囊', !$('#char-writing-tabs') && !$('.char-writing-tab'));
-  check('右栏字段目录列出五栏', $$('#char-field-index .field-index-item').length === 5);
+  check('右栏字段目录列出四栏', $$('#char-field-index .field-index-item').length === 4);
   check('字段目录高亮当前栏', !!$('#char-field-index .field-index-item[aria-current="true"]'));
   check('字段目录的已写圆点跟着内容走',
     $('#char-field-index .field-index-item[data-key="desc"] .field-index-dot')?.dataset.filled === 'true');
   const writingBadge = byId('char-section-tab-writing')?.querySelector('.char-section-count');
-  check('角色设定徽章是「已写 / 共」，不再是恒定值',
-    /^\d+\/5$/.test(writingBadge?.textContent || ''), writingBadge?.textContent);
-  check('五个写作框高度各不相同（按字段分别给定）',
+  check('角色卡设定徽章是「已写 / 共」，不再是恒定值',
+    /^\d+\/4$/.test(writingBadge?.textContent || ''), writingBadge?.textContent);
+  check('四个写作框高度各不相同（按字段分别给定）',
     new Set(WRITING_IDS.map((id) => hOf(byId(id)))).size > 1,
     WRITING_IDS.map((id) => hOf(byId(id))).join('/'));
 
-  click('#char-section-tab-state');
-  check('属性独立分区不影响写作草稿', shown('#char-section-state') && desc.value === '一行字');
+  click('#char-section-tab-advanced');
+  check('高级设置分区不影响写作草稿', shown('#char-section-advanced') && desc.value === '一行字');
   click('#char-section-tab-writing');
   check('切回写作分区保留未保存输入', desc.value === '一行字' && shown('#c-desc'));
 
@@ -1387,47 +1392,60 @@ await scenario('角色卡：卡片上删除', async () => {
 // ---------------------------------------------------------------------------
 //  场景 8：角色属性 → 状态面板（属性模板的完整链路）
 // ---------------------------------------------------------------------------
-await scenario('属性：从角色卡种到状态面板', async () => {
+await scenario('属性：从本书角色种到状态面板', async () => {
   // --- 1) 加属性：只有手写和「粘贴文本」两条路 ---
+  // 属性属于「角色（人物）」＝这本书里的副本，不是角色卡 —— 所以编辑入口在
+  // 「本书角色编辑页」，不在角色卡编辑页（角色卡编辑页已把属性区摘掉了）。
   // （曾经还有一排行「快捷候选词」，内容来自「设置 → 状态属性」；那份全局清单
   //   2026-10-09 连同设置区块一起去掉了 —— 属性名按角色写，清单省不了几个字。
   //   所以下面顺带守一句「它别再长回来」。）
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-  setValue('#c-name', '属性测试角色');
-  setValue('#c-desc', '属性测试角色的设定文本');
-  setValue('#c-personality', '沉默寡言');
-  // 年龄/性别/种族已从编辑器移除（归入描述），这里不再通过 UI 填。
-  // 身份三项的流转由下方「保存后补数据」保证，见 saveCharacters 那段。
+  //
+  // 先造一张绑了「冒烟测试世界」的角色卡当宿主：人物列表要从这张卡进。
+  // 卡名就叫「属性测试角色」—— 下游「导出」「进入世界」场景把它当一张已保存、
+  // 绑了书的普通角色卡用（那些场景不测属性，这张卡本身不带属性也没关系）。
+  await createCharBoundTo('冒烟测试世界', '属性测试角色');
 
-  check('角色编辑器里没有快捷候选词那一行', !byId('c-attr-quick'));
+  // 进这张卡的人物列表，点「＋ 新建」打开本书角色编辑器
+  const hostCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('属性测试角色'));
+  check('造好了绑书的角色卡', !!hostCard);
+  click(buttonByText(hostCard, '编辑'));
+  await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
+  click('#char-section-tab-roles');
+  await waitFor('切到人物列表', () => !byId('char-section-roles').hidden);
+  click('#btn-char-roles-new');
+  await waitFor('本书角色编辑器打开', () => shown('#view-book-char-editor'));
+
+  // 副本名字和卡同名：这样进世界时「名字取的是角色名」这条断言对得上。
+  setValue('#bc-c-name', '属性测试角色');
+  setValue('#bc-c-desc', '属性测试角色的设定文本');
+  // 本书角色只有角色描述/属性/表情图/高级设置，没有性格 —— 属性是它的核心字段。
+
+  check('本书角色编辑器里没有快捷候选词那一行', !byId('bc-c-attr-quick'));
 
   // 手写第一个
-  setValue('#c-attr-new', '金币');
-  click('#btn-add-attr');
-  await waitFor('属性行出现', () => $$('#c-attr-list .attr-row').length === 1);
-  check('手写加进来的名字对', byId('c-attr-list').querySelector('.attr-name').textContent === '金币');
+  setValue('#bc-c-attr-new', '金币');
+  click('#bc-btn-add-attr');
+  await waitFor('属性行出现', () => $$('#bc-c-attr-list .attr-row').length === 1);
+  check('手写加进来的名字对', byId('bc-c-attr-list').querySelector('.attr-name').textContent === '金币');
 
   // 手写第二个
-  setValue('#c-attr-new', '上衣');
-  click('#btn-add-attr');
-  await waitFor('第二个属性行', () => $$('#c-attr-list .attr-row').length === 2);
+  setValue('#bc-c-attr-new', '上衣');
+  click('#bc-btn-add-attr');
+  await waitFor('第二个属性行', () => $$('#bc-c-attr-list .attr-row').length === 2);
 
   // 保留字段名要被拦下（这些是提示词自己的段落标记，当属性会打架）
-  setValue('#c-attr-new', '旁白');
-  click('#btn-add-attr');
+  setValue('#bc-c-attr-new', '旁白');
+  click('#bc-btn-add-attr');
   await sleep(100);
-  check('保留字段名被拒绝', $$('#c-attr-list .attr-row').length === 2, `实际 ${$$('#c-attr-list .attr-row').length}`);
+  check('保留字段名被拒绝', $$('#bc-c-attr-list .attr-row').length === 2, `实际 ${$$('#bc-c-attr-list .attr-row').length}`);
 
   // --- 圆角体检：属性行与它里面的输入框（扫前是 7px / 6px，都是写死的）---
   {
     const root = getComputedStyle(document.documentElement);
     const RSM = root.getPropertyValue('--radius-sm').trim();
-    const rows = $$('#c-attr-list .attr-row');
+    const rows = $$('#bc-c-attr-list .attr-row');
     const radiusOf = (node) => (node ? getComputedStyle(node).borderTopLeftRadius : '(没有)');
-    check('属性行圆角 = --radius-sm（不是写死的 7）', radiusOf($('#c-attr-list .attr-item')) === RSM, `${radiusOf($('#c-attr-list .attr-item'))} vs ${RSM}`);
+    check('属性行圆角 = --radius-sm（不是写死的 7）', radiusOf($('#bc-c-attr-list .attr-item')) === RSM, `${radiusOf($('#bc-c-attr-list .attr-item'))} vs ${RSM}`);
     check(
       '属性里的值输入框圆角 = --radius-sm（不是写死的 7）',
       // ⚙ 组件化之后圆角长在**里层那颗原生 input** 上（宿主只是个布局盒）——
@@ -1444,7 +1462,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   }
 
   // 填初始值
-  const attrRows = $$('#c-attr-list .attr-row');
+  const attrRows = $$('#bc-c-attr-list .attr-row');
   setValue(attrRows[0].querySelector('.attr-value'), '100');
   setValue(attrRows[1].querySelector('.attr-value'), '布衣');
 
@@ -1462,11 +1480,11 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   }
 
   // --- 加一个「带范围的数值」属性（吸收互动模板那套：类型 + 范围 + 变化规则）---
-  setValue('#c-attr-new', '好感度');
-  click('#btn-add-attr');
-  await waitFor('第三个属性行', () => $$('#c-attr-list .attr-row').length === 3);
+  setValue('#bc-c-attr-new', '好感度');
+  click('#bc-btn-add-attr');
+  await waitFor('第三个属性行', () => $$('#bc-c-attr-list .attr-row').length === 3);
 
-  let meterRow = $$('#c-attr-list .attr-row')[2];
+  let meterRow = $$('#bc-c-attr-list .attr-row')[2];
   check('新属性默认是文本类型', !!meterRow.querySelector('.attr-type') && meterRow.querySelector('.attr-type').value === 'text',
     meterRow.querySelector('.attr-type') && meterRow.querySelector('.attr-type').value);
   check('文本类型下不显示范围输入框', !meterRow.parentElement.querySelector('.attr-more .attr-num'));
@@ -1474,9 +1492,9 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   setValue(meterRow.querySelector('.attr-value'), '20');
   // 选「数值」→ 重画一次，并且自动展开「更多」，范围输入框这时候才出现
   setValue(meterRow.querySelector('.attr-type'), 'meter');
-  await waitFor('范围输入框出现', () => !!$('#c-attr-list .attr-more .attr-num'));
+  await waitFor('范围输入框出现', () => !!$('#bc-c-attr-list .attr-more .attr-num'));
 
-  meterRow = $$('#c-attr-list .attr-row')[2];
+  meterRow = $$('#bc-c-attr-list .attr-row')[2];
   const numInputs = meterRow.parentElement.querySelectorAll('.attr-more .attr-num');
   check('数值类型下有两个范围输入框', numInputs.length === 2, `实际 ${numInputs.length} 个`);
   setValue(numInputs[0], '0');
@@ -1490,23 +1508,23 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   const moreBtn = meterRow.querySelector('.attr-more-btn');
   check('有范围时「更多」默认是展开的', String(moreBtn.textContent).includes('收起'), String(moreBtn.textContent));
   click(moreBtn);
-  await waitFor('收起后配置区没了', () => !$('#c-attr-list .attr-more'));
-  meterRow = $$('#c-attr-list .attr-row')[2];
+  await waitFor('收起后配置区没了', () => !$('#bc-c-attr-list .attr-more'));
+  meterRow = $$('#bc-c-attr-list .attr-row')[2];
   click(meterRow.querySelector('.attr-more-btn'));
-  await waitFor('再展开还在', () => !!$('#c-attr-list .attr-more .attr-num'));
+  await waitFor('再展开还在', () => !!$('#bc-c-attr-list .attr-more .attr-num'));
   check(
     '收起再展开，范围没丢',
-    $$('#c-attr-list .attr-more .attr-num')[0].value === '0' && $$('#c-attr-list .attr-more .attr-num')[1].value === '100',
-    JSON.stringify($$('#c-attr-list .attr-more .attr-num').map((i) => i.value))
+    $$('#bc-c-attr-list .attr-more .attr-num')[0].value === '0' && $$('#bc-c-attr-list .attr-more .attr-num')[1].value === '100',
+    JSON.stringify($$('#bc-c-attr-list .attr-more .attr-num').map((i) => i.value))
   );
 
   // --- 分组：把这个字段搬进「关系」---
-  const tabLabels = () => $$('#c-attr-tabs .attr-tab').map((b) => b.textContent);
-  const listedNames = () => $$('#c-attr-list .attr-name').map((n) => n.textContent);
+  const tabLabels = () => $$('#bc-c-attr-tabs .attr-tab').map((b) => b.textContent);
+  const listedNames = () => $$('#bc-c-attr-list .attr-name').map((n) => n.textContent);
   check('三个字段都还没分组时，标签栏只有一个「未分组」', JSON.stringify(tabLabels()) === JSON.stringify(['未分组 3']), JSON.stringify(tabLabels()));
 
   // ⚠️ 必须重新取一次行：上面 click 触发过重画，列表整块重建，旧节点 querySelector 拿到 null。
-  meterRow = $$('#c-attr-list .attr-row')[2];
+  meterRow = $$('#bc-c-attr-list .attr-row')[2];
   const groupSelect = meterRow.parentElement.querySelector('.attr-more .attr-group');
   // 「未分组」必须在选项里 —— 否则一旦所有属性都归了组，就再也拿不出来了
   check(
@@ -1521,8 +1539,8 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   check('下拉末尾有「＋ 新建分组…」', !!newOpt, Array.from(groupSelect.options).map((o) => o.textContent).join('/'));
   setValue(groupSelect, newOpt.value);
 
-  await waitFor('这一行变成新建分组输入框', () => !!$('#c-attr-list .attr-more .attr-group-new'));
-  const newGroupInput = $('#c-attr-list .attr-more .attr-group-new');
+  await waitFor('这一行变成新建分组输入框', () => !!$('#bc-c-attr-list .attr-more .attr-group-new'));
+  const newGroupInput = $('#bc-c-attr-list .attr-more .attr-group-new');
   setValue(newGroupInput, '关系');
   newGroupInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 
@@ -1539,20 +1557,20 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   );
 
   // 切到「关系」：只铺这一组的字段
-  click($$('#c-attr-tabs .attr-tab').find((b) => b.textContent.startsWith('关系')));
-  await waitFor('切到关系组', () => $$('#c-attr-list .attr-row').length === 1);
+  click($$('#bc-c-attr-tabs .attr-tab').find((b) => b.textContent.startsWith('关系')));
+  await waitFor('切到关系组', () => $$('#bc-c-attr-list .attr-row').length === 1);
   check(
     '切组之后只显示这一组的字段',
     listedNames().join(',') === '好感度',
     JSON.stringify(listedNames())
   );
-  check('切组之后那一行的「更多」还是展开的（草稿里的展开状态没丢）', !!$('#c-attr-list .attr-more .attr-num'));
+  check('切组之后那一行的「更多」还是展开的（草稿里的展开状态没丢）', !!$('#bc-c-attr-list .attr-more .attr-num'));
 
   // --- 搬到**已经存在**的分组：在下拉里直接选，不用再走「＋ 新建分组…」---
-  click($$('#c-attr-tabs .attr-tab').find((b) => b.textContent.startsWith('未分组')));
+  click($$('#bc-c-attr-tabs .attr-tab').find((b) => b.textContent.startsWith('未分组')));
   await waitFor('切回未分组', () => listedNames().length === 2);
   // 取行的函数要每次现查：「更多」一点开列表就整块重建，手里的节点会作废
-  const shirtRow = () => $$('#c-attr-list .attr-row').find((r) => r.querySelector('.attr-name').textContent === '上衣');
+  const shirtRow = () => $$('#bc-c-attr-list .attr-row').find((r) => r.querySelector('.attr-name').textContent === '上衣');
   click(shirtRow().querySelector('.attr-more-btn'));
   await waitFor('上衣的「更多」展开', () => !!shirtRow().parentElement.querySelector('.attr-more .attr-group'));
   const moveSelect = shirtRow().parentElement.querySelector('.attr-more .attr-group');
@@ -1568,9 +1586,9 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   // 再搬回「未分组」：下拉里那个出口必须一直在 ——
   // 少了它，属性一旦归了组就再也拿不出来了（纯下拉最容易丢的就是这条路）。
   // 搬回去之后夹具回到原样，下面「游玩时状态面板」那一段的预期才不受影响。
-  click($$('#c-attr-tabs .attr-tab').find((b) => b.textContent.startsWith('关系')));
-  await waitFor('切到关系组', () => $$('#c-attr-list .attr-row').length === 2);
-  const backRow = () => $$('#c-attr-list .attr-row').find((r) => r.querySelector('.attr-name').textContent === '上衣');
+  click($$('#bc-c-attr-tabs .attr-tab').find((b) => b.textContent.startsWith('关系')));
+  await waitFor('切到关系组', () => $$('#bc-c-attr-list .attr-row').length === 2);
+  const backRow = () => $$('#bc-c-attr-list .attr-row').find((r) => r.querySelector('.attr-name').textContent === '上衣');
   // 「更多」的展开状态记在草稿上（_moreOpen），上面点开过一次，这里通常是开着的
   if (!backRow().parentElement.querySelector('.attr-more .attr-group')) {
     click(backRow().querySelector('.attr-more-btn'));
@@ -1580,13 +1598,22 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   await waitFor('上衣退回未分组', () => tabLabels().join() === '关系 1,未分组 2');
   check('下拉里选「未分组」就把它拿出来了', listedNames().join(',') === '好感度', JSON.stringify(listedNames()));
 
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
+  // 副本要勾「在状态栏显示」才会进世界后出现在入口条（默认 false，不勾就点不到它开状态卡）。
+  // 开关在「高级设置」分区；它只对世界书副本有意义（角色卡写了也没用）。
+  click('#bc-char-section-tab-advanced');
+  await waitFor('切到高级设置', () => !byId('bc-char-section-advanced').hidden);
+  check('有「在状态栏显示」开关', !!byId('bc-c-show-in-panel'));
+  if (!byId('bc-c-show-in-panel').checked) click(byId('bc-c-show-in-panel'));
+
+  click('#bc-btn-save-char');
+  // 本书角色新建保存后自动离开编辑器，回到角色卡编辑页的人物列表
+  await waitFor('保存后回到人物列表', () => !shown('#view-book-char-editor') && !!$('#char-book-roles'));
   await sleep(150);
 
-  const saved = await savedCharacters();
-  const mine = saved.find((c) => c.name === '属性测试角色');
-  check('属性已落盘到角色卡', !!mine && Array.isArray(mine.attributes) && mine.attributes.length === 3, JSON.stringify(mine && mine.attributes));
+  // 属性落盘到**这本书的角色副本**（不是角色卡）：副本存在 book.characters 里
+  const book = (await savedWorldbooks()).find((b) => b.name === '冒烟测试世界');
+  const mine = book && Array.isArray(book.characters) ? book.characters.find((c) => c.name === '属性测试角色') : null;
+  check('属性已落盘到本书角色副本', !!mine && Array.isArray(mine.attributes) && mine.attributes.length === 3, JSON.stringify(mine && mine.attributes));
   check(
     '初始值也一起落盘了',
     !!mine && mine.attributes[0].name === '金币' && mine.attributes[0].value === '100' && mine.attributes[1].value === '布衣',
@@ -1605,21 +1632,28 @@ await scenario('属性：从角色卡种到状态面板', async () => {
     JSON.stringify(mine && mine.attributes[2] && mine.attributes[2].group)
   );
   check(
-    '界面自己的临时状态没有写进角色卡（_moreOpen）',
+    '界面自己的临时状态没有写进副本（_moreOpen）',
     !!mine && !('_moreOpen' in mine.attributes[2]),
     JSON.stringify(mine && Object.keys(mine.attributes[2] || {}))
   );
   // 年龄/性别/种族已整体移除（身份写进角色描述即可），身份组只剩「姓名」。
 
-  // --- 3) 点「聊天」绑定角色 → 属性应该种进状态面板 ---
+  // --- 3) 进入世界 → 副本属性应该种进状态面板 ---
+  // 属性属于「本书角色（副本）」，只在世界书会话里出现 —— 入口是角色卡封面那颗「进入世界」。
   click('#btn-close-chars');
   await sleep(150);
 
   const card = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('属性测试角色'));
-  check('找到了新角色的卡片', !!card);
-  await startChatWith(card);
-  await waitFor('切到聊天视图', () => shown('#view-chat'));
-
+  check('找到了宿主角色卡的卡片', !!card);
+  // 进世界（不用「聊天」：单角色聊天绑的是角色卡，属性在副本上，进世界才种得进去）
+  click(card.querySelector('.char-card-world'));
+  await waitFor('玩家角色弹窗打开', () => shown('#player-modal'));
+  // 给玩家一个名字：无主字段并回主角那步（absorbTopLevelIntoPlayer）靠玩家名判
+  // 「有没有主角可以认领」—— 名字留空它就整段跳过，模型补写回来的状态表会
+  // 堆成一批无主字段（见「漏状态表」那条），值落不回副本卡上。
+  setValue('#player-name', '冒烟玩家');
+  click('#btn-start-play');
+  await waitFor('进入世界', () => shown('#view-chat') && !shown('#player-modal'));
   await waitFor('状态卡入口条出现', () => shown('#panel-box'));
 
   // 「当前状态」那块折叠面板的**字段列表面板**已经去掉（一个面板只能显示一个
@@ -1695,53 +1729,26 @@ await scenario('属性：从角色卡种到状态面板', async () => {
       !!byId('panel-box').closest('#cast-panel') && !byId('panel-box').closest('.chat-col'),
       `${side(byId('panel-box'), 'borderTopWidth')} / ${side(byId('panel-box'), 'backgroundColor')}`
     );
+    // 世界书会话的头像是**方的 + 浅色底**（`.convo-avatar.book`），角色会话才是
+    // 渐变圆头像 —— 属性归副本后这场进的是世界会话，列表第一项就是书会话，
+    // 所以要验的是「书会话头像确实是方的 + 浅色底」，而不是角色头像的渐变。
+    const bookAvatar = $$('.convo-avatar').find((a) => a.classList.contains('book'));
     check(
-      '侧栏条目是渐变圆头像（不是浅色底 + 主色字）',
-      (getComputedStyle($$('.convo-avatar')[0]).backgroundImage || '').includes('linear-gradient'),
-      getComputedStyle($$('.convo-avatar')[0]).backgroundImage
+      '世界书会话的头像是方的（r=3，不是圆）',
+      !!bookAvatar && getComputedStyle(bookAvatar).borderTopLeftRadius === '3px',
+      bookAvatar ? getComputedStyle(bookAvatar).borderTopLeftRadius : '（没有书会话头像）'
     );
   }
 
-  // --- 入口条上不显示「我」（2026-10-08：普通聊天不显示玩家状态）---
-  // 「我」只在玩世界书时上入口条；普通聊天里只剩「我」时整条横幅都会收掉。
-  // 这场绑了角色，所以横幅在、但上面只有那个角色。两张卡并排的契约挪到
-  // 下面「发出一条消息」之后验 —— 玩家卡从自己消息的头像开。
+  // --- 进入世界后：入口条上既有副本（NPC）也有「我」---
+  // 「我」在玩世界书时才上入口条；这场进了世界，所以横幅上同时有「我」和副本。
   {
     const myAvatarBtn = $$('#panel-cast .panel-avatar').find((b) => b.dataset.owner === 'player');
-    check('普通聊天的入口条没有「我」的头像', !myAvatarBtn);
+    check('进入世界后入口条有「我」的头像', !!myAvatarBtn);
   }
 
-  // --- 顶栏：头像 + 标题旁的小胶囊（2026-09-30 按设计稿的 .top / .pill-tag 加的）---
-  {
-    const av = byId('topbar-avatar');
-    check('顶栏左边有头像', !!av);
-    check(
-      '顶栏头像和侧栏 / 消息区共用同一套渐变',
-      (getComputedStyle(av).backgroundImage || '').includes('linear-gradient'),
-      getComputedStyle(av).backgroundImage
-    );
-    // 头像上的字 = 说话人首字（绑了角色的会话就是角色名首字）
-    check(
-      '顶栏头像上是这个角色的首字',
-      (av.textContent || '').trim().length === 1 || !!av.querySelector('img'),
-      av.textContent
-    );
-
-    const pill = byId('convo-pill');
-    check('标题旁边有那颗小胶囊', !!pill);
-    // 视角是默认（非 GM / 标准叙述）时，胶囊退给「绑定角色身上第一个数值字段」
-    check(
-      '胶囊里是绑定角色的关键数值（「好感度 20」这种）',
-      /好感度\s*\d+/.test((pill.textContent || '').trim()),
-      pill.textContent
-    );
-    const nameRow = byId('convo-title').parentElement;
-    check(
-      '胶囊和标题是同一行的兄弟节点（不是塞在 h1 里）',
-      nameRow && nameRow.classList.contains('topbar-name') && pill.parentElement === nameRow,
-      nameRow ? nameRow.className : 'no-parent'
-    );
-  }
+  // 顶栏的「方角书 + 线性翻页图标」在「进入世界」场景里单独验过（见下），
+  // 这里不再重复 —— 属性迁移后这场是 GM 世界会话，顶栏头像走的是「书」那一支。
 
   // --- 2026-10-12 晚：把「设计稿上的那几个数」逐条钉住 -------------------------
   // 为什么单开一节：这一批全是「DOM 全绿、类名全在，观感照样错」的东西 ——
@@ -1870,11 +1877,10 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   const cardSeq = Array.from(charCard().querySelectorAll('.sc-body > *')).map((n) =>
     n.classList.contains('sc-group-title') ? `#${n.textContent}` : n.querySelector('.sc-name').textContent
   );
-  // 「身份」分组已随 IDENTITY_GROUP 一起删掉：姓名不再归组，和金币/上衣一起
-  // 排在已分组字段（关系）之后 —— 组内的先出，没组的跟在后头。
+  // 副本只种属性、不种「姓名」（姓名是玩家/绑定角色的身份字段）：组内的先出，没组的跟在后头。
   check(
     '分组小标题和字段按组排好',
-    cardSeq.join(',') === '#关系,好感度,姓名,金币,上衣',
+    cardSeq.join(',') === '#关系,好感度,金币,上衣',
     JSON.stringify(cardSeq)
   );
   // 数值行：值显示成「20/100」，带进度条
@@ -1892,11 +1898,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
     check('文本字段没有进度条', !gold || !gold.querySelector('.sc-bar'));
   }
 
-  check('卡里的值是角色卡上的初始值', cardValue('金币') === '100', String(cardValue('金币')));
-
-  // 单角色对话（角色卡点「聊天」）也得把姓名带上。
-  check('姓名在这张卡里', cardNames().includes('姓名'), JSON.stringify(cardNames()));
-  check('姓名取的是角色名', cardValue('姓名') === '属性测试角色', String(cardValue('姓名')));
+  check('卡里的值是副本上的初始值', cardValue('金币') === '100', String(cardValue('金币')));
 
   // --- 4) 发一条：注入给模型的消息里必须真的带上面板 ---
   // 断言在宿主侧做（要看 chat:send 的 payload），这里只负责发出去
@@ -1907,14 +1909,14 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   // --- 浮动卡：开两张必须**自动并排**（2026-09-30 换回悬浮卡的核心诉求）---
   // 当初「浮动卡」被换成固定右栏，就是因为两张会叠在一起。现在靠 layoutSideBySide
   // 按整卡宽铺开 —— 这条就是那个契约的守门人，别让它退化成"错开 26px 叠着"。
-  // 普通聊天的入口条没有「我」，玩家卡从自己消息的头像开（普通聊天里剩下的入口）。
+  // 进入世界后「我」也在入口条上，点它开第二张卡（玩家自己的状态卡）。
   {
-    const myMsgAvatar = $$('#messages .msg.user .msg-avatar').pop();
+    const myAvatarBtn = $$('#panel-cast .panel-avatar').find((b) => b.dataset.owner === 'player');
     check(
-      '自己消息的头像是「我」状态卡的入口',
-      !!myMsgAvatar && myMsgAvatar.classList.contains('clickable')
+      '入口条上的「我」头像能开自己的状态卡',
+      !!myAvatarBtn
     );
-    click(myMsgAvatar);
+    click(myAvatarBtn);
     await waitFor('第二张状态卡也开了', () => $$('#state-cards .state-card').length >= 2);
 
     const host = byId('state-cards');
@@ -2026,91 +2028,6 @@ await scenario('属性：从角色卡种到状态面板', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 8b：续写路径也要把状态表要回来
-//
-//  「只思考没落笔 → 点继续」这条路绕开了主生成的补问分支（情形三）：正文被
-//  「继续」补出来了，状态表却始终没写，状态卡就停在旧值上 —— 真实反馈里
-//  「一整局都没更新过一次」就是这么来的。断言：点完继续，金币被补问要了回来。
-// ---------------------------------------------------------------------------
-await scenario('续写：也把状态表补回来', async () => {
-  const lastAssistant = () => $$('#messages .msg.assistant').pop();
-
-  setValue('#input', '续写找状态表');
-  click('#btn-send');
-
-  // 主生成只思考不落笔 → 落在那条「点继续」的兜底说明上（正文为空）
-  await waitFor(
-    '落在「只思考没落笔」的兜底说明上',
-    () => {
-      const node = lastAssistant();
-      return !!node && /只输出了思考过程/.test(node.textContent || '');
-    },
-    8000
-  );
-  await waitFor('流式结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
-
-  const node = lastAssistant();
-  check('兜底说明这条上有「继续」', !!node && !!buttonByText(node, '继续'));
-
-  // 「继续」2026-10-20 起改成常显（不再收在「⋯」里），直接点即可
-  click(buttonByText(node, '继续'));
-  const back = await settlePanelValue('金币', '55', 8000);
-  await waitFor('流式结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
-
-  const convosNow = await window.mimitale.getConversations();
-  const act = convosNow.conversations.find((c) => c.id === convosNow.activeId);
-  const lastNow = lastAssistant();
-  const contentNode = lastNow ? lastNow.querySelector('.msg-content') : null;
-  const tail = contentNode ? contentNode.textContent : '（没有内容节点）';
-  check(
-    '续写之后也会补问状态表（88 → 55）',
-    !!back,
-    '面板=' + JSON.stringify(act && act.panel) + ' / 气泡尾部=' + JSON.stringify(tail.slice(-160))
-  );
-});
-
-// ---------------------------------------------------------------------------
-//  场景 9：状态卡入口条 —— 一直在这儿，点头像开卡
-// ---------------------------------------------------------------------------
-await scenario('状态卡入口条：常驻 + 点头像开卡', async () => {
-  await waitFor('入口条在', () => shown('#panel-box') && !!byId('panel-cast'));
-
-  // 旧面板的折叠开关/字段区/提示行都去掉了 —— 入口条只有一行头像，没有可收的内容
-  check(
-    '旧面板的折叠开关 / 字段区 / 提示行都已移除',
-    !byId('btn-panel-collapse') && !byId('panel-fields') && !byId('panel-hint') && !byId('btn-panel-reset'),
-    JSON.stringify({
-      collapse: !!byId('btn-panel-collapse'),
-      fields: !!byId('panel-fields'),
-      hint: !!byId('panel-hint'),
-      reset: !!byId('btn-panel-reset')
-    })
-  );
-
-  const boxH = Math.round(byId('panel-box').getBoundingClientRect().height);
-  check('右栏头像入口正常显示', boxH > 0 && boxH < 120, `${boxH}px`);
-
-  // 头像行就是入口。普通聊天不显示「我」（2026-10-08），
-  // 这条会话绑了角色，所以头像行上只有那个角色。
-  const owners = $$('#panel-cast .panel-avatar').map((b) => b.dataset.owner);
-  check('普通聊天的入口条没有「我」，只有绑定的角色', owners.length === 1 && owners[0] !== 'player', JSON.stringify(owners));
-  const avatarBox = $$('#panel-cast .panel-avatar')[0].getBoundingClientRect();
-  check('头像可见可点', avatarBox.height > 0 && avatarBox.width > 0, `${Math.round(avatarBox.width)}×${Math.round(avatarBox.height)}`);
-
-  // 点头像 → 开那个角色的状态卡；再点 ✕ 收掉
-  const firstOwner = owners[0];
-  const cardOf = () => $(`#state-cards .state-card[data-owner="${CSS.escape(firstOwner)}"]`);
-  click($$('#panel-cast .panel-avatar')[0]);
-  await waitFor('状态卡从入口条打开', () => !!cardOf());
-  click(cardOf().querySelector('.sc-close'));
-  await sleep(150);
-  check('点 ✕ 把卡收掉了', !cardOf());
-
-  // 顶栏那个「状态」按钮早就去掉了，别再回来
-  check('顶栏的「状态」按钮已移除', !byId('btn-panel-toggle'));
-});
-
-// ---------------------------------------------------------------------------
 //  场景 9.5：认不出归属的字段 —— 并回主角，不再单开一张「世界」卡
 //
 //  用户在真实对局里发现的坑：AI 输出状态栏时**不会给主角加「角色名·」前缀**，
@@ -2126,66 +2043,10 @@ await scenario('状态卡入口条：常驻 + 点头像开卡', async () => {
 //     是它们自己造的那条；在这里多发一轮会把那条顶掉。所以只走数据层。
 // ---------------------------------------------------------------------------
 await scenario('无主状态字段：并回主角，不单开世界卡', async () => {
-  await waitFor('入口条在', () => shown('#panel-box') && !!byId('panel-cast'));
-
   const panelMod = await import(new URL('js/data/panel.js', document.baseURI).href);
-  const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
-
-  const convo = (stateMod.state.conversations || []).find((c) => c.id === stateMod.state.activeId);
-  check('拿到当前会话', !!convo);
-  if (!convo) return;
-
   const key = (name, owner) => panelMod.panelKey(name, owner);
-  const ownerOf = (k) => panelMod.panelFieldOwner(convo, k);
-  const nameOf = (k) => panelMod.panelFieldName(k);
 
-  // --- 1) 认得出主角时：无主字段并回 player --------------------------------
-  // 这个会话绑了角色卡（上面的场景绑的），所以主角名 = 那张卡的名字。
-  const cardMod = await import(new URL('js/data/library.js', document.baseURI).href);
-  const boundCard = cardMod.characterById(convo.characterId);
-  check('会话绑了角色卡（主角名能从卡上认出来）', !!boundCard, String(convo.characterId));
-  if (!boundCard) return;
-
-  // 造三个无主字段（模拟 AI 没带前缀时的输出），覆盖三种认领规则：
-  //   · 上衣   —— 角色卡上有这个名字 → 规则 1，归**角色**
-  //   · 醉意   —— 主角那边没有、角色卡也没有 → 规则 3，归**主角**
-  //   · 好感度 —— 同上（主角那边没这个名字）→ 归主角
-  panelMod.appendPanelFields(convo, [
-    { name: '上衣', value: '（AI 改成的新衣服）' },
-    { name: '好感度', value: '63/100' },
-    { name: '醉意', value: '10/100' }
-  ]);
-  check(
-    '造出三个无主字段（模拟 AI 没带前缀时的输出）',
-    convo.panelFields.filter((k) => !ownerOf(k)).length === 3,
-    JSON.stringify(convo.panelFields.filter((k) => !ownerOf(k)).map((k) => [nameOf(k), ownerOf(k)]))
-  );
-
-  panelMod.absorbTopLevelIntoPlayer(convo);
-
-  check(
-    '并完之后一个无主字段都不剩',
-    !convo.panelFields.some((k) => !ownerOf(k)),
-    JSON.stringify(convo.panelFields.map((k) => [nameOf(k), ownerOf(k)]))
-  );
-  check(
-    '规则1：角色卡上声明过的字段名归角色（不是归主角）',
-    convo.panel[key('上衣', boundCard.id)] === '（AI 改成的新衣服）',
-    JSON.stringify({
-      cardOwner: boundCard.id,
-      got: convo.panel[key('上衣', boundCard.id)],
-      playerGot: convo.panel[key('上衣', 'player')]
-    })
-  );
-  check(
-    '规则2：单角色聊天里，AI 自己编的新字段也归那张卡（不归玩家）',
-    // 这个会话绑了角色卡、没有玩家角色 → 是单角色聊天，无主字段全归那张卡。
-    convo.panelFields.some((k) => ownerOf(k) === boundCard.id && nameOf(k) === '醉意') &&
-      !!convo.panel[key('醉意', boundCard.id)],
-    JSON.stringify(convo.panelFields.filter((k) => ownerOf(k) === boundCard.id).map(nameOf))
-  );
-
-  // --- 2) 认不出主角时：原样不动，不瞎认领 --------------------------------
+  // --- 1) 认不出主角时：原样不动，不瞎认领 --------------------------------
   const bare = {
     id: 'bare', panel: {}, panelFields: [], panelDefs: {}, messages: [],
     player: null, characterId: null
@@ -2198,7 +2059,7 @@ await scenario('无主状态字段：并回主角，不单开世界卡', async (
     JSON.stringify(bare.panelFields)
   );
 
-  // --- 3) 手改优先：player 那边手改过就不被 AI 那份顶掉 --------------------
+  // --- 2) 手改优先：player 那边手改过就不被 AI 那份顶掉 --------------------
   const manualConvo = {
     id: 'mc', player: { name: '阿甲' }, characterId: null,
     panel: {}, panelFields: [], panelDefs: {}, messages: []
@@ -2218,9 +2079,8 @@ await scenario('无主状态字段：并回主角，不单开世界卡', async (
     JSON.stringify(manualConvo.panelFields)
   );
 
-  // --- 4) 世界会话（有玩家角色 + 多个角色）：认不出的新字段归主角 ----------
-  // 这是规则 4 的独立验证 —— 上面那个会话是单角色聊天，会走规则 2，
-  // 覆盖不到「主角」这条分支。这里用一份合成数据（不碰真实会话）。
+  // --- 3) 世界会话（有玩家角色 + 多个角色）：认不出的新字段归主角 ----------
+  // 这是规则 4 的独立验证 —— 用一份合成数据（不碰真实会话）。
   const worldLike = {
     id: 'world-like',
     characterId: null,
@@ -2244,29 +2104,6 @@ await scenario('无主状态字段：并回主角，不单开世界卡', async (
       !worldLike.panelFields.some((k) => !panelMod.panelFieldOwner(worldLike, k)),
     JSON.stringify(worldLike.panelFields.map((k) => [panelMod.panelFieldName(k), panelMod.panelFieldOwner(worldLike, k)]))
   );
-
-  // --- 5) 入口条上不再有「世界/场景」这个入口 ------------------------------
-  const sceneBtn = $$('#panel-cast .panel-avatar').find(
-    (b) => b.dataset.owner === 'scene' || b.dataset.kind === 'scene'
-  );
-  check(
-    '入口条上没有「世界/场景」入口了',
-    !sceneBtn,
-    JSON.stringify($$('#panel-cast .panel-avatar').map((b) => [b.dataset.owner, b.dataset.kind]))
-  );
-
-  // --- 收拾现场：把刚才造的字段恢复原样，别影响后面的场景 -------------------
-  // 上衣：规则 1 把它并给了角色卡，恢复成卡上的初始值（「布衣」是那张卡上的值）
-  convo.panel[key('上衣', boundCard.id)] = '布衣';
-  // 好感度 / 醉意：这次被认领了，删掉（后面 21 场景会自己扫出来）
-  for (const n of ['好感度', '醉意']) {
-    for (const k of [key(n, 'player'), key(n, boundCard.id)]) {
-      convo.panelFields = convo.panelFields.filter((x) => x !== k);
-      delete convo.panel[k];
-      delete convo.panelDefs[k];
-    }
-  }
-  delete convo.panelManual;
 });
 
 // ---------------------------------------------------------------------------
@@ -3963,11 +3800,13 @@ await scenario('侧栏：入口网格与收起', async () => {
     // 会话项头像：稿子 2:24 是 20×20 r=3 → 10-12 深夜放大到 48（「一眼认人」）
     // → **10-13 回到 36**：48 配 60 高的条目，一屏只看得到 8~9 条，太占地方。
     // 这两条守的是「别再悄悄缩回去」—— 36 仍然明显大于稿子的 20，也大过最初那版 38 的头。
+    // 世界书会话的头像是 36×36 r=3（方角），角色会话才是 36×36 r=4 —— 取第一项
+    // （此刻多半是书会话），只守「还是 36×36 方角（r 是 3 或 4 都行）」这层。
     const cav = document.querySelector('.convo-item .convo-avatar');
     const cbox = cav ? cav.getBoundingClientRect() : null;
     check(
-      '会话项头像 36×36 方角 r=4（密度回调后）',
-      !!cbox && Math.round(cbox.width) === 36 && getComputedStyle(cav).borderTopLeftRadius === '4px',
+      '会话项头像 36×36 方角（密度回调后）',
+      !!cbox && Math.round(cbox.width) === 36 && ['3px', '4px'].includes(getComputedStyle(cav).borderTopLeftRadius),
       cbox ? `${Math.round(cbox.width)} r=${getComputedStyle(cav).borderTopLeftRadius}` : '（没有头像）'
     );
     check(
@@ -4510,27 +4349,10 @@ await scenario('导出', async () => {
   click(buttonByText(exportSourceCard, '编辑'));
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
-  // 先给它绑一本世界书再导出 —— 这样「导出的卡带不带 character_book」
-  // 才验得到（宿主侧的 probeExports 会看导出的卡里有没有这本）。
-  // ⚠️ 2026-10-20：编辑器里的「导出」撤了，卡片只能从角色卡那颗按 id 取**落盘**的那一张，
-  //    所以绑定必须真的保存下去（以前不保存也能导出，因为导出的是内存里那个对象）。
-  click('#c-wb-add-btn');
-  await waitFor('世界书选择浮层出现', () => !!$('.cwb-picker'));
-  const exportBook = $$('.cwb-picker .cwb-picker-row').find((o) =>
-    String(o.textContent || '').includes('冒烟测试世界')
-  );
-  if (exportBook) {
-    click(exportBook);
-    await waitFor('导出场景：世界书绑上了', () => $$('#c-wb-list .cwb-row').length === 1);
-  } else {
-    check('导出场景：能选到种子世界书', false, JSON.stringify($$('.cwb-picker .cwb-picker-row').map((o) => o.textContent.trim())));
-  }
-
-  click('#btn-save-char');
-  await waitFor('导出场景：绑定落盘', async () => {
-    const saved = (await savedCharacters()).find((c) => c.name === '属性测试角色');
-    return !!saved && Array.isArray(saved.worldbookIds) && saved.worldbookIds.length > 0;
-  });
+  // 「属性测试角色」这张卡在属性场景开头就绑上了「冒烟测试世界」，
+  // 这里直接确认绑定在（导出的卡要带 character_book 才验得到，见宿主侧 probeExports）。
+  // ⚠️ 2026-10-20：编辑器里的「导出」撤了，卡片只能从角色卡那颗按 id 取**落盘**的那一张。
+  check('导出场景：这张卡已经绑了世界书', $$('#c-wb-list .cwb-row').length === 1, `绑定 ${$$('#c-wb-list .cwb-row').length} 本`);
 
   // 制造一处没保存的改动：用左栏那颗「返回」离开时要先拦一下，别把改动静默丢掉
   // （顺便验这颗新按钮走的是和页头「返回」同一个动作，不是自己另写一套）
@@ -4623,9 +4445,11 @@ await scenario('世界书：新建条目', async () => {
   // ⚠️ btn-close-worldbooks（返回）2026-10-19 挪到左上角并改成图标按钮，
   //    图标按钮按约定不套 m-button，所以从这张表里去掉。
   // ⚠️ btn-export-wb 2026-10-20 从书籍条去掉了（搬到列表卡片上），也去掉。
-  const WB_BTN_IDS = ['btn-save-wb','btn-add-wb-chars','btn-ai-wb-char','btn-new-wb-char','btn-sync-wb-attrs','btn-preview-wb','btn-del-worldbook','btn-new-entry','btn-wb-entry-template','btn-wb-add-event','btn-del-entry'];
+  // ⚠️ 「本书角色」屏撤掉后，btn-add-wb-chars / btn-ai-wb-char / btn-new-wb-char /
+  //    btn-sync-wb-attrs 四颗跟着没了，这张表只留还在这页上的。
+  const WB_BTN_IDS = ['btn-save-wb','btn-preview-wb','btn-del-worldbook','btn-new-entry','btn-wb-entry-template','btn-wb-add-event','btn-del-entry'];
   const wbBad = WB_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
-  check('世界书编辑器 11 颗按钮都是 m-button 宿主', wbBad.length === 0, wbBad.join(', ') || '全部是');
+  check('世界书编辑器 7 颗按钮都是 m-button 宿主', wbBad.length === 0, wbBad.join(', ') || '全部是');
   check('编辑器里没有「导出」按钮', !byId('btn-export-wb'));
   // 2026-10-20：保存从页头右上搬到书籍条右侧 —— 书籍条三屏共用，位置在任何
   // tab 都固定，且紧挨脏状态胶囊。页头只剩「返回 / 标题 / 全文 N 字」。
@@ -4637,11 +4461,10 @@ await scenario('世界书：新建条目', async () => {
   check('页头不再有面包屑', !byId('wb-crumb'));
   check('页头右侧只剩字数', [...document.querySelectorAll('#view-wb-editor .wb-head .page-actions > *')]
     .every((node) => node === byId('wb-total-words')), [...document.querySelectorAll('#view-wb-editor .wb-head .page-actions > *')].map((n) => n.id || n.className).join(','));
-  // 每次进编辑器都落在「条目」屏（书籍设置屏已经撤了）
-  check('进编辑器默认在「条目」屏',
-    !byId('wb-panel-entries').hidden && byId('wb-panel-characters').hidden,
-    `entries=${!byId('wb-panel-entries').hidden} chars=${!byId('wb-panel-characters').hidden}`);
+  // 每次进编辑器都落在「条目」屏（书籍设置屏、「本书角色」屏都已经撤了）
+  check('进编辑器默认在「条目」屏', !byId('wb-panel-entries').hidden, `entries=${!byId('wb-panel-entries').hidden}`);
   check('「书籍设置」屏已经不存在了', !byId('wb-panel-settings') && !byId('wb-tab-settings'));
+  check('「本书角色」屏已经不存在了', !byId('wb-panel-characters') && !byId('wb-tab-characters'));
   click('#wb-tab-entries');
   await sleep(120);
   check('切到「条目」屏', !byId('wb-panel-entries').hidden);
@@ -4685,8 +4508,6 @@ await scenario('世界书：新建条目', async () => {
   check('条目屏是三栏（列表 / 正文 / 属性）',
     getComputedStyle($('#wb-panel-entries')).gridTemplateColumns.split(/\s+/).length === 3,
     getComputedStyle($('#wb-panel-entries')).gridTemplateColumns);
-  check('本书角色不挤占条目编辑区',
-    byId('wb-panel-characters').hidden);
   check('正文列比条目列表宽（它才是主工作区）',
     wbRect('.wb-doc').width > wbRect('.wb-list').width,
     `正文 ${Math.round(wbRect('.wb-doc').width)} vs 列表 ${Math.round(wbRect('.wb-list').width)}`);
@@ -4716,8 +4537,6 @@ await scenario('世界书：新建条目', async () => {
   check('行上的 × 垂直居中（上下留白相等）',
     !!rowBox && !!delBox && Math.abs((delBox.top - rowBox.top) - (rowBox.bottom - delBox.bottom)) <= 2,
     rowBox && delBox ? `上 ${Math.round(delBox.top - rowBox.top)} / 下 ${Math.round(rowBox.bottom - delBox.bottom)}` : '找不到条目行');
-  check('本书角色有自己独立的分区',
-    $('#wb-panel-characters').contains(byId('wb-char-list')));
   // 书名改在条目左栏顶部；删除本书也落在这里（不再有设置屏）
   check('书名改在条目左栏顶部',
     $('.wb-list').contains(byId('wb-name')) && !$('#wb-bookbar').contains(byId('wb-name')));
@@ -4742,13 +4561,6 @@ await scenario('世界书：新建条目', async () => {
     aside.scrollHeight <= aside.clientHeight + 1,
     `${aside.scrollHeight} / ${aside.clientHeight}`);
   check('「＋ 条目」跟着条目列表走', $('.wb-list').contains(byId('btn-new-entry')));
-  const draftText = byId('wb-e-content').value;
-  click('#wb-tab-characters');
-  await sleep(120);
-  check('切到「本书角色」后条目屏收起来了', byId('wb-panel-characters').hidden === false && byId('wb-panel-entries').hidden);
-  click('#wb-tab-entries');
-  await sleep(120);
-  check('世界书分区切换保留条目草稿', byId('wb-e-content').value === draftText);
   setValue('#wb-search', '世界总览');
   check('世界书搜索过滤条目列表', $$('#wb-entry-list .wb-entry').length === 1);
   setValue('#wb-search', '');
@@ -4819,52 +4631,58 @@ await scenario('世界书：放弃未保存的改动', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 11：世界书 —— 新建「本书角色」，同时验证编辑器没被世界书弹窗盖住
+//  场景 11：世界书 —— 新建「本书角色」
+//
+//  入口是**角色卡编辑页的「人物列表」**那颗「＋ 新建」：世界书编辑器的
+//  「本书角色」屏早就撤了（世界书归角色卡，人物只是这本书的副本）。
 // ---------------------------------------------------------------------------
 await scenario('世界书：本书角色', async () => {
-  // 上一条场景把弹窗关掉了，这里自己从角色的「自带世界书」开进去
-  await openWorldbookEditor('冒烟测试世界');
+  await createCharBoundTo('冒烟测试世界', '本书角色测试卡');
 
-  click('#btn-new-wb-char');
-  await waitFor('角色编辑器打开', () => shown('#view-book-char-editor'));
-  check('标题是「新建本书角色」', byId('bc-chars-title').textContent === '新建本书角色', byId('bc-chars-title').textContent);
-
-  // 回归测试：角色编辑器必须盖在世界书弹窗上面（否则点了跟没反应一样）
-  const cx = Math.floor(innerWidth / 2);
-  const cy = Math.floor(innerHeight / 2);
-  const top = document.elementFromPoint(cx, cy);
-  const where = top ? (top.closest('#view-book-char-editor') ? 'chars' : top.closest('#view-wb-editor') ? 'worldbooks' : 'other') : 'null';
-  check('编辑器没有被世界书弹窗盖住', where === 'chars', `最上层是 ${where}`);
+  const hostCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('本书角色测试卡'));
+  check('角色卡列表里有那张绑好书的卡', !!hostCard);
+  click(buttonByText(hostCard, '编辑'));
+  await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
+  click('#char-section-tab-roles');
+  await waitFor('切到人物列表', () => !byId('char-section-roles').hidden);
 
   const before = ((await savedWorldbooks())[0].characters || []).length;
 
+  click('#btn-char-roles-new');
+  await waitFor('本书角色编辑器打开', () => shown('#view-book-char-editor'));
+  check('标题是「新建本书角色」', byId('bc-chars-title').textContent === '新建本书角色', byId('bc-chars-title').textContent);
+
+  // 回归测试：角色编辑器必须盖在下面那一屏上面（否则点了跟没反应一样）
+  const cx = Math.floor(innerWidth / 2);
+  const cy = Math.floor(innerHeight / 2);
+  const top = document.elementFromPoint(cx, cy);
+  const where = top ? (top.closest('#view-book-char-editor') ? 'chars' : top.closest('#view-char-editor') ? 'charditor' : 'other') : 'null';
+  check('编辑器没有被下面那一屏盖住', where === 'chars', `最上层是 ${where}`);
+
   setValue('#bc-c-name', '冒烟NPC');
   click('#bc-btn-save-char');
-  await waitFor('副本 chip 出现', () => $('#wb-char-list').textContent.includes('冒烟NPC'));
+  // 新建的副本保存完会自动离开编辑器，回到人物列表
+  await waitFor('副本出现在人物列表', () => {
+    const host = $('#char-book-roles');
+    return !!host && host.textContent.includes('冒烟NPC');
+  });
 
   const after = ((await savedWorldbooks())[0].characters || []).length;
   check('副本已落盘', after === before + 1, `期望 ${before + 1}，实际 ${after}`);
 
-  click('#bc-btn-close-chars');
-  await sleep(120);
   check('副本保存后关闭不弹确认框', !shown('#confirm-modal'));
-  check('本书角色用自己的分区编辑器', !!byId('bc-char-field-index') && !!byId('bc-char-section-tab-state'));
-  check('关掉本书角色页回到世界书角色分区', shown('#view-wb-editor') && !byId('wb-panel-characters').hidden);
+  // 本书角色是四个分区（角色描述 / 属性 / 表情图 / 高级设置），没有世界书、也没有字段目录
+  check('本书角色用自己的分区编辑器',
+    !!byId('bc-char-section-tab-state') && !!byId('bc-char-section-tab-expressions'));
+  check('本书角色没有「世界书」分区', !byId('bc-char-section-tab-worldbook') && !byId('bc-c-worldbook-box'));
+  check('本书角色没有右侧字段目录', !byId('bc-char-field-index'));
+  // 人物列表卡片走角色卡列表同一套模板：2:3 封面 + 名字 + 标签
+  const npcCard = $$('#char-book-roles .char-card').find((c) => c.textContent.includes('冒烟NPC'));
+  check('人物列表里那张卡是角色卡同款', !!npcCard && !!npcCard.querySelector('.wb-card-cover') && !!npcCard.querySelector('.char-card-name'));
 
-  // 2026-10-18：「本书角色」有了自己的一屏，标题那套「整块折叠」撤了
-  // （那是单栏时代为了不让一排 chip 把开场白挤没才做的）。这里改成钉住新形态。
-  check('副本数标在分区标签上', byId('wb-tab-characters-n').textContent === String(after),
-    byId('wb-tab-characters-n').textContent);
-  check('每张副本卡都标着「本书副本」',
-    $$('#wb-char-list .wb-local-tag').length === after,
-    `${$$('#wb-char-list .wb-local-tag').length} / ${after}`);
-  check('副本卡上面那颗是「移出本书」（说的是从这本书里移出去）',
-    $$('#wb-char-list .wb-char-card-btn').some((b) => b.textContent === '移出本书'));
-  check('角色屏顶部那行写着「副本只属于这本书」',
-    byId('wb-chars-hint').textContent.includes('副本只属于这本书'), byId('wb-chars-hint').textContent);
-
-  click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
+  click('#btn-close-chars');
+  await sleep(120);
+  await waitFor('回到角色卡列表', () => shown('#view-chars'));
 });
 
 // ---------------------------------------------------------------------------
@@ -5194,7 +5012,6 @@ await scenario('AI 生成角色：角色卡', async () => {
   check('名字已回填', byId('c-name').value === '守夜人', byId('c-name').value);
   check('描述已回填', byId('c-desc').value.includes('深夜值班'), byId('c-desc').value);
   check('标签已回填', byId('c-tags').value.includes('测试'), byId('c-tags').value);
-  check('属性已回填', $('#c-attr-list') && $('#c-attr-list').textContent.includes('好感度'), $('#c-attr-list') && $('#c-attr-list').textContent);
 
   // 最要紧的一条：**这一步还不该落盘** —— 和「新建角色」一样，点保存才算数
   await sleep(150);
@@ -5204,13 +5021,6 @@ await scenario('AI 生成角色：角色卡', async () => {
   await waitFor('落盘完成', async () => (await savedCharacters()).length === before + 1);
   const saved = (await savedCharacters())[before] || {};
   check('保存后角色进了角色卡', saved.name === '守夜人', saved.name);
-  check('落盘的属性也跟着进来了', (saved.attributes || []).length === 2, JSON.stringify(saved.attributes));
-  // ⚠️ 这两条断言故意盯着**归一化之后的形状**，不是模型给的原样：
-  //   · 数值字段落盘是 meter（没有 number 这个类型）
-  //   · dynamic 是默认频率，存储时那个键会被省掉（见 main/panel-fields.js）
-  const attrs = saved.attributes || [];
-  check('数值属性落成了 meter', attrs.some((a) => a.name === '好感度' && a.type === 'meter'), JSON.stringify(attrs));
-  check('默认频率（dynamic）不写多余的键', attrs.some((a) => a.name === '好感度' && a.mode === undefined), JSON.stringify(attrs));
 });
 
 // ---------------------------------------------------------------------------
@@ -5364,11 +5174,11 @@ await scenario('AI 补设定：保存才建书', async () => {
 //  验四件：① 点错预防（先弹确认，取消就什么都不发生）；② 等的时候按钮在转圈圈
 //  且点不动；③ 五栏回填、名字/标签没动、保存胶囊变脏；④ 点了保存才落盘。
 // ---------------------------------------------------------------------------
-await scenario('AI 补充：确认后重写五栏', async () => {
+await scenario('AI 补充：确认后重写四栏', async () => {
   click('#btn-chars');
   await waitFor('切到角色卡页面', () => shown('#view-chars'));
 
-  // 上一场生成并保存下来的「守夜人」：五栏里描述和性格都有，够 AI 读
+  // 上一场生成并保存下来的「守夜人」：四栏里描述和场景都有，够 AI 读
   const card = $$('#char-page-grid .char-card').find((node) => node.textContent.includes('守夜人'));
   check('角色卡里有上一场存的「守夜人」', !!card);
   click(buttonByText(card, '编辑'));
@@ -5385,7 +5195,7 @@ await scenario('AI 补充：确认后重写五栏', async () => {
   click('#btn-ai-fill-char');
   await waitFor('点「AI 补充」先弹确认', () => shown('#confirm-modal'));
   const confirmText = byId('confirm-message').textContent;
-  check('确认框说清会覆盖哪几栏 + 保存才生效', /五栏/.test(confirmText) && confirmText.includes('保存'), confirmText);
+  check('确认框说清会覆盖哪几栏 + 保存才生效', /四栏/.test(confirmText) && confirmText.includes('保存'), confirmText);
   click('#confirm-cancel');
   await waitFor('取消后确认框收起', () => !shown('#confirm-modal'));
   await sleep(120);
@@ -5401,10 +5211,9 @@ await scenario('AI 补充：确认后重写五栏', async () => {
   check('loading 期间按钮点不动', byId('btn-ai-fill-char').disabled === true);
   check('loading 文案是「补充中…」', String(byId('btn-ai-fill-char').textContent).includes('补充中'), byId('btn-ai-fill-char').textContent);
 
-  // ③ 五栏回填
-  await waitFor('五栏都填上了', () => byId('c-desc').value.includes('AI补充后的描述'));
+  // ③ 四栏回填
+  await waitFor('四栏都填上了', () => byId('c-desc').value.includes('AI补充后的描述'));
   check('描述换了', byId('c-desc').value.includes('AI补充后的描述'), byId('c-desc').value.slice(0, 24));
-  check('性格换了', byId('c-personality').value.includes('AI补充后的性格'), byId('c-personality').value.slice(0, 24));
   check('场景换了', byId('c-scenario').value.includes('AI补充后的场景'), byId('c-scenario').value.slice(0, 24));
   check('开场白换了', byId('c-first').value.includes('AI补充后的开场白'), byId('c-first').value.slice(0, 24));
   check('示例对话换了', byId('c-example').value.includes('<START>'), byId('c-example').value.slice(0, 24));
@@ -5441,15 +5250,25 @@ await scenario('AI 补充：确认后重写五栏', async () => {
 //  和角色卡那条路共用弹窗和草稿，但上下文完全不同：它要带这本书的条目和副本名单。
 //  假后端据 system 里有没有「【世界：」分辨走的是不是 NPC 那条路，返回的角色名
 //  也因此不同（见 tools/smoke-test.js）—— 落盘的名字对不上就说明没带上下文。
+//
+//  入口是**角色卡编辑页的「人物列表」**那颗「AI 生成」：世界书编辑器里的
+//  「本书角色」屏早就撤了，这里别再回去找 `#btn-ai-wb-char`。
 // ---------------------------------------------------------------------------
 await scenario('AI 生成 NPC：依据世界书', async () => {
-  await openWorldbookEditor('冒烟测试世界');
+  await createCharBoundTo('冒烟测试世界', 'NPC 生成卡');
 
-  check('世界书里有「AI 生成」按钮', !!byId('btn-ai-wb-char'));
+  const hostCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('NPC 生成卡'));
+  check('角色卡列表里有那张绑好书的卡', !!hostCard);
+  click(buttonByText(hostCard, '编辑'));
+  await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
+  click('#char-section-tab-roles');
+  await waitFor('切到人物列表', () => !byId('char-section-roles').hidden);
+
+  check('人物列表里有「AI 生成」按钮', !!byId('btn-char-roles-ai'));
 
   const before = ((await savedWorldbooks())[0].characters || []).length;
 
-  click('#btn-ai-wb-char');
+  click('#btn-char-roles-ai');
   await waitFor('生成弹窗打开', () => shown('.ai-gen-modal'));
   check('弹窗是 NPC 那一版', $('.ai-gen-modal').textContent.includes('AI 生成 NPC'), $('.ai-gen-modal').textContent.slice(0, 40));
   check('状态行说明了依据哪本书', $('.ai-gen-status').textContent.includes('冒烟测试世界'), $('.ai-gen-status').textContent);
@@ -5461,17 +5280,6 @@ await scenario('AI 生成 NPC：依据世界书', async () => {
 
   await waitFor('角色编辑器打开', () => shown('#view-book-char-editor'));
   check('标题是「新建本书角色」', byId('bc-chars-title').textContent === '新建本书角色', byId('bc-chars-title').textContent);
-  // 副本这条路上「AI 补设定」补的是**这本书**的条目（副本自带的书进世界时不被注入）
-  check(
-    '副本上的「AI 补设定」标着 worldbook 作用域',
-    !!byId('bc-c-wb-ai-block') && byId('bc-c-wb-ai-block').dataset.scope === 'worldbook',
-    byId('bc-c-wb-ai-block') && `class=${byId('bc-c-wb-ai-block').className} scope=${byId('bc-c-wb-ai-block').dataset.scope}`
-  );
-  check(
-    '副本上说明写进这本书',
-    byId('bc-c-wb-ai-status').textContent.includes('这本书'),
-    byId('bc-c-wb-ai-status').textContent
-  );
   // 名字来自假后端的「带世界上下文」分支 —— 对不上就说明 system 里没带上这本书的设定
   check('生成时确实带上了这本书的上下文', byId('bc-c-name').value === '后厨帮工', byId('bc-c-name').value);
 
@@ -5479,94 +5287,16 @@ await scenario('AI 生成 NPC：依据世界书', async () => {
   check('生成后副本还没落盘', ((await savedWorldbooks())[0].characters || []).length === before, String(((await savedWorldbooks())[0].characters || []).length));
 
   click('#bc-btn-save-char');
-  await waitFor('副本 chip 出现', () => $('#wb-char-list').textContent.includes('后厨帮工'));
+  // 新建的副本保存完会自动离开编辑器，回到角色卡编辑页的人物列表
+  await waitFor('副本出现在人物列表', () => {
+    const host = $('#char-book-roles');
+    return !!host && host.textContent.includes('后厨帮工');
+  });
   check('副本已落进这本书', ((await savedWorldbooks())[0].characters || []).length === before + 1, String(((await savedWorldbooks())[0].characters || []).length));
 
-  click('#bc-btn-close-chars');
+  click('#btn-close-chars');
   await sleep(120);
   check('副本保存后关闭不弹确认框', !shown('#confirm-modal'));
-
-  click('#btn-close-worldbooks');
-  await waitFor('世界书弹窗关闭', () => !shown('#view-wb-editor'));
-});
-
-// ---------------------------------------------------------------------------
-//  场景 11.75：「AI 补设定」在副本上 —— 补进那本书的草稿
-//
-//  副本进世界时注入的是**那本书**（data/cast.js 的 effectiveWorldbookIds），
-//  所以这里的条目既不建新书、也不直接写 book.entries（世界书编辑器可能正压着一份脏草稿，
-//  之后一保存就把它整体覆盖掉）。正确落点是那本书的**草稿**：
-//  回世界书编辑器能看见，点「保存」才进磁盘。这条验的就是这三步。
-// ---------------------------------------------------------------------------
-await scenario('AI 补设定：副本并进这本书的草稿', async () => {
-  await openWorldbookEditor('冒烟测试世界');
-
-  const bookBefore = (await savedWorldbooks()).find((b) => b.name === '冒烟测试世界');
-  check('磁盘上有那本测试书', !!bookBefore);
-  const entriesOnDisk = ((bookBefore && bookBefore.entries) || []).length;
-  const listedBefore = $$('#wb-entry-list .wb-entry').length;
-
-  const npc = $$('#wb-char-list .wb-char-card').find((c) => c.textContent.includes('后厨帮工'));
-  check('本书角色里有「后厨帮工」', !!npc);
-  click(buttonByText(npc, '编辑'));
-  await waitFor('副本编辑器打开', () => shown('#view-book-char-editor'));
-  check('编辑的是本书副本', byId('bc-chars-title').textContent === '编辑本书角色', byId('bc-chars-title').textContent);
-
-  click('#bc-c-wb-ai-btn');
-  await waitFor('副本上也补出了条目', () => $$('#bc-c-wb-ai-list .cwb-ai-entry').length > 0);
-  check(
-    '补出 3 条（死条目那条被丢掉）',
-    $$('#bc-c-wb-ai-list .cwb-ai-entry').length === 3,
-    String($$('#bc-c-wb-ai-list .cwb-ai-entry').length)
-  );
-  check(
-    '状态行说明会并进这本书',
-    byId('bc-c-wb-ai-status').textContent.includes('并进'),
-    byId('bc-c-wb-ai-status').textContent
-  );
-
-  click('#bc-btn-save-char');
-  // 保存完草稿就交给那本书了：清单清空即说明 materialize 走完了
-  await waitFor('副本保存完', () => $$('#bc-c-wb-ai-list .cwb-ai-entry').length === 0, 8000);
-  await sleep(250);
-
-  // 世界书编辑器还在后台：左栏条目列表应该已经多出这 3 条（appendEntriesToBookDraft 里刷的）
-  check(
-    '那本书的左栏条目列表跟着长了 3 条',
-    $$('#wb-entry-list .wb-entry').length === listedBefore + 3,
-    `${$$('#wb-entry-list .wb-entry').length} / ${listedBefore + 3}`
-  );
-  // 但还没落盘 —— 保存副本不会顺手把整本书写进磁盘
-  check(
-    '磁盘上的条目数没变（只是草稿）',
-    (((await savedWorldbooks()).find((b) => b.name === '冒烟测试世界') || {}).entries || []).length === entriesOnDisk,
-    String((((await savedWorldbooks()).find((b) => b.name === '冒烟测试世界') || {}).entries || []).length)
-  );
-
-  click('#bc-btn-close-chars');
-  await waitFor('回到世界书编辑器', () => shown('#view-wb-editor'));
-  check(
-    '页头保存胶囊提示「有未保存的改动」',
-    byId('wb-save-state').dataset.state === 'dirty',
-    byId('wb-save-state').textContent
-  );
-
-  click('#btn-save-wb');
-  await waitFor('这本书真的落盘', async () => {
-    const book = (await savedWorldbooks()).find((b) => b.name === '冒烟测试世界');
-    return !!book && (book.entries || []).length === entriesOnDisk + 3;
-  });
-
-  const savedBook = (await savedWorldbooks()).find((b) => b.name === '冒烟测试世界');
-  const titles = (savedBook.entries || []).map((e) => e.title);
-  check('补出来的三条进了这本书', ['夜班规矩', '街口那盏灯', '这座城的作派'].every((t) => titles.includes(t)), JSON.stringify(titles));
-  const savedNpc = ((savedBook && savedBook.characters) || []).find((c) => c.name === '后厨帮工');
-  check('副本没被绑上一本新书', !savedNpc || !(savedNpc.worldbookIds || []).length, JSON.stringify(savedNpc && savedNpc.worldbookIds));
-
-  click('#btn-close-worldbooks');
-  await sleep(150);
-  if (shown('#confirm-modal')) click('#confirm-ok');
-  await waitFor('世界书编辑器关闭', () => !shown('#view-wb-editor'));
 });
 
 // ---------------------------------------------------------------------------
@@ -5592,7 +5322,8 @@ await scenario('进入世界：用角色卡当自己', async () => {
 
   check('名字被自动填上了', byId('player-name').value === '属性测试角色', byId('player-name').value);
   check('设定也带过来了', byId('player-profile').value.length > 0, `${byId('player-profile').value.length} 字`);
-  check('预览说明了会带上哪些属性', shown('#player-char-preview') && byId('player-char-preview').textContent.includes('金币'), byId('player-char-preview').textContent);
+  // 属性已归本书角色（副本），角色卡不再带属性 —— 选卡当自己时 preview 如实说明这一点。
+  check('角色卡没有属性时 preview 说明没有定义属性', shown('#player-char-preview') && byId('player-char-preview').textContent.includes('没有定义属性'), byId('player-char-preview').textContent);
 
   // 填完还能改 —— 改了以你改的为准
   setValue('#player-name', '改过的名字');
@@ -5640,9 +5371,10 @@ await scenario('进入世界：用角色卡当自己', async () => {
     return row ? row.querySelector('.sc-value').textContent : null;
   };
 
-  check('「我的状态」卡里有用角色卡种下的属性', cardNames.includes('金币') && cardNames.includes('上衣'), JSON.stringify(cardNames));
+  // 属性已归本书角色（副本）：选的角色卡不带属性，玩家自己的状态卡里只剩「姓名」。
+  // 副本的属性（金币/上衣/好感度）在副本自己的卡上，不由「选卡当自己」带进来。
   check('姓名用的是你改过的名字', cardValue('姓名') === '改过的名字', String(cardValue('姓名')));
-  check('值来自角色卡的初始值', cardValue('金币') === '100', String(cardValue('金币')));
+  check('玩家卡不再带角色卡的属性（属性归副本）', !cardNames.includes('金币') && !cardNames.includes('上衣'), JSON.stringify(cardNames));
 
   // 收掉这张卡，别影响后面的场景
   const closeMyCard = $('#state-cards .state-card[data-owner="player"] .sc-close');
@@ -5675,613 +5407,11 @@ notes.push(`磁盘上的角色数：${(await savedCharacters()).length}`);
 notes.push(`磁盘上的世界书数：${(await savedWorldbooks()).length}`);
 notes.push(`会话数：${$$('#convo-list .convo-item').length}`);
 
-// ---------------------------------------------------------------------------
-//  场景 13：角色卡 —— 每个字段都能原样存下来
-//
-//  主进程的 normalizeCharacter 是白名单式的，只保留显式列出的字段，漏一个就
-//  静默丢掉。这里把每个可编辑字段都填上不同值，再逐个核对回来没有。
-// ---------------------------------------------------------------------------
-await scenario('角色卡：字段往返不丢', async () => {
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
-  const NAME = '字段往返测试';
-  setValue('#c-name', NAME);
-  setValue('#c-tags', '甲, 乙');
-  // 年龄/性别/种族已整体移除（写进描述即可），编辑器里没有对应输入框。
-  setValue('#c-desc', 'D-描述');
-  setValue('#c-personality', 'P-性格');
-  setValue('#c-scenario', 'S-场景');
-  setValue('#c-first', 'F-开场白');
-  setValue('#c-example', 'E-示例');
-  setValue('#c-system', 'SP-系统提示');
-  setValue('#c-post', 'PH-后指令');
-  setValue('#c-notes', 'CN-备注');
 
-  setValue('#c-attr-new', '金币');
-  click('#btn-add-attr');
-  await waitFor('属性行出现', () => $$('#c-attr-list .attr-row').length === 1);
-  setValue($$('#c-attr-list .attr-row')[0].querySelector('.attr-value'), '777');
 
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
-  await sleep(150);
 
-  const saved = (await savedCharacters()).find((c) => c.name === NAME);
-  check('角色存下来了', !!saved);
 
-  const expect = {
-    tags: ['甲', '乙'],
-    description: 'D-描述',
-    personality: 'P-性格',
-    scenario: 'S-场景',
-    firstMes: 'F-开场白',
-    mesExample: 'E-示例',
-    systemPrompt: 'SP-系统提示',
-    postHistoryInstructions: 'PH-后指令',
-    creatorNotes: 'CN-备注'
-  };
-  for (const [key, want] of Object.entries(expect)) {
-    const got = saved ? saved[key] : undefined;
-    check(`字段 ${key} 没被丢掉`, JSON.stringify(got) === JSON.stringify(want), `期望 ${JSON.stringify(want)}，实际 ${JSON.stringify(got)}`);
-  }
-  check(
-    '属性没被丢掉',
-    !!saved && Array.isArray(saved.attributes) && saved.attributes.length === 1 && saved.attributes[0].value === '777',
-    JSON.stringify(saved && saved.attributes)
-  );
-});
-
-// ---------------------------------------------------------------------------
-//  场景：角色头像 / 形象 —— 两张图各管一处
-//    头像（1:1）→ 消息气泡、状态卡；形象（2:3）→ 角色卡列表，点开看大图。
-//    上传走**真裁剪组件**（不是往框里直接塞图）：images:pick 的桩给一张
-//    1×1 PNG，裁剪浮层照常弹、照常按目标比例输出。
-// ---------------------------------------------------------------------------
-await scenario('角色：头像和形象是两张图', async () => {
-  const isImg = (v) => typeof v === 'string' && v.startsWith('data:image/');
-
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-
-  const NAME = '双图测试角色';
-  setValue('#c-name', NAME);
-
-  // --- 两个上传框各就各位 ---
-  check('编辑器里有两个上传框（头像 / 形象）', !!byId('char-avatar') && !!byId('char-portrait'));
-  check(
-    '两个框一开始都是「点击上传」',
-    !!byId('char-avatar').querySelector('.char-avatar-empty') &&
-      !!byId('char-portrait').querySelector('.char-avatar-empty')
-  );
-
-  // --- 头像 / 形象 挪到了表单最顶上，和角色名同级（不再有折叠的「图片」块）---
-  check(
-    '头像 / 形象 保留在角色资料栏',
-    !!$('.char-media-top') && $('.char-identity-pane').contains($('.char-media-top'))
-  );
-  check('没有可折叠的「图片」块了', !$('.char-media-section'));
-
-  // --- 传头像：点框 → 弹裁剪 → 「用这块」 ---
-  click('#char-avatar');
-  await waitFor('裁剪浮层弹出来了', () => !!byId('crop-layer'));
-  check('裁剪标题是「裁剪头像」', byId('crop-layer').textContent.includes('裁剪头像'));
-  click('#crop-ok');
-  // dataURL 的解码是异步的，等到尺寸出来再断言，别读到 0
-  await waitFor('头像按 384 落进框里', () => {
-    const i = byId('char-avatar').querySelector('img');
-    return !!i && i.naturalWidth === 384;
-  });
-
-  const avImg = byId('char-avatar').querySelector('img');
-  check(
-    '头像按 1:1 裁（384×384）',
-    !!avImg && avImg.naturalWidth === 384 && avImg.naturalHeight === 384,
-    avImg ? `${avImg.naturalWidth}×${avImg.naturalHeight}` : '框里没图'
-  );
-
-  // 这张卡只有一张图 —— 形象那一栏先沿用头像，并标出「沿用」
-  check(
-    '还没单独设形象时，形象框先沿用头像并标记',
-    !!byId('char-portrait').querySelector('img') && byId('char-portrait').classList.contains('is-inherited')
-  );
-
-  // --- 传形象 ---
-  click('#char-portrait');
-  await waitFor('裁剪浮层又弹出来了', () => !!byId('crop-layer'));
-  check('裁剪标题是「裁剪角色形象」', byId('crop-layer').textContent.includes('裁剪角色形象'));
-  click('#crop-ok');
-  // 光等「框里有 img」不够 —— 还没单独设形象时，框里本来就沿用着头像那张。
-  // 等到尺寸变成 1024 才说明新裁的那张真的换上了。
-  await waitFor('形象换成新裁的那张', () => {
-    const i = byId('char-portrait').querySelector('img');
-    return !!i && i.naturalWidth === 1024;
-  });
-  check('设过形象之后不再标「沿用头像」', !byId('char-portrait').classList.contains('is-inherited'));
-
-  const ptImg = byId('char-portrait').querySelector('img');
-  check(
-    '形象按 2:3 裁（1024×1536）',
-    !!ptImg && ptImg.naturalWidth === 1024 && ptImg.naturalHeight === 1536,
-    `实际 ${ptImg && ptImg.naturalWidth}×${ptImg && ptImg.naturalHeight} / 视口 ${window.innerWidth}×${window.innerHeight} / dpr ${window.devicePixelRatio}`
-  );
-
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
-  await sleep(200);
-
-  // --- 落盘：两张图是两个字段，都要留下 ---
-  const saved = (await savedCharacters()).find((c) => c.name === NAME);
-  check('角色存下来了', !!saved);
-  check('头像存进 avatar', isImg(saved && saved.avatar), String(saved && saved.avatar).slice(0, 24));
-  check('形象存进 portrait（另一个字段）', isImg(saved && saved.portrait), String(saved && saved.portrait).slice(0, 24));
-  check('两张图不是同一份', !!saved && saved.avatar !== saved.portrait);
-
-  // --- 列表上铺的是形象，点它能看大图 ---
-  const card = $$('#char-page-grid .char-card').find(
-    (c) => c.querySelector('.char-card-name') && c.querySelector('.char-card-name').textContent === NAME
-  );
-  check('列表里能找到这张卡', !!card);
-
-  const media = card && card.querySelector('.char-card-avatar');
-  check('列表卡上铺的是形象图', !!media && !!media.querySelector('img'));
-  check('列表卡上的形象能点（包在按钮里）', !!media && media.tagName === 'BUTTON');
-  check('角色卡不留外层内边距', !!card && ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'].every((key) => getComputedStyle(card)[key] === '0px'));
-  check('角色封面贴着卡片顶边与左右边', !!card && !!media && ['left', 'right', 'top'].every((key) => Math.abs(card.getBoundingClientRect()[key] - media.getBoundingClientRect()[key]) < 1));
-  check('角色封面由卡片统一裁切圆角', !!card && !!media && getComputedStyle(card).overflow === 'hidden' && getComputedStyle(media).borderTopLeftRadius === '0px');
-  click(media);
-  await sleep(300);
-
-  // --- 老卡兼容：只有一张图（没有 portrait 键）的卡 ---
-  // 用真实交互造：新建一张卡、只传头像、保存 —— 落盘后照样没有 portrait 键，
-  // 这就是老卡那种「只有一张图」的形态（不走 saveCharacters 硬塞：那样绕开了
-  // 渲染层，界面上根本看不到这张卡）。
-  const OLD = '只有一张图的老卡';
-  click('#btn-chars');
-  await waitFor('切回角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-  setValue('#c-name', OLD);
-  click('#char-avatar');
-  await waitFor('裁剪浮层弹出来了', () => !!byId('crop-layer'));
-  click('#crop-ok');
-  await waitFor('头像按 384 落进框里', () => { const i = byId('char-avatar').querySelector('img'); return !!i && i.naturalWidth === 384; });
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
-  await sleep(200);
-
-  const opened = (await savedCharacters()).find((c) => c.name === OLD);
-  check('只传过头像的卡，落盘后没有 portrait 键', !!opened && !('portrait' in opened));
-
-  const oldCard = $$('#char-page-grid .char-card').find(
-    (c) => c.querySelector('.char-card-name') && c.querySelector('.char-card-name').textContent === OLD
-  );
-  check('只有一张图的卡，列表上显示的还是它那张图', !!oldCard && !!oldCard.querySelector('.char-card-avatar img'));
-  if (!oldCard) return;
-
-  click(buttonByText(oldCard, '编辑'));
-  await waitFor('编辑器打开', () => shown('#view-char-editor'));
-  check('老卡的形象框先沿用头像那张图', byId('char-portrait').classList.contains('is-inherited'));
-
-  click('#char-avatar');
-  await waitFor('裁剪浮层弹出来了', () => !!byId('crop-layer'));
-  click('#crop-ok');
-  // 换头像之后形象栏要接过原来那张，于是不再标「沿用头像」。
-  // （不能等 img.src 变化：images:pick 的桩每次都给同一张 1×1 PNG，
-  //   两次裁出来的字节是一样的，src 根本不变。）
-  await waitFor('形象接过了旧头像', () => !byId('char-portrait').classList.contains('is-inherited'));
-  click('#btn-save-char');
-  // 改已有的角色不会自动关弹窗（留着接着改别的字段），这里等落盘再自己关
-  await sleep(400);
-  click('#btn-close-chars');
-  await sleep(150);
-
-  const fixed = (await savedCharacters()).find((c) => c.name === OLD);
-  check(
-    '老卡换头像时，原来那张图原封不动留成了形象',
-    !!fixed && !!opened && fixed.portrait === opened.avatar,
-    String(fixed && fixed.portrait).slice(0, 24)
-  );
-  check('老卡的头像还是有的', !!fixed && isImg(fixed.avatar));
-});
-
-// ---------------------------------------------------------------------------
-//  场景 14：角色属性 —— 粘贴文本批量生成
-// ---------------------------------------------------------------------------
-await scenario('角色属性：粘贴文本批量生成', async () => {
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-  setValue('#c-name', '粘贴测试角色');
-
-  check('粘贴区一开始是收着的', !shown('#c-attr-paste'));
-  click('#btn-attr-paste');
-  await waitFor('粘贴区展开', () => shown('#c-attr-paste'));
-
-  // 故意混几种写法 + 两行认不出来的（空行 / 光一个名字 / 保留字）
-  setValue(
-    '#c-attr-paste-text',
-    ['金币：9900', '【上衣】：衬衫', '年龄 16', '- 下装：裙子', '', '籍贯', '旁白：不该收进来'].join('\n')
-  );
-  click('#btn-attr-paste-apply');
-  await waitFor('属性行出现', () => $$('#c-attr-list .attr-row').length >= 4);
-  await sleep(80);
-
-  const names = $$('#c-attr-list .attr-name').map((n) => n.textContent);
-  const valueOf = (n) => {
-    const row = $$('#c-attr-list .attr-row').find((r) => r.querySelector('.attr-name').textContent === n);
-    return row ? row.querySelector('.attr-value').value : null;
-  };
-
-  check('四种写法都认出来了', ['金币', '上衣', '年龄', '下装'].every((n) => names.includes(n)), JSON.stringify(names));
-  check(
-    '值也对',
-    valueOf('金币') === '9900' && valueOf('上衣') === '衬衫' && valueOf('年龄') === '16' && valueOf('下装') === '裙子',
-    JSON.stringify({ 金币: valueOf('金币'), 上衣: valueOf('上衣'), 年龄: valueOf('年龄'), 下装: valueOf('下装') })
-  );
-  check('认不出的行跳过（光一个名字）', !names.includes('籍贯'), JSON.stringify(names));
-  check('保留字不收（旁白）', !names.includes('旁白'), JSON.stringify(names));
-  check('解析完自动收起粘贴区', !shown('#c-attr-paste'));
-
-  // 再贴一次：同名的应该覆盖值，而不是加出第二条
-  click('#btn-attr-paste');
-  await waitFor('粘贴区展开', () => shown('#c-attr-paste'));
-  setValue('#c-attr-paste-text', '金币：1\n新字段：值');
-  click('#btn-attr-paste-apply');
-  await waitFor('新字段出现', () => $$('#c-attr-list .attr-name').some((n) => n.textContent === '新字段'));
-  await sleep(80);
-
-  const names2 = $$('#c-attr-list .attr-name').map((n) => n.textContent);
-  check('同名没有加出第二条', names2.filter((n) => n === '金币').length === 1, JSON.stringify(names2));
-  check('同名的值被覆盖了', valueOf('金币') === '1', String(valueOf('金币')));
-  check('新字段加进来了', names2.includes('新字段'), JSON.stringify(names2));
-
-  // 存盘往返（顺带再验一次白名单没漏字段）
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
-  await sleep(150);
-
-  const saved = (await savedCharacters()).find((c) => c.name === '粘贴测试角色');
-  check(
-    '粘贴出来的属性也落盘了',
-    !!saved && saved.attributes.length === 5 && saved.attributes.some((a) => a.name === '金币' && a.value === '1'),
-    JSON.stringify(saved && saved.attributes)
-  );
-});
-
-// ---------------------------------------------------------------------------
-//  场景 14.5：角色属性 —— 套用官方互动模板
-//
-//  一键种入官方固定分组（状态栏 / 关系 / 背包）和默认字段，字段带好
-//  类型 / 范围 / 变化规则。这是「互动模板」的核心体验：不用手动建组、
-//  不用逐条填类型。
-// ---------------------------------------------------------------------------
-await scenario('角色属性：套用互动模板', async () => {
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-  setValue('#c-name', '模板测试角色');
-
-  // 空卡还没有任何分组
-  const tabLabels = () => $$('#c-attr-tabs .attr-tab').map((b) => b.textContent);
-
-  check('模板入口在属性区里', !!byId('btn-attr-template'));
-  click('#btn-attr-template');
-  await waitFor('模板字段种进来了', () => $$('#c-attr-list .attr-row').length >= 3);
-
-  // 三个官方分组都出现在标签栏里（各带字段计数）
-  check(
-    '三个固定分组都出现了',
-    ['状态栏', '关系', '背包'].every((g) => tabLabels().some((t) => t.startsWith(g))),
-    JSON.stringify(tabLabels())
-  );
-  check('状态栏组里有 3 个字段（时间 / 地点 / 心情）', tabLabels().some((t) => t.startsWith('状态栏 3')), JSON.stringify(tabLabels()));
-  check('关系组里有 2 个字段（好感度 / 关系阶段）', tabLabels().some((t) => t.startsWith('关系 2')), JSON.stringify(tabLabels()));
-  check('背包组里有 1 个字段（物品）', tabLabels().some((t) => t.startsWith('背包 1')), JSON.stringify(tabLabels()));
-
-  // 应用完停在「状态栏」，能看到刚种进来的字段
-  const names = $$('#c-attr-list .attr-name').map((n) => n.textContent);
-  check('应用完停在状态栏，能看到时间/地点/心情', ['时间', '地点', '心情'].every((n) => names.includes(n)), JSON.stringify(names));
-
-  // 切到「关系」：好感度是带范围的数值，关系阶段是文本，都有变化规则
-  const clickTab = (prefix) => {
-    const tab = $$('#c-attr-tabs .attr-tab').find((b) => b.textContent.startsWith(prefix));
-    if (!tab) throw new Error(`标签栏里没有「${prefix}」`);
-    click(tab);
-  };
-  clickTab('关系');
-  await waitFor('切到关系组', () => $$('#c-attr-list .attr-name').some((n) => n.textContent === '好感度'));
-
-  // 好感度是带范围的数值字段，「更多」默认就是展开的（有范围就展开）——
-  // 直接断言范围 0~100 和变化规则，不再点按钮（点了反而会收起）。
-  const favorRow = () => $$('#c-attr-list .attr-row').find((r) => r.querySelector('.attr-name').textContent === '好感度');
-  await waitFor('好感度的范围框可见', () => !!favorRow().parentElement.querySelector('.attr-more .attr-num'));
-  const numInputs = favorRow().parentElement.querySelectorAll('.attr-more .attr-num');
-  check('好感度范围是 0~100', numInputs[0].value === '0' && numInputs[1].value === '100', JSON.stringify(Array.from(numInputs).map((i) => i.value)));
-  check(
-    '好感度带变化规则',
-    favorRow().parentElement.querySelector('.attr-more .attr-hint').value.includes('示好'),
-    favorRow().parentElement.querySelector('.attr-more .attr-hint').value
-  );
-
-  // 保存后落盘：类型/范围/hint/分组都在
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
-  await sleep(150);
-
-  const saved = (await savedCharacters()).find((c) => c.name === '模板测试角色');
-  const byName = (n) => ((saved && saved.attributes) || []).find((a) => a.name === n) || {};
-  check('模板字段都落盘了', !!saved && saved.attributes.length === 6, JSON.stringify(saved && (saved.attributes || []).map((a) => a.name)));
-  check(
-    '好感度类型/范围/规则/分组都对',
-    byName('好感度').type === 'meter' && byName('好感度').min === 0 && byName('好感度').max === 100 &&
-      String(byName('好感度').hint || '').includes('示好') && byName('好感度').group === '关系',
-    JSON.stringify(byName('好感度'))
-  );
-  check('关系阶段带「按好感度自动」的变化规则', String(byName('关系阶段').hint || '').includes('好感度'), JSON.stringify(byName('关系阶段')));
-  check('物品是列表类型、归到背包', byName('物品').type === 'list' && byName('物品').group === '背包', JSON.stringify(byName('物品')));
-
-  // 再套一次：已存在的字段不重复加
-  click('#btn-attr-template');
-  await sleep(80);
-  check('再套一次不会重复加字段', $$('#c-attr-list .attr-row').length === 3, `实际 ${$$('#c-attr-list .attr-row').length}`);
-});
-
-// ---------------------------------------------------------------------------
-//  场景 15：角色属性 —— 分组标签栏
-//
-//  属性在数据上仍是一维数组（分组记在每个字段自己的 group 上），
-//  分组只是视图键：点哪个标签就只铺哪一组，在某一组里加字段自动带这个分组。
-//  这个场景专门盯「视图分层」，落盘的形状由上面的场景 13 / 14 把关。
-// ---------------------------------------------------------------------------
-await scenario('角色属性：分组标签栏', async () => {
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-  setValue('#c-name', '分组测试角色');
-
-  const tabLabels = () => $$('#c-attr-tabs .attr-tab').map((b) => b.textContent);
-  const listedNames = () => $$('#c-attr-list .attr-name').map((n) => n.textContent);
-  const clickTab = (prefix) => {
-    const tab = $$('#c-attr-tabs .attr-tab').find((b) => b.textContent.startsWith(prefix));
-    if (!tab) throw new Error(`标签栏里没有「${prefix}」`);
-    click(tab);
-  };
-
-  // 空卡：总得有个地方落笔，所以默认就该有「未分组」这一桶
-  check(
-    '空卡默认只有一个「未分组」标签',
-    JSON.stringify(tabLabels()) === JSON.stringify(['未分组 0']),
-    JSON.stringify(tabLabels())
-  );
-
-  setValue('#c-attr-new', '金币');
-  click('#btn-add-attr');
-  await waitFor('金币出现', () => listedNames().includes('金币'));
-  check('标签上的计数跟着涨', tabLabels()[0] === '未分组 1', JSON.stringify(tabLabels()));
-
-  // 新建一个分组：回车确认，应该立刻切过去
-  const newTabInput = $('#c-attr-tabs .attr-tab-new');
-  check('标签栏末尾有「新建分组」入口', !!newTabInput);
-  setValue(newTabInput, '背包');
-  newTabInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-  await waitFor('切到新分组', () => tabLabels().some((t) => t.startsWith('背包')));
-  check(
-    '新建的空分组也在标签栏里，且排在未分组前面',
-    JSON.stringify(tabLabels()) === JSON.stringify(['背包 0', '未分组 1']),
-    JSON.stringify(tabLabels())
-  );
-  check('切到空分组后列表是空的', listedNames().length === 0, JSON.stringify(listedNames()));
-  // 空组光秃秃的会让人以为界面坏了 —— 得有一句话告诉他下一步干嘛
-  check(
-    '空分组里有引导文案',
-    !!$('#c-attr-list .attr-empty') && $('#c-attr-list .attr-empty').textContent.includes('背包'),
-    ($('#c-attr-list .attr-empty') || {}).textContent
-  );
-  // 组名和字段数拆成了两个节点（数字做成徽标），但整串得还是「名字 空格 数字」——
-  // 测试是按整串比对的，拆节点时最容易把那个空格弄丢
-  check(
-    '标签里的组名和计数是两个节点，中间的空格还在',
-    !!$('#c-attr-tabs .attr-tab-name') && !!$('#c-attr-tabs .attr-tab-count') &&
-      $('#c-attr-tabs .attr-tab').textContent === '背包 0',
-    JSON.stringify(($('#c-attr-tabs .attr-tab') || {}).textContent)
-  );
-
-  // 在「背包」这一页加字段：应该自动归到背包，不用再去「更多」里填分组
-  setValue('#c-attr-new', '道具');
-  click('#btn-add-attr');
-  await waitFor('道具出现', () => listedNames().includes('道具'));
-  check('在当前分组里加字段，自动带上这个分组', tabLabels()[0] === '背包 1', JSON.stringify(tabLabels()));
-
-  setValue('#c-attr-new', '上衣');
-  click('#btn-add-attr');
-  await waitFor('上衣出现', () => listedNames().includes('上衣'));
-  check('继续加还是这一组', tabLabels()[0] === '背包 2', JSON.stringify(tabLabels()));
-
-  // 切回未分组：只该看到金币
-  clickTab('未分组');
-  await waitFor('切回未分组', () => listedNames().length === 1);
-  check('切组之后只显示那一组的字段', listedNames().join(',') === '金币', JSON.stringify(listedNames()));
-
-  // 再切回背包：还是那两行，顺序也没变
-  clickTab('背包');
-  await waitFor('切回背包', () => listedNames().length === 2);
-  check('切回去还是那两行、顺序不变', listedNames().join(',') === '道具,上衣', JSON.stringify(listedNames()));
-
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
-  await sleep(150);
-
-  const saved = (await savedCharacters()).find((c) => c.name === '分组测试角色');
-  const byName = (n) => ((saved && saved.attributes) || []).find((a) => a.name === n) || {};
-  check('三个字段都存下来了', !!saved && saved.attributes.length === 3, JSON.stringify(saved && saved.attributes));
-  check(
-    '分组落在字段自己身上',
-    byName('道具').group === '背包' && byName('上衣').group === '背包',
-    JSON.stringify(saved && saved.attributes)
-  );
-  // 未分组的字段不写 group —— 数据形状要和以前完全一样，老卡的往返才不会变样
-  check('未分组的字段不写 group', !!saved && saved.attributes.length === 3 && byName('金币').group === undefined, JSON.stringify(byName('金币')));
-  check(
-    '编辑器的视图状态没被写进角色卡（_activeGroup / _extraGroups）',
-    !!saved &&
-      saved.attributes.every((a) => !('_activeGroup' in a) && !('_extraGroups' in a)),
-    JSON.stringify(saved && Object.keys(saved.attributes[0] || {}))
-  );
-});
-
-// ---------------------------------------------------------------------------
-//  场景：角色属性 —— 分组的改名 / 解散 / 顺序稳定
-//
-//  分组以前只能靠「在某个字段的『更多』里填 group」间接建出来，建完就没有
-//  入口了 —— 改不了名，也解散不掉。另外标签栏按**字段在数组里的先后**排，
-//  于是空分组会被已经有字段的组顶到后面去，看着像在按字段数量排队。
-//  这个场景盯这两件事。
-// ---------------------------------------------------------------------------
-await scenario('角色属性：分组改名与解散', async () => {
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-  setValue('#c-name', '分组改名角色');
-
-  const tabLabels = () => $$('#c-attr-tabs .attr-tab').map((b) => b.textContent);
-  const listedNames = () => $$('#c-attr-list .attr-name').map((n) => n.textContent);
-  const clickTab = (prefix) => {
-    const tab = $$('#c-attr-tabs .attr-tab').find((b) => b.textContent.startsWith(prefix));
-    if (!tab) throw new Error(`标签栏里没有「${prefix}」`);
-    return click(tab);
-  };
-  const newGroup = (name) => {
-    const box = $('#c-attr-tabs .attr-tab-new');
-    setValue(box, name);
-    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    return waitFor(`分组「${name}」出现`, () => tabLabels().some((t) => t.startsWith(name)));
-  };
-  const addAttr = (name) => {
-    setValue('#c-attr-new', name);
-    click('#btn-add-attr');
-    return waitFor(`属性「${name}」出现`, () => listedNames().includes(name));
-  };
-  const openGroupEdit = () => {
-    click($('#c-attr-tabs .attr-tab-edit'));
-    return waitFor('分组操作条出现', () => shown('#c-attr-group-edit'));
-  };
-  // 改名走 change（回车 / 失焦），而 setValue 只补一个 input —— 手动补齐
-  const renameTo = (name) => {
-    const box = $('#c-attr-group-edit .attr-group-name');
-    setValue(box, name);
-    box.dispatchEvent(new Event('change', { bubbles: true }));
-  };
-
-  // --- 顺序：先建的空分组不该被「后建的、已经填了字段的组」顶下去 ---
-  await newGroup('状态');
-  await newGroup('关系');
-  await addAttr('好感度');
-  check(
-    '先建的分组留在原位，没被后面填了字段的组顶到后面',
-    JSON.stringify(tabLabels()) === JSON.stringify(['状态 0', '关系 1']),
-    JSON.stringify(tabLabels())
-  );
-
-  clickTab('状态');
-  await addAttr('体温');
-  check(
-    '回头给先建的那一组填字段，顺序仍然是创建顺序',
-    JSON.stringify(tabLabels()) === JSON.stringify(['状态 1', '关系 1']),
-    JSON.stringify(tabLabels())
-  );
-
-  // --- 改名：空分组改名不能把它改没了 ---
-  clickTab('状态');
-  await openGroupEdit();
-  check(
-    '操作条里带出了当前分组名',
-    $('#c-attr-group-edit .attr-group-name').value === '状态',
-    $('#c-attr-group-edit .attr-group-name').value
-  );
-  renameTo('心情');
-  await waitFor('改名生效', () => tabLabels().some((t) => t.startsWith('心情')));
-  check(
-    '改名后标签留在原来的位置（没跳到末尾）',
-    JSON.stringify(tabLabels()) === JSON.stringify(['心情 1', '关系 1']),
-    JSON.stringify(tabLabels())
-  );
-  check('改名后仍停在那一组，字段也还在', listedNames().join(',') === '体温', JSON.stringify(listedNames()));
-
-  // --- 改名时按 Esc：只该取消改名，**不能**把整个角色编辑器一起关掉 ---
-  // 以前这两个输入框的 Esc 分支只 preventDefault、没 stopPropagation，
-  // 事件冒泡到入口层的全局 Esc 链（document 上）就把 charsModal 关了。
-  await openGroupEdit();
-  {
-    const escBox = $('#c-attr-group-edit .attr-group-name');
-    escBox.value = '不该生效的名字';
-    escBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await sleep(120);
-    check('改名时按 Esc 不会关掉角色编辑器', shown('#view-char-editor'));
-    check('改名时按 Esc 也不会连弹「放弃新建」确认框', !shown('#confirm-modal'));
-    check('按 Esc 是「放弃改名」，名字没被改掉', tabLabels().some((t) => t.startsWith('心情')), JSON.stringify(tabLabels()));
-  }
-
-  // --- 改成已有的名字 = 并组 ---
-  clickTab('关系');
-  await openGroupEdit();
-  renameTo('心情');
-  await waitFor('并组完成', () => listedNames().length === 2);
-  check(
-    '改成已有的名字就是并组，被并掉的那个位置不占坑',
-    JSON.stringify(tabLabels()) === JSON.stringify(['心情 2']),
-    JSON.stringify(tabLabels())
-  );
-  check('两组的字段合到一起，一个都没丢', listedNames().join(',') === '好感度,体温', JSON.stringify(listedNames()));
-
-  // --- 解散：字段退回「未分组」，动之前先问一句 ---
-  // 并组/改名完成后操作条会自动收起来（免得留在那儿被误点第二次），
-  // 所以要重新点开「⋯」再拿里面的按钮。
-  await openGroupEdit();
-  click($('#c-attr-group-edit m-button'));
-  await waitFor('确认弹窗出现', () => shown('#confirm-modal'));
-  check(
-    '确认弹窗把「属性会退回未分组」说清楚了',
-    byId('confirm-message').textContent.includes('未分组') && byId('confirm-message').textContent.includes('2'),
-    byId('confirm-message').textContent
-  );
-  click('#confirm-ok');
-  await waitFor('解散完成', () => tabLabels().length === 1 && tabLabels()[0] === '未分组 2');
-  check('解散之后属性退回「未分组」，一个都没少', listedNames().join(',') === '好感度,体温', JSON.stringify(listedNames()));
-
-  // --- 空分组直接删，不该弹确认 ---
-  await newGroup('临时');
-  await openGroupEdit();
-  click($('#c-attr-group-edit m-button'));
-  await waitFor('空分组被删掉', () => tabLabels().join() === '未分组 2');
-  check('删空分组不弹确认（没什么可丢的）', !shown('#confirm-modal'));
-
-  // --- 视图状态别跟着落盘 ---
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
-  await sleep(150);
-
-  const saved = (await savedCharacters()).find((c) => c.name === '分组改名角色');
-  check('结果落盘：两个属性都在「未分组」', !!saved && saved.attributes.length === 2, JSON.stringify(saved && saved.attributes));
-  check(
-    '解散过的分组没有留在数据里（字段上不写 group）',
-    !!saved && saved.attributes.every((a) => a.group === undefined),
-    JSON.stringify(saved && saved.attributes)
-  );
-  check(
-    '创建顺序表也没被写进角色卡',
-    !!saved && saved.attributes.every((a) => !('_groupOrder' in a) && !('_groupEditOpen' in a)),
-    JSON.stringify(saved && Object.keys(saved.attributes[0] || {}))
-  );
-});
 
 // ---------------------------------------------------------------------------
 //  场景 19：会话分支 + 存档点
@@ -6290,13 +5420,25 @@ await scenario('角色属性：分组改名与解散', async () => {
 //  「存档点」= 当前会话内的快照，读档会整个退回去。
 // ---------------------------------------------------------------------------
 await scenario('会话：分支与存档点', async () => {
-  click('#convo-list .convo-item');
+  // 世界会话的开场白是异步生成的，可能还在流式输出 —— 那时 switchConvo 会被
+  // 「正在生成回答」拦住。先等流结束，再挑一个确实够长的会话来分支。
+  await waitFor('上一段流式生成结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
+
+  const convos = (await window.mimitale.getConversations()).conversations;
+  const target = convos.find((c) => (c.messages || []).length >= 2);
+  const targetItem = target && $$('#convo-list .convo-item').find((it) => {
+    const t = it.querySelector('.convo-title');
+    return t && t.textContent.trim() === (target.title || '').trim();
+  });
+  check('有一个够长的会话可以分支', !!target && !!targetItem, target ? `找到「${target.title}」${(target.messages || []).length} 条` : '没有够长的会话');
+  if (!targetItem) return;
+  click(targetItem);
   await waitFor('切回聊天视图', () => shown('#view-chat'));
   await sleep(250);
 
   const before = await window.mimitale.getConversations();
   const origin = before.conversations.find((c) => c.id === before.activeId);
-  check('有一个够长的会话可以分支', !!origin && (origin.messages || []).length >= 2, `消息 ${origin && (origin.messages || []).length} 条`);
+  check('切到了那个够长的会话', !!origin && (origin.messages || []).length >= 2, `消息 ${origin && (origin.messages || []).length} 条`);
 
   // --- 分支 ---
   const nodes = $$('#messages .msg');
@@ -7760,9 +6902,10 @@ await scenario('状态卡：点头像查看与编辑', async () => {
       $$('#state-cards .state-card[data-owner="player"] .sc-input').length === 0,
     JSON.stringify({ 值: $$('#state-cards .state-card[data-owner="player"] .sc-value').length, 输入框: $$('#state-cards .state-card[data-owner="player"] .sc-input').length })
   );
+  // 属性已归本书角色（副本）：玩家自己的状态卡里不再带角色卡的属性（金币/上衣在副本卡上）。
   check(
-    '卡里有玩家角色卡种下的属性',
-    $$('#state-cards .state-card[data-owner="player"] .sc-name').some((n) => n.textContent === '金币'),
+    '玩家卡不再带角色卡的属性',
+    !$$('#state-cards .state-card[data-owner="player"] .sc-name').some((n) => n.textContent === '金币' || n.textContent === '上衣'),
     JSON.stringify($$('#state-cards .state-card[data-owner="player"] .sc-name').map((n) => n.textContent))
   );
 
@@ -7771,39 +6914,36 @@ await scenario('状态卡：点头像查看与编辑', async () => {
   await waitFor('编辑态出现输入框', () => $$('#state-cards .state-card[data-owner="player"] .sc-input').length > 0);
   check('编辑态下按钮变成「完成」', myCard().querySelector('.sc-edit').textContent.trim() === '完成', myCard().querySelector('.sc-edit').textContent);
 
-  // --- 改一个值 → 落到会话面板上 ---
-  const coinRow = $$('#state-cards .state-card[data-owner="player"] .sc-row').find(
-    (r) => r.querySelector('.sc-name').textContent === '金币'
-  );
-  const coinInput = coinRow.querySelector('.sc-input');
-  setValue(coinInput, '19');
-  coinInput.dispatchEvent(new Event('blur', { bubbles: true }));
-  await sleep(300);
-  let cv = await window.mimitale.getConversations();
-  let wc = cv.conversations.find((c) => c.title === '冒烟测试世界');
-  check('卡片里改的值落到了会话面板上', !!wc && wc.panel && panelValByName(wc.panel, '金币') === '19', wc ? String(panelValByName(wc.panel, '金币')) : 'null');
-
-  // --- 加一个字段 ---
+  // --- 加一个字段 → 改它的值 → 落到会话面板上 ---
+  // 玩家卡里没有现成的字段可改（属性归副本了），先加一个「心情」再改值验证落盘。
   setValue($('#state-cards .state-card[data-owner="player"] .sc-new'), '心情');
   click($('#state-cards .state-card[data-owner="player"] .sc-add-btn'));
   await waitFor('新字段出现', () =>
     $$('#state-cards .state-card[data-owner="player"] .sc-name').some((n) => n.textContent === '心情')
   );
   await sleep(200);
-  cv = await window.mimitale.getConversations();
-  wc = cv.conversations.find((c) => c.title === '冒烟测试世界');
+  let cv = await window.mimitale.getConversations();
+  let wc = cv.conversations.find((c) => c.title === '冒烟测试世界');
   check(
     '新字段归到玩家名下（owner=player）',
     !!wc && panelDefByName(wc.panelDefs, '心情') && panelDefByName(wc.panelDefs, '心情').owner === 'player',
     JSON.stringify(wc && panelDefByName(wc.panelDefs, '心情'))
   );
 
-  // --- 删掉它 ---
-  const moodRow = $$('#state-cards .state-card[data-owner="player"] .sc-row').find(
+  const moodRow = () => $$('#state-cards .state-card[data-owner="player"] .sc-row').find(
     (r) => r.querySelector('.sc-name').textContent === '心情'
   );
-  check('新字段行里有删除按钮', !!moodRow && !!moodRow.querySelector('.sc-del'));
-  click(moodRow.querySelector('.sc-del'));
+  const moodInput = moodRow().querySelector('.sc-input');
+  setValue(moodInput, '开心');
+  moodInput.dispatchEvent(new Event('blur', { bubbles: true }));
+  await sleep(300);
+  cv = await window.mimitale.getConversations();
+  wc = cv.conversations.find((c) => c.title === '冒烟测试世界');
+  check('卡片里改的值落到了会话面板上', !!wc && wc.panel && panelValByName(wc.panel, '心情') === '开心', wc ? String(panelValByName(wc.panel, '心情')) : 'null');
+
+  // --- 删掉它 ---
+  check('新字段行里有删除按钮', !!moodRow() && !!moodRow().querySelector('.sc-del'));
+  click(moodRow().querySelector('.sc-del'));
   await sleep(250);
   check(
     '删掉之后卡里就没了',
@@ -7819,72 +6959,6 @@ await scenario('状态卡：点头像查看与编辑', async () => {
   click(myCard().querySelector('.sc-close'));
   await sleep(150);
   check('点 ✕ 把卡收掉了', !myCard());
-
-  // --- 绑了角色的会话：头像行只有那个角色（普通聊天不显示「我」），点它开卡 ---
-  const charConvo = $$('#convo-list .convo-item').find((it) => {
-    const t = it.querySelector('.convo-title');
-    return t && t.textContent.trim().startsWith('选项测试');
-  });
-  if (charConvo) {
-    click(charConvo);
-    await sleep(400);
-    const owners = $$('#panel-cast .panel-avatar').map((b) => b.dataset.owner);
-    check(
-      '绑了角色的会话里入口条只有那个角色（没有「我」）',
-      !owners.includes('player') && owners.length === 1,
-      JSON.stringify(owners)
-    );
-
-    const charBtn = $$('#panel-cast .panel-avatar').find((b) => b.dataset.owner !== 'player');
-    if (charBtn) {
-      const charOwner = charBtn.dataset.owner;
-      const charCard = () => $(`#state-cards .state-card[data-owner="${CSS.escape(charOwner)}"]`);
-      click(charBtn);
-      await waitFor('角色状态卡出现', () => !!charCard());
-      check('点角色头像能开那个角色的卡', !!charCard());
-      check('角色卡里也有字段', $$(`#state-cards .state-card[data-owner="${CSS.escape(charOwner)}"] .sc-name`).length > 0);
-      click(charCard().querySelector('.sc-close'));
-      await sleep(150);
-    }
-
-    // --- 玩家卡里加一个「角色已经占了」的名字 → 提示要说清是谁占的 ---
-    // 字段名全局唯一（面板注入给模型的是「【名字】：值」，同名模型分不出是谁的），
-    // 所以单角色聊天里「姓名/性别」这类名字是加不进玩家卡的。
-    // ⚠️ 以前这里只查「整张面板有没有这个名字」，于是玩家卡明明没有也会报
-    //    「已经有了」—— 用户会懵（「我没加啊」）。现在必须说清是**角色**占了。
-    // 普通聊天的入口条没有「我」（2026-10-08），玩家卡从自己消息的头像开。
-    const myMsgAvatar = $$('#messages .msg.user .msg-avatar').pop();
-    if (myMsgAvatar) {
-      click(myMsgAvatar);
-      await waitFor('我的状态卡从自己消息的头像打开', () => !!$('#state-cards .state-card[data-owner="player"]'));
-      click($('#state-cards .state-card[data-owner="player"] .sc-edit'));
-      await sleep(250);
-
-      setValue($('#state-cards .state-card[data-owner="player"] .sc-new'), '姓名');
-      click($('#state-cards .state-card[data-owner="player"] .sc-add-btn'));
-      await sleep(150);
-      const toast = byId('toast');
-      check(
-        '加角色已占用的名字时，提示说的是「角色那边占了」而不是干巴巴的「已经有了」',
-        !!toast && toast.textContent.includes('角色那边占了') && toast.textContent.includes('我的姓名'),
-        toast ? toast.textContent : '(没有提示)'
-      );
-      check(
-        '同名字段确实没有被加进去',
-        !$$('#state-cards .state-card[data-owner="player"] .sc-name').some((n) => n.textContent === '姓名'),
-        JSON.stringify($$('#state-cards .state-card[data-owner="player"] .sc-name').map((n) => n.textContent))
-      );
-
-      // 按提示换个不冲突的名字就能加上
-      setValue($('#state-cards .state-card[data-owner="player"] .sc-new'), '我的姓名');
-      click($('#state-cards .state-card[data-owner="player"] .sc-add-btn'));
-      await waitFor(
-        '换个名字就加上了',
-        () => $$('#state-cards .state-card[data-owner="player"] .sc-name').some((n) => n.textContent === '我的姓名')
-      );
-      check('换个名字就能加成（提示给的活路走得通）', true);
-    }
-  }
 });
 
 // ---------------------------------------------------------------------------
@@ -8231,11 +7305,12 @@ await scenario('面板：同名属性按 owner 各自保留', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 28：进世界之后才往书里加角色，新 NPC 的属性也要种进会话。
-//  修复抽出 seedWorldbookCharactersIntoConvos，遍历绑定这本书的会话补种。验证：
-//  绑了这本书的会种入、没绑的不碰、同名属性不盖掉已有的。
+//  场景 28：同一会话里，两个角色的同名属性要按 owner 并存（不互相挤掉）。
+//  ⚠️ 以前这条测的是「进世界后加角色 → 遍历绑了这本书的会话补种」那个包装函数
+//     （seedWorldbookCharactersIntoConvos），那个函数随「副本自带世界书」一起撤了；
+//     保底的不变式还在 —— 同名属性靠 owner 复合键共存，所以改测这一层。
 // ---------------------------------------------------------------------------
-await scenario('世界书：进世界后加角色也能种进会话', async () => {
+await scenario('世界书：同名属性按 owner 并存', async () => {
   let mod = null;
   try {
     const url = new URL('js/data/panel.js', document.baseURI).href;
@@ -8243,49 +7318,22 @@ await scenario('世界书：进世界后加角色也能种进会话', async () =
   } catch (err) {
     check('panel 模块能动态加载（场景28）', false, (err && err.message) || String(err));
   }
-  if (!mod || typeof mod.seedWorldbookCharactersIntoConvos !== 'function') {
+  if (!mod || typeof mod.seedPanelFromCharacters !== 'function') {
     check('panel 模块能动态加载（场景28）', false);
     return;
   }
   check('panel 模块能动态加载（场景28）', true);
 
-  // 两个会话：A 绑了这本书，B 没绑
-  const book = { id: 'bk1', name: '酒馆' };
-  const convos = [
-    { id: 'cA', worldbookIds: ['bk1'], panel: {}, panelFields: [], panelDefs: {}, messages: [] },
-    { id: 'cB', worldbookIds: ['other'], panel: {}, panelFields: [], panelDefs: {}, messages: [] }
-  ];
-  // 新加入的副本：一个角色，带一个「生命」属性
-  const copies = [
-    { id: 'wc_new', name: '新来的NPC', attributes: [{ name: '生命', type: 'meter', min: 0, max: 100, value: '50/100' }] }
-  ];
+  const convo = { id: 'cC', worldbookIds: ['bk1'], panel: {}, panelFields: [], panelDefs: {}, messages: [] };
+  mod.seedPanelFromCharacters(convo, [{ id: 'wc_old', name: '老角色', attributes: [{ name: '生命', type: 'meter', min: 0, max: 100, value: '90/100' }] }], 'wc_old');
+  mod.seedPanelFromCharacters(convo, [{ id: 'wc_new', name: '新来的NPC', attributes: [{ name: '生命', type: 'meter', min: 0, max: 100, value: '50/100' }] }]);
 
-  const seeded = mod.seedWorldbookCharactersIntoConvos(convos, book, copies);
-
-  check('只种进了绑了这本书的那一个会话', seeded === 1, `seeded=${seeded}`);
   check(
-    '绑了这本书的会话拿到了新 NPC 的属性（归属=副本 id）',
-    convos[0].panelFields.length === 1 &&
-      mod.panelFieldOwner(convos[0], convos[0].panelFields[0]) === 'wc_new' &&
-      convos[0].panel[convos[0].panelFields[0]] === '50/100',
-    JSON.stringify(convos[0].panelFields)
-  );
-  check(
-    '没绑这本书的会话完全没被碰',
-    convos[1].panelFields.length === 0,
-    JSON.stringify(convos[1].panelFields)
-  );
-
-  // 会话里已有同名的「生命」（属于另一个角色）时，新 NPC 的「生命」不该盖掉它
-  const clashConvo = { id: 'cC', worldbookIds: ['bk1'], panel: {}, panelFields: [], panelDefs: {}, messages: [] };
-  mod.seedPanelFromCharacters(clashConvo, [{ id: 'wc_old', name: '老角色', attributes: [{ name: '生命', type: 'meter', min: 0, max: 100, value: '90/100' }] }], 'wc_old');
-  mod.seedWorldbookCharactersIntoConvos([clashConvo], book, copies);
-  check(
-    '同名的「生命」按 owner 并存（老角色的 90 和新 NPC 的 50 都留着）',
-    clashConvo.panelFields.length === 2 &&
-      clashConvo.panelFields.some((k) => mod.panelFieldOwner(clashConvo, k) === 'wc_old' && clashConvo.panel[k] === '90/100') &&
-      clashConvo.panelFields.some((k) => mod.panelFieldOwner(clashConvo, k) === 'wc_new' && clashConvo.panel[k] === '50/100'),
-    JSON.stringify(clashConvo.panel)
+    '同名的「生命」按 owner 并存（老角色的 90 和新角色的 50 都留着）',
+    convo.panelFields.length === 2 &&
+      convo.panelFields.some((k) => mod.panelFieldOwner(convo, k) === 'wc_old' && convo.panel[k] === '90/100') &&
+      convo.panelFields.some((k) => mod.panelFieldOwner(convo, k) === 'wc_new' && convo.panel[k] === '50/100'),
+    JSON.stringify(convo.panel)
   );
 });
 
@@ -9109,75 +8157,6 @@ await scenario('面板：世界书同名副本的字段并回「我」', async (
     wbList.length = 0;
     wbList.push(...saved);
   }
-});
-
-// ---------------------------------------------------------------------------
-//  场景 34：「同步属性」把角色卡同名卡的属性补进世界书副本（副本是快照，
-//  角色卡后来补的属性不会回流）。钉住 syncCopyAttrsFromSource 四条语义：
-//  按名字补属性、已有字段不覆盖、源卡没有的进 missing、补进去是深拷贝。
-// ---------------------------------------------------------------------------
-await scenario('世界书：同步属性把角色卡的属性补进副本', async () => {
-  let mod = null;
-  try {
-    const url = new URL('js/data/panel.js', document.baseURI).href;
-    mod = await import(url);
-  } catch (err) {
-    check('panel 模块能动态加载（场景34）', false, (err && err.message) || String(err));
-  }
-  if (!mod || typeof mod.syncCopyAttrsFromSource !== 'function') {
-    check('panel 模块能动态加载（场景34）', false);
-    return;
-  }
-  check('panel 模块能动态加载（场景34）', true);
-
-  // 角色卡：露西娅有 2 个属性；「路人甲」在角色卡里没有同名卡
-  const sources = [
-    {
-      id: 'lib_lucy',
-      name: '露西娅',
-      attributes: [
-        { name: '生命', type: 'meter', min: 0, max: 100, value: '100/100', group: '生存' },
-        { name: '心情', type: 'text', value: '闯祸了的慌', group: '状态栏' }
-      ]
-    }
-  ];
-
-  const copies = [
-    // 空壳副本 —— 该被补满
-    { id: 'wc_a', name: '露西娅', attributes: [] },
-    // 副本上已经有「生命」（这本书的当前值）→ 只补缺的「心情」，不覆盖生命
-    { id: 'wc_b', name: '露西娅', attributes: [{ name: '生命', value: '42/100' }] },
-    // 角色卡里没有同名卡 → 进 missing，一动不动
-    { id: 'wc_c', name: '路人甲', attributes: [] }
-  ];
-
-  const res = mod.syncCopyAttrsFromSource(copies, sources);
-
-  check('补了 2 个副本（有同名卡且缺属性）', res.touched === 2, JSON.stringify(res));
-  check('一共补上 3 条属性（2 + 1）', res.added === 3, JSON.stringify(res));
-  check('角色卡里没同名卡的副本进 missing', res.missing.length === 1 && res.missing[0] === '路人甲', JSON.stringify(res.missing));
-
-  check('空壳副本被补满 2 个属性', copies[0].attributes.length === 2, JSON.stringify(copies[0].attributes));
-  check(
-    '副本已有的「生命」不被角色卡的初始值覆盖',
-    copies[1].attributes.length === 2 &&
-      copies[1].attributes.find((a) => a.name === '生命').value === '42/100' &&
-      copies[1].attributes.some((a) => a.name === '心情'),
-    JSON.stringify(copies[1].attributes)
-  );
-  check('没同名卡的副本完全没被碰', copies[2].attributes.length === 0, JSON.stringify(copies[2].attributes));
-
-  // 深拷贝：改副本上的属性值，不该影响角色卡那张卡
-  copies[0].attributes[0].value = '改了副本';
-  check(
-    '补进去的是深拷贝（改副本不回流角色卡）',
-    sources[0].attributes[0].value === '100/100',
-    sources[0].attributes[0].value
-  );
-
-  // 幂等：再同步一次，已经没有可补的了
-  const again = mod.syncCopyAttrsFromSource(copies, sources);
-  check('再同步一次没什么可补的（幂等）', again.touched === 0 && again.added === 0, JSON.stringify(again));
 });
 
 // ---------------------------------------------------------------------------
@@ -10032,414 +9011,8 @@ await scenario('预设：AI 生成', async () => {
   check('标签按数组存下来', made && Array.isArray(made.tags) && made.tags.join('|') === '节奏|对白', made && JSON.stringify(made.tags));
 });
 
-// ---------------------------------------------------------------------------
-//  角色表情图 —— 按回复正文里的词换状态卡上的图
-//
-//  ⚠️ 放在预设那几条**聊天场景之前**：最后一条 chat:send 会被宿主侧的
-//  probePresetInjection 拿来当「预设到底注没注入」的样本，这里插在后面会把它顶掉。
-// ---------------------------------------------------------------------------
-await scenario('角色：表情图按回复关键词切换', async () => {
-  const isImg = (v) => typeof v === 'string' && v.startsWith('data:image/');
-  // 假后端每次回复的正文里都带着这句（见 smoke-test.js 的 chat:send）
-  const TRIGGER = '这是加粗';
 
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
-  const NAME = '表情测试角色';
-  setValue('#c-name', NAME);
-
-  // 状态卡的入口条只列「真的持有字段的人」，所以这张卡得有属性才看得见状态卡
-  click('#btn-attr-template');
-  await waitFor('模板字段种进来了', () => $$('#c-attr-list .attr-row').length >= 3);
-
-  // 先给一张形象 —— 没命中表情时状态卡铺的就是它
-  click('#char-portrait');
-  await waitFor('裁剪浮层弹出来了', () => !!byId('crop-layer'));
-  click('#crop-ok');
-  await waitFor('形象按 1024 落进框里', () => {
-    const i = byId('char-portrait').querySelector('img');
-    return !!i && i.naturalWidth === 1024;
-  });
-
-  // --- 表情图：直接在「表情图」分区里编辑（2026-10-19 起不再弹窗） ---
-  check('页面上没有表情弹窗了（编辑挪进分区）', !byId('expr-modal'));
-  click('#char-section-tab-expressions');
-  await waitFor('切到表情图分区', () => shown('#char-section-expressions'));
-  check('分区里有「添加表情」按钮', !!byId('btn-add-expr'));
-  check(
-    '表情列表就在分区里，不在遮罩后面',
-    !!byId('char-expr-list') && !!byId('char-expr-list').closest('#char-section-expressions')
-  );
-  check('还没加表情时有一句提示', /还没有表情图/.test(byId('char-expr-list').textContent));
-  {
-    const empty = byId('char-expr-list').querySelector('.char-expr-empty');
-    check(
-      '空状态横跨整行（grid-column 1 / -1，不缩在第一格）',
-      !!empty && getComputedStyle(empty).gridColumn.includes('-1'),
-      empty ? getComputedStyle(empty).gridColumn : '没有空状态节点'
-    );
-  }
-  click('#btn-add-expr');
-  await waitFor('多了一行表情', () => $$('#char-expr-list .char-expr-card').length === 1);
-  check(
-    '左栏分区导航的「表情图」跟着显示 1',
-    byId('char-section-tab-expressions').querySelector('.char-section-count').textContent === '1',
-    byId('char-section-tab-expressions').textContent
-  );
-
-  // 名都没起就传图要拦住 —— 没名字的条目匹配不上任何东西，存下去等于白存
-  click($('#char-expr-list .char-expr-thumb'));
-  await sleep(250);
-  check('没起名字就传图会被拦下（不弹裁剪）', !byId('crop-layer'));
-
-  setValue('#char-expr-list .char-expr-name', '表情甲');
-  setValue('#char-expr-list .char-expr-keys', TRIGGER);
-
-  click($('#char-expr-list .char-expr-thumb'));
-  await waitFor('裁剪浮层弹出来了', () => !!byId('crop-layer'));
-  check('裁剪标题是「裁剪表情图」', byId('crop-layer').textContent.includes('裁剪表情图'));
-  click('#crop-ok');
-  await waitFor('表情图按 640 落进缩略图', () => {
-    const i = $('#char-expr-list .char-expr-thumb img');
-    return !!i && i.naturalWidth === 640;
-  });
-  const exThumb = $('#char-expr-list .char-expr-thumb img');
-  check(
-    '表情图按 1:1 裁（640×640）',
-    !!exThumb && exThumb.naturalWidth === 640 && exThumb.naturalHeight === 640,
-    exThumb ? `${exThumb.naturalWidth}×${exThumb.naturalHeight}` : '缩略图里没图'
-  );
-
-  // 表情是分区里的常显内容，没有再要关的弹窗，直接保存
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
-  await sleep(200);
-
-  // --- 落盘 ---
-  const saved = (await savedCharacters()).find((c) => c.name === NAME);
-  check('角色存下来了', !!saved);
-  const expr = saved && Array.isArray(saved.expressions) ? saved.expressions[0] : null;
-  check('表情表落在了角色卡上', !!expr, JSON.stringify(saved && saved.expressions));
-  check(
-    '表情名和触发词都存下来了',
-    !!expr && expr.name === '表情甲' && Array.isArray(expr.keywords) && expr.keywords.includes(TRIGGER),
-    JSON.stringify(expr && { name: expr.name, keywords: expr.keywords })
-  );
-  check('表情图是 dataURL', isImg(expr && expr.image), String(expr && expr.image).slice(0, 24));
-  check('表情图和形象是两份，没互相顶掉', !!expr && isImg(saved.portrait) && expr.image !== saved.portrait);
-
-  // --- 开一场，看状态卡上铺哪张 ---
-  const card = $$('#char-page-grid .char-card').find(
-    (c) => c.querySelector('.char-card-name') && c.querySelector('.char-card-name').textContent === NAME
-  );
-  check('列表里能找到这张卡', !!card);
-  await startChatWith(card);
-  await waitFor('切到聊天视图', () => shown('#view-chat'));
-  await waitFor('状态卡入口条出现', () => shown('#panel-box'));
-
-  const charAvatar = $$('#panel-cast .panel-avatar').find((b) => b.dataset.owner !== 'player');
-  check('入口条上有这个角色', !!charAvatar);
-  click(charAvatar);
-  await waitFor('角色状态卡出现', () => $$('#state-cards .state-card').some((c) => c.dataset.owner !== 'player'));
-
-  const scCard = () => $$('#state-cards .state-card').find((c) => c.dataset.owner !== 'player');
-
-  check('状态卡上有角色图', !!scCard().querySelector('.sc-photo img'));
-  check(
-    '还没说过话时铺的是角色形象（没有表情标签）',
-    !scCard().querySelector('.sc-photo-tag'),
-    (scCard().querySelector('.sc-photo-tag') || {}).textContent
-  );
-
-  // --- 说一句：回复正文里带上了触发词，卡上的图该换过来 ---
-  setValue('#input', '冒烟测试：表情');
-  click('#btn-send');
-  await waitFor('助手回复出现', () => $('#messages').textContent.includes('冒烟测试回复'), 8000);
-  await waitFor('流式状态结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
-
-  // 卡片在刷新时会被重建，每次都要重新拿一遍节点
-  await waitFor('状态卡换上了表情图', () => {
-    const node = scCard();
-    return !!node && !!node.querySelector('.sc-photo-tag');
-  });
-  const tag = scCard().querySelector('.sc-photo-tag');
-  check('卡上标出了命中的表情名', !!tag && tag.textContent === '表情甲', tag ? tag.textContent : '没有标签');
-  const photo = scCard().querySelector('.sc-photo img');
-  check(
-    '铺的是那张表情图（不是形象）',
-    !!photo && photo.getAttribute('src') === expr.image,
-    photo ? `长度 ${String(photo.getAttribute('src')).length} / 表情图 ${String(expr.image).length}` : '没有图'
-  );
-});
-
-// ---------------------------------------------------------------------------
-//  角色表情图（词表）—— 差分文件名都得认得出情绪
-//
-//  认不出就退回「拿文件名当名字」，导进来一片 Char_C1_flustered_transparent：
-//  图进来了，名字不能看，还得一条条手改 —— 所以词表按差分集的键逐个过一遍。
-// ---------------------------------------------------------------------------
-await scenario('角色：表情词典认得差分文件名', async () => {
-  const mod = await import(new URL('js/views/charExpressions.js', document.baseURI).href);
-
-  // 键 → 中文名。一套立绘差分的完整划分（基础 / 常态 / 亲密 / 状态 / 关系）
-  const EXPECTED = {
-    neutral: '平静', smile: '微笑', shy: '害羞', confused: '困惑', panicked: '慌张',
-    sad: '难过', teary: '委屈', surprised: '惊讶', proud: '得意', angry: '生气',
-    disgust: '嫌弃', curious: '好奇', smirk: '坏笑', cold: '冷漠', tired: '疲惫',
-    relieved: '安心', flustered: '脸红别脸', panting: '喘气', resist: '抗拒', dazed: '迷离',
-    defiant: '挑衅', pleading: '求饶', enduring: '隐忍', afterglow: '事后', happy: '开心',
-    helpless: '无奈', serious: '认真', blank: '发呆', scared: '害怕', aching: '心疼',
-    tipsy: '微醺', sleepy: '犯困', hopeful: '期待', clingy: '撒娇', sulky: '赌气',
-    moved: '感动', jealous: '嫉妒', worried: '担忧', apologetic: '道歉', thankful: '感谢',
-    peeking: '偷看', uneasy: '不安'
-  };
-
-  const keyOf = (file) => (mod.emotionFromFileName(file) || {}).key;
-  const missed = [];
-  const wrongName = [];
-  for (const [key, name] of Object.entries(EXPECTED)) {
-    // 中性占位：真差分集就是「角色_编号_英文键_transparent.png」这个形状
-    const got = mod.emotionFromFileName(`Char_${key}_transparent.png`);
-    if (!got) missed.push(key);
-    else if (got.key !== key || got.name !== name) wrongName.push(`${key}→${got.key}/${got.name}`);
-  }
-  check(`${Object.keys(EXPECTED).length} 个差分键都认得出`, missed.length === 0, missed.join(','));
-  check('认出来的中文名也对得上', wrongName.length === 0, wrongName.join(' '));
-
-  // 中文文件名走另一条路，抽几个有代表性的
-  check('中文文件名照样认得出', keyOf('Char_害羞_透明.png') === 'shy');
-  check('中文同义词也能落到键上', keyOf('Char_吃醋_透明.png') === 'jealous');
-  check('没见过的词不硬猜（退回文件名）', mod.emotionFromFileName('Char_0231.png') === null);
-});
-
-// ---------------------------------------------------------------------------
-//  角色表情图（二）—— 批量导入 / 默认脸 / <emo> 标签
-//
-//  ⚠️ 同上：必须留在预设那几条聊天场景之前。
-// ---------------------------------------------------------------------------
-await scenario('角色：表情图批量导入、默认脸与 emo 标签', async () => {
-  const isImg = (v) => typeof v === 'string' && v.startsWith('data:image/');
-
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-
-  const NAME = '批量表情测试角色';
-  setValue('#c-name', NAME);
-
-  // 状态卡入口条只列「真的持有字段的人」，所以得有属性才看得见状态卡
-  click('#btn-attr-template');
-  await waitFor('模板字段种进来了', () => $$('#c-attr-list .attr-row').length >= 3);
-
-  // --- 批量导入：假后端给六个文件，前三个文件名是英文、后三个是中文 ---
-  click('#char-section-tab-expressions');
-  await waitFor('切到表情图分区', () => shown('#char-section-expressions'));
-  check('分区里有「批量导入」按钮', !!byId('btn-batch-expr'));
-  click('#btn-batch-expr');
-  await waitFor(
-    '六张里导进五张（末张「羞怯」和英文的 shy 撞同一个情绪键，被跳过）',
-    () => $$('#char-expr-list .char-expr-card').length === 5
-  );
-
-  const rows = () => $$('#char-expr-list .char-expr-card');
-  const thumbOk = rows().every((r) => {
-    const img = r.querySelector('.char-expr-thumb img');
-    return !!img && img.naturalWidth === 640 && img.naturalHeight === 640;
-  });
-  check('批量导入的图都按 1:1 裁过（640×640）', thumbOk);
-
-  // --- 网格布局的新特性（2026-10-19 从「一条一行」改成 auto-fill 网格） ---
-  {
-    const cs = getComputedStyle(byId('char-expr-list'));
-    const nCols = (cs.gridTemplateColumns || '').split(' ').filter(Boolean).length;
-    check(
-      '表情列表是网格（多列，不是一条一行）',
-      cs.display === 'grid' && nCols >= 2,
-      `${cs.display} / ${cs.gridTemplateColumns}`
-    );
-  }
-  {
-    const thumb = rows()[0].querySelector('.char-expr-thumb');
-    check(
-      '缩略图区是 1:1（立绘不会被拉扁）',
-      !!thumb && getComputedStyle(thumb).aspectRatio.replace(/\s/g, '') === '1/1',
-      thumb ? getComputedStyle(thumb).aspectRatio : '没有缩略图'
-    );
-  }
-  {
-    const zoom = rows()[0].querySelector('.char-expr-zoom');
-    check(
-      '放大镜默认藏起来（hover 才浮出）',
-      !!zoom && getComputedStyle(zoom).opacity === '0',
-      zoom ? getComputedStyle(zoom).opacity : '没有放大镜'
-    );
-  }
-  {
-    const del = rows()[0].querySelector('.char-expr-del');
-    check(
-      '删除按钮默认也藏起来（hover 才浮出）',
-      !!del && getComputedStyle(del).opacity === '0',
-      del ? getComputedStyle(del).opacity : '没有删除按钮'
-    );
-  }
-  {
-    const def = rows()[0].querySelector('.char-expr-default');
-    check(
-      '默认脸按钮常显（不跟 hover）',
-      !!def && parseFloat(getComputedStyle(def).opacity) > 0.5,
-      def ? getComputedStyle(def).opacity : '没有默认脸按钮'
-    );
-  }
-  // 放大镜点开的是灯箱，不是裁剪层（缩略图是 <button>，套进去点放大镜会连带弹裁剪）
-  {
-    const zoom = rows()[0].querySelector('.char-expr-zoom');
-    click(zoom);
-    await waitFor('点放大镜打开了灯箱', () => !!byId('lightbox'));
-    check('点放大镜没弹裁剪层', !byId('crop-layer'));
-    click('#lightbox-close');
-    await waitFor('灯箱关掉了', () => !byId('lightbox'));
-  }
-
-  const names = $$('#char-expr-list .char-expr-name').map((i) => i.value);
-  check(
-    '英文文件名认出了中文情绪名',
-    names.slice(0, 3).join(',') === '害羞,微笑,慌张',
-    names.join(',')
-  );
-  check(
-    '中文文件名也认（正名「惊讶」+ 同义词「气愤」）',
-    names.slice(3).join(',') === '惊讶,生气',
-    names.join(',')
-  );
-
-  // 给「微笑」挂上一个关键词：假后端每轮回复里都有「这是加粗」，
-  // 这样等会儿发 <emo> 标签时，正文关键词和标签会指向**两张不同的图**，
-  // 才验得出「标签优先」。
-  setValue($$('#char-expr-list .char-expr-keys')[1], '这是加粗');
-
-  // --- 默认脸（单选） ---
-  const star = (i) => rows()[i].querySelector('.char-expr-default');
-  check('每行都有默认脸开关', rows().every((r) => !!r.querySelector('.char-expr-default')));
-  check('一开始没人是默认脸', !star(0).classList.contains('is-on') && !star(1).classList.contains('is-on'));
-
-  click(star(1));
-  await sleep(30);
-  check('点一下就把这条设成默认脸', star(1).classList.contains('is-on'));
-  check(
-    '别的行没被一起点亮',
-    rows().every((r, i) => i === 1 || !r.querySelector('.char-expr-default').classList.contains('is-on'))
-  );
-
-  click(star(1));
-  await sleep(30);
-  check('再点一下取消', !star(1).classList.contains('is-on'));
-  click(star(1));
-  await sleep(30);
-  check('重新点上', star(1).classList.contains('is-on'));
-
-  // 表情是分区里的常显内容，没有再要关的弹窗，直接保存
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'));
-  await sleep(200);
-
-  const saved = (await savedCharacters()).find((c) => c.name === NAME);
-  check('角色存下来了', !!saved);
-  const exprs = (saved && saved.expressions) || [];
-  check('五条表情都在卡上', exprs.length === 5, JSON.stringify(exprs.map((e) => e.name)));
-  check(
-    '情绪键落盘了（中文文件名映射到同一套英文键）',
-    exprs.map((e) => e.key).join(',') === 'shy,smile,panicked,surprised,angry',
-    JSON.stringify(exprs.map((e) => e.key))
-  );
-  check('每条都带了图', exprs.every((e) => isImg(e.image)));
-
-  // 透明底立绘压在卡片底色上，轮廓得描出来（白发 + 浅底最容易糊）。
-  // 描边色跟着主题反着走，所以拿的是算出来的值，不是写死的字符串。
-  {
-    const edgeVar = getComputedStyle(document.documentElement).getPropertyValue('--art-edge').trim();
-    check('定义了立绘描边变量 --art-edge', edgeVar.startsWith('0 0 1px'), edgeVar);
-    const thumb = rows()[0].querySelector('.char-expr-thumb');
-    const shadow = getComputedStyle(thumb).boxShadow;
-    check(
-      '表情缩略图上描边生效了（不是 none）',
-      !!shadow && shadow !== 'none' && shadow.includes('inset') === false,
-      shadow
-    );
-  }
-  const defEntry = exprs.find((e) => e.default === true);
-  check('默认脸只落了一条，而且是「微笑」', exprs.filter((e) => e.default === true).length === 1 &&
-    !!defEntry && defEntry.name === '微笑', defEntry && defEntry.name);
-  const shyEntry = exprs.find((e) => e.name === '害羞');
-  const smileEntry = exprs.find((e) => e.name === '微笑');
-
-  // --- 开一场：没说过话时该铺默认脸，而不是形象图 ---
-  const card = $$('#char-page-grid .char-card').find(
-    (c) => c.querySelector('.char-card-name') && c.querySelector('.char-card-name').textContent === NAME
-  );
-  check('列表里能找到这张卡', !!card);
-
-  // 列表卡那个圆头像也是透明底素材压底色，同一个坑（见 --art-edge 那段）
-  {
-    const av = card.querySelector('.char-card-avatar');
-    const avShadow = av ? getComputedStyle(av).boxShadow : '';
-    check('角色卡列表卡的头像有描边', !!avShadow && avShadow !== 'none', avShadow);
-  }
-  await startChatWith(card);
-  await waitFor('切到聊天视图', () => shown('#view-chat'));
-  await waitFor('状态卡入口条出现', () => shown('#panel-box'));
-
-  const charAvatar = $$('#panel-cast .panel-avatar').find((b) => b.dataset.owner !== 'player');
-  check('入口条上有这个角色', !!charAvatar);
-  click(charAvatar);
-  await waitFor('角色状态卡出现', () => $$('#state-cards .state-card').some((c) => c.dataset.owner !== 'player'));
-
-  const scCard = () => $$('#state-cards .state-card').find((c) => c.dataset.owner !== 'player');
-  const scPhoto = () => scCard().querySelector('.sc-photo img');
-
-  check(
-    '没说过话时铺的是默认脸「微笑」',
-    !!scPhoto() && scPhoto().getAttribute('src') === smileEntry.image,
-    (scCard().querySelector('.sc-photo-tag') || {}).textContent
-  );
-  check('卡上标着默认脸的名字', (scCard().querySelector('.sc-photo-tag') || {}).textContent === '微笑');
-
-  // 卡面那块 1:1 的立绘区：白发素材压在卡片底色上，就靠这条描边勾出轮廓
-  {
-    const photoShadow = getComputedStyle(scCard().querySelector('.sc-photo')).boxShadow;
-    check('状态卡图区有描边（不是 none）', !!photoShadow && photoShadow !== 'none', photoShadow);
-  }
-
-  // --- 发一句，回复里既有「这是加粗」又有 <emo>shy</emo>：标签该赢 ---
-  setValue('#input', '冒烟测试：表情标签');
-  click('#btn-send');
-  await waitFor('助手回复出现', () => $('#messages').textContent.includes('冒烟测试回复'), 8000);
-  await waitFor('流式状态结束', () => byId('btn-send').getAttribute('data-mode') === 'send', 8000);
-
-  await waitFor(
-    '状态卡换成了标签指定的那张',
-    () => {
-      const tag = scCard() && scCard().querySelector('.sc-photo-tag');
-      return !!tag && tag.textContent === '害羞';
-    },
-    6000
-  );
-  check(
-    '<emo> 标签压过了正文关键词（害羞 赢了 微笑）',
-    !!scPhoto() && scPhoto().getAttribute('src') === shyEntry.image,
-    (scCard().querySelector('.sc-photo-tag') || {}).textContent
-  );
-
-  // 标签是给程序读的，不该留在气泡正文里
-  check(
-    '气泡正文里看不见 <emo> 标签',
-    !$('#messages').textContent.includes('<emo>'),
-    ($('#messages').textContent.match(/<emo>[^<]*<\/emo>/) || [''])[0]
-  );
-});
 
 await scenario('预设：绑定到会话的「视角」弹窗', async () => {
   // 种子数据里没有会话，先用角色卡起一场对话

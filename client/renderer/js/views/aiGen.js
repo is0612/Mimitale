@@ -102,16 +102,48 @@ function briefSection(brief) {
   return `\n\n【背景 / 基调】\n${text}\n\n角色的设定、用词、世界观必须严格贴合上面这个背景，不要另起一套。`;
 }
 
-const BOOK_SYSTEM_TAIL = `这是一位要在「世界」里出场的配角（NPC），不是主角，也不是玩家自己。
+// 本书角色（NPC）专用的生成提示词：本书角色只负责介绍角色内容、不负责聊天，
+// 所以只出 name / description / tags / attributes 四样，性格、语气全融进 description，
+// 不再单独要 personality / scenario / firstMes / mesExample（那些字段在本书角色里会被丢掉）。
+const NPC_FIELDS_SPEC = `严格按照下面的 JSON 结构输出，不要输出任何多余的文字、解释或 Markdown 代码块标记：
+
+{
+  "name": "角色名",
+  "description": "角色描述，把身份、外貌、年龄、处境、性格、说话方式、与玩家的关系都写进去。第三人称，具体有画面感",
+  "tags": ["标签", "标签"],
+  "attributes": [
+    { "name": "字段名", "type": "text", "value": "初始值", "mode": "dynamic" }
+  ]
+}
+
+attributes 给 3~8 条，每条包含 name / type / value / mode 四个键。
+type 只能是 text（文字）、meter（数值，可另带 min / max）、list（多项用「、」隔开）三种。
+${MODE_RULE}
+字段名要贴合这个角色的身份和处境，禁止用「属性1」「好感度」这种泛称（可以是「对你的戒心」「口袋里的铜板」「今日穿着」这类）。
+
+字符串里的换行一律写成 \\n —— 这是 JSON，值里不能直接断行：
+
+· description：第三人称，交代身份、外貌、年龄、处境，必须有画面感，并包含外貌特征与至少一个动态细节。
+  性格要融进描述里，不要单独拆出来：写清她平时怎么说话（口头禅、句式、紧张时的措辞）、
+  一个明显的缺点或执念、以及对 {{user}} 的具体态度。禁止「温柔善良」「认真努力」这类空泛词。
+  挑 1~2 个最能体现角色的细节即可，不要把所有特点列成清单。
+  前 160 字必须写全最重要的信息（身份、立场、说话方式、和玩家的关系）——
+  超出部分在注入时会被截掉，所以前 160 字要精炼。`;
+
+const NPC_SYSTEM = `你是一位经验丰富的角色设定师，负责为一个「世界」里的配角（NPC）写设定。
+
+${NPC_FIELDS_SPEC}
 
 额外要求：
 · 先读已有的角色名单和世界设定，新角色必须和它们明显区分开，不要重复或改写已有的人。
-· description 和 personality 加起来的前 160 字必须写全最重要的信息
-  （身份、立场、说话方式、和玩家的关系）—— 超出部分在注入时会被截掉，所以前 160 字要精炼。
 · attributes 写这个角色身上会变的东西（好感度、钱、状态、随身物品这类），3~8 条，字段名要贴身份。
-· scenario / firstMes / mesExample 必须是同一场戏，按「他第一次和 {{user}} 打交道」的那一刻写；
-  firstMes 结尾必须是明确需要立刻回应的具体请求或问题，不能软着陆。
-· 只输出 JSON 本身。`;
+
+质量要求（按优先级）：
+1. 先想清楚这个角色处在什么世界、什么基调里，再动笔 —— 描写用词必须和那个基调一致。
+2. 角色辨识度靠少量准确的细节建立，不靠形容词数量堆起来。
+3. 性格必须用具体说话方式、判断和情绪处理习惯体现，禁止空泛形容词；必须写出对 {{user}} 的具体态度。
+4. 角色要有「可互动性」：不是完美无缺的偶像，要有小缺点、小执念、小矛盾，方便后续剧情推进。
+5. 只输出 JSON 本身，不要任何解释或代码块标记。`;
 
 // 上限：世界书单本最多 5000 条，全喂进去输入就爆了
 const MAX_ENTRY_CHARS = 2400;
@@ -451,7 +483,7 @@ function buildLayer() {
           class: 'modal-sub',
           text:
             scope === 'worldbook'
-              ? '按这本书的设定生成一个配角（含描述、性格、场景、开场白、示例对话），生成完还可以自己改'
+              ? '按这本书的设定生成一个配角（含角色描述），生成完还可以自己改'
               : '描述一下你想做的角色，AI 补全成一张角色卡：描述、性格、场景、开场白、示例对话都有'
         })
       ),
@@ -511,7 +543,7 @@ async function generate() {
 
   const system =
     scope === 'worldbook' && targetBook
-      ? `${LIBRARY_SYSTEM}\n\n${BOOK_SYSTEM_TAIL}\n\n以下是这本书的设定：\n\n${buildBookContext(targetBook, prompt)}`
+      ? `${NPC_SYSTEM}\n\n以下是这本书的设定：\n\n${buildBookContext(targetBook, prompt)}`
       : LIBRARY_SYSTEM + briefSection(nodes.brief && nodes.brief.value);
 
   const requestId = uid();

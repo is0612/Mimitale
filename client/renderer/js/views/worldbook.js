@@ -7,16 +7,17 @@ import { el } from '../core/dom.js';
 import { uid, now, activeConvo } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
-import { h, button, clear } from '../ui/build.js';
+import { h, button, clear, libraryCard } from '../ui/build.js';
+import { mButton } from '../components/index.js';
+import { entityTone } from '../ui/avatarTone.js';
+import { openLightbox } from '../ui/lightbox.js';
 import { showView, currentViewName } from './viewSwitch.js';
 import { persistLibrary, persistConversations } from '../data/persist.js';
-import { seedWorldbookCharactersIntoConvos, syncCopyAttrsFromSource } from '../data/panel.js';
 import {
-  characters,
   worldbooks,
   worldbookById,
   worldbookCharacters,
-  newWorldbookCharId,
+  characterPortrait,
   convoWorldbookIds,
   WORLDBOOK_SCAN_DEPTH,
   recursiveDepthSetting
@@ -32,13 +33,10 @@ function syncEditorLayout() {
 }
 
 // --- 入口层注入的跨视图编排动作 ---
-// 切到本书某角色 / 本书内起草 / 释放作用域 / 回写草稿
+// 切到本书某角色 / 释放作用域 / 回写草稿
 let openInBook = () => {};
-let draftInBook = () => {};
 let releaseScope = () => {};
 let stashDraft = () => {};
-// 打开「AI 生成 NPC」弹窗（视图不向上 import 入口层，编排放注入里）
-let aiDraftInBook = () => {};
 // 离开编辑器后通知入口层（回到角色编辑器时，那边「已绑世界书」那行要按最新数据重画）
 let afterLeave = () => {};
 
@@ -56,10 +54,8 @@ function runAsync(action) {
 
 export function initWorldbook(opts = {}) {
   if (typeof opts.openInBook === 'function') openInBook = opts.openInBook;
-  if (typeof opts.draftInBook === 'function') draftInBook = opts.draftInBook;
   if (typeof opts.releaseScope === 'function') releaseScope = opts.releaseScope;
   if (typeof opts.stashDraft === 'function') stashDraft = opts.stashDraft;
-  if (typeof opts.aiDraftInBook === 'function') aiDraftInBook = opts.aiDraftInBook;
   if (typeof opts.afterLeave === 'function') afterLeave = opts.afterLeave;
 
   initWorldbookLayout({ onFilter: () => {
@@ -76,26 +72,6 @@ export function initWorldbook(opts = {}) {
   el.wb.btnDelEntry.addEventListener('click', runAsync(deleteEntry));
   el.wb.btnSave.addEventListener('click', runAsync(saveWorldbook));
   el.wb.btnPreview.addEventListener('click', runAsync(previewWorldbook));
-  el.wb.btnAddChars.addEventListener('click', openWorldbookCharPicker);
-  el.wb.btnNewChar.addEventListener('click', newWorldbookCharacter);
-  // 「AI 生成」：按这本书的设定生成一个 NPC 副本，结果同样落到角色编辑器草稿里，
-  // 和「＋ 新建」同一条路，看过再保存。
-  if (el.wb.btnAiChar) {
-    el.wb.btnAiChar.addEventListener('click', () => {
-      const book = currentWorldbook();
-      if (!book) return;
-      aiDraftInBook(book.id);
-    });
-  }
-  if (el.wb.btnSyncAttrs) el.wb.btnSyncAttrs.addEventListener('click', runAsync(syncWorldbookCharAttrs));
-
-  // 从角色卡多选加入
-  el.wbPicker.btnClose.addEventListener('click', closeWorldbookCharPicker);
-  el.wbPicker.btnCancel.addEventListener('click', closeWorldbookCharPicker);
-  el.wbPicker.btnConfirm.addEventListener('click', runAsync(confirmWorldbookCharPicker));
-  el.wbPicker.modal.addEventListener('click', (event) => {
-    if (event.target === el.wbPicker.modal) closeWorldbookCharPicker();
-  });
 
   // 书名 / 条目都只写草稿 + 举「未保存」的旗子，点「保存」才写回并落盘。
   el.wb.name.addEventListener('input', () => {
@@ -297,7 +273,6 @@ async function saveWorldbook() {
   commitDraft(book.id);
 
   // 保存之后才是「真的改了」：条目数、会话注入用的数据都在这一刻对齐
-  renderWorldbookChars();
   renderDirtyHint();
 
   // 失败提示由 persistLibrary 弹（「世界书没能写进磁盘…」），
@@ -505,7 +480,6 @@ function selectWorldbook(id) {
   if (!book) {
     editingEntryId = null;
     showEntryForm(false);
-    renderWorldbookChars();
     renderDirtyHint();
     return;
   }
@@ -524,7 +498,6 @@ function selectWorldbook(id) {
 
   renderEntryList();
   fillEntryForm(currentEntry());
-  renderWorldbookChars();
   renderDirtyHint();
 }
 
@@ -539,16 +512,78 @@ function selectEntry(id) {
 
 // 本书角色：从角色卡复制进来的独立副本（改这边不影响角色卡，反之亦然）。
 // 它同时就是「这本书的 NPC 名单」——GM 提示词里的名单按它拼。
+// 人物列表现在只在「角色卡编辑页」展示，这里不再画。
 
-/** 画「本书角色」这一屏（卡片网格 + 空态引导卡） */
-export function renderWorldbookChars() {
-  syncEditorLayout();
-  const host = el.wb.charList;
-  if (!host) return;
+// 每本书 → 展示它角色副本的宿主节点列表。角色增删 / 显示状态切换后，把所有宿主一起重绘
+// （现在只有角色卡编辑页的 #char-book-roles 这一个宿主）。
+const bookCharHosts = new Map();
+
+/**
+ * 一个副本卡：和角色卡列表同一副骨架（2:3 封面 + 名称 + 标签行）。
+ * 人物是有形象的，所以铺立绘而不是小圆头像；文字只给名称和标签，不再塞描述预览。
+ * ⚠️ 「显示状态」做成封面左下角浮标：操作行按 216px 只塞得下两颗，
+ *    第三颗（四个字）会把每颗挤到 43px 以下（见 .char-card-actions 的 flex 基准）。
+ */
+function bookCharCard(book, c) {
+  const tags = (Array.isArray(c.tags) ? c.tags : [])
+    .map((t) => String(t || '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const portrait = characterPortrait(c);
+  const shown = c.showInPanel === true;
+
+  const showBtn = h('button', {
+    type: 'button',
+    class: `char-card-show${shown ? ' is-on' : ''}`,
+    // 只写「状态栏」+ 实心/空心点：216px 的卡上写「状态栏 · 显示」会盖掉小半个封面
+    text: `${shown ? '●' : '○'} 状态栏`,
+    title: '在右栏「在场角色」入口条上显示这个副本的状态',
+    'aria-pressed': shown ? 'true' : 'false',
+    onclick: (event) => {
+      // 卡片本身可点（封面开大图 / 批量选择），这一下不该连带触发
+      event.stopPropagation();
+      runAsync(() => toggleWorldbookCharShowInPanel(book, c.id, !shown));
+    }
+  });
+
+  return libraryCard({
+    title: c.name,
+    sub: tags.join(' · ') || '还没有标签',
+    media: portrait ? h('img', { src: portrait, alt: '' }) : String(c.name || '').slice(0, 1) || '?',
+    mediaClass: ['art-edge', entityTone(c.id, c.name)],
+    mediaTitle: `${c.name} · 点开看大图`,
+    onMediaClick: portrait ? () => openLightbox(portrait, { title: c.name }) : null,
+    coverExtra: showBtn,
+    actions: [
+      mButton({
+        variant: 'ghost',
+        size: 'sm',
+        text: '编辑',
+        title: '编辑这个副本的设定',
+        onClick: () => editWorldbookCharacter(book, c.id)
+      }),
+      mButton({
+        variant: 'ghost',
+        size: 'sm',
+        text: '移出本书',
+        title: '从本书移除（角色卡里的不受影响）',
+        onClick: () => runAsync(() => removeWorldbookCharacter(book, c.id))
+      })
+    ]
+  });
+}
+
+/** 把某本书的角色副本画进指定宿主（角色卡编辑页「人物列表」分区用）。
+ *  ⚠️ 宿主不存在、或 book 为空时静默跳过 —— 调用方不必自己判空。 */
+export function renderBookCharacters(book, host) {
+  if (!host || !book) return;
+
+  // 注册宿主：之后这本书角色一变，所有注册过的宿主一起重绘。
+  let hosts = bookCharHosts.get(book.id);
+  if (!hosts) bookCharHosts.set(book.id, (hosts = new Set()));
+  hosts.add(host);
+
   clear(host);
-
-  const book = currentWorldbook();
-  if (!book) return;
 
   const copies = worldbookCharacters(book);
 
@@ -558,129 +593,35 @@ export function renderWorldbookChars() {
       h(
         'div',
         { class: 'wb-char-empty' },
-        h('h3', { text: '这本书还没有角色' }),
+        h('h3', { text: '这本书还没有人物' }),
         h('p', {
-          text: '世界书里的角色只在绑定了这本书的会话里出现，和角色卡相互独立 —— 在这里改，不会动到角色卡里的原卡。'
+          text: '这本书里的人物只在绑定了这本书的会话里出现，和角色卡相互独立 —— 在这里改，不会动到角色卡里的原卡。'
         }),
         h('span', {
           class: 'wb-char-empty-hint',
-          text: `用上面的「＋ 从角色卡加入」复制一个进来，或「AI 生成」按这本书已有的 ${(book.entries || []).length} 条设定起一个草稿。`
+          text: `用上面「＋ 新建」自己写一个，或「AI 生成」按这本书已有的 ${(book.entries || []).length} 条设定起一个草稿。`
         })
       )
     );
     return;
   }
 
-  for (const c of copies) {
-    const desc = String(c.description || '').trim();
-    host.appendChild(
-      h(
-        'article',
-        { class: 'wb-char-card', title: c.name },
-        h(
-          'div',
-          { class: 'wb-char-card-top' },
-          h(
-            'div',
-            { class: 'wb-char-card-avatar' },
-            c.avatar ? h('img', { src: c.avatar, alt: '' }) : String(c.name || '').slice(0, 1) || '?'
-          ),
-          h(
-            'strong',
-            { class: 'wb-char-card-name' },
-            h('span', { class: 'wb-char-card-title', text: c.name }),
-            // 「本书副本」：角色卡里还有一份原件，标清楚改的是哪一份
-            h('span', { class: 'wb-local-tag', text: '本书副本', title: '从角色卡复制进来的一份快照；改它不会动角色卡里的原卡' })
-          )
-        ),
-        // 设定只读预览：真正的编辑走「编辑」按钮进角色编辑器（那里才是全集）
-        h('p', { class: 'wb-char-card-desc', text: desc ? desc.slice(0, 90) : '还没有人物设定' }),
-        h(
-          'div',
-          { class: 'wb-char-card-foot' },
-          // 「显示状态」：勾上后这个副本的状态出现在右栏「在场角色」入口条上；
-          // 用复选框是因为它是每本书各自一份的持久开关，勾选状态要一眼看见。
-          h(
-            'label',
-            { class: 'wb-char-card-show', title: '把这个副本的状态显示在右栏「在场角色」入口条上' },
-            (() => {
-              const cb = h('input', { type: 'checkbox' });
-              cb.checked = c.showInPanel === true;
-              cb.addEventListener('change', runAsync(() => toggleWorldbookCharShowInPanel(c.id, cb.checked)));
-              return cb;
-            })(),
-            h('span', { text: '显示状态' })
-          ),
-          h('div', { class: 'wb-char-card-actions' },
-            button({
-              class: 'wb-char-card-btn',
-              text: '编辑',
-              title: '编辑这个副本的设定',
-              onClick: () => editWorldbookCharacter(c.id)
-            }),
-            button({
-              class: 'wb-char-card-btn wb-char-card-remove',
-              text: '移出本书',
-              title: '从本书移除（角色卡里的不受影响）',
-              onClick: runAsync(() => removeWorldbookCharacter(c.id))
-            })
-          )
-        )
-      )
-    );
-  }
+  for (const c of copies) host.appendChild(bookCharCard(book, c));
 }
 
-/** 把选中的角色卡角色复制进本书：深拷贝一份，id 另发，两边从此互不相干 */
-async function addWorldbookCharacters(ids) {
-  const book = currentWorldbook();
+/** 重绘某本书所有已注册的人物列表宿主（角色增删 / 显示状态切换后调） */
+export function rerenderBookCharHosts(book) {
   if (!book) return;
-
-  const wanted = new Set(ids);
-  const picked = characters().filter((c) => wanted.has(c.id));
-  if (!picked.length) return;
-
-  book.characters = worldbookCharacters(book);
-  const copies = [];
-  for (const src of picked) {
-    const copy = JSON.parse(JSON.stringify(src));
-    copy.id = newWorldbookCharId();
-    copy.createdAt = now();
-    copy.updatedAt = now();
-    book.characters.push(copy);
-    copies.push(copy);
+  const hosts = bookCharHosts.get(book.id);
+  if (!hosts) return;
+  for (const host of hosts) {
+    if (host.isConnected) renderBookCharacters(book, host);
+    else hosts.delete(host);
   }
-  book.updatedAt = now();
-
-  renderWorldbookChars();
-
-  const ok = await persistLibrary();
-  showToast(ok ? `已加入 ${picked.length} 个角色副本` : '加入失败，没能写入磁盘', ok ? 'ok' : 'error');
-
-  // 加入副本只动了世界书（persistLibrary），这里把新角色的属性种进正在玩这本书的
-  // 会话面板，否则「进世界之后再往书里加角色」看不到新 NPC 的状态。
-  if (ok) {
-    const seeded = seedWorldbookCharactersIntoConvos(state.conversations, book, copies);
-    if (seeded) {
-      persistConversations(0);
-      if (activeConvo() && convoWorldbookIds(activeConvo()).includes(book.id)) {
-        renderAll();
-      }
-    }
-  }
-}
-
-/**
- * 在本书里新建一个角色副本：先只做成草稿给用户填，点「保存角色」才真的加进这本书。
- */
-function newWorldbookCharacter() {
-  if (!currentWorldbook()) return;
-  draftInBook();
 }
 
 /** 从本书移除一个角色副本（角色卡里的角色不动） */
-async function removeWorldbookCharacter(id) {
-  const book = currentWorldbook();
+async function removeWorldbookCharacter(book, id) {
   if (!book) return;
 
   const target = worldbookCharacters(book).find((c) => c.id === id);
@@ -699,68 +640,29 @@ async function removeWorldbookCharacter(id) {
   book.characters = worldbookCharacters(book).filter((c) => c.id !== id);
   book.updatedAt = now();
 
-  renderWorldbookChars();
+  rerenderBookCharHosts(book);
   if (!(await persistLibrary())) {
     // 写盘失败：把内存也退回去，别让界面显示「已移除」而磁盘上还在。
     book.characters = before;
     book.updatedAt = beforeUpdated;
-    renderWorldbookChars();
+    rerenderBookCharHosts(book);
     return;
   }
   showToast('已移除', 'ok');
 }
 
-/** 打开角色编辑器，但作用域切到这本书的角色副本 */
-function editWorldbookCharacter(id) {
-  const book = currentWorldbook();
+/** 打开角色编辑器，但作用域切到这本书的角色副本。
+ *  ⚠️ 先 focusWorldbook 把「当前书」切过去：角色卡编辑页里点「编辑」时世界书编辑器
+ *  可能根本没打开（editingWorldbookId 还指着别的书或 null），不切过去副本会找不到。 */
+function editWorldbookCharacter(book, id) {
   if (!book) return;
+  if (!focusWorldbook(book.id)) return;
   openInBook(id);
-}
-
-/** 把角色卡同名卡的属性补进本书副本：只按名字匹配、只补副本没有的字段，已有值不覆盖，
- *  也不动 description / personality 等其它字段。 */
-async function syncWorldbookCharAttrs() {
-  const book = currentWorldbook();
-  if (!book) return;
-
-  const copies = worldbookCharacters(book);
-  if (!copies.length) {
-    showToast('这本书里还没有角色副本', 'error');
-    return;
-  }
-
-  const { touched, added, missing } = syncCopyAttrsFromSource(copies, characters());
-  if (!touched) {
-    const why = missing.length
-      ? `这些副本在角色卡里没有同名卡：${missing.join('、')}`
-      : '所有副本的属性都已经是最新的了';
-    showToast(why, 'error');
-    return;
-  }
-
-  book.updatedAt = now();
-  const saved = await persistLibrary();
-  renderWorldbookChars();
-
-  if (saved) {
-    // 把补上的属性种进正在玩这本书的会话面板，头像 / 状态卡立刻可见。
-    const seeded = seedWorldbookCharactersIntoConvos(state.conversations, book, copies);
-    if (seeded) {
-      persistConversations(0);
-      if (activeConvo() && convoWorldbookIds(activeConvo()).includes(book.id)) {
-        renderAll();
-      }
-    }
-    showToast(`已补 ${added} 个属性到 ${touched} 个副本`, 'ok');
-  } else {
-    showToast('补属性失败，没能写入磁盘', 'error');
-  }
 }
 
 /** 切换某个副本「在状态栏显示」：showInPanel 存在本书的副本上，同一角色放进不同的书
  *  可以各显示各的；改完立刻重绘当前会话。 */
-async function toggleWorldbookCharShowInPanel(id, on) {
-  const book = currentWorldbook();
+async function toggleWorldbookCharShowInPanel(book, id, on) {
   if (!book) return;
 
   const target = worldbookCharacters(book).find((c) => c.id === id);
@@ -778,7 +680,7 @@ async function toggleWorldbookCharShowInPanel(id, on) {
     target.showInPanel = beforeShow;
     target.updatedAt = beforeTargetUpdated;
     book.updatedAt = beforeBookUpdated;
-    renderWorldbookChars();
+    rerenderBookCharHosts(book);
     return;
   }
   // 「当前状态」入口条按当前会话的面板画，正在玩这本书就得重绘一次，头像才会立刻增删。
@@ -786,95 +688,6 @@ async function toggleWorldbookCharShowInPanel(id, on) {
     renderAll();
   }
   showToast(on ? `「${target.name}」的状态会显示了` : `「${target.name}」的状态已隐藏`, 'ok');
-}
-
-// --- 从角色卡多选加入 ---
-
-let wbPickerChars = [];
-const wbPickerPicked = new Set();
-
-function openWorldbookCharPicker() {
-  const list = characters();
-  if (!list.length) {
-    showToast('角色卡里还没有角色，先建一个吧', 'error');
-    return;
-  }
-
-  wbPickerChars = list;
-  wbPickerPicked.clear();
-  renderWorldbookCharPicker();
-  el.wbPicker.modal.classList.remove('hidden');
-}
-
-export function closeWorldbookCharPicker() {
-  el.wbPicker.modal.classList.add('hidden');
-  wbPickerChars = [];
-  wbPickerPicked.clear();
-}
-
-function renderWorldbookCharPicker() {
-  const host = el.wbPicker.list;
-  host.innerHTML = '';
-
-  if (!wbPickerChars.length) {
-    const tip = document.createElement('div');
-    tip.className = 'wb-picker-empty';
-    tip.textContent = '角色卡是空的';
-    host.appendChild(tip);
-    return;
-  }
-
-  for (const c of wbPickerChars) {
-    const row = document.createElement('label');
-    row.className = `wb-picker-row${wbPickerPicked.has(c.id) ? ' picked' : ''}`;
-
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = wbPickerPicked.has(c.id);
-    box.addEventListener('change', () => {
-      if (box.checked) wbPickerPicked.add(c.id);
-      else wbPickerPicked.delete(c.id);
-      row.classList.toggle('picked', box.checked);
-      updateWorldbookCharPickerHint();
-    });
-
-    const av = document.createElement('div');
-    av.className = 'wb-picker-avatar';
-    if (c.avatar) {
-      const img = document.createElement('img');
-      img.src = c.avatar;
-      img.alt = '';
-      av.appendChild(img);
-    } else {
-      av.textContent = String(c.name || '').slice(0, 1) || '?';
-    }
-
-    const name = document.createElement('span');
-    name.className = 'wb-picker-name';
-    name.textContent = c.name;
-
-    row.append(box, av, name);
-    host.appendChild(row);
-  }
-
-  updateWorldbookCharPickerHint();
-}
-
-function updateWorldbookCharPickerHint() {
-  if (!el.wbPicker.hint) return;
-  el.wbPicker.hint.textContent = wbPickerPicked.size
-    ? `已选 ${wbPickerPicked.size} 个`
-    : '加入的是副本，之后两边各改各的';
-}
-
-async function confirmWorldbookCharPicker() {
-  const ids = [...wbPickerPicked];
-  if (!ids.length) {
-    showToast('先勾选要加入的角色', 'error');
-    return;
-  }
-  closeWorldbookCharPicker();
-  await addWorldbookCharacters(ids);
 }
 
 // 编辑器只负责编辑「当前这一本」；书从角色的「自带世界书」里长出来（见 createWorldbook）。
@@ -901,7 +714,6 @@ function openWorldbooksModal(targetId) {
   selectWorldbook(next);
   // 每次都落在「条目」屏（书籍设置屏已经撤了，书名改在条目左栏顶部）。
   setWorldbookPanel('entries');
-  renderWorldbookChars();
 
   showView('wbEditor');
 }
@@ -937,7 +749,6 @@ export async function leaveWorldbookEditor() {
 
   const back = editorReturnView === 'wbEditor' ? 'chars' : editorReturnView;
   showView(back);
-  renderWorldbookChars();
   renderDirtyHint();
   // 回到角色编辑器时，那边「已绑世界书」那行可能刚被改名 / 加过条目 —— 交给入口层重画
   afterLeave(back);

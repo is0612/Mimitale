@@ -4,23 +4,21 @@ import { iconHtml } from '../ui/icons.js';
 
 //  角色编辑页的骨架：左栏（资料 + 分区导航）／内容列／右栏字段目录。
 //  ⚠️ 只搬运已有控件，绝不克隆 —— id / 值 / 监听器都得原样留着。
-//  第三列（字段目录）只在「角色设定」展开。
+//  第三列（字段目录）只在「角色卡设定」展开。
 
 let layout = null;
 
 // 分区导航的图标：只留名字，形状在 ui/icons.js 的注册表里。
 const SECTION_ICONS = {
   writing: 'file-text',
-  state: 'sliders-horizontal',
-  expressions: 'smile',
+  roles: 'users',
   worldbook: 'book-open',
   advanced: 'settings'
 };
 
 /** ⚠️ 顺序三处一致：这里 = index.html 里 .field-no 写的序号 = 右栏目录的序号。 */
 const FIELD_SPECS = [
-  ['desc', '角色描述'],
-  ['personality', '性格'],
+  ['desc', '角色卡描述'],
   ['scenario', '场景'],
   ['first', '开场白'],
   ['example', '示例对话']
@@ -29,13 +27,12 @@ const FIELD_SPECS = [
 /** 高级设置那三栏的 id。只用来数「填了几栏」，不搬运 */
 const ADVANCED_FIELDS = ['c-system', 'c-post', 'c-notes'];
 
-/** 五个分区：[key, 标题, 说明]。⚠️ 说明只喂给内容列的标题，不喂给左栏导航。 */
+/** 四个分区：[key, 标题, 说明]。⚠️ 说明只喂给内容列的标题，不喂给左栏导航。 */
 const SECTIONS = [
-  ['writing', '角色设定', '五栏连成一页，上下滚着就能对照'],
-  ['state', '属性', '管理角色的初始状态与互动选项'],
-  ['expressions', '表情图', '管理角色的表情与触发词'],
+  ['writing', '角色卡设定', '几栏连成一页，上下滚着就能对照'],
+  ['roles', '人物列表', '这本书里的人物副本，和角色卡相互独立'],
   ['worldbook', '世界书', '绑定角色自带的世界设定'],
-  ['advanced', '高级设置', '角色专属指令与作者备注']
+  ['advanced', '高级设置', '角色卡专属指令与作者备注']
 ];
 
 function node(tag, className, text) {
@@ -65,12 +62,11 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   const form = document.getElementById('char-form');
   if (!form || layout) return;
   const media = form.querySelector('.char-media-top');
-  const text = form.querySelector('.char-text-section');
+  const textSection = form.querySelector('.char-text-section');
   const identityFields = form.querySelector('.char-head-fields');
-  const expressions = form.querySelector('.char-expr-entry');
   const worldbook = document.getElementById('c-worldbook-box');
   const advanced = form.querySelector('.char-advanced');
-  if (!media || !text || !identityFields || !expressions || !worldbook || !advanced) return;
+  if (!media || !identityFields || !worldbook || !advanced) return;
 
   // ---------------------------------------------------------------- 左栏
   const identity = node('aside', 'char-identity-pane');
@@ -111,6 +107,23 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
     heading.append(node('h2', '', title), node('p', '', description));
     panel.append(heading);
 
+    // 「人物列表」分区：正文是一个卡片网格，由 characterEditor.js 换卡时经
+    // renderBookCharacters 填。这里只留宿主，别在标题下再放别的节点。
+    if (key === 'roles') {
+      const bar = node('div', 'char-book-roles-bar');
+      const btnAi = node('button', 'char-book-roles-btn', 'AI 生成');
+      btnAi.type = 'button';
+      btnAi.id = 'btn-char-roles-ai';
+      const btnNew = node('button', 'char-book-roles-btn', '＋ 新建');
+      btnNew.type = 'button';
+      btnNew.id = 'btn-char-roles-new';
+      bar.append(btnAi, btnNew);
+      const roles = node('div', 'char-book-roles');
+      roles.id = 'char-book-roles';
+      roles.setAttribute('aria-label', '本书人物列表');
+      panel.append(bar, roles);
+    }
+
     nav.append(button);
     main.append(panel);
     sections.set(key, panel);
@@ -122,7 +135,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   const railFoot = document.getElementById('char-rail-foot');
   if (railFoot) identity.append(railFoot);
 
-  // ------------------------------------------------- 五个写作字段：全部常显
+  // ------------------------------------------------- 写作字段：全部常显
   const writing = sections.get('writing');
   const fieldItems = [];
   for (const [key, title] of FIELD_SPECS) {
@@ -137,15 +150,17 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   const firstItem = fieldItems.find((item) => item.key === 'first');
   if (alt && firstItem) firstItem.field.after(alt);
 
-  sections.get('state').append(text);
-  sections.get('expressions').append(expressions);
+  // 字段（.char-sheet）都搬进 writing 分区后，.char-text-section 成了空容器 ——
+  // 它还留在 form 顶层会占掉 grid 第一列，把 identity/main/index 全挤错位，必须摘掉。
+  if (textSection) textSection.remove();
+
   sections.get('worldbook').append(worldbook);
   sections.get('advanced').append(advanced);
 
   // --------------------------------------------------- 右栏：字段目录
   const index = node('aside', 'char-field-index');
   index.id = 'char-field-index';
-  index.setAttribute('aria-label', '角色设定字段目录');
+  index.setAttribute('aria-label', '角色卡设定字段目录');
   index.append(node('div', 'field-index-title', '字段目录'));
   const indexItems = [];
   for (let i = 0; i < fieldItems.length; i += 1) {
@@ -171,7 +186,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   }
   const inject = node('div', 'field-index-block');
   inject.innerHTML = '<h3>这一页会进到哪里</h3><ul class="field-index-list">'
-    + '<li>描述 + 性格：每轮都注入</li>'
+    + '<li>角色卡描述：每轮都注入</li>'
     + '<li>场景：只在开场注入一次</li>'
     + '<li>开场白：绑定时作为第一条消息</li>'
     + '<li>示例对话：作为语气样例注入</li>'
@@ -190,7 +205,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
       button.setAttribute('aria-selected', String(active));
       button.tabIndex = active ? 0 : -1;
     }
-    // 三栏只在「角色设定」展开（CSS 按这个属性挑栅格）
+    // 三栏只在「角色卡设定」展开（CSS 按这个属性挑栅格）
     form.dataset.editorSection = key;
     onReveal();
     if (key === 'writing') syncCurrentIndex();
@@ -224,7 +239,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   refreshCharSectionCounts();
 }
 
-/** 刷新徽章与字数 / 圆点。⚠️ 徽章只表示「已有多少条内容」：只有「角色设定」用分数；0 也要显示。 */
+/** 刷新徽章与字数 / 圆点。⚠️ 徽章只表示「已有多少条内容」：只有「角色卡设定」用分数；0 也要显示。 */
 export function refreshCharSectionCounts() {
   if (!layout) return;
   const filled = layout.indexItems.filter((item) => (item.control.value || '').trim()).length;

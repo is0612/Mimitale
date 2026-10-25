@@ -1317,9 +1317,11 @@ function registerStubs() {
     //    「你是一位经验丰富的角色设定师」之后桩就认不出来了 —— 生成请求被当成普通聊天，
     //    返回一段「冒烟测试回复」，下游十几条断言（名字没回填、落盘没属性……）连带全红，
     //    而真正的原因跟它们一点关系都没有。
-    //    现在同时要两样：人设里的「角色设定师」+ 字段契约里的 "firstMes"（字段名是契约，
-    //    改措辞不会动它）。两个都在才算，误判成聊天的可能性很低。
-    if (/角色设定师/.test(allText) && allText.includes('"firstMes"')) {
+    //    现在同时要两样：人设里的「角色设定师」+ 字段契约里的键（字段名是契约，改措辞不会动它）。
+    // ⚠️ 2026-10-26：本书角色（NPC）那条路的合同改成只有 name/description/tags/attributes，
+    //    把 "firstMes" 去掉了 —— 只认 "firstMes" 会让 NPC 生成整条被当成普通聊天全红。
+    //    所以两条合同任认一个键：角色卡有 firstMes，NPC 有 attributes。
+    if (/角色设定师/.test(allText) && (allText.includes('"firstMes"') || allText.includes('"attributes"'))) {
       // 认出来的 AI 生成请求数 —— 只在诊断时打出来（见下面的 TMP 输出），
       // 用来区分「请求没发出来」和「发出来了但没认出来」。
       aiGenSeen += 1;
@@ -2316,18 +2318,13 @@ function probeExports(result) {
       const card = parseCharacterCardPng(withText);
       const ext = (card && card.data && card.data.extensions && card.data.extensions.mimitale) || {};
       const attrs = Array.isArray(ext.attributes) ? ext.attributes : [];
-      const meter = attrs.find((a) => a && a.name === '好感度');
+      // 属性已归本书角色（副本）：角色卡自身不再带属性，导出的卡 attributes 为空。
+      // 属性的 PNG 往返（范围/规则）改由世界书副本那一路覆盖（见 smoke-renderer.js 的属性场景）。
       cardOk =
         !!card &&
         card.spec === 'chara_card_v2' &&
         card.data.name === '属性测试角色' &&
-        attrs.length === 3 &&
-        // 范围/规则也要能过一遍 PNG 往返（写进 extensions.mimitale 再读回来）
-        !!meter &&
-        meter.type === 'meter' &&
-        meter.min === 0 &&
-        meter.max === 100 &&
-        meter.hint === '按剧情合理增减，单轮不超过 10';
+        attrs.length === 0;
       cardDetail = card ? `读回来的是「${card.data.name}」 ext=${JSON.stringify(ext)}` : 'PNG 里没读回卡数据';
     } catch (err) {
       cardDetail = '往返崩了：' + ((err && err.message) || err);
@@ -3643,11 +3640,11 @@ async function probeCardFillParse(win, result) {
       if (typeof mod.parseCardFill !== 'function') return { exported: false };
 
       const clean = JSON.stringify({
-        description: '描述', personality: '性格', scenario: '场景', firstMes: '开场白', mesExample: '示例'
+        description: '描述', scenario: '场景', firstMes: '开场白', mesExample: '示例'
       });
       const snake = JSON.stringify({ first_mes: '开场白', mes_example: '示例' });
       const fenced = '好的：\\n\\n\\\`\\\`\\\`json\\n' + clean + '\\n\\\`\\\`\\\`';
-      const empty = JSON.stringify({ description: '', personality: '   ' });
+      const empty = JSON.stringify({ description: '', scenario: '   ' });
 
       const a = mod.parseCardFill(clean);
       const b = mod.parseCardFill(snake);
@@ -3668,9 +3665,9 @@ async function probeCardFillParse(win, result) {
       push('AI 补充：解析函数可以从模块里拿到', false, JSON.stringify(out));
       return;
     }
-    push('AI 补充：五栏都能解析出来', out.clean.ok && out.clean.filled === 5, JSON.stringify(out.clean));
+    push('AI 补充：四栏都能解析出来', out.clean.ok && out.clean.filled === 4, JSON.stringify(out.clean));
     push('AI 补充：下划线写法（first_mes / mes_example）也认', out.snake.ok && out.snake.firstMes && out.snake.mesExample, JSON.stringify(out.snake));
-    push('AI 补充：带围栏的输出也能解析', out.fenced.ok && out.fenced.filled === 5, JSON.stringify(out.fenced));
+    push('AI 补充：带围栏的输出也能解析', out.fenced.ok && out.fenced.filled === 4, JSON.stringify(out.fenced));
     push('AI 补充：乱码不抛错、给出错误', !out.junk.ok && !!out.junk.err, JSON.stringify(out.junk));
     push('AI 补充：一栏都没给就算失败', !out.empty.ok && !!out.empty.err, JSON.stringify(out.empty));
   } catch (err) {
@@ -4671,8 +4668,8 @@ app.whenReady().then(async () => {
           await nap(700);
           // 进编辑器就落在「条目」屏（设置屏撤了），不用再切
           await new Promise(r => setTimeout(r, 300));`,
-        // 世界书编辑器的「本书角色」分区（2026-10-18 起它有了自己的一屏）：
-        // 动作行 + 卡片网格 / 空态引导卡 —— 卡片里「本书副本」那枚标最容易挤掉。
+        // 角色卡编辑页的「人物列表」：动作行 + 卡片网格 / 空态引导卡。
+        // （世界书编辑器里的「本书角色」屏已撤，这里只留角色卡这一侧的入口。）
         wbChars: `
           const t = document.querySelector('#toast');
           if (t) { t.classList.add('hidden'); t.textContent = ''; }
@@ -4684,22 +4681,11 @@ app.whenReady().then(async () => {
           const wbEditBtn = wbCard && Array.from(wbCard.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (wbEditBtn) wbEditBtn.click();
           await nap(550);
-          $('#char-section-tab-worldbook')?.click(); await nap(250);
-          if (!$$('#c-wb-list .cwb-row').length) {
-            $('#c-wb-add-btn')?.click(); await nap(350);
-            const row = $$('.cwb-picker-row')[0];
-            if (row) row.click();
-            await nap(400);
-          }
-          const line = $$('#c-wb-list .cwb-row')[0];
-          const go = line && Array.from(line.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (go) go.click();
-          await nap(700);
-          document.querySelector('#wb-tab-characters')?.click();
+          $('#char-section-tab-roles')?.click();
           await nap(350);
           if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 本书角色编辑页（worldbook → 本书角色 → 编辑）：和角色卡编辑页是两套页面，
-        // 出图用来核对两边的栅格 / 左栏底栏 / 右栏目录长得一样。
+        // 出图用来核对左栏四个分区 / 底栏四颗按钮 / 单栏写作纸（没有右栏目录）。
         bookCharEditor: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
@@ -4709,24 +4695,13 @@ app.whenReady().then(async () => {
           const editBtn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
           if (editBtn) editBtn.click();
           await nap(550);
-          $('#char-section-tab-worldbook')?.click(); await nap(250);
-          if (!$$('#c-wb-list .cwb-row').length) {
-            $('#c-wb-add-btn')?.click(); await nap(350);
-            const row = $$('.cwb-picker-row')[0];
-            if (row) row.click();
-            await nap(400);
-          }
-          const line = $$('#c-wb-list .cwb-row')[0];
-          const go = line && Array.from(line.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (go) go.click();
-          await nap(700);
-          $('#wb-tab-characters')?.click(); await nap(350);
-          const copy = $$('#wb-char-list .wb-char-card')[0];
+          $('#char-section-tab-roles')?.click(); await nap(250);
+          const copy = $$('#char-book-roles .char-card')[0];
           if (copy) {
             const open = Array.from(copy.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
             if (open) open.click();
           } else {
-            $('#btn-new-wb-char')?.click();
+            $('#btn-char-roles-new')?.click();
           }
           await nap(700);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,

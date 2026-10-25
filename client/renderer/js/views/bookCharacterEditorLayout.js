@@ -2,10 +2,11 @@
 
 import { iconHtml } from '../ui/icons.js';
 
-//  本书角色编辑页的骨架：左栏（资料 + 分区导航）／内容列／右栏字段目录。
+//  本书角色编辑页的骨架：左栏（资料 + 分区导航）／内容列。
 //  从 characterEditorLayout.js 复制；DOM id 全部走 bc- 前缀。
 //  ⚠️ 只搬运已有控件，绝不克隆 —— id / 值 / 监听器都得原样留着。
-//  第三列（字段目录）只在「角色设定」展开。
+//  右栏字段目录已撤：本书角色只负责介绍角色内容，就一栏写作字段，目录没意义。
+//  「世界书」分区也撤了：世界书是角色卡的，人物不自带书。
 
 let layout = null;
 
@@ -14,28 +15,22 @@ const SECTION_ICONS = {
   writing: 'file-text',
   state: 'sliders-horizontal',
   expressions: 'smile',
-  worldbook: 'book-open',
   advanced: 'settings'
 };
 
-/** ⚠️ 顺序三处一致：这里 = index.html 里 .field-no 写的序号 = 右栏目录的序号。 */
+/** ⚠️ 顺序两处一致：这里 = index.html 里 .field-no 写的序号。 */
 const FIELD_SPECS = [
-  ['desc', '角色描述'],
-  ['personality', '性格'],
-  ['scenario', '场景'],
-  ['first', '开场白'],
-  ['example', '示例对话']
+  ['desc', '角色描述']
 ];
 
 /** 高级设置那三栏的 id。只用来数「填了几栏」，不搬运 */
 const ADVANCED_FIELDS = ['bc-c-system', 'bc-c-post', 'bc-c-notes'];
 
-/** 五个分区：[key, 标题, 说明]。⚠️ 说明只喂给内容列的标题，不喂给左栏导航。 */
+/** 四个分区：[key, 标题, 说明]。⚠️ 说明只喂给内容列的标题，不喂给左栏导航。 */
 const SECTIONS = [
-  ['writing', '角色设定', '五栏连成一页，上下滚着就能对照'],
+  ['writing', '角色描述', '这一栏交代角色的身份、外貌、经历与性格'],
   ['state', '属性', '管理角色的初始状态与互动选项'],
   ['expressions', '表情图', '管理角色的表情与触发词'],
-  ['worldbook', '世界书', '绑定角色自带的世界设定'],
   ['advanced', '高级设置', '角色专属指令与作者备注']
 ];
 
@@ -69,9 +64,8 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   const text = form.querySelector('.char-text-section');
   const identityFields = form.querySelector('.char-head-fields');
   const expressions = form.querySelector('.char-expr-entry');
-  const worldbook = document.getElementById('bc-c-worldbook-box');
   const advanced = form.querySelector('.char-advanced');
-  if (!media || !text || !identityFields || !expressions || !worldbook || !advanced) return;
+  if (!media || !text || !identityFields || !expressions || !advanced) return;
 
   // ---------------------------------------------------------------- 左栏
   const identity = node('aside', 'char-identity-pane');
@@ -123,7 +117,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   const railFoot = document.getElementById('bc-char-rail-foot');
   if (railFoot) identity.append(railFoot);
 
-  // ------------------------------------------------- 五个写作字段：全部常显
+  // ------------------------------------------------- 一个写作字段：常显
   const writing = sections.get('writing');
   const fieldItems = [];
   for (const [key, title] of FIELD_SPECS) {
@@ -133,53 +127,12 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
     writing.append(field);
     fieldItems.push({ key, title, field, control });
   }
-  // 备选开场白跟着「开场白」走（它是那一栏的一部分，不单独占序号）
-  const alt = document.getElementById('bc-c-alt-field');
-  const firstItem = fieldItems.find((item) => item.key === 'first');
-  if (alt && firstItem) firstItem.field.after(alt);
 
   sections.get('state').append(text);
   sections.get('expressions').append(expressions);
-  sections.get('worldbook').append(worldbook);
   sections.get('advanced').append(advanced);
 
-  // --------------------------------------------------- 右栏：字段目录
-  const index = node('aside', 'char-field-index');
-  index.id = 'bc-char-field-index';
-  index.setAttribute('aria-label', '角色设定字段目录');
-  index.append(node('div', 'field-index-title', '字段目录'));
-  const indexItems = [];
-  for (let i = 0; i < fieldItems.length; i += 1) {
-    const item = fieldItems[i];
-    const button = node('button', 'field-index-item');
-    button.type = 'button';
-    button.dataset.key = item.key;
-    const len = node('span', 'field-index-len', '—');
-    const dot = node('span', 'field-index-dot');
-    dot.dataset.filled = 'false';
-    button.append(
-      node('span', 'field-index-no', String(i + 1)),
-      node('span', 'field-index-name', item.title),
-      len,
-      dot
-    );
-    button.addEventListener('click', () => {
-      item.field.scrollIntoView({ block: 'start' });
-      setCurrentIndex(item.key);
-    });
-    index.append(button);
-    indexItems.push({ key: item.key, title: item.title, field: item.field, control: item.control, button, len, dot });
-  }
-  const inject = node('div', 'field-index-block');
-  inject.innerHTML = '<h3>这一页会进到哪里</h3><ul class="field-index-list">'
-    + '<li>描述 + 性格：每轮都注入</li>'
-    + '<li>场景：只在开场注入一次</li>'
-    + '<li>开场白：绑定时作为第一条消息</li>'
-    + '<li>示例对话：作为语气样例注入</li>'
-    + '</ul>';
-  index.append(inject);
-
-  form.append(identity, main, index);
+  form.append(identity, main);
   form.classList.add('char-editor-layout');
 
   // ---------------------------------------------------------------- 交互
@@ -191,57 +144,30 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
       button.setAttribute('aria-selected', String(active));
       button.tabIndex = active ? 0 : -1;
     }
-    // 三栏只在「角色设定」展开（CSS 按这个属性挑栅格）
     form.dataset.editorSection = key;
     onReveal();
-    if (key === 'writing') syncCurrentIndex();
     return true;
   }
-
-  /** 高亮「当前在看的那一栏」 */
-  function setCurrentIndex(key) {
-    for (const item of indexItems) item.button.setAttribute('aria-current', String(item.key === key));
-  }
-
-  /** 用 scroll 而非 IntersectionObserver 算当前栏：五栏比 rect 更简单，也不会僵在上一次。 */
-  function syncCurrentIndex() {
-    if (!indexItems.length || form.dataset.editorSection !== 'writing') return;
-    const line = main.getBoundingClientRect().top + 12;
-    let current = indexItems[0];
-    for (const item of indexItems) {
-      if (item.field.getBoundingClientRect().top <= line) current = item;
-    }
-    setCurrentIndex(current.key);
-  }
-
-  main.addEventListener('scroll', syncCurrentIndex, { passive: true });
 
   for (const button of sectionButtons) button.addEventListener('click', () => selectSection(button.dataset.key));
   wireTabs(nav, sectionButtons, selectSection);
 
-  layout = { form, main, sections, indexItems, selectSection, onReveal, sourceChip, sectionCounts };
+  layout = { form, main, sections, fieldItems, selectSection, onReveal, sourceChip, sectionCounts };
 
   selectSection('writing');
   refreshCharSectionCounts();
 }
 
-/** 刷新徽章与字数 / 圆点。⚠️ 徽章只表示「已有多少条内容」：只有「角色设定」用分数；0 也要显示。 */
+/** 刷新徽章与字数。⚠️ 徽章只表示「已有多少条内容」：只有「角色描述」用分数；0 也要显示。 */
 export function refreshCharSectionCounts() {
   if (!layout) return;
-  const filled = layout.indexItems.filter((item) => (item.control.value || '').trim()).length;
-  setCharSectionCount('writing', `${filled}/${layout.indexItems.length}`);
+  const filled = layout.fieldItems.filter((item) => (item.control.value || '').trim()).length;
+  setCharSectionCount('writing', `${filled}/${layout.fieldItems.length}`);
 
   const advanced = ADVANCED_FIELDS
     .map((id) => document.getElementById(id))
     .filter((el) => el && (el.value || '').trim()).length;
   setCharSectionCount('advanced', String(advanced));
-
-  for (const item of layout.indexItems) {
-    const value = item.control.value || '';
-    // 字数口径与字段角标一致：value.length（不 trim）
-    item.len.textContent = value.length ? String(value.length) : '—';
-    item.dot.dataset.filled = String(!!value.trim());
-  }
 }
 
 /** 分区导航右侧的计数徽章：空串就整条藏起来（视图层按草稿实时喂） */

@@ -1,7 +1,8 @@
 'use strict';
 
 // views/bookCharacterEditor.js —— 本书角色编辑页（世界书 → 本书角色 → 编辑）
-// 从 characterEditor.js 复制的一份，字段结构暂与它一致；两边各改各的，改动记得同步看另一边。
+// 从 characterEditor.js 复制的一份，但只负责介绍角色内容：只有「角色描述」一栏，
+// 没有场景 / 开场白 / 示例对话 / 性格，也不自带世界书（世界书是角色卡的）。
 // 新建角色只是草稿，保存才落库；属性/表情图草稿归本模块，拆出去的两个模块拿同一份数组引用。
 
 import { state } from '../core/state.js';
@@ -9,20 +10,19 @@ import { el } from './bookCharEditorDom.js';
 import { uid, now } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
-import { h, clear } from '../ui/build.js';
 import { showView, currentViewName } from './viewSwitch.js';
-import { MAX_PANEL_FIELDS } from '../data/panel.js';
+import { MAX_PANEL_FIELDS, seedPanelFromCharacters } from '../data/panel.js';
 import { MAX_EXPRESSIONS } from '../data/expressions.js';
 import {
   characters,
   characterAttrs,
-  worldbooks,
   worldbookById,
   worldbookCharacters,
+  convoWorldbookIds,
   newWorldbookCharId
 } from '../data/library.js';
-import { persistCharacters, persistConversations, persistLibrary } from '../data/persist.js';
-import { currentWorldbook, renderWorldbookChars, focusWorldbook, openWorldbookEditor, createWorldbook } from './worldbook.js';
+import { persistCharacters, persistConversations } from '../data/persist.js';
+import { currentWorldbook, rerenderBookCharHosts, focusWorldbook } from './worldbook.js';
 import { renderCharacterPage } from './characterList.js';
 import { renderCharAttrs, initCharAttrsUi } from './bookCharAttributes.js';
 import {
@@ -31,25 +31,20 @@ import {
   initCharExpressionsUi
 } from './bookCharExpressions.js';
 import { openAiGenModal } from './aiGen.js';
-import { initCharBookAi, resetCharBookAi, materializeCharBook, setCharBookScope } from './bookCharBookAi.js';
 import { initCharAiFill, resetCharAiFill } from './bookCharAiFill.js';
 import { attachAutoGrow, syncAutoGrowAll } from '../ui/auto-grow.js';
-import { mTextarea, hostOf } from '../components/index.js';
+import { hostOf } from '../components/index.js';
 import { pickAndCrop } from '../ui/imageCrop.js';
 import { initCharacterEditorLayout, showCharacterField, setCharSectionCount, setCharSourceChip, refreshCharSectionCounts } from './bookCharacterEditorLayout.js';
 export { showCharacterField } from './bookCharacterEditorLayout.js';
 
-// 长文本框（描述/性格/场景/开场白/示例对话）：自动增高与拖拽记忆在 ui/auto-grow.js；
+// 长文本框（描述）：自动增高与拖拽记忆在 ui/auto-grow.js；
 // 记忆 key 用字段名而不是角色 id —— 换角色也该沿用一个高度。
 
 function longTextAreas() {
   const c = el.c || {};
   return [
-    [c.desc, 'desc'],
-    [c.personality, 'personality'],
-    [c.scenario, 'scenario'],
-    [c.first, 'first'],
-    [c.example, 'example']
+    [c.desc, 'desc']
   ].filter((pair) => pair[0]);
 }
 
@@ -60,7 +55,7 @@ function setCharSaveState(state) {
   el.charSaveState.textContent = state === 'dirty' ? '有未保存的改动' : '所有更改已保存';
 }
 
-/** 给五个框接上自动增高。接线只需一次（重复调用会被 ignore） */
+/** 给这一个框接上自动增高。接线只需一次（重复调用会被 ignore） */
 function wireAutoGrow() {
   for (const [node, key] of longTextAreas()) {
     attachAutoGrow(node, { key: `charform:${key}` });
@@ -84,7 +79,7 @@ function updateCharCount(textarea) {
   badge.textContent = `${n.toLocaleString()} 字`;
 }
 
-/** 页头右侧的「全文 N 字」：五个写作栏 + 高级设置三栏，和世界书页头同一种读法 */
+/** 页头右侧的「全文 N 字」：一个写作栏 + 高级设置三栏，和世界书页头同一种读法 */
 function updateCharTotalWords() {
   if (!el.charTotalWords) return;
   let total = 0;
@@ -96,7 +91,7 @@ function updateCharTotalWords() {
   el.charTotalWords.textContent = `全文 ${total.toLocaleString()} 字`;
 }
 
-/** 刷新全部五个框的角标 + 左栏徽章 + 右栏字段目录（fillCharForm 回填之后用） */
+/** 刷新这一个框的角标 + 左栏徽章（fillCharForm 回填之后用） */
 function syncAllCharCounts() {
   for (const [node] of longTextAreas()) updateCharCount(node);
   updateCharTotalWords();
@@ -116,18 +111,10 @@ let charDraftAvatar = '';
 let charDraftPortrait;
 // 表情图草稿（深拷贝），保存角色时才写回卡上
 let charExpressions = [];
-// 备选开场白草稿（导入卡常带，单卡见过 29 条）；行是动态铺的，见 renderAltGreetings
-let charAltGreetings = [];
-// 与主进程 main/characters.js 的 MAX_ALTERNATE_GREETINGS 对齐，否则 UI 能加、保存时被悄悄砍掉
-const MAX_ALT_GREETINGS = 50;
 // 「新建角色」的草稿：先只活在编辑器里，不进列表、不写磁盘
 let charDraft = null; // { character, scope, bookId }
-// 🔴 一张卡只允许一本自带世界书（主进程 normalize 也只留一本，两边一起卡住才不会「界面能绑、重启变一本」）
-const MAX_CHAR_WORLDBOOKS = 1;
 // 属性草稿，保存角色时才写回
 let charAttrs = [];
-// 给角色绑世界书的浮层（自己起一个，不复用世界书页的选择器）
-let worldbookPickerEl = null;
 
 // 入口层注入的动作
 let actions = { rerender: () => {} };
@@ -207,7 +194,7 @@ function updateCharEditorScopeUi() {
       // 保存状态胶囊（.save-pill）已提示未保存，这里说明这几栏写下去会去哪儿
       el.charsSub.textContent = inBook
         ? `这本书里的独立副本，改它不影响角色卡${book ? ` · ${book.name}` : ''}`
-        : '描述与性格每轮都会注入给 AI，改完点左栏底部的「保存」';
+        : '描述每轮都会注入给 AI，改完点左栏底部的「保存」';
     }
   }
 }
@@ -239,8 +226,6 @@ export async function leaveCharacterEditor({ force = false } = {}) {
     if (!ok) return;
   }
 
-  // 选书浮层挂在 body 上、z-index 比编辑页高，不收就成了悬在屏幕上的孤儿
-  closeWorldbookPicker();
   // 「AI 补充」还在等模型的话，走了就作废 —— 否则回来时表单会被上一张卡的内容糊上
   resetCharAiFill();
   discardCharDraft();
@@ -386,18 +371,11 @@ function fillCharForm(character) {
   el.c.name.value = character.name || '';
   el.c.tags.value = (Array.isArray(character.tags) ? character.tags : []).join(', ');
   el.c.desc.value = character.description || '';
-  el.c.personality.value = character.personality || '';
-  el.c.scenario.value = character.scenario || '';
-  el.c.first.value = character.firstMes || '';
-  // 备选开场白：先深拷贝成草稿，再按草稿把行铺出来（条数不定，不能写死 HTML）
-  charAltGreetings = draftAltGreetingsOf(character);
-  renderAltGreetings();
-  el.c.example.value = character.mesExample || '';
   el.c.system.value = character.systemPrompt || '';
   el.c.post.value = character.postHistoryInstructions || '';
   el.c.notes.value = character.creatorNotes || '';
 
-  // 年龄/性别/种族不在这张表单里，归入描述文字；这里不回填这三个输入框。
+  // 年龄/性别/种族不在这张表单里，归入描述文字；这里不回填这几个输入框。
 
   // 长文本：值由程序塞入不走 input，故显式重算高度。
   // ⚠️ 接线必须在这里（startCharDraft 不经过 openCharsModal），但不能此刻量：调用方还没摘 .hidden，display:none 下 scrollHeight 恒为 0。
@@ -408,12 +386,8 @@ function fillCharForm(character) {
   updateExprSummary();
 
   // 换了一张卡：上一张还没落盘的 AI 设定草稿不能跟过来
-  resetCharBookAi();
   // 上一张卡的「AI 补充」请求也一样要作废，别让它把内容写进新卡的表单
   resetCharAiFill();
-
-  // 角色自带的世界书：清单 + 绑定按钮 + 开关
-  renderCharWorldbookBox(character);
 
   // 属性：复制一份当草稿，保存时才写回角色卡
   charAttrs = characterAttrs(character);
@@ -430,25 +404,21 @@ function fillCharForm(character) {
   showCharForm(true);
 
   // 到这儿弹窗才可见，量高度才准（隐藏状态下量会永远得到 84px）
-  syncAutoGrowAll(longTextAreas().map((pair) => pair[0]).concat(altGreetTextAreas()));
+  syncAutoGrowAll(longTextAreas().map((pair) => pair[0]));
   syncAllCharCounts();
 }
 
 /**
- * 「AI 补充」的结果填进表单（见 views/charAiFill.js）。
+ * 「AI 补充」的结果填进表单（见 views/bookCharAiFill.js）。
  * · 只覆盖 AI 真给了内容的那几栏：模型偶尔漏一栏，别拿空串把手写的抹掉；
  * · 每填一栏派一个 input —— 和用户手打一个字走的是同一条路，角标 / 自动增高 /
  *   「有未保存的改动」胶囊会一起刷新（直接赋值不触发 input，那三样会停在旧值）；
- * · 名字 / 标签 / 属性 / 备注一律不碰：这份任务只改这五栏。
+ * · 名字 / 标签 / 属性 / 备注一律不碰：这份任务只改这一栏。
  * @returns {number} 真正填了几栏（0 = 一栏都没填，调用方要报错）
  */
 function applyAiFill(fields) {
   const map = [
-    ['description', el.c.desc],
-    ['personality', el.c.personality],
-    ['scenario', el.c.scenario],
-    ['firstMes', el.c.first],
-    ['mesExample', el.c.example]
+    ['description', el.c.desc]
   ];
 
   let written = 0;
@@ -468,298 +438,6 @@ function renderShowInPanelBox() {
   el.c.showInPanelBox.classList.toggle('hidden', charEditorScope !== 'worldbook');
 }
 
-// 角色自带的世界书
-
-/** 角色自带世界书：清单 + 绑定按钮；没绑定也始终显示（入口要一直在）。
- *  ⚠️ 只能绑一本，且绑上就一直生效 —— 没有「启用」开关（2026-10-24）。 */
-function renderCharWorldbookBox(character) {
-  if (!character) return;
-
-  // 「AI 补设定」：角色卡保存时建一本自己的书；世界书里的副本并进**这本书的草稿**
-  // （副本自己带的世界书进世界时不会被注入，见 data/cast.js 的 effectiveWorldbookIds）
-  setCharBookScope(charEditorScope, currentWorldbook() ? currentWorldbook().name : '');
-
-  const ids = character && Array.isArray(character.worldbookIds) ? character.worldbookIds : [];
-  const books = ids.map((id) => worldbookById(id)).filter(Boolean);
-  setCharSectionCount('worldbook', String(books.length));
-
-  // 🔴 只能一本：已经绑上了就把「＋ 绑定 / ＋ 新建」灰掉，否则用户点了才被告知不行
-  const full = books.length >= MAX_CHAR_WORLDBOOKS;
-  for (const btn of [el.c.wbAddBtn, el.c.wbNewBtn]) {
-    if (!btn) continue;
-    btn.disabled = full;
-    btn.title = full
-      ? '自带世界书只能有一本 —— 先解绑现在这本，再换或新建'
-      : btn === el.c.wbNewBtn
-        ? '新建一本世界书并绑定给这个角色'
-        : '从世界书库里挑一本绑给这个角色';
-  }
-
-  // --- 已绑的清单 ---
-  el.c.wbList.innerHTML = '';
-
-  if (!books.length) {
-    const empty = document.createElement('p');
-    empty.className = 'field-help cwb-empty';
-    empty.textContent =
-      '还没有绑定。点「＋ 新建」写一本，或「＋ 绑定」从库里挑一本 —— 单独跟这个角色聊天时会带上它。';
-    el.c.wbList.appendChild(empty);
-  } else {
-    for (const book of books) {
-      const row = document.createElement('div');
-      row.className = 'cwb-row';
-
-      const name = document.createElement('span');
-      name.className = 'cwb-row-name';
-      name.textContent = book.name;
-      name.title = book.name;
-
-      const count = document.createElement('span');
-      count.className = 'cwb-row-count';
-      const n = Array.isArray(book.entries) ? book.entries.length : 0;
-      count.textContent = `${n} 条`;
-
-      // 「编辑」：不离开角色编辑器，只是切到那本书的编辑器逛一圈；返回时还回这张卡。
-      const edit = document.createElement('button');
-      edit.type = 'button';
-      edit.className = 'cwb-row-edit';
-      edit.title = '打开这本书的编辑器（改完返回还会回到这张卡）';
-      edit.setAttribute('aria-label', `编辑世界书 ${book.name}`);
-      edit.textContent = '编辑';
-      edit.addEventListener('click', () => openBoundWorldbook(book.id));
-
-      const del = document.createElement('button');
-      del.type = 'button';
-      del.className = 'cwb-row-del';
-      del.title = '解绑（不会删掉世界书本身）';
-      del.setAttribute('aria-label', `解绑 ${book.name}`);
-      del.textContent = '✕';
-      del.addEventListener('click', () => unbindWorldbookFromCharacter(book.id));
-
-      row.append(name, count, edit, del);
-      el.c.wbList.appendChild(row);
-    }
-  }
-
-  if (!books.length) {
-    el.c.wbDesc.textContent = '';
-    el.c.wbHint.textContent =
-      '绑定之后，这张卡单独聊天会带上这本书的设定；被绑进某个世界当角色时不生效（那条会话有自己的世界观）。';
-    return;
-  }
-
-  const names = books.map((b) => b.name).join('、');
-  const total = books.reduce((sum, b) => sum + (Array.isArray(b.entries) ? b.entries.length : 0), 0);
-  el.c.wbDesc.textContent = `已绑 ${books.length} 本（共 ${total} 条）：${names}`;
-
-  el.c.wbHint.textContent =
-    '单独跟它聊天时会带上这些设定，角色卡上的「进入世界」也进这本书；但绑进某个世界当角色时不生效 —— 那条会话已经有自己的世界观了。';
-}
-
-/**
- * 行上的「编辑」：跳去那本书的**详情**（世界书编辑器）。
- *
- * ⚠️ 不走 leaveCharacterEditor —— 那条路会弹「放弃未保存的改动」并把编辑态收掉。
- * 这里只是切屏：角色编辑器这一屏的 DOM 原样留着，世界书编辑器点「返回」就回到
- * 这张卡（`openWorldbookEditor` 会把来处记成 charEditor）。
- * 但填在输入框里、还没进草稿的那点内容先收一份 —— 切屏期间只要别处触发一次重绘，
- * 没收过的输入就白填了（和「导入前先 stash」同一手）。
- */
-function openBoundWorldbook(bookId) {
-  if (!worldbookById(bookId)) return;
-  stashCharForm();
-  openWorldbookEditor(bookId);
-}
-
-/** 「＋ 新建」：造一本书 → 立刻绑给这张卡 → 直接进编辑器写内容。
- *  书先落盘再绑定，否则角色上的 id 会指向一本盘上没有的书（见 createWorldbook）。
- *  ⚠️ 只能一本：已经有书时**不建**（否则库里会多出一本没人绑的孤儿）。 */
-async function createWorldbookForCharacter() {
-  const character = editorCharacterById(editingCharacterId);
-  if (!character) return;
-
-  const ids = Array.isArray(character.worldbookIds) ? character.worldbookIds : [];
-  if (ids.length >= MAX_CHAR_WORLDBOOKS) {
-    showToast('自带世界书只能有一本 —— 先解绑现在这本，再新建', 'error');
-    return;
-  }
-
-  const book = await createWorldbook();
-  if (!book) return;
-
-  await bindWorldbookToCharacter(book.id);
-  openBoundWorldbook(book.id);
-}
-
-/** 世界书编辑器逛一圈回来时用：把那块「已绑世界书」按**最新**数据重画。
- *  书名 / 条目数可能刚在那边改过，不重画就还是旧的那行。 */
-export function refreshCharWorldbookBox() {
-  const character = editorCharacterById(editingCharacterId);
-  if (character) renderCharWorldbookBox(character);
-}
-
-/** 绑一本自带世界书。⚠️ 只允许一本：已经有别的书就让用户先解绑，不静默替换（会丢数据）。 */
-async function bindWorldbookToCharacter(bookId) {
-  const character = editorCharacterById(editingCharacterId);
-  if (!character) return false;
-
-  const hadIds = Array.isArray(character.worldbookIds);
-  const beforeIds = hadIds ? [...character.worldbookIds] : [];
-  if (beforeIds.includes(bookId)) {
-    showToast('这本已经绑上了');
-    return false;
-  }
-  if (beforeIds.length) {
-    showToast('自带世界书只能绑一本 —— 先解绑现在这本，再换别的', 'error');
-    return false;
-  }
-
-  const beforeUpdatedAt = character.updatedAt;
-
-  character.worldbookIds = [bookId];
-  character.updatedAt = now();
-  renderCharWorldbookBox(character);
-
-  if (isCharDraft()) {
-    showToast('已绑定世界书，保存后生效');
-    return true;
-  }
-
-  if (!(await persistLibrary())) {
-    if (hadIds) character.worldbookIds = beforeIds;
-    else delete character.worldbookIds;
-    character.updatedAt = beforeUpdatedAt;
-    renderCharWorldbookBox(character);
-    return false;
-  }
-  showToast('已绑定世界书');
-  return true;
-}
-
-/** 解绑（不删世界书本身） */
-async function unbindWorldbookFromCharacter(bookId) {
-  const character = editorCharacterById(editingCharacterId);
-  if (!character) return;
-
-  const book = worldbookById(bookId);
-  const beforeIds = Array.isArray(character.worldbookIds) ? [...character.worldbookIds] : [];
-  const beforeUpdatedAt = character.updatedAt;
-
-  character.worldbookIds = beforeIds.filter((id) => id !== bookId);
-  character.updatedAt = now();
-  renderCharWorldbookBox(character);
-
-  if (isCharDraft()) {
-    showToast(book ? `已解绑「${book.name}」（书没删，还能重新绑）` : '已解绑');
-    return;
-  }
-
-  if (!(await persistLibrary())) {
-    character.worldbookIds = beforeIds;
-    character.updatedAt = beforeUpdatedAt;
-    renderCharWorldbookBox(character);
-    return;
-  }
-  showToast(book ? `已解绑「${book.name}」（书没删，还能重新绑）` : '已解绑');
-}
-
-/** 点「＋ 绑定」列出还没绑的世界书，勾选后一次加入；自起浮层，
- *  不复用世界书页那个方向相反、绑了模块级状态的选择器 */
-function openWorldbookPicker() {
-  const character = editorCharacterById(editingCharacterId);
-  if (!character) return;
-
-  const bound = new Set(Array.isArray(character.worldbookIds) ? character.worldbookIds : []);
-  const all = worldbooks();
-  const candidates = all.filter((b) => !bound.has(b.id));
-
-  // 🔴 自带世界书只允许一本（和主进程 main/characters.js 的 MAX_CHARACTER_WORLDBOOKS 对齐）
-  if (bound.size >= MAX_CHAR_WORLDBOOKS) {
-    showToast('自带世界书只能绑一本 —— 先解绑现在这本，再换别的', 'error');
-    return;
-  }
-  if (!all.length) {
-    showToast('世界书库还是空的 —— 点「＋ 新建」给这个角色写一本', 'error');
-    return;
-  }
-  if (!candidates.length) {
-    showToast('所有世界书都已经绑上了');
-    return;
-  }
-
-  closeWorldbookPicker();
-
-  const overlay = document.createElement('div');
-  overlay.className = 'cwb-picker';
-
-  const card = document.createElement('div');
-  card.className = 'cwb-picker-card';
-
-  const head = document.createElement('div');
-  head.className = 'cwb-picker-head';
-  const title = document.createElement('span');
-  title.className = 'cwb-picker-title';
-  title.textContent = `给「${character.name}」绑定世界书`;
-  const close = document.createElement('button');
-  close.type = 'button';
-  close.className = 'icon-btn icon-btn-sm';
-  close.title = '关闭';
-  close.setAttribute('aria-label', '关闭');
-  close.textContent = '✕';
-  close.addEventListener('click', closeWorldbookPicker);
-  head.append(title, close);
-
-  const list = document.createElement('div');
-  list.className = 'cwb-picker-list';
-
-  for (const book of candidates) {
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'cwb-picker-row';
-
-    const name = document.createElement('span');
-    name.className = 'cwb-picker-name';
-    name.textContent = book.name;
-
-    const meta = document.createElement('span');
-    meta.className = 'cwb-picker-meta';
-    const n = Array.isArray(book.entries) ? book.entries.length : 0;
-    const chars = Array.isArray(book.characters) ? book.characters.length : 0;
-    meta.textContent = chars ? `${n} 条 · ${chars} 个角色` : `${n} 条`;
-
-    row.append(name, meta);
-    // 只允许一本，选一行就等于选定
-    row.addEventListener('click', async () => {
-      closeWorldbookPicker();
-      await bindWorldbookToCharacter(book.id);
-    });
-    list.appendChild(row);
-  }
-
-  card.append(head, list);
-  overlay.appendChild(card);
-
-  // 点浮层空白处关掉
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) closeWorldbookPicker();
-  });
-
-  document.body.appendChild(overlay);
-  worldbookPickerEl = overlay;
-}
-
-// Esc 链用：浮层挂在 body 上、z-index(60) 高于编辑器(50)，按 Esc 应先关它
-export function isWorldbookPickerOpen() {
-  return !!worldbookPickerEl;
-}
-
-export function closeWorldbookPicker() {
-  if (worldbookPickerEl) {
-    worldbookPickerEl.remove();
-    worldbookPickerEl = null;
-  }
-}
-
 // 草稿 / 保存 / 删除
 
 /** 把表单内容写回内存里的角色对象（切走或保存前调用） */
@@ -774,17 +452,13 @@ function stashCharForm() {
     .filter(Boolean)
     .slice(0, 20);
   character.description = el.c.desc.value;
-  character.personality = el.c.personality.value;
-  character.scenario = el.c.scenario.value;
-  character.firstMes = el.c.first.value;
-  // 空行丢掉、去重、限条数，口径与主进程 normalizeAlternateGreetings 一致
-  const altGreetings = charAltGreetings
-    .map((s) => String(s == null ? '' : s).trim())
-    .filter((s, i, arr) => s && arr.indexOf(s) === i)
-    .slice(0, MAX_ALT_GREETINGS);
-  if (altGreetings.length) character.alternateGreetings = altGreetings;
-  else delete character.alternateGreetings;
-  character.mesExample = el.c.example.value;
+  // 本书角色只负责介绍角色内容：性格 / 场景 / 开场白 / 示例对话（含备选）一律清掉，
+  // 别让旧数据里残留的字段在界面看不到的情况下还挂在副本上。
+  delete character.personality;
+  delete character.scenario;
+  delete character.firstMes;
+  delete character.alternateGreetings;
+  delete character.mesExample;
   character.systemPrompt = el.c.system.value;
   character.postHistoryInstructions = el.c.post.value;
   character.creatorNotes = el.c.notes.value;
@@ -850,11 +524,7 @@ function startCharDraft(preset) {
     name: p.name || '新角色',
     avatar: '',
     description: p.description || '',
-    personality: p.personality || '',
-    // AI 生成时连场景 / 开场白 / 示例对话一起带进来；手建角色这三项仍是空的
-    scenario: p.scenario || '',
-    firstMes: p.firstMes || '',
-    mesExample: p.mesExample || '',
+    // 本书角色只介绍角色内容，不带性格 / 场景 / 开场白 / 示例对话；AI 生成时也只填描述
     systemPrompt: '',
     postHistoryInstructions: '',
     creatorNotes: '',
@@ -904,6 +574,18 @@ function commitCharDraft() {
   return true;
 }
 
+/** 把新建副本的属性补种进「已经开着、正玩这本书」的会话（新建会话那边自己会 seed）。
+ *  只对本书角色（worldbook 作用域）有意义；角色卡是单角色会话，本来就全套注入。 */
+function seedNewCharacterIntoOpenConvos(character, bookId) {
+  if (!character || !bookId) return;
+  let touched = 0;
+  for (const convo of state.conversations) {
+    if (!convoWorldbookIds(convo).includes(bookId)) continue;
+    if (seedPanelFromCharacters(convo, [character])) touched += 1;
+  }
+  if (touched) persistConversations(0);
+}
+
 /** 丢掉没保存的草稿：它从来没进过任何列表，忘掉就行 */
 function discardCharDraft() {
   if (!charDraft) return;
@@ -927,8 +609,7 @@ async function saveCharacter() {
   // 「新建」还是「改已有」要在落盘前记下来：草稿一提交 charDraft 就清空
   const creating = isCharDraft();
   const scope = creating ? charDraft.scope : charEditorScope;
-  // 副本作用域要写进哪本书：草稿提交之后 charDraft 就没了，先记下来
-  const draftBookId = charDraft ? charDraft.bookId : null;
+  const bookId = creating ? charDraft.bookId : null;
 
   stashCharForm();
 
@@ -938,24 +619,16 @@ async function saveCharacter() {
     return;
   }
 
-  // 「AI 补设定」补出来的条目：角色卡 → 建一本书并绑上（跟着同一次写盘落地）；
-  // 副本 → 并进这本书的草稿，等世界书编辑器那边点「保存」
-  const madeBook = await materializeCharBook(character, {
-    scope,
-    bookId: scope === 'worldbook'
-      ? draftBookId || (currentWorldbook() ? currentWorldbook().id : null)
-      : null
-  });
-  if (madeBook && !madeBook.draft) {
-    renderCharWorldbookBox(character);
-  }
-
   // 新建是终点（直接离开）；改已有的留在本页，多半还要接着改
   if (creating) {
     renderCharacterPage();
     actions.rerender();
-    // 改的是书里的副本，那本书的角色排也要跟着刷新
-    if (scope === 'worldbook') renderWorldbookChars();
+    // 改的是书里的副本，角色卡编辑页的人物列表也要跟着刷新
+    if (scope === 'worldbook') {
+      rerenderBookCharHosts(currentWorldbook());
+      // 已经开着的会话不会重新 seed（那一步只在建会话时做）：新副本的属性手动补进去
+      seedNewCharacterIntoOpenConvos(character, bookId);
+    }
     // 写盘失败别报「已创建」：persistCharacters 已弹过提示，页面留着可直接重试
     if (!(await persistCharacters())) return;
     setCharSaveState('saved');
@@ -970,8 +643,8 @@ async function saveCharacter() {
   updateCharEditorScopeUi();
   actions.rerender();
 
-  // 改的是书里的副本，书名旁边那排和左栏计数都要跟着刷新
-  if (scope === 'worldbook') renderWorldbookChars();
+  // 改的是书里的副本，角色卡编辑页的人物列表也要跟着刷新
+  if (scope === 'worldbook') rerenderBookCharHosts(currentWorldbook());
 
   // 失败提示由 persistCharacters 弹；成功才报「已保存」，否则后一条会盖掉前一条
   if (await persistCharacters()) {
@@ -1008,14 +681,14 @@ export async function deleteCharacterById(id, scope) {
       book.characters = beforeChars.filter((c) => c.id !== character.id);
       book.updatedAt = now();
 
-      // 书里的副本不受会话影响，只需要刷新书那边的界面
-      renderWorldbookChars();
+      // 书里的副本不受会话影响，只需要刷新角色卡编辑页那边的人物列表
+      rerenderBookCharHosts(book);
 
       if (!(await persistCharacters())) {
         // 写盘失败 → 把副本放回去，界面跟磁盘保持一致
         book.characters = beforeChars;
         book.updatedAt = beforeBookUpdatedAt;
-        renderWorldbookChars();
+        rerenderBookCharHosts(book);
         return;
       }
       showToast(`已移除「${character.name}」`);
@@ -1163,152 +836,11 @@ export function stashCharacterForm() {
   stashCharForm();
 }
 
-// 开场白模板：定场 → 登场 → 留个话头（从社区角色卡归纳的三段骨架）。
-// 占位是单花括号；{{user}} / {{char}} 才是会被替换的宏。
-const FIRST_MES_TEMPLATE = [
-  '{定场：时间 + 地点 + {{user}} 此刻正在做什么，一两句就够}',
-  '',
-  '{登场：{{char}} 的一个动作或神态，紧接着一句直接对 {{user}} 说出口的话}',
-  '',
-  '{话头：停在一个需要 {{user}} 回应的地方 —— 一个问题，或一个等着你的沉默}'
-].join('\n');
-
-/** 「套用开场白模板」：框里已经有内容就先问一句，别默默把用户写的东西冲掉 */
-async function applyFirstMesTemplate() {
-  const box = el.c.first;
-  if (!box) return;
-
-  if (box.value.trim()) {
-    const ok = await confirmDialog({
-      title: '套用开场白模板',
-      message: '开场白里已经有内容，套用模板会把它覆盖掉。',
-      confirmText: '覆盖',
-      danger: true
-    });
-    if (!ok) return;
-  }
-
-  box.value = FIRST_MES_TEMPLATE;
-  // 直接赋 value 不触发 input，手动派一个让角标和自动增高刷新
-  box.dispatchEvent(new Event('input', { bubbles: true }));
-  box.focus();
-  box.setSelectionRange(box.value.length, box.value.length);
-}
-
-// 备选开场白：同一张卡的多个入场剧本，数据源是角色卡的 alternateGreetings。
-// 行由 renderAltGreetings 动态铺；正文一律走 textContent —— 卡里的字不可信。
-
-/** 从角色卡取一份备选开场白副本（编辑期改动不碰原数据） */
-function draftAltGreetingsOf(character) {
-  const list = character && Array.isArray(character.alternateGreetings) ? character.alternateGreetings : [];
-  return list
-    .filter((s) => typeof s === 'string' && s.trim())
-    .slice(0, MAX_ALT_GREETINGS);
-}
-
-/** 列表里所有备选开场白输入框（量高度 / 聚焦都用得上） */
-function altGreetTextAreas() {
-  return el.c.altList ? Array.from(el.c.altList.querySelectorAll('.alt-greet-text')) : [];
-}
-
-/** 把草稿铺成行；每次增删都整体重铺（条数少，不值得做增量 diff） */
-function renderAltGreetings() {
-  const list = el.c.altList;
-  if (!list) return;
-
-  clear(list);
-  charAltGreetings.forEach((text, i) => {
-    const ta = mTextarea({
-      class: 'alt-greet-text',
-      // id 约定见 charCountNode：宿主 id + '-count' 就是角标；组件化后 id 挂在宿主上，
-      // 事件里拿到的是里层原生框，刷新角标前要先过 hostOf()。
-      id: `bc-c-alt-${i}`,
-      rows: 3,
-      spellcheck: 'false',
-      placeholder: '第 ' + (i + 1) + ' 个入场剧本：定场 → 登场 → 留个话头',
-      value: text,
-      dataset: { index: i }
-    });
-    // 不传 key：行会重排，按字段记的高度会错位
-    attachAutoGrow(ta, {});
-
-    list.append(
-      h(
-        'div',
-        { class: 'alt-greet-row', dataset: { index: i } },
-        h(
-          'div',
-          { class: 'alt-greet-head' },
-          h('span', { class: 'alt-greet-no', text: `备选 ${i + 1}` }),
-          h('span', { class: 'field-count', id: `bc-c-alt-${i}-count`, text: `${text.length.toLocaleString()} 字` }),
-          h('button', {
-            class: 'alt-greet-del',
-            type: 'button',
-            title: '删掉这条',
-            'aria-label': `删掉备选 ${i + 1}`,
-            text: '×'
-          })
-        ),
-        ta
-      )
-    );
-  });
-
-  updateAltCountBadge();
-}
-
-/** 字段头那个「N 条」角标。一条都没有就留空，别显示「0 条」占地方 */
-function updateAltCountBadge() {
-  if (!el.c.altCount) return;
-  const n = charAltGreetings.length;
-  el.c.altCount.textContent = n ? `${n} 条` : '';
-}
-
-/** 「＋ 添加一条」：追加一个空行，光标落进去（空行在保存时会被丢掉） */
-function addAltGreeting() {
-  if (charAltGreetings.length >= MAX_ALT_GREETINGS) {
-    showToast(`一张卡最多 ${MAX_ALT_GREETINGS} 条备选开场白`);
-    return;
-  }
-  charAltGreetings.push('');
-  renderAltGreetings();
-
-  const rows = altGreetTextAreas();
-  const last = rows[rows.length - 1];
-  if (last) {
-    last.focus();
-    last.scrollIntoView({ block: 'nearest' });
-  }
-}
-
-/** 删掉第 index 条（草稿级删除，点「保存角色」才落盘） */
-function removeAltGreeting(index) {
-  if (!Number.isInteger(index) || index < 0 || index >= charAltGreetings.length) return;
-  charAltGreetings.splice(index, 1);
-  renderAltGreetings();
-}
-
-/** 列表上的事件委托：删按钮 + 正文输入 */
-function onAltListClick(event) {
-  const del = event.target.closest('.alt-greet-del');
-  if (!del) return;
-  const row = del.closest('.alt-greet-row');
-  removeAltGreeting(row ? Number(row.dataset.index) : NaN);
-}
-
-function onAltListInput(event) {
-  // ⚙ 组件化后 target 可能是里层原生框：.alt-greet-text 和 data-index 都在宿主上，必须 hostOf
-  const ta = hostOf(event.target);
-  if (!ta || !ta.classList || !ta.classList.contains('alt-greet-text')) return;
-  const i = Number(ta.dataset.index);
-  if (Number.isInteger(i) && i >= 0 && i < charAltGreetings.length) charAltGreetings[i] = ta.value;
-}
-
 /** 绑编辑器自己的所有按钮。rerender 由入口层注入 */
 export function initCharacterEditor(injected) {
   actions = { rerender: () => {}, ...(injected || {}) };
   initCharacterEditorLayout({
-    onReveal: () => syncAutoGrowAll(longTextAreas().map((pair) => pair[0]).concat(altGreetTextAreas()))
+    onReveal: () => syncAutoGrowAll(longTextAreas().map((pair) => pair[0]))
   });
 
   el.btnCloseChars.addEventListener('click', leaveCharacterEditor);
@@ -1333,19 +865,6 @@ export function initCharacterEditor(injected) {
 
   // 表情图：加 / 批量导入的接线在 charExpressions 模块里（initCharExpressionsUi）
 
-  el.c.wbAddBtn.addEventListener('click', openWorldbookPicker);
-  el.c.wbNewBtn.addEventListener('click', createWorldbookForCharacter);
-
-  // 「AI 补设定」：要读**表单里当前**的卡 —— 先 stash 进草稿，刚手改的描述才带得上；
-  // 拿到条目算「有未保存的改动」，和手改走同一条路（点保存才建书、才落盘）。
-  initCharBookAi({
-    readCard: () => {
-      stashCharForm();
-      return editorCharacterById(editingCharacterId);
-    },
-    onChange: () => setCharSaveState('dirty')
-  });
-
   // 「AI 补充」：同样先 stash —— 模型要读的是**表单里**这张卡，刚手改的描述才带得上；
   // 结果只写回表单，点「保存」才进卡（applyAiFill 里派的 input 会顺手把胶囊打脏）。
   initCharAiFill({
@@ -1356,15 +875,6 @@ export function initCharacterEditor(injected) {
     apply: applyAiFill
   });
 
-  if (el.c.btnFirstTemplate) el.c.btnFirstTemplate.addEventListener('click', applyFirstMesTemplate);
-
-  // 备选开场白的添加按钮 + 列表删除/输入（行是动态铺的，用委托）
-  if (el.c.btnAltAdd) el.c.btnAltAdd.addEventListener('click', addAltGreeting);
-  if (el.c.altList) {
-    el.c.altList.addEventListener('click', onAltListClick);
-    el.c.altList.addEventListener('input', onAltListInput);
-  }
-
   // 字数角标 + 保存状态：手动输入时刷新（回填路径在 fillCharForm 里统一刷过）
   el.charForm.addEventListener('input', (event) => {
     setCharSaveState('dirty');
@@ -1374,11 +884,11 @@ export function initCharacterEditor(injected) {
     if (node instanceof HTMLTextAreaElement || (node && node.control instanceof HTMLTextAreaElement)) {
       updateCharCount(node);
     }
-    // 左栏徽章（已写 x/5）与右栏字段目录的字数都跟着输入走，不然它们是开局那一刻的快照
+    // 左栏徽章（已填几栏）跟着输入走，不然它是开局那一刻的快照
     updateCharTotalWords();
     refreshCharSectionCounts();
   });
-  // 勾选框 / 下拉不触发 input，单独挂 change（自带世界书开关、剧情选项、显示状态都走这儿）
+  // 勾选框 / 下拉不触发 input，单独挂 change（「在状态栏显示」走这儿）
   el.charForm.addEventListener('change', () => setCharSaveState('dirty'));
 
   // 属性区按钮（分组标签栏是渲染时就带的）

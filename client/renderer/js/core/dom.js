@@ -337,11 +337,6 @@ export const el = {
     btnEntryTemplate: $('btn-wb-entry-template'),
     btnWbAddEvent: $('btn-wb-add-event'),
     btnDelBook: $('btn-del-worldbook'),
-    charList: $('wb-char-list'),
-    btnAddChars: $('btn-add-wb-chars'),
-    btnAiChar: $('btn-ai-wb-char'),
-    btnNewChar: $('btn-new-wb-char'),
-    btnSyncAttrs: $('btn-sync-wb-attrs'),
     formEmpty: $('wb-form-empty'),
     form: $('wb-form'),
     footHint: $('wb-foot-hint'),
@@ -360,14 +355,6 @@ export const el = {
       enabled: $('wb-e-enabled')
     },
     btnDelEntry: $('btn-del-entry')
-  },
-  wbPicker: {
-    modal: $('wb-char-picker'),
-    list: $('wb-char-picker-list'),
-    hint: $('wb-char-picker-hint'),
-    btnClose: $('btn-close-wb-char-picker'),
-    btnCancel: $('btn-cancel-wb-char-picker'),
-    btnConfirm: $('btn-confirm-wb-char-picker')
   },
   // ⚠️ 桌宠的展示在另一个窗口里，这里只有它留在设置页上的控件
   // 两边同步靠主进程推 `pet:changed`（右键菜单改了配置，这边要跟着变）
