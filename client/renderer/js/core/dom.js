@@ -148,6 +148,7 @@ export const el = {
   viewChat: $('view-chat'),
   viewChars: $('view-chars'),
   viewCharEditor: $('view-char-editor'),
+  viewBookCharEditor: $('view-book-char-editor'),
   viewWbEditor: $('view-wb-editor'),
   viewPresets: $('view-presets'),
   viewGames: $('view-games'),

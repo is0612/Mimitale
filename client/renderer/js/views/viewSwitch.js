@@ -12,12 +12,13 @@ import { renderGamePage } from './gameList.js';
 
 let currentView = 'chat';
 
-const VIEWS = ['chat', 'chars', 'charEditor', 'wbEditor', 'presets', 'games', 'settings'];
+const VIEWS = ['chat', 'chars', 'charEditor', 'bookCharEditor', 'wbEditor', 'presets', 'games', 'settings'];
 
 const VIEW_PARTS = [
   { name: 'chat', view: 'viewChat', btn: null },
   { name: 'chars', view: 'viewChars', btn: 'btnChars' },
   { name: 'charEditor', view: 'viewCharEditor', btn: null },
+  { name: 'bookCharEditor', view: 'viewBookCharEditor', btn: null },
   { name: 'wbEditor', view: 'viewWbEditor', btn: null },
   { name: 'presets', view: 'viewPresets', btn: 'btnPresets' },
   { name: 'games', view: 'viewGames', btn: 'btnGames' },

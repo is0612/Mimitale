@@ -4698,6 +4698,38 @@ app.whenReady().then(async () => {
           document.querySelector('#wb-tab-characters')?.click();
           await nap(350);
           if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 本书角色编辑页（worldbook → 本书角色 → 编辑）：和角色卡编辑页是两套页面，
+        // 出图用来核对两边的栅格 / 左栏底栏 / 右栏目录长得一样。
+        bookCharEditor: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-chars')?.click(); await nap(400);
+          const card = $$('#char-page-grid .char-card').find(c => c.textContent.includes('自带世界书测试')) || $$('#char-page-grid .char-card')[0];
+          const editBtn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (editBtn) editBtn.click();
+          await nap(550);
+          $('#char-section-tab-worldbook')?.click(); await nap(250);
+          if (!$$('#c-wb-list .cwb-row').length) {
+            $('#c-wb-add-btn')?.click(); await nap(350);
+            const row = $$('.cwb-picker-row')[0];
+            if (row) row.click();
+            await nap(400);
+          }
+          const line = $$('#c-wb-list .cwb-row')[0];
+          const go = line && Array.from(line.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (go) go.click();
+          await nap(700);
+          $('#wb-tab-characters')?.click(); await nap(350);
+          const copy = $$('#wb-char-list .wb-char-card')[0];
+          if (copy) {
+            const open = Array.from(copy.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+            if (open) open.click();
+          } else {
+            $('#btn-new-wb-char')?.click();
+          }
+          await nap(700);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         panel: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);

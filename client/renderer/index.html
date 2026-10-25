@@ -281,14 +281,14 @@
         </div>
       </section>
 
-      <section id="view-char-editor" class="view hidden" aria-label="编辑角色">
+      <section id="view-char-editor" class="view hidden" aria-label="角色卡编辑">
         <header class="page-head">
           <div class="page-heading editor-head-left">
             <!-- 2026-10-19：返回挪到左上角；面包屑（角色卡 / 名字）去掉 —— 新建时它和标题
                  「新建角色」说的是同一件事；「保存角色」挪去了左栏底部的 char-rail-foot，
                  页头只剩标题和一句说明。 -->
             <button id="btn-close-chars" class="page-back" type="button" title="返回上一屏（Esc）" aria-label="返回" data-icon="chevron-left"><span>返回</span></button>
-            <h1 id="chars-title" class="page-title">编辑角色</h1>
+            <h1 id="chars-title" class="page-title">角色卡编辑</h1>
             <p id="chars-sub" class="page-sub"></p>
           </div>
           <div class="page-actions">
@@ -641,6 +641,370 @@
           <m-button id="btn-back-char" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
           <m-button id="btn-ai-fill-char" variant="ghost" size="sm" title="让 AI 重写描述 / 性格 / 场景 / 开场白 / 示例对话">AI 补充</m-button>
           <m-button id="btn-del-char" variant="danger" size="sm">删除</m-button>
+        </div>
+      </section>
+
+      <!-- 本书角色编辑页：与「角色卡编辑」是两套独立页面，字段结构暂时一致。 -->
+      <section id="view-book-char-editor" class="view hidden" aria-label="编辑本书角色">
+        <header class="page-head">
+          <div class="page-heading editor-head-left">
+            <!-- 2026-10-19：返回挪到左上角；面包屑（角色卡 / 名字）去掉 —— 新建时它和标题
+                 「新建角色」说的是同一件事；「保存角色」挪去了左栏底部的 char-rail-foot，
+                 页头只剩标题和一句说明。 -->
+            <button id="bc-btn-close-chars" class="page-back" type="button" title="返回上一屏（Esc）" aria-label="返回" data-icon="chevron-left"><span>返回</span></button>
+            <h1 id="bc-chars-title" class="page-title">编辑本书角色</h1>
+            <p id="bc-chars-sub" class="page-sub"></p>
+          </div>
+          <div class="page-actions">
+            <span id="bc-char-total-words" class="editor-total"></span>
+            <span id="bc-char-save-state" class="save-pill" data-state="saved" hidden>所有更改已保存</span>
+          </div>
+        </header>
+
+        <div class="char-main">
+          <div id="bc-char-empty" class="char-empty">
+            <div class="char-empty-title">没有可编辑的角色</div>
+          </div>
+
+          <div id="bc-char-form" class="char-form hidden">
+            <!-- 图片区：形象 / 头像 + 表情图入口，放在表单最顶上，和下面的文字字段同级。
+                 两种图的形状就是存下来的形状（裁剪框住哪块这里就显示哪块）。
+                 ⚠️ 顺序是排版的一部分：形象在前（120px 列）、头像在后（56px 列），
+                    和 .char-avatar-col 的 grid-template-columns 一一对应，别单独调换。 -->
+            <div class="char-media-top">
+              <div class="char-avatar-col">
+                <div class="char-media-item">
+                  <button id="bc-char-portrait" class="char-portrait art-edge" type="button" title="点击上传角色形象（竖版立绘，显示在角色卡列表上）" aria-label="上传角色形象">
+                    <span class="char-avatar-empty">点击上传</span>
+                  </button>
+                  <span class="char-media-label">形象</span>
+                  <m-button id="bc-btn-clear-portrait" variant="ghost" size="sm" class="hidden">清除</m-button>
+                </div>
+                <div class="char-media-item">
+                  <button id="bc-char-avatar" class="char-avatar art-edge" type="button" title="点击上传头像（正方形，用在消息气泡和状态卡上）" aria-label="上传头像">
+                    <span class="char-avatar-empty">点击上传</span>
+                  </button>
+                  <span class="char-media-label">头像</span>
+                  <m-button id="bc-btn-clear-avatar" variant="ghost" size="sm" class="hidden">清除</m-button>
+                </div>
+              </div>
+
+              <div class="char-expr-entry">
+                <div class="char-expr-head">
+                  <span id="bc-expr-count" class="char-expr-count"></span>
+                  <span class="field-help">回复写到名称、触发词或 <code>&lt;emo&gt;键&lt;/emo&gt;</code> 时换成那张；都没写就用标了 ★ 的默认脸</span>
+                  <m-button id="bc-btn-batch-expr" variant="ghost" size="sm"
+                            title="选一个文件夹，按文件名里的情绪词自动命名（shy 和 害羞 都认），从顶部对齐裁成正方形">批量导入</m-button>
+                  <m-button id="bc-btn-add-expr" variant="ghost" size="sm">＋ 添加表情</m-button>
+                </div>
+                <div id="bc-char-expr-list" class="char-expr-list"></div>
+              </div>
+            </div>
+
+            <!-- 文字区：角色名 / 标签 / 五个长文本 / 属性，全部是纯文本。 -->
+            <div class="char-text-section">
+              <div class="char-head-fields">
+                <label class="field">
+                  <span class="field-label">角色名</span>
+                  <!-- ⚙ 组件化（2026-10-16）：默认档（44px / 正文级字号），type=text
+                       与 spellcheck=false 都是组件默认值，所以这里不用写。
+                       id 留在宿主上，dom.js / el.c.name / .value 都不用改。 -->
+                  <m-input id="bc-c-name" placeholder="例如 小满" aria-label="角色名"></m-input>
+                </label>
+                <label class="field">
+                  <span class="field-label">标签</span>
+                  <m-input id="bc-c-tags" placeholder="分类用，例如：原神, 治愈" aria-label="标签"></m-input>
+                </label>
+              </div>
+
+            <!-- 年龄/性别/种族不再单独填：这些是角色的固定设定，写进「角色描述」
+                 文字里即可（描述里本就该交代清楚「十八岁」「魅魔混血」这类信息）。
+                 单独字段反而会和描述重复，还要两处一起维护。 -->
+
+            <!-- 五个长文本字段共用一套结构（V2 重组版）：
+                 head = 序号 + 字段名 + 字数角标，主体 = textarea，
+                 写法说明收进 <details> 折叠条 —— 五栏同屏放着，说明全铺开会把正文淹掉。
+
+                 ⚠️ 两件事别改回去：
+                 ① label 只包住 head。for 关联还在，点「角色描述」四个字照样聚焦输入框；
+                    但**不能**把 details 包进 label —— 那样点「这一栏怎么写」会连带聚焦输入框。
+                 ② 序号要和 characterEditorLayout.js 的 FIELD_SPECS 顺序一致。 -->
+            <div class="field field-stack char-sheet">
+              <label class="char-sheet-label" for="bc-c-desc">
+                <span class="field-head">
+                  <span class="field-no">1</span>
+                  <span class="field-label" data-icon="user">角色描述</span>
+                  <span class="field-count" id="bc-c-desc-count">0 字</span>
+                </span>
+              </label>
+              <!-- ⚙ 多行框也是组件（2026-10-16）：宿主带 id，里层那颗原生 textarea
+                   才是「看着是输入框」的那一层 —— 描边 / 内边距 / min-height 全在它上面，
+                   样式里的选择器因此多一层（见 style.css 的「编辑角色 · 写作纸」）。 -->
+              <m-textarea id="bc-c-desc" rows="5" spellcheck="false" placeholder="这个角色是谁、长什么样、有什么经历……&#10;可以用 {{char}} 表示角色自己，{{user}} 表示你。"></m-textarea>
+              <details class="char-fold">
+                <summary>这一栏怎么写</summary>
+                <div class="char-fold-body">
+                  <span class="field-help">
+                    想一句话把角色立住，可以在最前面加一行 <code>((…))</code>，
+                    里面按 <b>动机 → 障碍 → 代价 → 奖励</b> 写全。
+                    例：<code>((她察觉你在撩她，因此讨厌你；但你要是真能动摇她，她会极度顺从。))</code><br />
+                    障碍写成「玩家本人」的话，你一出现故事就结束了 —— 让障碍落在角色自己身上。
+                  </span>
+                </div>
+              </details>
+            </div>
+
+            <div class="field field-stack char-sheet">
+              <label class="char-sheet-label" for="bc-c-personality">
+                <span class="field-head">
+                  <span class="field-no">2</span>
+                  <span class="field-label" data-icon="smile">性格</span>
+                  <span class="field-count" id="bc-c-personality-count">0 字</span>
+                </span>
+              </label>
+              <m-textarea id="bc-c-personality" rows="3" spellcheck="false" placeholder="开朗、爱笑、有点冒失……"></m-textarea>
+              <details class="char-fold">
+                <summary>这一栏怎么写</summary>
+                <div class="char-fold-body">
+                  <span class="field-help">
+                    写<b>行为倾向</b>比写形容词管用：{{char}} 遇到压力会怎样、被冒犯会怎样、高兴时什么样。
+                  </span>
+                </div>
+              </details>
+            </div>
+
+            <div class="field field-stack char-sheet">
+              <label class="char-sheet-label" for="bc-c-scenario">
+                <span class="field-head">
+                  <span class="field-no">3</span>
+                  <span class="field-label" data-icon="map-pin">场景</span>
+                  <span class="field-count" id="bc-c-scenario-count">0 字</span>
+                </span>
+              </label>
+              <m-textarea id="bc-c-scenario" rows="3" spellcheck="false" placeholder="你们正在哪里、干什么"></m-textarea>
+              <details class="char-fold">
+                <summary>这一栏怎么写</summary>
+                <div class="char-fold-body">
+                  <span class="field-help">
+                    交代「你们正在哪里、干什么」即可，一两句话就够 —— 事件本身交给开场白写。
+                  </span>
+                </div>
+              </details>
+            </div>
+
+            <div class="field field-stack char-sheet">
+              <label class="char-sheet-label" for="bc-c-first">
+                <span class="field-head">
+                  <span class="field-no">4</span>
+                  <span class="field-label" data-icon="message-circle">开场白</span>
+                  <span class="field-count" id="bc-c-first-count">0 字</span>
+                </span>
+              </label>
+              <!-- 开场白骨架：一键填进「定场 → 登场 → 留个话头」三段。
+                   这套骨架是从社区卡的写法里归纳的（150 张开场白里约九成都是这个形状），
+                   文案在 characterEditor.js 的 FIRST_MES_TEMPLATE。 -->
+              <m-textarea id="bc-c-first" rows="3" spellcheck="false" placeholder="第一句话。绑定角色时如果对话还是空的，会自动作为角色的开场消息插入。"></m-textarea>
+              <div class="field-template-bar">
+                <m-button id="bc-btn-first-template" variant="ghost" size="sm"
+                        title="把开场白的骨架填进输入框（已有内容会先问一句）">套用开场白模板</m-button>
+                <span class="field-template-hint">定场 · 登场 · 留个话头</span>
+              </div>
+              <details class="char-fold">
+                <summary>这一栏怎么写</summary>
+                <div class="char-fold-body">
+                  <span class="field-help">
+                    骨架三段：<b>定场</b>（时间 / 地点 / {{user}} 正在做什么）→ <b>登场</b>（{{char}} 的动作或神态 + 一句说出口的话）
+                    → <b>话头</b>（停在一个需要 {{user}} 回应的地方）。<br />
+                    最后一段别写满 —— <b>给出去的话语权越明确，第一轮越好接</b>。
+                    同一张卡可以多写几条不同状态的开场白（干活 / 闲暇 / 压力下 / 剧情后期）。
+                  </span>
+                </div>
+              </details>
+            </div>
+
+            <!-- 备选开场白：同一张卡的多个入场剧本（导入卡常带，单卡最多见过 29 条）。
+                 绑定角色时若不止一条会弹出来让玩家挑；这里只做纯文本的增删改。
+                 列表由 characterEditor.js 的 renderAltGreetings() 动态铺 —— 条数不定，
+                 所以不能在 HTML 里写死几行。 -->
+            <div class="field field-stack char-sheet" id="bc-c-alt-field">
+              <span class="field-head">
+                <span class="field-label" data-icon="layers">备选开场白</span>
+                <span class="field-count" id="bc-c-alt-count"></span>
+              </span>
+              <details class="char-fold">
+                <summary>这一栏怎么写</summary>
+                <div class="char-fold-body">
+                  <span class="field-help">
+                    同上一条开场白，但可以写好几条（日常 / 忙碌 / 剧情后期……）。
+                    <b>绑定角色时会弹出来让你挑一条</b>；一条都不加就只用上面那条。
+                  </span>
+                </div>
+              </details>
+              <div id="bc-c-alt-list" class="alt-greet-list"></div>
+              <div class="field-template-bar">
+                <m-button id="bc-btn-alt-add" variant="ghost" size="sm"
+                        title="加一条备选开场白">＋ 添加一条</m-button>
+              </div>
+            </div>
+
+            <div class="field field-stack char-sheet">
+              <label class="char-sheet-label" for="bc-c-example">
+                <span class="field-head">
+                  <span class="field-no">5</span>
+                  <span class="field-label" data-icon="messages-square">示例对话</span>
+                  <span class="field-count" id="bc-c-example-count">0 字</span>
+                </span>
+              </label>
+              <m-textarea id="bc-c-example" rows="4" spellcheck="false" placeholder="{{user}}: 你好&#10;{{char}}: 你好呀～今天感觉怎么样？"></m-textarea>
+              <details class="char-fold">
+                <summary>这一栏怎么写</summary>
+                <div class="char-fold-body">
+                  <span class="field-help">
+                    照这个格式写几组，能明显提升扮演时的语气准确度。<br />
+                    每行以 <code>{{user}}:</code> 或 <code>{{char}}:</code> 开头，用 <code>&lt;START&gt;</code> 分隔不同组。
+                  </span>
+                </div>
+              </details>
+            </div>
+
+            <!-- 属性：会变成游玩时「状态」面板里的字段。
+                 这里填的是初始值，进游戏后在面板里改的是那一局的当前值。
+
+                 数据上属性仍是一维数组（分组记在每个字段自己身上），
+                 分组只是**视图层**的聚合键：标签栏点哪个，下面就只显示哪一组。
+                 这样导出 / 导入 / 面板注入全都不用改，风险面小得多。 -->
+            <div class="field field-stack">
+              <span class="field-label" data-icon="sliders">属性（状态面板）</span>
+
+              <!-- 官方「互动模板」：一键种入预设分组（状态栏 / 关系 / 背包）和默认字段，
+                   字段可再改名 / 修改 / 删除。放在整块最上面，一眼就能看到。 -->
+              <div class="attr-template-bar">
+                <m-button id="bc-btn-attr-template" variant="ghost" size="sm"
+                        title="一键加进官方模板的状态栏 / 关系 / 背包分组和默认字段">套用互动模板</m-button>
+                <span class="attr-template-hint">状态栏 · 关系 · 背包</span>
+              </div>
+
+              <!-- 整块做成一张卡：卡头是分组标签栏，卡身是这一组的字段 + 加字段那一行。
+                   平铺成一堆输入框的话，看不出哪些字段属于同一组，
+                   也看不出标签栏管的到底是哪一片。 -->
+              <div class="attr-panel">
+                <!-- 分组标签栏：由渲染层按字段上已有的分组名铺出来，不是写死的几块 ——
+                     分组名本来就是使用者自己定的。 -->
+                <div id="bc-c-attr-tabs" class="attr-tabs" role="tablist" aria-label="属性分组"></div>
+
+                <div class="attr-body">
+                  <!-- 分组操作条：改名 + 解散。由渲染层铺，
+                       只在「⋯」被点开、且当前停在命名分组上时才露出来。 -->
+                  <div id="bc-c-attr-group-edit" class="attr-group-edit hidden"></div>
+
+                  <div id="bc-c-attr-list" class="attr-list" role="tabpanel" aria-label="当前分组的属性"></div>
+
+                  <!-- 加字段：加进**当前选中的那一组**，所以不用再手动填分组。
+                       占位文案由渲染层按当前分组改写 —— 它设的是 `.placeholder` property，
+                       组件那边用 reflectProperties 把那一段桥到里层原生 input（见 components/base.js）。 -->
+                  <div class="attr-add-row">
+                    <m-input id="bc-c-attr-new" class="attr-new" size="sm" placeholder="属性名，比如 金币" aria-label="新属性名"></m-input>
+                    <m-button id="bc-btn-add-attr" variant="ghost" size="sm">添加</m-button>
+                    <m-button id="bc-btn-attr-paste" variant="ghost" size="sm" title="把一段文本一次解析成多条属性">粘贴文本</m-button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 批量粘贴：一行一项，比一条条手打快得多 -->
+              <div id="bc-c-attr-paste" class="attr-paste hidden">
+                <m-textarea id="bc-c-attr-paste-text" rows="5" spellcheck="false"
+                          placeholder="一行一项，例如：&#10;金币：9900&#10;【上衣】：衬衫&#10;年龄 16"></m-textarea>
+                <div class="attr-paste-foot">
+                  <span class="field-help">
+                    认「<code>金币：9900</code>」「<code>【金币】：9900</code>」「<code>金币 9900</code>」这几种写法；<br />
+                    同名会覆盖值，认不出来的行自动跳过。
+                  </span>
+                  <m-button id="bc-btn-attr-paste-apply" variant="primary" size="sm">解析并加入</m-button>
+                </div>
+              </div>
+
+              <span class="field-help">
+                这些属性会进游玩时的「状态」面板，每轮由程序注入给 AI，数值不会漂。<br />
+                这里填的是<b>初始值</b>；进游戏之后在面板里改的是<b>这一局的当前值</b>，不会动到角色卡。
+              </span>
+
+              <!-- 在状态栏显示：只对**世界书副本**有意义。
+                   一本酒馆十来号 NPC，默认全列会把入口条挤爆；想看谁的状态就勾谁。
+                   副本的「人设立不立得住」由描述/性格决定，跟这个开关无关 ——
+                   不勾只是不出头像，人设照旧进 GM 名单。 -->
+              <div id="bc-c-show-in-panel-box" class="char-options-box char-switch-card">
+                <label class="check">
+                  <input id="bc-c-show-in-panel" type="checkbox" />
+                  <span>在状态栏显示（「在场角色」那排头像里加上 TA）</span>
+                </label>
+                <span class="field-help" id="bc-c-show-in-panel-help">
+                  勾上之后，这张卡的状态会出现在右栏「在场角色」入口条上。<br />
+                  <b>不勾不影响人设</b> —— 描述和性格照样进提示词，只是不占头像位。<br />
+                  一本书里 NPC 多的时候，只勾你真正想盯的那几个。
+                </span>
+              </div>
+            </div>
+            </div><!-- /char-text-section -->
+
+            <!-- 角色自带的世界书：导入带 character_book 的角色卡时会自动绑上，
+                 也可以在这里手动绑定。开关关掉后，这张角色无论单独聊天、
+                 还是被绑进某个世界当角色，都不会带入它自己的世界书。 -->
+            <div id="bc-c-worldbook-box" class="char-worldbook-box">
+              <div class="cwb-head">
+                <span class="field-label" data-icon="book">自带世界书</span>
+                <div class="cwb-head-actions">
+                  <!-- 「AI 补设定」（2026-10-20）：读这张卡补几条世界设定，保存角色时才建书。
+                       只给角色卡用 —— 世界书副本进世界时注入的是那本书，自带书不生效。 -->
+                  <m-button id="bc-c-wb-add-btn" variant="ghost" size="sm">＋ 绑定</m-button>
+                  <!-- 世界书只能从这张卡长出来：新建 → 自动绑定 → 直接进编辑器 -->
+                  <m-button id="bc-c-wb-new-btn" variant="ghost" size="sm" title="新建一本世界书并绑定给这个角色">＋ 新建</m-button>
+                  <m-button id="bc-c-wb-ai-btn" variant="ghost" size="sm">AI 补设定</m-button>
+                </div>
+              </div>
+              <div id="bc-c-wb-list" class="cwb-list"></div>
+              <div id="bc-c-wb-ai-block" class="cwb-ai">
+                <p id="bc-c-wb-ai-status" class="field-help cwb-ai-status"></p>
+                <div id="bc-c-wb-ai-list" class="cwb-ai-list hidden"></div>
+              </div>
+              <!-- 只能绑一本，所以没有「启用」开关了：绑上就一直生效（2026-10-24） -->
+              <p class="field-help" id="bc-c-wb-desc"></p>
+              <p class="field-help" id="bc-c-wb-hint"></p>
+            </div>
+
+            <div class="char-advanced">
+              <label class="field field-stack">
+                <span class="field-label">角色专属系统提示词</span>
+                <m-textarea id="bc-c-system" rows="3" spellcheck="false" placeholder="留空则使用通用扮演规则"></m-textarea>
+                <span class="field-help">这张卡专属的开场设定，留空则只用通用扮演规则。</span>
+              </label>
+
+              <label class="field field-stack">
+                <span class="field-label">对话后指令</span>
+                <m-textarea id="bc-c-post" rows="2" spellcheck="false" placeholder="放在整段对话最后，用来强调格式或语气要求"></m-textarea>
+              </label>
+
+              <label class="field field-stack">
+                <span class="field-label">作者备注</span>
+                <m-textarea id="bc-c-notes" rows="2" spellcheck="false" placeholder="只给你自己看，不会发给模型"></m-textarea>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- ⚠️ 这一块由 characterEditorLayout.js 整块搬进 .char-identity-pane，
+             id 一个都不能改（characterEditor.js 直接按 id 取用）。
+             2026-10-20：保存 / 返回 / AI 补充 / 删除，四行。
+             · 「导出」撤了 —— 角色卡卡片右上角那颗已经能拿走这张卡（同日加的），
+               编辑器里再放一颗只是把两处入口做成同一件事；
+             · 「返回」补回来了：页头的返回在左上角，手停在左栏底部改完一屏要回去时，
+               鼠标得横跨整个窗口 —— 原来那条「左栏不重复放返回」的规矩就是为这个让路的；
+             · 「AI 补充」紧贴返回下面：它只改表单，等于「改完要保存」那条线上的辅助动作，
+               和删除之间隔开一行，中间不留手滑的缝。 -->
+        <div id="bc-char-rail-foot" class="char-rail-foot">
+          <m-button id="bc-btn-save-char" variant="primary" size="sm">保存</m-button>
+          <m-button id="bc-btn-back-char" variant="ghost" size="sm" title="返回上一屏（Esc）">返回</m-button>
+          <m-button id="bc-btn-ai-fill-char" variant="ghost" size="sm" title="让 AI 重写描述 / 性格 / 场景 / 开场白 / 示例对话">AI 补充</m-button>
+          <m-button id="bc-btn-del-char" variant="danger" size="sm">删除</m-button>
         </div>
       </section>
 

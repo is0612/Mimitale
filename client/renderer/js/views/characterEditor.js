@@ -193,8 +193,8 @@ function updateCharEditorScopeUi() {
   const creating = isCharDraft();
 
   if (el.charsTitle) {
-    if (creating) el.charsTitle.textContent = inBook ? '新建本书角色' : '新建角色';
-    else el.charsTitle.textContent = inBook ? '编辑本书角色' : '编辑角色';
+    if (creating) el.charsTitle.textContent = inBook ? '新建本书角色' : '新建角色卡';
+    else el.charsTitle.textContent = inBook ? '编辑本书角色' : '角色卡编辑';
   }
   if (el.charsSub) {
     if (creating) {

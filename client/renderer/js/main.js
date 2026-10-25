@@ -96,14 +96,24 @@ import {
   leaveCharacterEditor,
   closeWorldbookPicker,
   isWorldbookPickerOpen,
-  startCharacterDraftInBook,
   startCharacterDraftFromAi,
-  releaseEditorScope,
   stashCharacterForm,
   refreshCharWorldbookBox,
   deleteCharacterById,
   deleteCharactersByIds
 } from './views/characterEditor.js';
+// 本书角色编辑页：和角色卡编辑是一套代码的两份拷贝，结构暂时一致，之后各改各的。
+import {
+  initCharacterEditor as initBookCharacterEditor,
+  openCharacterEditor as openBookCharacterEditor,
+  leaveCharacterEditor as leaveBookCharacterEditor,
+  isWorldbookPickerOpen as isBookWorldbookPickerOpen,
+  closeWorldbookPicker as closeBookWorldbookPicker,
+  startCharacterDraftInBook as startBookCharacterDraftInBook,
+  startCharacterDraftFromAi as startBookCharacterDraftFromAi,
+  releaseEditorScope as releaseBookEditorScope,
+  refreshCharWorldbookBox as refreshBookCharWorldbookBox
+} from './views/bookCharacterEditor.js';
 import { initCharacterImport } from './views/characterImport.js';
 import { initAiGen, openAiGenModal } from './views/aiGen.js';
 import { initPresetAi, openPresetAiModal } from './views/presetAi.js';
@@ -373,13 +383,18 @@ function bindEvents() {
       return;
     }
     // 「绑定世界书」浮层挂在 body 上、层级比编辑器高：先关它，别顺手把编辑器关了
-    if (isWorldbookPickerOpen()) {
+    if (isWorldbookPickerOpen() || isBookWorldbookPickerOpen()) {
       closeWorldbookPicker();
+      closeBookWorldbookPicker();
       return;
     }
     // 角色编辑器是页面不是弹窗：Esc = 返回上一屏（同页头「返回」）。
     if (!el.viewCharEditor.classList.contains('hidden')) {
       leaveCharacterEditor();
+      return;
+    }
+    if (!el.viewBookCharEditor.classList.contains('hidden')) {
+      leaveBookCharacterEditor();
       return;
     }
     // 人设弹窗压在设置之上：先关它，否则 Esc 会把设置页也一起离开。
@@ -574,9 +589,12 @@ async function init() {
   });
   // 角色编辑器自己绑弹窗里的按钮；它保存 / 删除之后要全量重绘，那是入口层的编排。
   initCharacterEditor({ rerender: () => renderAll() });
+  initBookCharacterEditor({ rerender: () => renderAll() });
   // AI 生成角色 / NPC：生成完交给编辑器开新草稿，看过、改过、保存才真正创建。
   initAiGen({
-    startDraft: (fields, scope, bookId) => startCharacterDraftFromAi(fields, scope, bookId)
+    startDraft: (fields, scope, bookId) => (scope === 'worldbook'
+      ? startBookCharacterDraftFromAi(fields, scope, bookId)
+      : startCharacterDraftFromAi(fields, scope, bookId))
   });
   // 导入通道：导完打开第一个新角色（那是编辑器的事），导入前先收一回编辑器里填的内容。
   initCharacterImport({
@@ -586,15 +604,16 @@ async function init() {
   // 世界书编辑器要切「角色编辑器作用域」再开编辑器，动作由入口层注入。
   initWorldbook({
     stashDraft: () => stashWorldbookForm(),
-    openInBook: (id) => openCharacterEditor(id, 'worldbook'),
-    draftInBook: () => startCharacterDraftInBook(),
-    releaseScope: () => releaseEditorScope(),
+    openInBook: (id) => openBookCharacterEditor(id),
+    draftInBook: () => startBookCharacterDraftInBook(),
+    releaseScope: () => releaseBookEditorScope(),
     // 「AI 生成 NPC」：带上这本书的 id，生成时拿它的条目和副本名单当上下文
     aiDraftInBook: (bookId) => openAiGenModal({ scope: 'worldbook', bookId }),
     // 从角色编辑器点行上的「编辑」跳过来逛一圈、再「返回」：那行「已绑世界书」
     // 可能已经被改名 / 加过条目，按最新数据重画一遍（不然还挂着旧的 N 条）
     afterLeave: (view) => {
       if (view === 'charEditor') refreshCharWorldbookBox();
+      else if (view === 'bookCharEditor') refreshBookCharWorldbookBox();
     }
   });
   // 设置页保存后要重绘右上角切换器和消息列表，所以注入进去。

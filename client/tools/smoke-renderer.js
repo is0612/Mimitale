@@ -885,7 +885,7 @@ await scenario('角色卡：新建角色', async () => {
 
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-  check('标题是「新建角色」', byId('chars-title').textContent === '新建角色', byId('chars-title').textContent);
+  check('标题是「新建角色卡」', byId('chars-title').textContent === '新建角色卡', byId('chars-title').textContent);
   check('保存前列表里没有多出卡片', $$('#char-page-grid .char-card').length === before);
   check('保存前「删除角色」是禁用的', byId('btn-del-char').disabled === true);
 
@@ -1338,7 +1338,7 @@ await scenario('角色卡：编辑已有角色', async () => {
 
   click(buttonByText(cards[0], '编辑'));
   await waitFor('编辑器打开', () => shown('#view-char-editor'));
-  check('编辑已有角色时标题是「编辑角色」', byId('chars-title').textContent === '编辑角色', byId('chars-title').textContent);
+  check('编辑已有角色时标题是「角色卡编辑」', byId('chars-title').textContent === '角色卡编辑', byId('chars-title').textContent);
   check('「删除角色」按钮可用', byId('btn-del-char').disabled === false);
 
   setValue('#c-name', '改过名字的角色');
@@ -4826,30 +4826,30 @@ await scenario('世界书：本书角色', async () => {
   await openWorldbookEditor('冒烟测试世界');
 
   click('#btn-new-wb-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-  check('标题是「新建本书角色」', byId('chars-title').textContent === '新建本书角色', byId('chars-title').textContent);
+  await waitFor('角色编辑器打开', () => shown('#view-book-char-editor'));
+  check('标题是「新建本书角色」', byId('bc-chars-title').textContent === '新建本书角色', byId('bc-chars-title').textContent);
 
   // 回归测试：角色编辑器必须盖在世界书弹窗上面（否则点了跟没反应一样）
   const cx = Math.floor(innerWidth / 2);
   const cy = Math.floor(innerHeight / 2);
   const top = document.elementFromPoint(cx, cy);
-  const where = top ? (top.closest('#view-char-editor') ? 'chars' : top.closest('#view-wb-editor') ? 'worldbooks' : 'other') : 'null';
+  const where = top ? (top.closest('#view-book-char-editor') ? 'chars' : top.closest('#view-wb-editor') ? 'worldbooks' : 'other') : 'null';
   check('编辑器没有被世界书弹窗盖住', where === 'chars', `最上层是 ${where}`);
 
   const before = ((await savedWorldbooks())[0].characters || []).length;
 
-  setValue('#c-name', '冒烟NPC');
-  click('#btn-save-char');
+  setValue('#bc-c-name', '冒烟NPC');
+  click('#bc-btn-save-char');
   await waitFor('副本 chip 出现', () => $('#wb-char-list').textContent.includes('冒烟NPC'));
 
   const after = ((await savedWorldbooks())[0].characters || []).length;
   check('副本已落盘', after === before + 1, `期望 ${before + 1}，实际 ${after}`);
 
-  click('#btn-close-chars');
+  click('#bc-btn-close-chars');
   await sleep(120);
   check('副本保存后关闭不弹确认框', !shown('#confirm-modal'));
-  check('本书角色复用角色卡相同的分区编辑器', !!byId('char-field-index') && !!byId('char-section-tab-state'));
-  check('共享角色编辑器返回原世界书角色分区', shown('#view-wb-editor') && !byId('wb-panel-characters').hidden);
+  check('本书角色用自己的分区编辑器', !!byId('bc-char-field-index') && !!byId('bc-char-section-tab-state'));
+  check('关掉本书角色页回到世界书角色分区', shown('#view-wb-editor') && !byId('wb-panel-characters').hidden);
 
   // 2026-10-18：「本书角色」有了自己的一屏，标题那套「整块折叠」撤了
   // （那是单栏时代为了不让一排 chip 把开场白挤没才做的）。这里改成钉住新形态。
@@ -5185,7 +5185,7 @@ await scenario('AI 生成角色：角色卡', async () => {
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   // 解析失败时也会开草稿（把原文塞进描述），光看「有没有开」分不出成功和兜底 ——
   // 所以再看一眼描述框：兜底那份的标题一定是「未命名角色」。
-  check('生成后打开的是新建草稿', byId('chars-title').textContent === '新建角色', byId('chars-title').textContent);
+  check('生成后打开的是新建草稿', byId('chars-title').textContent === '新建角色卡', byId('chars-title').textContent);
   check(
     '走的是正常解析，不是「解析失败」兜底',
     byId('c-desc').value.length > 0 && byId('c-name').value !== '未命名角色',
@@ -5459,30 +5459,30 @@ await scenario('AI 生成 NPC：依据世界书', async () => {
   setValue('#ai-gen-prompt', '酒馆后厨的帮工');
   click(buttonByText($('.ai-gen-modal'), '开始生成'));
 
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-  check('标题是「新建本书角色」', byId('chars-title').textContent === '新建本书角色', byId('chars-title').textContent);
+  await waitFor('角色编辑器打开', () => shown('#view-book-char-editor'));
+  check('标题是「新建本书角色」', byId('bc-chars-title').textContent === '新建本书角色', byId('bc-chars-title').textContent);
   // 副本这条路上「AI 补设定」补的是**这本书**的条目（副本自带的书进世界时不被注入）
   check(
     '副本上的「AI 补设定」标着 worldbook 作用域',
-    !!byId('c-wb-ai-block') && byId('c-wb-ai-block').dataset.scope === 'worldbook',
-    byId('c-wb-ai-block') && `class=${byId('c-wb-ai-block').className} scope=${byId('c-wb-ai-block').dataset.scope}`
+    !!byId('bc-c-wb-ai-block') && byId('bc-c-wb-ai-block').dataset.scope === 'worldbook',
+    byId('bc-c-wb-ai-block') && `class=${byId('bc-c-wb-ai-block').className} scope=${byId('bc-c-wb-ai-block').dataset.scope}`
   );
   check(
     '副本上说明写进这本书',
-    byId('c-wb-ai-status').textContent.includes('这本书'),
-    byId('c-wb-ai-status').textContent
+    byId('bc-c-wb-ai-status').textContent.includes('这本书'),
+    byId('bc-c-wb-ai-status').textContent
   );
   // 名字来自假后端的「带世界上下文」分支 —— 对不上就说明 system 里没带上这本书的设定
-  check('生成时确实带上了这本书的上下文', byId('c-name').value === '后厨帮工', byId('c-name').value);
+  check('生成时确实带上了这本书的上下文', byId('bc-c-name').value === '后厨帮工', byId('bc-c-name').value);
 
   await sleep(150);
   check('生成后副本还没落盘', ((await savedWorldbooks())[0].characters || []).length === before, String(((await savedWorldbooks())[0].characters || []).length));
 
-  click('#btn-save-char');
+  click('#bc-btn-save-char');
   await waitFor('副本 chip 出现', () => $('#wb-char-list').textContent.includes('后厨帮工'));
   check('副本已落进这本书', ((await savedWorldbooks())[0].characters || []).length === before + 1, String(((await savedWorldbooks())[0].characters || []).length));
 
-  click('#btn-close-chars');
+  click('#bc-btn-close-chars');
   await sleep(120);
   check('副本保存后关闭不弹确认框', !shown('#confirm-modal'));
 
@@ -5509,25 +5509,25 @@ await scenario('AI 补设定：副本并进这本书的草稿', async () => {
   const npc = $$('#wb-char-list .wb-char-card').find((c) => c.textContent.includes('后厨帮工'));
   check('本书角色里有「后厨帮工」', !!npc);
   click(buttonByText(npc, '编辑'));
-  await waitFor('副本编辑器打开', () => shown('#view-char-editor'));
-  check('编辑的是本书副本', byId('chars-title').textContent === '编辑本书角色', byId('chars-title').textContent);
+  await waitFor('副本编辑器打开', () => shown('#view-book-char-editor'));
+  check('编辑的是本书副本', byId('bc-chars-title').textContent === '编辑本书角色', byId('bc-chars-title').textContent);
 
-  click('#c-wb-ai-btn');
-  await waitFor('副本上也补出了条目', () => $$('#c-wb-ai-list .cwb-ai-entry').length > 0);
+  click('#bc-c-wb-ai-btn');
+  await waitFor('副本上也补出了条目', () => $$('#bc-c-wb-ai-list .cwb-ai-entry').length > 0);
   check(
     '补出 3 条（死条目那条被丢掉）',
-    $$('#c-wb-ai-list .cwb-ai-entry').length === 3,
-    String($$('#c-wb-ai-list .cwb-ai-entry').length)
+    $$('#bc-c-wb-ai-list .cwb-ai-entry').length === 3,
+    String($$('#bc-c-wb-ai-list .cwb-ai-entry').length)
   );
   check(
     '状态行说明会并进这本书',
-    byId('c-wb-ai-status').textContent.includes('并进'),
-    byId('c-wb-ai-status').textContent
+    byId('bc-c-wb-ai-status').textContent.includes('并进'),
+    byId('bc-c-wb-ai-status').textContent
   );
 
-  click('#btn-save-char');
+  click('#bc-btn-save-char');
   // 保存完草稿就交给那本书了：清单清空即说明 materialize 走完了
-  await waitFor('副本保存完', () => $$('#c-wb-ai-list .cwb-ai-entry').length === 0, 8000);
+  await waitFor('副本保存完', () => $$('#bc-c-wb-ai-list .cwb-ai-entry').length === 0, 8000);
   await sleep(250);
 
   // 世界书编辑器还在后台：左栏条目列表应该已经多出这 3 条（appendEntriesToBookDraft 里刷的）
@@ -5543,7 +5543,7 @@ await scenario('AI 补设定：副本并进这本书的草稿', async () => {
     String((((await savedWorldbooks()).find((b) => b.name === '冒烟测试世界') || {}).entries || []).length)
   );
 
-  click('#btn-close-chars');
+  click('#bc-btn-close-chars');
   await waitFor('回到世界书编辑器', () => shown('#view-wb-editor'));
   check(
     '页头保存胶囊提示「有未保存的改动」',

@@ -5264,7 +5264,8 @@ m-button.btn-new > .mi-btn__control:hover {
   background: var(--pre-bg);
 }
 
-#c-attr-paste textarea {
+#c-attr-paste textarea,
+#bc-c-attr-paste textarea {
   width: 100%;
   min-height: 0;
   font-size: var(--fs-xs);
@@ -5741,7 +5742,8 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* Character editor only. All colors follow the selected application theme. */
-#view-char-editor {
+#view-char-editor,
+#view-book-char-editor {
   --ce-surface: var(--bg-card);
   --ce-sidebar: var(--bg-side);
   --ce-line: var(--border);
@@ -5751,7 +5753,8 @@ m-button.btn-new > .mi-btn__control:hover {
 /* 两栏是默认：属性 / 表情图 / 世界书 / 高级设置的内容本来就是结构化的，不需要目录。
    「角色设定」才展开第三列 —— 五个字段连成一页长稿，右侧挂一份字段目录。
    ⚠️ 真实侧栏是 224px（不是设计稿里估的 196），所以三栏的余量要按 1440−224 算。 */
-#view-char-editor #char-form.char-editor-layout {
+#view-char-editor #char-form.char-editor-layout,
+#view-book-char-editor #bc-char-form.char-editor-layout {
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   flex: 1 1 auto;
@@ -5759,16 +5762,20 @@ m-button.btn-new > .mi-btn__control:hover {
   overflow: hidden;
 }
 
-#view-char-editor #char-form.char-editor-layout[data-editor-section='writing'] {
+#view-char-editor #char-form.char-editor-layout[data-editor-section='writing'],
+#view-book-char-editor #bc-char-form.char-editor-layout[data-editor-section='writing'] {
   grid-template-columns: 220px minmax(0, 1fr) 272px;
 }
 
 #view-char-editor #char-form.hidden,
-#view-char-editor .char-editor-panel[hidden] {
+#view-char-editor .char-editor-panel[hidden],
+#view-book-char-editor #bc-char-form.hidden,
+#view-book-char-editor .char-editor-panel[hidden] {
   display: none;
 }
 
-#view-char-editor .char-identity-pane {
+#view-char-editor .char-identity-pane,
+#view-book-char-editor .char-identity-pane {
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -5783,7 +5790,8 @@ m-button.btn-new > .mi-btn__control:hover {
    在这里是**双份**（原来它在表单里是上下叠的块，现在进了 flex 列）。
    ⚠️ 这一条不是随手的美化：它直接决定左栏会不会长出栏内滚动条。
    1440×900 下左栏内容比栏高多 18px，删掉这 20px 才回到「不滚」。 */
-#view-char-editor .char-identity-pane .char-media-top {
+#view-char-editor .char-identity-pane .char-media-top,
+#view-book-char-editor .char-identity-pane .char-media-top {
   margin-bottom: 0;
 }
 
@@ -5793,7 +5801,8 @@ m-button.btn-new > .mi-btn__control:hover {
    ⚠️ 高度仍是紧的：1440×900 下左栏刚好装得下，再塞东西就长出栏内滚动条
    （冒烟里那条「左栏没有长出栏内滚动条」就是守这个的）。
    2026-10-20：原来这颗位置是「导出」，撤掉换成「返回」+「AI 补充」—— 高度就是这么涨上来的。 */
-#view-char-editor .char-rail-foot {
+#view-char-editor .char-rail-foot,
+#view-book-char-editor .char-rail-foot {
   position: sticky;
   bottom: 0;
   z-index: 1;
@@ -5811,23 +5820,27 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 铺满栏宽写在宿主上，文字靠左是里层的对齐 */
-#view-char-editor .char-rail-foot m-button {
+#view-char-editor .char-rail-foot m-button,
+#view-book-char-editor .char-rail-foot m-button {
   width: 100%;
 }
 
 /* 主操作比次级高一档：32 / 28 / 24 三级，一眼能排出先后 */
-#view-char-editor .char-rail-foot #btn-save-char > .mi-btn__control {
+#view-char-editor .char-rail-foot #btn-save-char > .mi-btn__control,
+#view-book-char-editor .char-rail-foot #bc-btn-save-char > .mi-btn__control {
   min-height: 32px;
   font-weight: 600;
 }
 
 /* 删除：去掉 danger 的整块实底，平时只是一条淡字，悬停才染红。
    确认识别靠悬停 / 聚焦时的红，不靠一整块红底在栏底常驻。 */
-#view-char-editor .char-rail-foot #btn-del-char {
+#view-char-editor .char-rail-foot #btn-del-char,
+#view-book-char-editor .char-rail-foot #bc-btn-del-char {
   margin-top: 2px;
 }
 
-#view-char-editor .char-rail-foot #btn-del-char > .mi-btn__control {
+#view-char-editor .char-rail-foot #btn-del-char > .mi-btn__control,
+#view-book-char-editor .char-rail-foot #bc-btn-del-char > .mi-btn__control {
   min-height: 24px;
   padding: 2px 8px;
   background: transparent;
@@ -5835,18 +5848,21 @@ m-button.btn-new > .mi-btn__control:hover {
   box-shadow: none;
 }
 
-#view-char-editor .char-rail-foot #btn-del-char > .mi-btn__control:hover {
+#view-char-editor .char-rail-foot #btn-del-char > .mi-btn__control:hover,
+#view-book-char-editor .char-rail-foot #bc-btn-del-char > .mi-btn__control:hover {
   background: var(--danger-bg);
   color: var(--danger);
 }
 
 /* 同上：投影清掉之后，键盘聚焦要还能看见 */
-#view-char-editor .char-rail-foot #btn-del-char > .mi-btn__control:focus-visible {
+#view-char-editor .char-rail-foot #btn-del-char > .mi-btn__control:focus-visible,
+#view-book-char-editor .char-rail-foot #bc-btn-del-char > .mi-btn__control:focus-visible {
   box-shadow: var(--focus-ring);
 }
 
 /* 头像 + 形象：一排两个，底边对齐 */
-#view-char-editor .char-avatar {
+#view-char-editor .char-avatar,
+#view-book-char-editor .char-avatar {
   width: 56px; /* 42px 的圈装不下「点击上传」四个字，编辑页放大一档当好点击目标 */
   height: 56px;
 }
@@ -5854,18 +5870,23 @@ m-button.btn-new > .mi-btn__control:hover {
 /* 还是空槽时改虚线、收掉 art-edge 的白边 —— 白边是给透明底素材勾轮廓的，
    空框套一圈白线只会和虚线打架。 */
 #view-char-editor .char-avatar:has(.char-avatar-empty),
-#view-char-editor .char-portrait:has(.char-avatar-empty) {
+#view-char-editor .char-portrait:has(.char-avatar-empty),
+#view-book-char-editor .char-avatar:has(.char-avatar-empty),
+#view-book-char-editor .char-portrait:has(.char-avatar-empty) {
   border-style: dashed;
   box-shadow: none;
 }
 
 /* 收掉白边不能连键盘聚焦环一起收掉 */
 #view-char-editor .char-avatar:has(.char-avatar-empty):focus-visible,
-#view-char-editor .char-portrait:has(.char-avatar-empty):focus-visible {
+#view-char-editor .char-portrait:has(.char-avatar-empty):focus-visible,
+#view-book-char-editor .char-avatar:has(.char-avatar-empty):focus-visible,
+#view-book-char-editor .char-portrait:has(.char-avatar-empty):focus-visible {
   box-shadow: var(--focus-ring);
 }
 
-#view-char-editor .char-head-fields .field-label {
+#view-char-editor .char-head-fields .field-label,
+#view-book-char-editor .char-head-fields .field-label {
   padding: 0;
   font-size: var(--fs-xs);
 }
@@ -5873,7 +5894,8 @@ m-button.btn-new > .mi-btn__control:hover {
 /* ⚙ 已组件化（2026-10-16）：角色名/标签已经是 <m-input>，宿主自带
    width: 100% + min-width: 0（见 style.css 的组件段），这条不用再写。 */
 
-#view-char-editor .char-section-nav {
+#view-char-editor .char-section-nav,
+#view-book-char-editor .char-section-nav {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -5882,7 +5904,8 @@ m-button.btn-new > .mi-btn__control:hover {
   border-top: 1px solid var(--ce-line);
 }
 
-#view-char-editor .char-section-button {
+#view-char-editor .char-section-button,
+#view-book-char-editor .char-section-button {
   border: 0;
   background: transparent;
   color: var(--text-dim);
@@ -5897,22 +5920,26 @@ m-button.btn-new > .mi-btn__control:hover {
   gap: 10px;
 }
 
-#view-char-editor .char-section-button:hover {
+#view-char-editor .char-section-button:hover,
+#view-book-char-editor .char-section-button:hover {
   background: var(--accent-wash);
   color: var(--text);
 }
 
-#view-char-editor .char-section-button[aria-selected="true"] {
+#view-char-editor .char-section-button[aria-selected="true"],
+#view-book-char-editor .char-section-button[aria-selected="true"] {
   background: var(--accent-soft-strong);
   color: var(--text);
 }
 
-#view-char-editor .char-section-button:focus-visible {
+#view-char-editor .char-section-button:focus-visible,
+#view-book-char-editor .char-section-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
-#view-char-editor .char-editor-content {
+#view-char-editor .char-editor-content,
+#view-book-char-editor .char-editor-content {
   min-width: 0;
   overflow-y: auto;
   padding: 22px 30px 32px;
@@ -5923,7 +5950,8 @@ m-button.btn-new > .mi-btn__control:hover {
    但窗口再宽就会一路涨到 50+ 字/行。760 − 稿纸内边距 40 ≈ 720px 正文宽，
    16px 字号下约 42 字/行（设计稿给的是 650 稿纸 / 40 字，这里按真实窗口留了余量）。
    1440 下不触发这条；属性 / 表情 / 世界书 / 高级设置同宽居中，切分区时左缘不会跳。 */
-#view-char-editor .char-editor-panel {
+#view-char-editor .char-editor-panel,
+#view-book-char-editor .char-editor-panel {
   width: 100%;
   margin: 0 auto;
   display: grid;
@@ -5931,21 +5959,24 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 
-#view-char-editor .char-panel-heading h2 {
+#view-char-editor .char-panel-heading h2,
+#view-book-char-editor .char-panel-heading h2 {
   margin: 0;
   color: var(--text);
   font-size: var(--fs-lg);
   font-weight: 700;
 }
 
-#view-char-editor .char-panel-heading p {
+#view-char-editor .char-panel-heading p,
+#view-book-char-editor .char-panel-heading p {
   margin: 8px 0 0;
   color: var(--ce-muted);
   font-size: var(--fs-xs);
 }
 
 /* 「角色设定」那行标题：说明挪到右边同一行 —— 五栏连成长稿，标题不该占掉一整行高度 */
-#view-char-editor .char-panel-heading.is-work {
+#view-char-editor .char-panel-heading.is-work,
+#view-book-char-editor .char-panel-heading.is-work {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5954,7 +5985,8 @@ m-button.btn-new > .mi-btn__control:hover {
   border-bottom: 1px solid var(--ce-line);
 }
 
-#view-char-editor .char-panel-heading.is-work p {
+#view-char-editor .char-panel-heading.is-work p,
+#view-book-char-editor .char-panel-heading.is-work p {
   margin: 0;
   white-space: nowrap;
 }
@@ -5972,11 +6004,16 @@ m-button.btn-new > .mi-btn__control:hover {
 /* 2026-10-18 再压一档：原来 264/120/100/160/140 一屏只放得下两栏，空白比正文多。
    现在描述 200（≈6 行正文）、其余 84–128；都在 160 以下的三栏仍会被 auto-grow
    拉到内容高度（上限 160），描述固定 200，表单不会因为一段长描述无限变长。 */
-#view-char-editor #c-desc > textarea { min-height: 200px; }
-#view-char-editor #c-personality > textarea { min-height: 96px; }
-#view-char-editor #c-scenario > textarea { min-height: 84px; }
-#view-char-editor #c-first > textarea { min-height: 128px; }
-#view-char-editor #c-example > textarea { min-height: 112px; }
+#view-char-editor #c-desc > textarea,
+#view-book-char-editor #bc-c-desc > textarea { min-height: 200px; }
+#view-char-editor #c-personality > textarea,
+#view-book-char-editor #bc-c-personality > textarea { min-height: 96px; }
+#view-char-editor #c-scenario > textarea,
+#view-book-char-editor #bc-c-scenario > textarea { min-height: 84px; }
+#view-char-editor #c-first > textarea,
+#view-book-char-editor #bc-c-first > textarea { min-height: 128px; }
+#view-char-editor #c-example > textarea,
+#view-book-char-editor #bc-c-example > textarea { min-height: 112px; }
 
 #view-char-editor .attr-add-row,
 #view-char-editor .attr-range,
@@ -5984,21 +6021,31 @@ m-button.btn-new > .mi-btn__control:hover {
 #view-char-editor .attr-mode-row,
 #view-char-editor .attr-group-edit,
 #view-char-editor .attr-template-bar,
-#view-char-editor .field-template-bar {
+#view-char-editor .field-template-bar,
+#view-book-char-editor .attr-add-row,
+#view-book-char-editor .attr-range,
+#view-book-char-editor .attr-group-row,
+#view-book-char-editor .attr-mode-row,
+#view-book-char-editor .attr-group-edit,
+#view-book-char-editor .attr-template-bar,
+#view-book-char-editor .field-template-bar {
   flex-wrap: wrap;
 }
 
 @container (max-width: 560px) {
-  #view-char-editor .attr-more {
+  #view-char-editor .attr-more,
+#view-book-char-editor .attr-more {
     margin-left: 0;
   }
 
   /* ⚙ 组件化之后这个类在**宿主**上，选择器不能再带 input 标签 */
-  #view-char-editor .attr-row .attr-value {
+  #view-char-editor .attr-row .attr-value,
+#view-book-char-editor .attr-row .attr-value {
     flex-basis: 120px;
   }
 
-  #view-char-editor .attr-name {
+  #view-char-editor .attr-name,
+#view-book-char-editor .attr-name {
     text-align: left;
   }
 }
@@ -6007,7 +6054,8 @@ m-button.btn-new > .mi-btn__control:hover {
    五栏连成一张长稿之后，「现在看的是哪一栏 / 哪一栏还空着」需要有个地方交代 ——
    这一列的全部职责就是这个。 */
 
-#view-char-editor .char-field-index {
+#view-char-editor .char-field-index,
+#view-book-char-editor .char-field-index {
   display: none;
   min-width: 0;
   flex-direction: column;
@@ -6019,18 +6067,21 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 只在「角色设定」露头：其余分区没有"栏"可列，留着只会是一列空的 */
-#view-char-editor #char-form[data-editor-section='writing'] .char-field-index {
+#view-char-editor #char-form[data-editor-section='writing'] .char-field-index,
+#view-book-char-editor #bc-char-form[data-editor-section='writing'] .char-field-index {
   display: flex;
 }
 
-#view-char-editor .field-index-title {
+#view-char-editor .field-index-title,
+#view-book-char-editor .field-index-title {
   font-size: var(--fs-xs);
   color: var(--text-faint);
   letter-spacing: 0.06em;
   padding: 0 8px 8px;
 }
 
-#view-char-editor .field-index-item {
+#view-char-editor .field-index-item,
+#view-book-char-editor .field-index-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -6046,30 +6097,35 @@ m-button.btn-new > .mi-btn__control:hover {
   cursor: pointer;
 }
 
-#view-char-editor .field-index-item:hover {
+#view-char-editor .field-index-item:hover,
+#view-book-char-editor .field-index-item:hover {
   background: var(--accent-wash);
   color: var(--text);
 }
 
-#view-char-editor .field-index-item[aria-current='true'] {
+#view-char-editor .field-index-item[aria-current='true'],
+#view-book-char-editor .field-index-item[aria-current='true'] {
   background: var(--accent-soft-strong);
   color: var(--text);
   font-weight: 600;
 }
 
-#view-char-editor .field-index-item:focus-visible {
+#view-char-editor .field-index-item:focus-visible,
+#view-book-char-editor .field-index-item:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
-#view-char-editor .field-index-no {
+#view-char-editor .field-index-no,
+#view-book-char-editor .field-index-no {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
 
-#view-char-editor .field-index-name {
+#view-char-editor .field-index-name,
+#view-book-char-editor .field-index-name {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -6077,7 +6133,8 @@ m-button.btn-new > .mi-btn__control:hover {
   white-space: nowrap;
 }
 
-#view-char-editor .field-index-len {
+#view-char-editor .field-index-len,
+#view-book-char-editor .field-index-len {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
   color: var(--text-faint);
@@ -6085,7 +6142,8 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 已写 / 未写：一个点说完，不另起一列文字 */
-#view-char-editor .field-index-dot {
+#view-char-editor .field-index-dot,
+#view-book-char-editor .field-index-dot {
   flex: 0 0 auto;
   width: 6px;
   height: 6px;
@@ -6093,11 +6151,13 @@ m-button.btn-new > .mi-btn__control:hover {
   background: var(--border-hover);
 }
 
-#view-char-editor .field-index-dot[data-filled='true'] {
+#view-char-editor .field-index-dot[data-filled='true'],
+#view-book-char-editor .field-index-dot[data-filled='true'] {
   background: var(--accent);
 }
 
-#view-char-editor .field-index-block {
+#view-char-editor .field-index-block,
+#view-book-char-editor .field-index-block {
   margin-top: 14px;
   padding: 12px 12px 10px;
   border: 1px solid var(--border-soft);
@@ -6105,20 +6165,23 @@ m-button.btn-new > .mi-btn__control:hover {
   background: var(--bg-elev);
 }
 
-#view-char-editor .field-index-block h3 {
+#view-char-editor .field-index-block h3,
+#view-book-char-editor .field-index-block h3 {
   margin: 0 0 8px;
   font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--text-dim);
 }
 
-#view-char-editor .field-index-list {
+#view-char-editor .field-index-list,
+#view-book-char-editor .field-index-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-#view-char-editor .field-index-list li {
+#view-char-editor .field-index-list li,
+#view-book-char-editor .field-index-list li {
   display: flex;
   gap: 8px;
   margin: 4px 0;
@@ -6126,7 +6189,8 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--text-faint);
 }
 
-#view-char-editor .field-index-list li::before {
+#view-char-editor .field-index-list li::before,
+#view-book-char-editor .field-index-list li::before {
   content: '';
   flex: 0 0 auto;
   width: 4px;
@@ -9466,7 +9530,8 @@ m-button.btn-new > .mi-btn__control:hover {
 
 /* 两个编辑页的页头同高：角色页原来把面包屑 / 标题 / 说明叠成三行（78px），
    世界书页是一行（56px）—— 来回切换时内容区会上下跳 22px。现在都一行。 */
-#view-char-editor .page-head {
+#view-char-editor .page-head,
+#view-book-char-editor .page-head {
   height: auto;
   min-height: 56px;
   padding: 12px 24px;
@@ -9480,11 +9545,13 @@ m-button.btn-new > .mi-btn__control:hover {
   min-width: 0;
 }
 
-#view-char-editor .editor-head-left .page-title {
+#view-char-editor .editor-head-left .page-title,
+#view-book-char-editor .editor-head-left .page-title {
   flex: 0 0 auto;
 }
 
-#view-char-editor .editor-head-left .page-sub {
+#view-char-editor .editor-head-left .page-sub,
+#view-book-char-editor .editor-head-left .page-sub {
   flex: 1 1 auto;
   margin: 0;
   min-width: 0;
@@ -9602,14 +9669,16 @@ m-button.btn-new > .mi-btn__control:hover {
 /* 头像 / 形象：一排两格（120 + 12 + 56 = 188，正好是栏内净宽）。
    ⚠️ 两格必须等高：形象钉死 2:3，头像那格把图压到行底 —— 标签和「清除」才会落在
    同一条线上。顶对齐时两颗「清除」一高一低，整块看上去是两摞没对齐的东西。 */
-#view-char-editor .char-avatar-col {
+#view-char-editor .char-avatar-col,
+#view-book-char-editor .char-avatar-col {
   display: grid;
   grid-template-columns: 120px minmax(0, 1fr);
   column-gap: 12px;
   align-items: stretch;
 }
 
-#view-char-editor .char-avatar-col .char-media-item {
+#view-char-editor .char-avatar-col .char-media-item,
+#view-book-char-editor .char-avatar-col .char-media-item {
   display: grid;
   grid-template-rows: 1fr auto auto;
   row-gap: 6px;
@@ -9619,29 +9688,34 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 头像在 180px 的行里贴底，和形象的下沿齐平；上面那块余白是有意的留白 */
-#view-char-editor .char-avatar-col .char-media-item > button {
+#view-char-editor .char-avatar-col .char-media-item > button,
+#view-book-char-editor .char-avatar-col .char-media-item > button {
   align-self: end;
 }
 
-#view-char-editor .char-media-label {
+#view-char-editor .char-media-label,
+#view-book-char-editor .char-media-label {
   display: block;
 }
 
 /* 分区导航：图标 + 名称 + 一句话说明 + 计数徽章。
    窗口不高（笔记本 820 那档）时收掉第二行说明 —— 宁可少一句，
    也不让左栏长出栏内滚动条。 */
-#view-char-editor .char-section-icon {
+#view-char-editor .char-section-icon,
+#view-book-char-editor .char-section-icon {
   flex: 0 0 auto;
   display: inline-flex;
 }
 
-#view-char-editor .char-section-icon svg {
+#view-char-editor .char-section-icon svg,
+#view-book-char-editor .char-section-icon svg {
   width: 16px;
   height: 16px;
   opacity: 0.85;
 }
 
-#view-char-editor .char-section-label {
+#view-char-editor .char-section-label,
+#view-book-char-editor .char-section-label {
   flex: 1 1 auto;
   min-width: 0;
   display: block;
@@ -9651,7 +9725,8 @@ m-button.btn-new > .mi-btn__control:hover {
   font-size: var(--fs-sm);
 }
 
-#view-char-editor .char-section-count {
+#view-char-editor .char-section-count,
+#view-book-char-editor .char-section-count {
   flex: 0 0 auto;
   font-size: var(--fs-xs);
   color: var(--text-faint);
@@ -9661,7 +9736,8 @@ m-button.btn-new > .mi-btn__control:hover {
   font-variant-numeric: tabular-nums;
 }
 
-#view-char-editor .char-section-button[aria-selected='true'] .char-section-count {
+#view-char-editor .char-section-button[aria-selected='true'] .char-section-count,
+#view-book-char-editor .char-section-button[aria-selected='true'] .char-section-count {
   background: var(--accent-soft-strong);
   color: var(--accent);
 }
@@ -9672,14 +9748,16 @@ m-button.btn-new > .mi-btn__control:hover {
    V2 里五栏同时在场，所以头栏要压扁、说明要收起 —— 五段说明全铺开会把正文淹掉。 */
 
 /* margin-bottom 是字段之间唯一的间距 —— 每张稿纸自带描边，再画分隔线就重了 */
-#view-char-editor .char-sheet {
+#view-char-editor .char-sheet,
+#view-book-char-editor .char-sheet {
   background: var(--bg-card);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
   overflow: hidden;
 }
 
-#view-char-editor .char-sheet:focus-within {
+#view-char-editor .char-sheet:focus-within,
+#view-book-char-editor .char-sheet:focus-within {
   border-color: var(--accent-border);
 }
 
@@ -9688,12 +9766,15 @@ m-button.btn-new > .mi-btn__control:hover {
    备选开场白那块没有可关联的控件，头栏是 .char-sheet 的直接子级，所以两条都要写。
    ⚠️ 这里**只写「长什么样」**：flex 布局已在 `.char-form .field-stack > .field-head`
       里给过，margin 本来就是 0（span 的 UA 默认值），都别再抄一遍。 */
-#view-char-editor .char-sheet > .char-sheet-label {
+#view-char-editor .char-sheet > .char-sheet-label,
+#view-book-char-editor .char-sheet > .char-sheet-label {
   display: block;
 }
 
 #view-char-editor .char-sheet > .char-sheet-label > .field-head,
-#view-char-editor .char-sheet > .field-head {
+#view-char-editor .char-sheet > .field-head,
+#view-book-char-editor .char-sheet > .char-sheet-label > .field-head,
+#view-book-char-editor .char-sheet > .field-head {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -9703,7 +9784,8 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 序号：和右栏字段目录里的序号一一对应 —— 两张表靠它对上号 */
-#view-char-editor .char-sheet .field-no {
+#view-char-editor .char-sheet .field-no,
+#view-book-char-editor .char-sheet .field-no {
   flex: 0 0 auto;
   width: 20px;
   height: 20px;
@@ -9721,7 +9803,8 @@ m-button.btn-new > .mi-btn__control:hover {
    所以框自己的描边在这里必须归零，**聚焦反馈交给卡片**（见上面的 .char-sheet:focus-within）。
    反过来，别在这条里写 border-color 指望它做聚焦态：它会被这条自己吃掉。
    ⚙ 2026-10-16 组件化：`>` 后面多一层宿主（描边/内边距/背景长在里层那颗上）。 */
-#view-char-editor .char-sheet > m-textarea > textarea {
+#view-char-editor .char-sheet > m-textarea > textarea,
+#view-book-char-editor .char-sheet > m-textarea > textarea {
   max-height: none;
   padding: 12px 16px;
   border: 0;
@@ -9730,12 +9813,14 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 写法说明：折叠条。默认收起是刻意的 —— 五栏同屏，说明留给"想查的时候" */
-#view-char-editor .char-fold {
+#view-char-editor .char-fold,
+#view-book-char-editor .char-fold {
   border-top: 1px solid var(--border-soft);
   background: var(--bg-input);
 }
 
-#view-char-editor .char-fold > summary {
+#view-char-editor .char-fold > summary,
+#view-book-char-editor .char-fold > summary {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -9746,26 +9831,31 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--text-dim);
 }
 
-#view-char-editor .char-fold > summary::-webkit-details-marker {
+#view-char-editor .char-fold > summary::-webkit-details-marker,
+#view-book-char-editor .char-fold > summary::-webkit-details-marker {
   display: none;
 }
 
-#view-char-editor .char-fold > summary::before {
+#view-char-editor .char-fold > summary::before,
+#view-book-char-editor .char-fold > summary::before {
   content: '▸';
   color: var(--text-faint);
   transition: transform 0.12s;
 }
 
-#view-char-editor .char-fold[open] > summary::before {
+#view-char-editor .char-fold[open] > summary::before,
+#view-book-char-editor .char-fold[open] > summary::before {
   transform: rotate(90deg);
 }
 
-#view-char-editor .char-fold-body {
+#view-char-editor .char-fold-body,
+#view-book-char-editor .char-fold-body {
   padding: 0 14px 12px;
 }
 
 /* 模板条（只有开场白那一栏有）：夹在正文和折叠条之间 */
-#view-char-editor .char-sheet > .field-template-bar {
+#view-char-editor .char-sheet > .field-template-bar,
+#view-book-char-editor .char-sheet > .field-template-bar {
   margin-top: 0;
   padding: 8px 14px 10px;
   border-top: 1px solid var(--border-soft);
@@ -9773,18 +9863,21 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 备选开场白的条目列表：现在也长在稿纸卡里，补上左右内边距 */
-#view-char-editor .char-sheet > .alt-greet-list {
+#view-char-editor .char-sheet > .alt-greet-list,
+#view-book-char-editor .char-sheet > .alt-greet-list {
   padding: 12px 14px;
 }
 
-#view-char-editor .char-sheet > .alt-greet-list:empty {
+#view-char-editor .char-sheet > .alt-greet-list:empty,
+#view-book-char-editor .char-sheet > .alt-greet-list:empty {
   padding: 0;
 }
 
 /* ------------------------------ 编辑角色 · 高级设置 ------------------------------ */
 /* 从「details 套分区」改成三张平铺卡：一次点开，不再折两层 */
 
-#view-char-editor .char-advanced {
+#view-char-editor .char-advanced,
+#view-book-char-editor .char-advanced {
   display: grid;
   gap: 14px;
   margin: 0;
@@ -9793,7 +9886,8 @@ m-button.btn-new > .mi-btn__control:hover {
   border: 0;
 }
 
-#view-char-editor .char-advanced > .field {
+#view-char-editor .char-advanced > .field,
+#view-book-char-editor .char-advanced > .field {
   margin: 0;
   padding: 14px 16px;
   background: var(--bg-card);
@@ -9801,29 +9895,34 @@ m-button.btn-new > .mi-btn__control:hover {
   border-radius: var(--radius);
 }
 
-#view-char-editor .char-advanced > .field:focus-within {
+#view-char-editor .char-advanced > .field:focus-within,
+#view-book-char-editor .char-advanced > .field:focus-within {
   border-color: var(--accent-border);
 }
 
 /* ⚙ 2026-10-16 组件化：中间多一层宿主（`.field` 是 <label>，包着 <m-textarea>） */
-#view-char-editor .char-advanced > .field > m-textarea > textarea {
+#view-char-editor .char-advanced > .field > m-textarea > textarea,
+#view-book-char-editor .char-advanced > .field > m-textarea > textarea {
   min-height: 84px;
   max-height: none;
 }
 
-#view-char-editor .char-advanced > .field > .field-label {
+#view-char-editor .char-advanced > .field > .field-label,
+#view-book-char-editor .char-advanced > .field > .field-label {
   padding-top: 0;
 }
 
 /* ------------------------------ 编辑角色 · 属性 / 开关卡 ------------------------------ */
 
-#view-char-editor .attr-panel {
+#view-char-editor .attr-panel,
+#view-book-char-editor .attr-panel {
   background: var(--bg-card);
   border-color: var(--border-soft);
 }
 
 /* 字段行：名称定宽，值吃满中间，类型 / 更多 / 删除靠右 */
-#view-char-editor .attr-row {
+#view-char-editor .attr-row,
+#view-book-char-editor .attr-row {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -9832,21 +9931,25 @@ m-button.btn-new > .mi-btn__control:hover {
   border-bottom: 1px solid var(--border-soft);
 }
 
-#view-char-editor .attr-item:last-child .attr-row {
+#view-char-editor .attr-item:last-child .attr-row,
+#view-book-char-editor .attr-item:last-child .attr-row {
   border-bottom: 0;
 }
 
-#view-char-editor .attr-row .attr-name {
+#view-char-editor .attr-row .attr-name,
+#view-book-char-editor .attr-row .attr-name {
   flex: 0 0 120px;
 }
 
-#view-char-editor .attr-row .attr-value {
+#view-char-editor .attr-row .attr-value,
+#view-book-char-editor .attr-row .attr-value {
   flex: 1 1 auto;
   min-width: 0;
 }
 
 /* 「剧情选项 / 在状态栏显示」两张开关卡 */
-#view-char-editor .char-switch-card {
+#view-char-editor .char-switch-card,
+#view-book-char-editor .char-switch-card {
   margin-top: 14px;
   padding: 14px 16px;
   background: var(--bg-card);
@@ -9855,7 +9958,9 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 #view-char-editor .char-switch-card .check-desc,
-#view-char-editor .char-switch-card .field-help {
+#view-char-editor .char-switch-card .field-help,
+#view-book-char-editor .char-switch-card .check-desc,
+#view-book-char-editor .char-switch-card .field-help {
   max-width: 760px;
 }
 
