@@ -4680,6 +4680,33 @@ await scenario('世界书：本书角色', async () => {
   const npcCard = $$('#char-book-roles .char-card').find((c) => c.textContent.includes('冒烟NPC'));
   check('人物列表里那张卡是角色卡同款', !!npcCard && !!npcCard.querySelector('.wb-card-cover') && !!npcCard.querySelector('.char-card-name'));
 
+  // 封面上那颗「○/● 状态栏」浮标：点一下要立刻切换（showInPanel 落盘 + 卡片重绘）。
+  // 这里不点就没人守 —— 点完浮标还是空心、用户以为没点上，就是这次迁移漏掉的回归。
+  const showBtn = npcCard && npcCard.querySelector('.char-card-show');
+  check('副本卡片上有「状态栏」浮标', !!showBtn, showBtn ? showBtn.textContent.trim() : '（没有）');
+  if (showBtn) {
+    check('默认是空心（未显示）', /○/.test(showBtn.textContent), showBtn.textContent);
+    click(showBtn);
+    // 精确选中「冒烟NPC」那张卡（重绘后 npcCard 失效，重新按名字找），别选到别的卡
+    await waitFor('冒烟NPC 的浮标切成实心', () => {
+      const card = $$('#char-book-roles .char-card').find((c) => c.textContent.includes('冒烟NPC'));
+      const b = card && card.querySelector('.char-card-show');
+      return !!b && /●/.test(b.textContent);
+    });
+    const lib = await import(new URL('js/data/library.js', document.baseURI).href);
+    const bookNow = lib.worldbooks().find((b) => b.name === '冒烟测试世界');
+    const npcNow = bookNow && (bookNow.characters || []).find((c) => c.name === '冒烟NPC');
+    check('勾选写进了内存（showInPanel=true）', !!npcNow && npcNow.showInPanel === true, JSON.stringify(npcNow && npcNow.showInPanel));
+    // 点回来，别把状态留给后面的场景
+    const npcCard2 = $$('#char-book-roles .char-card').find((c) => c.textContent.includes('冒烟NPC'));
+    click(npcCard2.querySelector('.char-card-show'));
+    await waitFor('冒烟NPC 的浮标切回空心', () => {
+      const card = $$('#char-book-roles .char-card').find((c) => c.textContent.includes('冒烟NPC'));
+      const b = card && card.querySelector('.char-card-show');
+      return !!b && /○/.test(b.textContent);
+    });
+  }
+
   click('#btn-close-chars');
   await sleep(120);
   await waitFor('回到角色卡列表', () => shown('#view-chars'));

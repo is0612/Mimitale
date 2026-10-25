@@ -542,7 +542,9 @@ function bookCharCard(book, c) {
     onclick: (event) => {
       // 卡片本身可点（封面开大图 / 批量选择），这一下不该连带触发
       event.stopPropagation();
-      runAsync(() => toggleWorldbookCharShowInPanel(book, c.id, !shown));
+      // ⚠️ runAsync(fn) 返回的是「执行闭包」，这里必须立刻调用 —— 只写 runAsync(fn)
+      //    不调用就等于点了没反应（这是「状态栏浮标点不动」的根因）。
+      runAsync(() => toggleWorldbookCharShowInPanel(book, c.id, !shown))();
     }
   });
 
@@ -567,7 +569,7 @@ function bookCharCard(book, c) {
         size: 'sm',
         text: '移出本书',
         title: '从本书移除（角色卡里的不受影响）',
-        onClick: () => runAsync(() => removeWorldbookCharacter(book, c.id))
+        onClick: () => runAsync(() => removeWorldbookCharacter(book, c.id))()
       })
     ]
   });
@@ -683,6 +685,9 @@ async function toggleWorldbookCharShowInPanel(book, id, on) {
     rerenderBookCharHosts(book);
     return;
   }
+  // ⚠️ 先重绘人物列表：卡片上那颗「○/● 状态栏」浮标要立刻跟着切换，
+  //    否则用户点完浮标还是空心、以为没点上（这是「点不动」的根因）。
+  rerenderBookCharHosts(book);
   // 「当前状态」入口条按当前会话的面板画，正在玩这本书就得重绘一次，头像才会立刻增删。
   if (activeConvo() && convoWorldbookIds(activeConvo()).includes(book.id)) {
     renderAll();
