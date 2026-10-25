@@ -30,7 +30,8 @@
            文字直接裸在 button 里就没法单独隐藏，只能整颗 display:none。 -->
       <div class="sidebar-foot">
         <div class="sidebar-section-title">创作空间</div>
-        <m-button id="btn-chars" variant="ghost" block data-icon="users" aria-label="打开角色库"><span class="foot-label">角色库</span><span id="foot-chars-count" class="foot-count"></span></m-button>
+        <m-button id="btn-chars" variant="ghost" block data-icon="users" aria-label="打开角色卡"><span class="foot-label">角色卡</span><span id="foot-chars-count" class="foot-count"></span></m-button>
+        <m-button id="btn-games" variant="ghost" block data-icon="dice" aria-label="打开游戏卡"><span class="foot-label">游戏卡</span><span id="foot-games-count" class="foot-count"></span></m-button>
         <m-button id="btn-presets" variant="ghost" block data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span><span id="foot-presets-count" class="foot-count"></span></m-button>
 
         <!-- 账号条：未登录是人形图标 + 文案，点一下开登录窗；
@@ -201,10 +202,10 @@
       </section>
 
       <!-- 视图二：角色列表页 -->
-      <section id="view-chars" class="view hidden" aria-label="角色库">
+      <section id="view-chars" class="view hidden" aria-label="角色卡">
         <header class="page-head">
           <div class="page-heading">
-            <h1 class="page-title">角色库</h1>
+            <h1 class="page-title">角色卡</h1>
             <p id="chars-page-sub" class="page-sub"></p>
           </div>
           <div class="page-actions">
@@ -247,10 +248,43 @@
         </div>
       </section>
 
+      <!-- 视图：游戏卡列表页（2026-10-25 起，先复制角色卡布局；编辑器 / 数据后续再做） -->
+      <section id="view-games" class="view hidden" aria-label="游戏卡">
+        <header class="page-head">
+          <div class="page-heading">
+            <h1 class="page-title">游戏卡</h1>
+            <p id="games-page-sub" class="page-sub"></p>
+          </div>
+          <div class="page-actions">
+            <m-button id="btn-import-game" variant="ghost" size="sm">导入游戏卡</m-button>
+            <m-button id="btn-ai-game" variant="ghost" size="sm">AI 生成</m-button>
+            <m-button id="btn-new-game" variant="primary" size="sm">＋ 新建游戏</m-button>
+          </div>
+        </header>
+
+        <div class="page-body">
+          <div class="lib-toolbar">
+            <label class="lib-search" for="game-page-search">
+              <span data-icon="search" aria-hidden="true"></span>
+              <m-input id="game-page-search" type="search" placeholder="搜索游戏名、标签或描述" aria-label="搜索游戏"></m-input>
+            </label>
+            <span id="game-page-count" class="lib-count"></span>
+          </div>
+          <div id="game-page-grid" class="char-grid" role="list"></div>
+          <div id="game-page-empty" class="page-empty hidden">
+            <div class="page-empty-title">还没有游戏</div>
+            <p class="page-empty-hint">
+              点右上角「＋ 新建游戏」写一个可玩的游戏或剧本，<br />
+              或者点「导入游戏卡」读一张现成的。
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section id="view-char-editor" class="view hidden" aria-label="编辑角色">
         <header class="page-head">
           <div class="page-heading editor-head-left">
-            <!-- 2026-10-19：返回挪到左上角；面包屑（角色库 / 名字）去掉 —— 新建时它和标题
+            <!-- 2026-10-19：返回挪到左上角；面包屑（角色卡 / 名字）去掉 —— 新建时它和标题
                  「新建角色」说的是同一件事；「保存角色」挪去了左栏底部的 char-rail-foot，
                  页头只剩标题和一句说明。 -->
             <button id="btn-close-chars" class="page-back" type="button" title="返回上一屏（Esc）" aria-label="返回" data-icon="chevron-left"><span>返回</span></button>
@@ -276,7 +310,7 @@
             <div class="char-media-top">
               <div class="char-avatar-col">
                 <div class="char-media-item">
-                  <button id="char-portrait" class="char-portrait art-edge" type="button" title="点击上传角色形象（竖版立绘，显示在角色库列表上）" aria-label="上传角色形象">
+                  <button id="char-portrait" class="char-portrait art-edge" type="button" title="点击上传角色形象（竖版立绘，显示在角色卡列表上）" aria-label="上传角色形象">
                     <span class="char-avatar-empty">点击上传</span>
                   </button>
                   <span class="char-media-label">形象</span>
@@ -556,7 +590,7 @@
                 <span class="field-label" data-icon="book">自带世界书</span>
                 <div class="cwb-head-actions">
                   <!-- 「AI 补设定」（2026-10-20）：读这张卡补几条世界设定，保存角色时才建书。
-                       只给角色库的卡用 —— 世界书副本进世界时注入的是那本书，自带书不生效。 -->
+                       只给角色卡用 —— 世界书副本进世界时注入的是那本书，自带书不生效。 -->
                   <m-button id="c-wb-add-btn" variant="ghost" size="sm">＋ 绑定</m-button>
                   <!-- 世界书只能从这张卡长出来：新建 → 自动绑定 → 直接进编辑器 -->
                   <m-button id="c-wb-new-btn" variant="ghost" size="sm" title="新建一本世界书并绑定给这个角色">＋ 新建</m-button>
@@ -596,7 +630,7 @@
         <!-- ⚠️ 这一块由 characterEditorLayout.js 整块搬进 .char-identity-pane，
              id 一个都不能改（characterEditor.js 直接按 id 取用）。
              2026-10-20：保存 / 返回 / AI 补充 / 删除，四行。
-             · 「导出」撤了 —— 角色库卡片右上角那颗已经能拿走这张卡（同日加的），
+             · 「导出」撤了 —— 角色卡卡片右上角那颗已经能拿走这张卡（同日加的），
                编辑器里再放一颗只是把两处入口做成同一件事；
              · 「返回」补回来了：页头的返回在左上角，手停在左栏底部改完一屏要回去时，
                鼠标得横跨整个窗口 —— 原来那条「左栏不重复放返回」的规矩就是为这个让路的；
@@ -821,16 +855,16 @@
             </div>
           </div>
 
-          <!-- 屏 2 · 本书角色：从角色库复制进来的独立副本（书里没有角色时给一张引导卡） -->
+          <!-- 屏 2 · 本书角色：从角色卡复制进来的独立副本（书里没有角色时给一张引导卡） -->
           <div class="wb-chars-panel" id="wb-panel-characters" hidden>
             <div class="wb-chars-inner">
               <div class="wb-chars-bar">
-                <m-button id="btn-add-wb-chars" variant="ghost" size="sm">＋ 从角色库加入</m-button>
+                <m-button id="btn-add-wb-chars" variant="ghost" size="sm">＋ 从角色卡加入</m-button>
                 <m-button id="btn-ai-wb-char" variant="ghost" size="sm"
                           title="按这本书的设定生成一个 NPC（酒馆的小二、咖啡店的老板娘这类），生成完可以自己改">AI 生成</m-button>
                 <m-button id="btn-new-wb-char" variant="ghost" size="sm">＋ 新建</m-button>
                 <m-button id="btn-sync-wb-attrs" variant="ghost" size="sm"
-                          title="按名字找角色库里同名的卡，把它的属性补进这里的副本（副本是快照，加进来之后角色库又补了属性的话，副本不会自己跟着变）">↻ 同步属性</m-button>
+                          title="按名字找角色卡里同名的卡，把它的属性补进这里的副本（副本是快照，加进来之后角色卡又补了属性的话，副本不会自己跟着变）">↻ 同步属性</m-button>
                 <span id="wb-chars-hint" class="wb-chars-hint"></span>
               </div>
               <div id="wb-char-list" class="wb-char-list"></div>
@@ -2119,9 +2153,9 @@
 
       <div class="modal-body player-body">
         <!-- 用角色卡当自己：选完自动把名字/设定填到下面，属性也会带进状态面板。
-             角色库为空时整块隐藏（renderPlayerCharOptions 里控制）。 -->
+             角色卡为空时整块隐藏（renderPlayerCharOptions 里控制）。 -->
         <label class="field field-stack" id="player-char-field">
-          <span class="field-label">用角色库里的人物当自己（可选）</span>
+          <span class="field-label">用角色卡里的人物当自己（可选）</span>
           <m-select id="player-char" aria-label="选择角色卡"></m-select>
           <span id="player-char-preview" class="player-char-preview hidden"></span>
           <span class="field-help">
@@ -2156,12 +2190,12 @@
     </div>
   </div>
 
-  <!-- ================= 从角色库多选加入世界书 ================= -->
+  <!-- ================= 从角色卡多选加入世界书 ================= -->
   <div id="wb-char-picker" class="modal hidden">
     <div class="modal-card wb-picker-card" role="dialog" aria-modal="true" aria-labelledby="wb-char-picker-title">
       <header class="modal-head">
         <div class="modal-heading">
-          <h2 id="wb-char-picker-title">从角色库加入</h2>
+          <h2 id="wb-char-picker-title">从角色卡加入</h2>
           <p class="modal-sub">加入的是副本，之后两边各改各的，互不影响</p>
         </div>
         <button id="btn-close-wb-char-picker" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭" data-icon="close"></button>

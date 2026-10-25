@@ -48,6 +48,7 @@ import { initPanelUi } from './views/panelUi.js';
 import { initCastPanel } from './views/castPanel.js';
 import { initStateCards } from './views/stateCard.js';
 import { initPresetList } from './views/presetList.js';
+import { initGameList } from './views/gameList.js';
 import { initPresetIo, exportPreset } from './views/presetIO.js';
 import {
   initPreset,
@@ -186,7 +187,7 @@ function bindEvents() {
   if (el.btnSidebarToggle) el.btnSidebarToggle.addEventListener('click', toggleSidebar);
   applySidebarCollapsed();
 
-  // 「＋ 新对话」= 建空白会话并切到聊天屏；跟角色聊走角色库卡片上的「聊天」。
+  // 「＋ 新对话」= 建空白会话并切到聊天屏；跟角色聊走角色卡卡片上的「聊天」。
   el.btnNew.addEventListener('click', () => {
     if (state.streaming) {
       showToast('正在生成回答，先停止再新建会话');
@@ -244,7 +245,7 @@ function bindEvents() {
     }
   });
 
-  // 编辑器里的「导出」2026-10-20 撤了（角色库卡片右上角那颗就够），这里只剩会话导出
+  // 编辑器里的「导出」2026-10-20 撤了（角色卡卡片右上角那颗就够），这里只剩会话导出
   el.btnExportConvo.addEventListener('click', runAsync(exportConversation));
   // 预设页右上角「＋ 新建预设」：打开空草稿（真正建出来要等点保存）
   if (el.btnNewPreset) el.btnNewPreset.addEventListener('click', newPreset);
@@ -534,8 +535,10 @@ async function init() {
   });
   // 快捷短语面板：只往输入框里插，不发送。
   initQuickPhrases();
-  // 侧边栏的「角色库 / 世界书」入口自己绑（切屏是 viewSwitch 自己的事）。
+  // 侧边栏的「角色卡 / 游戏卡 / 世界书」入口自己绑（切屏是 viewSwitch 自己的事）。
   initViewSwitch();
+  // 游戏卡列表页（只搭了布局，占位按钮给个「还在搭」的提示）。
+  initGameList();
   // 账号：登录成功后弹窗自己关掉，侧栏那一格和设置页「用户信息」都要跟着变。
   initAccountModal({
     onSessionChange: (user) => {

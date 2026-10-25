@@ -163,7 +163,7 @@ function avatarPngDataUrl(character) {
   });
 }
 
-/** 把一张角色卡写成 .png / .json：角色库卡片右上角的「导出」和批量导出共用。
+/** 把一张角色卡写成 .png / .json：角色卡卡片右上角的「导出」和批量导出共用。
  *  ⚠️ 编辑器里那颗「导出」2026-10-20 撤了 —— 同一张卡在列表上就能拿走，
  *  两个入口并列只会让人以为它们导出的东西不一样。 */
 export async function exportCharacterCard(character) {
@@ -200,7 +200,7 @@ export async function exportCharacterCard(character) {
   });
 }
 
-/** 角色库卡片上的「导出」：按 id 取已落盘的那一张，不用先进详情页 */
+/** 角色卡卡片上的「导出」：按 id 取已落盘的那一张，不用先进详情页 */
 export async function exportCharacterById(id) {
   const character = characters().find((c) => c.id === id);
   if (!character) {
@@ -210,7 +210,7 @@ export async function exportCharacterById(id) {
   return exportCharacterCard(character);
 }
 
-/** 批量导出：每张一个 .json（带头像 / 立绘）。单张 PNG 走编辑器或角色库卡片上的「导出」。 */
+/** 批量导出：每张一个 .json（带头像 / 立绘）。单张 PNG 走编辑器或角色卡卡片上的「导出」。 */
 export async function exportCharactersByIds(ids) {
   const wanted = new Set(Array.isArray(ids) ? ids : []);
   const list = characters().filter((c) => wanted.has(c.id));

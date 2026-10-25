@@ -286,12 +286,12 @@ function shown(sel) {
  * 打开某本世界书的编辑器。
  *
  * 世界书没有独立入口了：只能从角色的「自带世界书」进。这里开一张**草稿**角色
- * （不保存、不落盘，不给角色库加卡）、绑上目标书，再点行上的「编辑」。
+ * （不保存、不落盘，不给角色卡加卡）、绑上目标书，再点行上的「编辑」。
  * ⚠️ 每次调用都会换一张新草稿 —— 上一次的草稿没有改动提示，直接覆盖不会弹框。
  */
 async function openWorldbookEditor(bookName) {
   click('#btn-chars');
-  await waitFor('切到角色库', () => shown('#view-chars'));
+  await waitFor('切到角色卡', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
   click('#char-section-tab-worldbook');
@@ -315,7 +315,7 @@ async function openWorldbookEditor(bookName) {
  */
 async function createCharBoundTo(bookName, charName) {
   click('#btn-chars');
-  await waitFor('切到角色库', () => shown('#view-chars'));
+  await waitFor('切到角色卡', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
   setValue('#c-name', charName);
@@ -332,7 +332,7 @@ async function createCharBoundTo(bookName, charName) {
   click('#btn-save-char');
   await waitFor('角色保存完成', () => byId('char-save-state').dataset.state === 'saved');
   click('#btn-close-chars');
-  await waitFor('回到角色库', () => shown('#view-chars'));
+  await waitFor('回到角色卡', () => shown('#view-chars'));
 }
 
 async function savedCharacters() {
@@ -831,26 +831,26 @@ await scenario('设置：左导航切组', async () => {
 //  从弹窗变成一屏之后，多出来三件必须守住的事：
 //   ① 进设置时侧栏那几颗入口要灭掉 —— 页面才有「我现在在哪一屏」这件事；
 //   ② 保存 / 返回 / Esc 都回到**进来之前那一屏**（弹窗时代是「关掉弹窗」，语义没变）；
-//   ③ 进来之前不一定是聊天 —— 从角色库进来就得回角色库，别写死。
+//   ③ 进来之前不一定是聊天 —— 从角色卡进来就得回角色卡，别写死。
 // ---------------------------------------------------------------------------
 await scenario('设置：是页面，来去都记得从哪来', async () => {
   const esc = () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
-  // --- 从「角色库」进去 ---
+  // --- 从「角色卡」进去 ---
   click('#btn-chars');
-  await waitFor('切到角色库', () => shown('#view-chars'));
+  await waitFor('切到角色卡', () => shown('#view-chars'));
   await openSettingsPage();
   await waitFor('切到设置页', () => shown('#view-settings'));
   check('设置页是真的把别的视图藏起来（不是盖一层浮层）', !shown('#view-chat') && !shown('#view-chars'));
   check(
-    '设置没有侧栏按钮要点亮（角色库那颗灭着）',
+    '设置没有侧栏按钮要点亮（角色卡那颗灭着）',
     !byId('btn-settings') && !byId('btn-chars').classList.contains('active')
   );
 
-  // --- 「返回」原路回角色库 ---
+  // --- 「返回」原路回角色卡 ---
   click('#btn-back-settings');
-  await waitFor('返回角色库', () => shown('#view-chars'));
-  check('返回回到进来之前那一屏（角色库），不是硬回聊天', shown('#view-chars') && !shown('#view-settings'));
+  await waitFor('返回角色卡', () => shown('#view-chars'));
+  check('返回回到进来之前那一屏（角色卡），不是硬回聊天', shown('#view-chars') && !shown('#view-settings'));
 
   // --- Esc 是同一个动作 ---
   await openSettingsPage();
@@ -872,12 +872,12 @@ await scenario('设置：是页面，来去都记得从哪来', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 4：角色库 —— 新建必须「保存后才生成」
+//  场景 4：角色卡 —— 新建必须「保存后才生成」
 // ---------------------------------------------------------------------------
-await scenario('角色库：新建角色', async () => {
+await scenario('角色卡：新建角色', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
-  check('角色库一开始是空的', shown('#char-page-empty'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
+  check('角色卡一开始是空的', shown('#char-page-empty'));
   // 空状态自己就是「去导入 / 去新建」的提示，末尾不再补一张添加卡（重复）
   check('空列表不给「添加」卡', !$('#char-page-grid .lib-add-card'));
 
@@ -964,9 +964,9 @@ await scenario('角色库：新建角色', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 5：角色库 —— 放弃新建不能留下东西
+//  场景 5：角色卡 —— 放弃新建不能留下东西
 // ---------------------------------------------------------------------------
-await scenario('角色库：放弃新建', async () => {
+await scenario('角色卡：放弃新建', async () => {
   const before = (await savedCharacters()).length;
   const cardsBefore = $$('#char-page-grid .char-card').length;
 
@@ -1021,7 +1021,7 @@ await scenario('角色库：放弃新建', async () => {
 // ---------------------------------------------------------------------------
 await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -1032,7 +1032,7 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   //      必须照样压过 m-button 自己的 display（不然按钮删不掉地常驻）。
   // ⚠️ btn-close-chars（返回）2026-10-19 从右上角挪到了左上角，并改成**图标按钮** ——
   //    图标按钮按约定不套 m-button（见 components/button.js 文件头），所以从这张表里去掉。
-  //    2026-10-20：那颗「导出」撤了（改到角色库卡片上），左栏底部换成「返回」+「AI 补充」。
+  //    2026-10-20：那颗「导出」撤了（改到角色卡卡片上），左栏底部换成「返回」+「AI 补充」。
   const CHAR_BTN_IDS = ['btn-save-char','btn-clear-avatar','btn-clear-portrait','btn-first-template','btn-alt-add','btn-attr-template','btn-add-attr','btn-attr-paste','btn-attr-paste-apply','c-wb-add-btn','btn-back-char','btn-ai-fill-char','btn-del-char'];
   const bad = CHAR_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
   check('角色编辑器 13 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
@@ -1061,7 +1061,7 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
     railIds.join(' → ') === 'btn-save-char → btn-back-char → btn-ai-fill-char → btn-del-char',
     railIds.join(' → ')
   );
-  check('编辑器里不再有「导出」（改到角色库卡片上）', !byId('btn-export-char'));
+  check('编辑器里不再有「导出」（改到角色卡卡片上）', !byId('btn-export-char'));
   const railSave = byId('btn-save-char');
   check(
     '「保存角色」铺满左栏栏宽',
@@ -1073,7 +1073,7 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
 
 await scenario('角色编辑器：五个写作框的高度', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -1219,7 +1219,7 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
 // ---------------------------------------------------------------------------
 await scenario('角色编辑器：字数角标', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -1250,7 +1250,7 @@ await scenario('角色编辑器：字数角标', async () => {
 // ---------------------------------------------------------------------------
 await scenario('角色编辑器：备选开场白增删改', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -1319,7 +1319,7 @@ await scenario('角色编辑器：备选开场白增删改', async () => {
   const mine = $$('#char-page-grid .char-card').find(
     (c) => c.querySelector('.char-card-name') && c.querySelector('.char-card-name').textContent === NAME
   );
-  check('新建的卡出现在角色库', !!mine);
+  check('新建的卡出现在角色卡', !!mine);
   if (mine) {
     click(mine.querySelector('.char-card-del'));
     await waitFor('删除确认框出现', () => shown('#confirm-modal'));
@@ -1329,9 +1329,9 @@ await scenario('角色编辑器：备选开场白增删改', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 6：角色库 —— 编辑已有角色是「更新」，不是「新增」
+//  场景 6：角色卡 —— 编辑已有角色是「更新」，不是「新增」
 // ---------------------------------------------------------------------------
-await scenario('角色库：编辑已有角色', async () => {
+await scenario('角色卡：编辑已有角色', async () => {
   const before = (await savedCharacters()).length;
   const cards = $$('#char-page-grid .char-card');
   check('有可编辑的卡片', cards.length > 0);
@@ -1355,9 +1355,9 @@ await scenario('角色库：编辑已有角色', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 7：角色库 —— 角色卡右上角直接删除
+//  场景 7：角色卡 —— 角色卡右上角直接删除
 // ---------------------------------------------------------------------------
-await scenario('角色库：卡片上删除', async () => {
+await scenario('角色卡：卡片上删除', async () => {
   const before = (await savedCharacters()).length;
   check('待删的角色存在', before > 0, `实际 ${before}`);
 
@@ -1393,7 +1393,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
   //   2026-10-09 连同设置区块一起去掉了 —— 属性名按角色写，清单省不了几个字。
   //   所以下面顺带守一句「它别再长回来」。）
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '属性测试角色');
@@ -1894,7 +1894,7 @@ await scenario('属性：从角色卡种到状态面板', async () => {
 
   check('卡里的值是角色卡上的初始值', cardValue('金币') === '100', String(cardValue('金币')));
 
-  // 单角色对话（角色库点「聊天」）也得把姓名带上。
+  // 单角色对话（角色卡点「聊天」）也得把姓名带上。
   check('姓名在这张卡里', cardNames().includes('姓名'), JSON.stringify(cardNames()));
   check('姓名取的是角色名', cardValue('姓名') === '属性测试角色', String(cardValue('姓名')));
 
@@ -2831,7 +2831,7 @@ await scenario('生成中导航返回并停止', async () => {
 
   setValue('#input', '导航期间保留的草稿');
   click('#btn-chars');
-  await waitFor('生成期间进入角色库', () => shown('#view-chars'));
+  await waitFor('生成期间进入角色卡', () => shown('#view-chars'));
   click($('#convo-list .convo-item.active'));
   await waitFor('点击当前会话返回聊天', () => shown('#view-chat'));
   check('返回后仍是原活动会话', stateMod.state.activeId === convoId);
@@ -3892,9 +3892,9 @@ await scenario('侧栏：入口网格与收起', async () => {
   check('侧栏宽度 224', Math.round(sidebar.getBoundingClientRect().width) === 224, String(Math.round(sidebar.getBoundingClientRect().width)));
 
   const foot = $$('.sidebar-foot m-button');
-  // 这一组只剩两颗创作入口 —— 设置不在侧栏（入口在登录后的账号菜单里），
+  // 这一组三颗创作入口（角色卡 / 游戏卡 / 预设）—— 设置不在侧栏（入口在登录后的账号菜单里），
   // 世界书也没有独立入口了（挂在角色的「自带世界书」上）。
-  check('侧栏保留两个创作入口', foot.length === 2, String(foot.length));
+  check('侧栏保留三个创作入口', foot.length === 3, String(foot.length));
   check('数据按钮位于设置页', !!byId('btn-folder')?.closest('#view-settings'));
   check(
     '每颗都带图标',
@@ -4021,7 +4021,7 @@ await scenario('侧栏：入口网格与收起', async () => {
 
     // ⚠️ 三列里每颗的文字都不许被截断。这条是 2026-10-12 踩出来的：
     //    一行 66.67px 要装下 pad 7 + 图标 13 + gap + 文字 + pad 7，
-    //    11.5px 的「角色库」是 34.5px → 刚好卡在边界，实拍出来是「角…」。
+    //    11.5px 的「角色卡」是 34.5px → 刚好卡在边界，实拍出来是「角…」。
     //    scrollWidth > clientWidth 是浏览器给的硬证据，比看图靠谱。
     check(
       '底部 6 颗的字都没被截断（角… / 世…）',
@@ -4068,8 +4068,8 @@ await scenario('侧栏：入口网格与收起', async () => {
       railMark ? String(Math.round(railMark.getBoundingClientRect().width)) : '（没有）'
     );
     check(
-      '收起后 2 颗创作入口图标都还在，只是文字藏了',
-      foot.length === 2 &&
+      '收起后 3 颗创作入口图标都还在，只是文字藏了',
+      foot.length === 3 &&
         foot.every((b) => getComputedStyle(b).display !== 'none' && !!b.querySelector('svg')) &&
         foot.every((b) => {
           const label = b.querySelector('.foot-label');
@@ -4465,7 +4465,7 @@ await scenario('编辑弹窗的放大按钮', async () => {
 
   // --- 角色编辑器 / 世界书编辑器：换成「整页」之后不该再有任何 modal-max 的痕迹 ---
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click(buttonByText($$('#char-page-grid .char-card')[0], '编辑'));
   await waitFor('角色编辑页打开', () => shown('#view-char-editor'));
   check(
@@ -4487,7 +4487,7 @@ await scenario('编辑弹窗的放大按钮', async () => {
     rail ? `scrollHeight ${rail.scrollHeight} vs clientHeight ${rail.clientHeight}` : '(没有左栏)'
   );
   click('#btn-close-chars');
-  await waitFor('回到角色库', () => shown('#view-chars'));
+  await waitFor('回到角色卡', () => shown('#view-chars'));
 });
 
 // ---------------------------------------------------------------------------
@@ -4503,16 +4503,16 @@ await scenario('导出', async () => {
 
   // --- 角色卡 ---
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
-  // 认名字不按下标：角色库是按更新时间排的，前面几场都会把它顶到第一位。
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
+  // 认名字不按下标：角色卡是按更新时间排的，前面几场都会把它顶到第一位。
   const exportSourceCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('属性测试角色'));
-  check('角色库里有「属性测试角色」', !!exportSourceCard, $$('#char-page-grid .char-card').map((c) => c.textContent.slice(0, 12)).join(' / '));
+  check('角色卡里有「属性测试角色」', !!exportSourceCard, $$('#char-page-grid .char-card').map((c) => c.textContent.slice(0, 12)).join(' / '));
   click(buttonByText(exportSourceCard, '编辑'));
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   // 先给它绑一本世界书再导出 —— 这样「导出的卡带不带 character_book」
   // 才验得到（宿主侧的 probeExports 会看导出的卡里有没有这本）。
-  // ⚠️ 2026-10-20：编辑器里的「导出」撤了，卡片只能从角色库那颗按 id 取**落盘**的那一张，
+  // ⚠️ 2026-10-20：编辑器里的「导出」撤了，卡片只能从角色卡那颗按 id 取**落盘**的那一张，
   //    所以绑定必须真的保存下去（以前不保存也能导出，因为导出的是内存里那个对象）。
   click('#c-wb-add-btn');
   await waitFor('世界书选择浮层出现', () => !!$('.cwb-picker'));
@@ -4543,9 +4543,9 @@ await scenario('导出', async () => {
     byId('confirm-message').textContent
   );
   click('#confirm-ok');
-  await waitFor('确认放弃后回到角色库', () => shown('#view-chars'));
+  await waitFor('确认放弃后回到角色卡', () => shown('#view-chars'));
 
-  // --- 角色库卡片上的「导出」：不用为了拿走一张卡先进详情页 ---
+  // --- 角色卡卡片上的「导出」：不用为了拿走一张卡先进详情页 ---
   const listCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('属性测试角色')) ||
     $$('#char-page-grid .char-card')[0];
   const listExport = listCard && buttonByText(listCard, '导出');
@@ -4570,7 +4570,7 @@ await scenario('导出', async () => {
 
   // --- 空会话不该导出：点「聊天」会新建一个还没说话的空会话 ---
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   await startChatWith($$('#char-page-grid .char-card')[0]);
   await waitFor('切回聊天视图', () => shown('#view-chat'));
   await sleep(150);
@@ -4848,7 +4848,7 @@ await scenario('世界书：本书角色', async () => {
   click('#btn-close-chars');
   await sleep(120);
   check('副本保存后关闭不弹确认框', !shown('#confirm-modal'));
-  check('本书角色复用角色库相同的分区编辑器', !!byId('char-field-index') && !!byId('char-section-tab-state'));
+  check('本书角色复用角色卡相同的分区编辑器', !!byId('char-field-index') && !!byId('char-section-tab-state'));
   check('共享角色编辑器返回原世界书角色分区', shown('#view-wb-editor') && !byId('wb-panel-characters').hidden);
 
   // 2026-10-18：「本书角色」有了自己的一屏，标题那套「整块折叠」撤了
@@ -5040,20 +5040,20 @@ await scenario('世界书：历史里的 null 占位不炸扫描', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 11.5：AI 生成角色 —— 角色库那一侧
+//  场景 11.5：AI 生成角色 —— 角色卡那一侧
 //
 //  假后端认「system 里有『你是一位角色设定师』」（见 tools/smoke-test.js）。
 //  这里只验「点按钮 → 弹窗 → 生成 → 字段真的填进编辑器草稿 → 保存才落盘」这条链，
 //  不验生成质量（那是提示词的事，测不了）。
 // ---------------------------------------------------------------------------
-await scenario('AI 生成角色：角色库', async () => {
+await scenario('AI 生成角色：角色卡', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
 
   const before = (await savedCharacters()).length;
 
   // 列表页确实多了一个入口，而且它不会顺手创建什么
-  check('角色库有「AI 生成」按钮', !!byId('btn-ai-char'));
+  check('角色卡有「AI 生成」按钮', !!byId('btn-ai-char'));
 
   // 2026-10-16：这一页的三颗按钮换成了 <m-button>（组件库的第一批按钮用户，
   // 迁移试点的验收就落在这里）。断言的靶子是**宿主与里层对不对得上** ——
@@ -5094,14 +5094,14 @@ await scenario('AI 生成角色：角色库', async () => {
   check('收起 loading：又能点了', importCtrl.disabled === false && importCtrl.getAttribute('aria-busy') === null);
   check('收起 loading：宿主 .disabled 跟着回到 false', importBtn.disabled === false);
   check('「＋ 新建角色」是 primary 那一档', byId('btn-new-char').classList.contains('mi-btn--primary'));
-  check('角色库页不再有原生 .btn 按钮', !$('#view-chars .btn'));
+  check('角色卡页不再有原生 .btn 按钮', !$('#view-chars .btn'));
 
   // ⚠️ 按钮组件化之后**发光的是里层**（底色 / 边框 / 圆角都在 `.mi-btn__control` 上）。
   // 卡片的动作行用 `flex: 1 1 0` 把两颗按钮平分两格 —— 里层若不跟着宿主撑满，
   // 按钮就只有「文字那么宽」：看着比槽位短一截，字还靠左，而且**不报错**。
   // 这条就是 2026-10-16 量出来那次（宿主 96 / 里层 50）的回归闸门。
   const cardRow = $('#char-page-grid .char-card .char-card-actions');
-  check('角色库页有卡片（动作行在）', !!cardRow);
+  check('角色卡页有卡片（动作行在）', !!cardRow);
   if (cardRow) {
     for (const node of cardRow.children) {
       const ctrl = node.control || node;
@@ -5160,8 +5160,8 @@ await scenario('AI 生成角色：角色库', async () => {
 
   click('#btn-ai-char');
   await waitFor('生成弹窗打开', () => shown('.ai-gen-modal'));
-  // 角色库这条路姓「角色」，不是「NPC」—— 两者提示词完全不同
-  check('弹窗是角色库那一版', $('.ai-gen-modal').textContent.includes('AI 生成角色'), $('.ai-gen-modal').textContent.slice(0, 40));
+  // 角色卡这条路姓「角色」，不是「NPC」—— 两者提示词完全不同
+  check('弹窗是角色卡那一版', $('.ai-gen-modal').textContent.includes('AI 生成角色'), $('.ai-gen-modal').textContent.slice(0, 40));
 
   const prompt = $('#ai-gen-prompt');
   check('弹窗里有描述输入框', !!prompt);
@@ -5203,7 +5203,7 @@ await scenario('AI 生成角色：角色库', async () => {
   click('#btn-save-char');
   await waitFor('落盘完成', async () => (await savedCharacters()).length === before + 1);
   const saved = (await savedCharacters())[before] || {};
-  check('保存后角色进了角色库', saved.name === '守夜人', saved.name);
+  check('保存后角色进了角色卡', saved.name === '守夜人', saved.name);
   check('落盘的属性也跟着进来了', (saved.attributes || []).length === 2, JSON.stringify(saved.attributes));
   // ⚠️ 这两条断言故意盯着**归一化之后的形状**，不是模型给的原样：
   //   · 数值字段落盘是 meter（没有 number 这个类型）
@@ -5214,19 +5214,19 @@ await scenario('AI 生成角色：角色库', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 11.55：AI 生成角色 —— 角色库那侧的「背景 / 基调」（可选）
+//  场景 11.55：AI 生成角色 —— 角色卡那侧的「背景 / 基调」（可选）
 //
-//  只有角色库那侧有这个框（世界书自带条目 + 开场白当大纲）。
+//  只有角色卡那侧有这个框（世界书自带条目 + 开场白当大纲）。
 //  验两件事：① 世界书那侧不该冒出这个框；② 填了之后那段真的进了 system。
 //  第 ② 条靠假后端认「【背景 / 基调】」返回不同的名字（见 tools/smoke-test.js）。
 // ---------------------------------------------------------------------------
 await scenario('AI 生成角色：背景/基调框', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
 
   click('#btn-ai-char');
   await waitFor('生成弹窗打开', () => shown('.ai-gen-modal'));
-  check('角色库那侧有「背景 / 基调」框', !!byId('ai-gen-brief'));
+  check('角色卡那侧有「背景 / 基调」框', !!byId('ai-gen-brief'));
 
   setValue('#ai-gen-prompt', '一个值夜班的店员');
   const brief = '现代都市的深夜便利店，安静、有点孤独。'.repeat(80) + '【末尾约束：店员必须记得离别时的承诺】';
@@ -5257,7 +5257,7 @@ await scenario('AI 生成角色：背景/基调框', async () => {
 // ---------------------------------------------------------------------------
 await scenario('AI 生成角色：模型输出带围栏和废话', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
 
   click('#btn-ai-char');
   await waitFor('生成弹窗打开', () => shown('.ai-gen-modal'));
@@ -5284,17 +5284,17 @@ await scenario('AI 生成角色：模型输出带围栏和废话', async () => {
 // ---------------------------------------------------------------------------
 await scenario('AI 补设定：保存才建书', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
 
   // 上一场生成并保存下来的「守夜人」：描述和性格都有，够 AI 读
   const card = $$('#char-page-grid .char-card').find((node) => node.textContent.includes('守夜人'));
-  check('角色库里有上一场存的「守夜人」', !!card);
+  check('角色卡里有上一场存的「守夜人」', !!card);
   click(buttonByText(card, '编辑'));
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
   check('编辑器里有「AI 补设定」按钮', !!byId('c-wb-ai-btn'));
   check(
-    '角色库的卡上标着 library 作用域',
+    '角色卡上标着 library 作用域',
     !!byId('c-wb-ai-block') && byId('c-wb-ai-block').dataset.scope === 'library',
     byId('c-wb-ai-block') && byId('c-wb-ai-block').dataset.scope
   );
@@ -5366,11 +5366,11 @@ await scenario('AI 补设定：保存才建书', async () => {
 // ---------------------------------------------------------------------------
 await scenario('AI 补充：确认后重写五栏', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
 
   // 上一场生成并保存下来的「守夜人」：五栏里描述和性格都有，够 AI 读
   const card = $$('#char-page-grid .char-card').find((node) => node.textContent.includes('守夜人'));
-  check('角色库里有上一场存的「守夜人」', !!card);
+  check('角色卡里有上一场存的「守夜人」', !!card);
   click(buttonByText(card, '编辑'));
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -5438,7 +5438,7 @@ await scenario('AI 补充：确认后重写五栏', async () => {
 // ---------------------------------------------------------------------------
 //  场景 11.7：AI 生成 NPC —— 世界书那一侧
 //
-//  和角色库那条路共用弹窗和草稿，但上下文完全不同：它要带这本书的条目和副本名单。
+//  和角色卡那条路共用弹窗和草稿，但上下文完全不同：它要带这本书的条目和副本名单。
 //  假后端据 system 里有没有「【世界：」分辨走的是不是 NPC 那条路，返回的角色名
 //  也因此不同（见 tools/smoke-test.js）—— 落盘的名字对不上就说明没带上下文。
 // ---------------------------------------------------------------------------
@@ -5581,9 +5581,9 @@ await scenario('进入世界：用角色卡当自己', async () => {
   await waitFor('玩家角色弹窗打开', () => shown('#player-modal'));
   check('弹窗里有角色名输入框', !!byId('player-name'));
 
-  // 角色库里有「属性测试角色」（带金币/上衣两个属性）
+  // 角色卡里有「属性测试角色」（带金币/上衣两个属性）
   const options = $$('#player-char option').map((o) => o.textContent);
-  check('下拉里有「自己写一个」和角色库的人', options.includes('（自己写一个）') && options.includes('属性测试角色'), JSON.stringify(options));
+  check('下拉里有「自己写一个」和角色卡的人', options.includes('（自己写一个）') && options.includes('属性测试角色'), JSON.stringify(options));
 
   // --- 选一张角色卡：名字和设定应该自动填进去 ---
   const cardId = $$('#player-char option').find((o) => o.textContent === '属性测试角色').value;
@@ -5683,7 +5683,7 @@ notes.push(`会话数：${$$('#convo-list .convo-item').length}`);
 // ---------------------------------------------------------------------------
 await scenario('角色卡：字段往返不丢', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -5736,7 +5736,7 @@ await scenario('角色卡：字段往返不丢', async () => {
 
 // ---------------------------------------------------------------------------
 //  场景：角色头像 / 形象 —— 两张图各管一处
-//    头像（1:1）→ 消息气泡、状态卡；形象（2:3）→ 角色库列表，点开看大图。
+//    头像（1:1）→ 消息气泡、状态卡；形象（2:3）→ 角色卡列表，点开看大图。
 //    上传走**真裁剪组件**（不是往框里直接塞图）：images:pick 的桩给一张
 //    1×1 PNG，裁剪浮层照常弹、照常按目标比例输出。
 // ---------------------------------------------------------------------------
@@ -5744,7 +5744,7 @@ await scenario('角色：头像和形象是两张图', async () => {
   const isImg = (v) => typeof v === 'string' && v.startsWith('data:image/');
 
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -5842,7 +5842,7 @@ await scenario('角色：头像和形象是两张图', async () => {
   // 渲染层，界面上根本看不到这张卡）。
   const OLD = '只有一张图的老卡';
   click('#btn-chars');
-  await waitFor('切回角色库页面', () => shown('#view-chars'));
+  await waitFor('切回角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', OLD);
@@ -5894,7 +5894,7 @@ await scenario('角色：头像和形象是两张图', async () => {
 // ---------------------------------------------------------------------------
 await scenario('角色属性：粘贴文本批量生成', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '粘贴测试角色');
@@ -5963,7 +5963,7 @@ await scenario('角色属性：粘贴文本批量生成', async () => {
 // ---------------------------------------------------------------------------
 await scenario('角色属性：套用互动模板', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '模板测试角色');
@@ -6042,7 +6042,7 @@ await scenario('角色属性：套用互动模板', async () => {
 // ---------------------------------------------------------------------------
 await scenario('角色属性：分组标签栏', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '分组测试角色');
@@ -6147,7 +6147,7 @@ await scenario('角色属性：分组标签栏', async () => {
 // ---------------------------------------------------------------------------
 await scenario('角色属性：分组改名与解散', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', '分组改名角色');
@@ -6452,7 +6452,7 @@ await scenario('语义检索', async () => {
 let hoverProbe = null;
 await scenario('准备悬停验证', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
 
   // 这里可能已经有别的角色卡了（属性场景留下的），所以按「多了一张」判断
   const beforeCards = $$('#char-page-grid .char-card').length;
@@ -6602,7 +6602,7 @@ await scenario('帮我想想（补一批剧情选项）', async () => {
 // ---------------------------------------------------------------------------
 await scenario('角色：绑定自带的世界书', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -6707,7 +6707,7 @@ await scenario('角色：绑定自带的世界书', async () => {
 await scenario('角色自带的世界书：顶部能看出生效', async () => {
   // 造一张绑了世界书的角色，存档
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   const NAME = '顶栏生效测试';
@@ -6746,7 +6746,7 @@ await scenario('角色自带的世界书：顶部能看出生效', async () => {
     // 用角色卡上的「聊天」入口绑定角色
     // （顶部那个角色下拉在重构里已经去掉了，别再用它）
     click('#btn-chars');
-    await waitFor('切到角色库页面', () => shown('#view-chars'));
+    await waitFor('切到角色卡页面', () => shown('#view-chars'));
     await sleep(300);
     const card = $$('.char-card').find((c) => String(c.textContent || '').includes(NAME));
     if (!card) {
@@ -6879,7 +6879,7 @@ await scenario('导入：重发 id 时绑定要跟着走', async () => {
 await scenario('剧情选项', async () => {
   // --- 1) 建一个角色、开一局（剧情选项不再长在角色卡上，改到「视角设置」里配）---
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -7142,7 +7142,7 @@ await scenario('剧情选项', async () => {
 // ---------------------------------------------------------------------------
 await scenario('剧情选项：默认开、关掉要写 false', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -7945,7 +7945,7 @@ await scenario('世界书：改一半关掉不残留草稿', async () => {
 // ---------------------------------------------------------------------------
 await scenario('世界书：删除本书', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库', () => shown('#view-chars'));
+  await waitFor('切到角色卡', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
   click('#char-section-tab-worldbook');
@@ -7974,15 +7974,15 @@ await scenario('世界书：删除本书', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 26d：角色库的卡片、工具条，以及两个编辑器页头同高
+//  场景 26d：角色卡片、工具条，以及两个编辑器页头同高
 //
 //  卡片结构钉两件事：名字在封面**下方**（不压在图里）、封面里挂的是头像。
 //  工具条钉搜索 + 计数 + 「没有匹配的角色」空态。
 // ---------------------------------------------------------------------------
-await scenario('角色库：卡片、工具条与页头高度', async () => {
+await scenario('角色卡：卡片、工具条与页头高度', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
-  check('角色库有搜索工具条', !!$('#char-page-search') && !!$('#char-page-count'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
+  check('角色卡有搜索工具条', !!$('#char-page-search') && !!$('#char-page-count'));
 
   const charCard = $('#char-page-grid .char-card');
   check('角色卡的结构是「封面 → 名字」', !!charCard &&
@@ -8017,7 +8017,7 @@ await scenario('角色库：卡片、工具条与页头高度', async () => {
 
   // 角色编辑页的「全文 N 字」：数字来自五个写作栏 + 高级设置三栏，别再漏一处
   click('#btn-chars');
-  await waitFor('回到角色库', () => shown('#view-chars'));
+  await waitFor('回到角色卡', () => shown('#view-chars'));
   click(buttonByText($$('#char-page-grid .char-card')[0], '编辑'));
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   const total = ['c-desc', 'c-personality', 'c-scenario', 'c-first', 'c-example', 'c-system', 'c-post', 'c-notes']
@@ -8028,7 +8028,7 @@ await scenario('角色库：卡片、工具条与页头高度', async () => {
   const charHeadHeight = Math.round($('#view-char-editor .page-head').getBoundingClientRect().height);
 
   click('#btn-close-chars');
-  await waitFor('回到角色库（收尾）', () => shown('#view-chars'));
+  await waitFor('回到角色卡（收尾）', () => shown('#view-chars'));
 
   // 两个编辑器的页头同高：角色页原来是三行（78px），世界书是一行（56px）
   await openWorldbookEditor('冒烟测试世界');
@@ -8097,7 +8097,7 @@ await scenario('面板：同名属性按 owner 各自保留', async () => {
     'young'
   );
   const prompt = mod.formatPanelForPrompt(withPlayer);
-  // 这里 owner 用的是假 id（sis/young，不在角色库/世界书里），panelOwnerLabel
+  // 这里 owner 用的是假 id（sis/young，不在角色卡/世界书里），panelOwnerLabel
   // 查不到角色名时退回 id 本身作前缀 —— 真实场景里 owner 是世界书副本 id，
   // 能查到角色名。断言按「前缀 = 归属 id」来验冲突确实加了前缀。
   check('注入里同名「好感度」带归属前缀区分', prompt.includes('sis·好感度') && prompt.includes('young·好感度'), prompt);
@@ -8132,7 +8132,7 @@ await scenario('面板：同名属性按 owner 各自保留', async () => {
 
   // 模型照抄前缀（「前缀妹妹·好感度」）时要拆回给原来的 owner，不能新建一个
   // 名字里带前缀的重复字段。同名字段开始带前缀之后这条路径才第一次被走到 ——
-  // 角色库里的卡按名字反查以前是查不到的（characterById 是按 id 查的）。
+  // 角色卡里的卡按名字反查以前是查不到的（characterById 是按 id 查的）。
   // 卡临时塞进内存 state（不走保存：那条路绕开渲染层，列表不会刷新）。
   const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
   const backupChars = stateMod.state.characters;
@@ -8936,7 +8936,7 @@ await scenario('世界书：副本的「在状态栏显示」开关', async () =
       JSON.stringify(so)
     );
 
-    // 角色库的卡（没有 showInPanel 字段）当单卡主角 → 同样豁免
+    // 角色卡（没有 showInPanel 字段）当单卡主角 → 同样豁免
     const libChars = lib.characters ? lib.characters() : [];
     if (libChars.length) {
       const c = libChars[0];
@@ -8951,7 +8951,7 @@ await scenario('世界书：副本的「在状态栏显示」开关', async () =
         messages: []
       };
       const so2 = mod.panelEntities(soloLib).map((e) => e.owner);
-      check('角色库的卡当单卡主角也显示（豁免开关）', so2.includes(c.id), JSON.stringify(so2));
+      check('角色卡当单卡主角也显示（豁免开关）', so2.includes(c.id), JSON.stringify(so2));
     }
   } finally {
     // 还原世界书列表，别污染后面的场景
@@ -9112,11 +9112,11 @@ await scenario('面板：世界书同名副本的字段并回「我」', async (
 });
 
 // ---------------------------------------------------------------------------
-//  场景 34：「同步属性」把角色库同名卡的属性补进世界书副本（副本是快照，
-//  角色库后来补的属性不会回流）。钉住 syncCopyAttrsFromSource 四条语义：
+//  场景 34：「同步属性」把角色卡同名卡的属性补进世界书副本（副本是快照，
+//  角色卡后来补的属性不会回流）。钉住 syncCopyAttrsFromSource 四条语义：
 //  按名字补属性、已有字段不覆盖、源卡没有的进 missing、补进去是深拷贝。
 // ---------------------------------------------------------------------------
-await scenario('世界书：同步属性把角色库的属性补进副本', async () => {
+await scenario('世界书：同步属性把角色卡的属性补进副本', async () => {
   let mod = null;
   try {
     const url = new URL('js/data/panel.js', document.baseURI).href;
@@ -9130,7 +9130,7 @@ await scenario('世界书：同步属性把角色库的属性补进副本', asyn
   }
   check('panel 模块能动态加载（场景34）', true);
 
-  // 角色库：露西娅有 2 个属性；「路人甲」在角色库里没有同名卡
+  // 角色卡：露西娅有 2 个属性；「路人甲」在角色卡里没有同名卡
   const sources = [
     {
       id: 'lib_lucy',
@@ -9147,7 +9147,7 @@ await scenario('世界书：同步属性把角色库的属性补进副本', asyn
     { id: 'wc_a', name: '露西娅', attributes: [] },
     // 副本上已经有「生命」（这本书的当前值）→ 只补缺的「心情」，不覆盖生命
     { id: 'wc_b', name: '露西娅', attributes: [{ name: '生命', value: '42/100' }] },
-    // 角色库里没有同名卡 → 进 missing，一动不动
+    // 角色卡里没有同名卡 → 进 missing，一动不动
     { id: 'wc_c', name: '路人甲', attributes: [] }
   ];
 
@@ -9155,11 +9155,11 @@ await scenario('世界书：同步属性把角色库的属性补进副本', asyn
 
   check('补了 2 个副本（有同名卡且缺属性）', res.touched === 2, JSON.stringify(res));
   check('一共补上 3 条属性（2 + 1）', res.added === 3, JSON.stringify(res));
-  check('角色库里没同名卡的副本进 missing', res.missing.length === 1 && res.missing[0] === '路人甲', JSON.stringify(res.missing));
+  check('角色卡里没同名卡的副本进 missing', res.missing.length === 1 && res.missing[0] === '路人甲', JSON.stringify(res.missing));
 
   check('空壳副本被补满 2 个属性', copies[0].attributes.length === 2, JSON.stringify(copies[0].attributes));
   check(
-    '副本已有的「生命」不被角色库的初始值覆盖',
+    '副本已有的「生命」不被角色卡的初始值覆盖',
     copies[1].attributes.length === 2 &&
       copies[1].attributes.find((a) => a.name === '生命').value === '42/100' &&
       copies[1].attributes.some((a) => a.name === '心情'),
@@ -9167,10 +9167,10 @@ await scenario('世界书：同步属性把角色库的属性补进副本', asyn
   );
   check('没同名卡的副本完全没被碰', copies[2].attributes.length === 0, JSON.stringify(copies[2].attributes));
 
-  // 深拷贝：改副本上的属性值，不该影响角色库那张卡
+  // 深拷贝：改副本上的属性值，不该影响角色卡那张卡
   copies[0].attributes[0].value = '改了副本';
   check(
-    '补进去的是深拷贝（改副本不回流角色库）',
+    '补进去的是深拷贝（改副本不回流角色卡）',
     sources[0].attributes[0].value === '100/100',
     sources[0].attributes[0].value
   );
@@ -9272,7 +9272,7 @@ await scenario('Esc 链与弹窗清理', async () => {
     click('#btn-back-char');
     await sleep(200);
     if (shown('#confirm-modal')) click('#confirm-ok');
-    await waitFor('回到角色库', () => shown('#view-chars'));
+    await waitFor('回到角色卡', () => shown('#view-chars'));
   }
 
   await clickMoreItem('#btn-memory');
@@ -9289,10 +9289,10 @@ await scenario('Esc 链与弹窗清理', async () => {
 
   // --- 选书浮层：Esc 只关最上面那层，别顺手把编辑器也关了 ---
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   const card = $$('#char-page-grid .char-card')[0];
   if (!card) {
-    check('角色库里有一张卡可以做这个验证', false);
+    check('角色卡里有一张卡可以做这个验证', false);
     return;
   }
   click(buttonByText(card, '编辑'));
@@ -9328,7 +9328,7 @@ await scenario('Esc 链与弹窗清理', async () => {
 
   // 造一本可删的书：角色编辑器 → ＋ 新建（建书 + 绑定 + 直接进它的编辑器）
   click('#btn-chars');
-  await waitFor('切到角色库', () => shown('#view-chars'));
+  await waitFor('切到角色卡', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   click('#char-section-tab-worldbook');
@@ -9598,7 +9598,7 @@ await scenario('看图：灯箱缩放与关闭', async () => {
   // 走真实交互造这张卡（新建 → 传形象 → 保存）。
   // 不能拿 saveCharacters 硬塞：那绕开了渲染层，列表刷新不出来，卡在页面上根本找不到。
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', NAME);
@@ -9711,7 +9711,7 @@ await scenario('看图：灯箱缩放与关闭', async () => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await sleep(80);
   check('Esc 关掉灯箱', !byId('lightbox'));
-  check('Esc 没顺带把角色库页面也关掉', shown('#view-chars'));
+  check('Esc 没顺带把角色卡页面也关掉', shown('#view-chars'));
 });
 
 // ---------------------------------------------------------------------------
@@ -9761,7 +9761,7 @@ await scenario('裁剪：原图不够大时不硬撑放大', async () => {
 // ---------------------------------------------------------------------------
 //  预设：列表页 / 编辑器 / 绑定到会话
 //
-//  预设是「叠在对话上的一层指令」，和角色库、世界书同级：
+//  预设是「叠在对话上的一层指令」，和角色卡、世界书同级：
 //    · 列表页在侧栏「预设」里，新建/编辑/删除都走它；
 //    · 编辑器和世界书编辑器同一套手感 —— 保存后才生效，没保存就关要问一句；
 //    · 会话的「视角」弹窗里选一个预设绑上去，聊天时它才进系统提示词。
@@ -10044,7 +10044,7 @@ await scenario('角色：表情图按回复关键词切换', async () => {
   const TRIGGER = '这是加粗';
 
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -10224,7 +10224,7 @@ await scenario('角色：表情图批量导入、默认脸与 emo 标签', async
   const isImg = (v) => typeof v === 'string' && v.startsWith('data:image/');
 
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
@@ -10386,7 +10386,7 @@ await scenario('角色：表情图批量导入、默认脸与 emo 标签', async
   {
     const av = card.querySelector('.char-card-avatar');
     const avShadow = av ? getComputedStyle(av).boxShadow : '';
-    check('角色库列表卡的头像有描边', !!avShadow && avShadow !== 'none', avShadow);
+    check('角色卡列表卡的头像有描边', !!avShadow && avShadow !== 'none', avShadow);
   }
   await startChatWith(card);
   await waitFor('切到聊天视图', () => shown('#view-chat'));
@@ -10442,11 +10442,11 @@ await scenario('角色：表情图批量导入、默认脸与 emo 标签', async
 });
 
 await scenario('预设：绑定到会话的「视角」弹窗', async () => {
-  // 种子数据里没有会话，先用角色库起一场对话
+  // 种子数据里没有会话，先用角色卡起一场对话
   click('#btn-chars');
-  await waitFor('角色库出来了', () => shown('#view-chars'));
-  const charCard = await waitFor('角色库里有卡可开聊', () => $$('#char-page-grid .char-card')[0]);
-  check('角色库里有卡可开聊', !!charCard);
+  await waitFor('角色卡出来了', () => shown('#view-chars'));
+  const charCard = await waitFor('角色卡里有卡可开聊', () => $$('#char-page-grid .char-card')[0]);
+  check('角色卡里有卡可开聊', !!charCard);
 
   const chatBtn = buttonByText(charCard, '聊天');
   check('角色卡上有「聊天」按钮', !!chatBtn);
@@ -10665,8 +10665,8 @@ await scenario('开聊前先定「你是谁」', async () => {
   };
 
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
-  const card = await waitFor('角色库里有卡可开聊', () => $$('#char-page-grid .char-card')[0]);
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
+  const card = await waitFor('角色卡里有卡可开聊', () => $$('#char-page-grid .char-card')[0]);
 
   // —— 点「聊天」先弹窗，这时还没建会话 ——
   click(buttonByText(card, '聊天'));
@@ -10689,7 +10689,7 @@ await scenario('开聊前先定「你是谁」', async () => {
 
   // —— 再开一场、什么都不填：会话上不存 player，界面回到默认的「你」——
   click('#btn-chars');
-  await waitFor('切回角色库页面', () => shown('#view-chars'));
+  await waitFor('切回角色卡页面', () => shown('#view-chars'));
   await startChatWith($$('#char-page-grid .char-card')[0]);
   await waitFor('切回聊天视图', () => shown('#view-chat'));
 
@@ -10705,13 +10705,13 @@ await scenario('开聊前先定「你是谁」', async () => {
   //    的豁免，掉进 showsInPanel（默认 false）里被过滤掉 —— 入口条只剩「我」，
   //    那个角色的状态卡再也点不开，表情键也不注入。
   click('#btn-chars');
-  await waitFor('切回角色库页面', () => shown('#view-chars'));
+  await waitFor('切回角色卡页面', () => shown('#view-chars'));
   const soloCard = $$('#char-page-grid .char-card')[0];
   click(buttonByText(soloCard, '聊天'));
   await waitFor('「你是谁」弹窗打开（挑卡当自己）', () => shown('#player-modal'));
 
   const selfOptions = Array.from(byId('player-char').options).filter((o) => o.value);
-  check('开聊前能从角色库挑一张卡当自己', selfOptions.length > 0, `${selfOptions.length} 个可选`);
+  check('开聊前能从角色卡挑一张卡当自己', selfOptions.length > 0, `${selfOptions.length} 个可选`);
   // ⚠️ 正在聊的那个人不能出现在「我是谁」里：选了就成了「自己跟自己聊」，
   //    开场白里的 {{user}} 全变成 TA 的名字（真实踩过）。
   const soloName = (soloCard.querySelector('.char-card-name')?.textContent || '').trim();
@@ -10746,7 +10746,7 @@ await scenario('开聊前先定「你是谁」', async () => {
 //  「＋ 新对话」：直接建空白会话；场上没有角色时「在场角色」整条收掉
 //
 //  2026-10-08 两处行为变化一起钉住：
-//    · 「＋ 新对话」不再先跳角色库，点下去就建一个空白会话并切回聊天屏；
+//    · 「＋ 新对话」不再先跳角色卡，点下去就建一个空白会话并切回聊天屏；
 //    · 普通聊天的入口条不显示「我」—— 空白会话名单为空，横幅整条隐藏。
 // ---------------------------------------------------------------------------
 await scenario('新对话：直接建空白会话，只剩「我」时入口条收起', async () => {
@@ -11226,7 +11226,7 @@ await scenario('开场白：只有一条时不弹选择器', async () => {
   const NAME = '单开场白测试角色';
 
   click('#btn-chars');
-  await waitFor('切到角色库页面', () => shown('#view-chars'));
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
   setValue('#c-name', NAME);
@@ -11620,15 +11620,15 @@ await scenario('组件库：自定义元素（m-button / m-input / m-textarea / 
 });
 
 // ---------------------------------------------------------------------------
-//  场景：列表页批量选择（角色库 / 世界书）
+//  场景：列表页批量选择（角色卡 / 世界书）
 //
 //  只验「选得对不对、按钮切没切、跨搜索保不保得住」—— 导出会弹系统文件夹框、
 //  删除会真删数据，这两步在冒烟里不点；它们的编排逻辑放在宿主侧静态断言里
 //  （tools/smoke-test.js 的 probeBatchLibrary）。
 // ---------------------------------------------------------------------------
-await scenario('批量：角色库与世界书的选择态', async () => {
+await scenario('批量：角色卡与世界书的选择态', async () => {
   click('#btn-chars');
-  await waitFor('切到角色库', () => shown('#view-chars'));
+  await waitFor('切到角色卡', () => shown('#view-chars'));
   await sleep(120);
 
   check('常态只露「批量」一颗', shown('#char-batch-normal') && !shown('#char-batch-active'));

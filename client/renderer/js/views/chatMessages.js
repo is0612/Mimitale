@@ -573,7 +573,7 @@ export function renderMessages(options) {
       empty.innerHTML = `
       <h2>开始和${esc(character.name)}聊天吧～</h2>
       <p>在下面输入框里说点什么，然后按 Enter。</p>
-      <p class="hint">当前扮演的是「${esc(character.name)}」。想换角色，去左下角「角色库」点另一张卡上的「聊天」。</p>
+      <p class="hint">当前扮演的是「${esc(character.name)}」。想换角色，去左下角「角色卡」点另一张卡上的「聊天」。</p>
     `;
     } else {
       // 名字取自「默认人设」里当前模型那一份；没写名字就不提名字，别硬塞内置假名
@@ -582,7 +582,7 @@ export function renderMessages(options) {
       <h2>${who ? `开始和${esc(who)}聊天吧～` : '开始聊天吧～'}</h2>
       <p>在下面输入框里说点什么，然后按 Enter。</p>
       <p class="hint">第一次使用请先点左下角「设置」，填入接口地址和 API Key。</p>
-      <p class="hint">想玩角色扮演？点左下角「角色库」导入角色卡，再点卡片上的「聊天」。</p>
+      <p class="hint">想玩角色扮演？点左下角「角色卡」导入角色卡，再点卡片上的「聊天」。</p>
     `;
     }
 

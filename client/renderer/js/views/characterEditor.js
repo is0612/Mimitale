@@ -1,6 +1,6 @@
 'use strict';
 
-// views/characterEditor.js —— 角色编辑器（角色库与世界书副本共用一套表单）
+// views/characterEditor.js —— 角色编辑器（角色卡与世界书副本共用一套表单）
 // 新建角色只是草稿，保存才落库；属性/表情图草稿归本模块，拆出去的两个模块拿同一份数组引用。
 
 import { state } from '../core/state.js';
@@ -105,8 +105,8 @@ function syncAllCharCounts() {
 
 // 编辑器的状态
 
-let editingCharacterId = null; // 角色库里当前正在编辑的角色
-// 作用域：'library' 角色库；'worldbook' 当前世界书里的副本（不动角色库）
+let editingCharacterId = null; // 角色卡里当前正在编辑的角色
+// 作用域：'library' 角色卡；'worldbook' 当前世界书里的副本（不动角色卡）
 let charEditorScope = 'library';
 // 正在编辑的角色头像（dataURL，正方形），用在消息气泡和状态卡上
 let charDraftAvatar = '';
@@ -131,7 +131,7 @@ let worldbookPickerEl = null;
 // 入口层注入的动作
 let actions = { rerender: () => {} };
 
-/** 当前作用域下的角色列表（角色库或世界书副本）；编辑器所有读写都走它 */
+/** 当前作用域下的角色列表（角色卡或世界书副本）；编辑器所有读写都走它 */
 function editorCharacterList() {
   if (charEditorScope === 'worldbook') return worldbookCharacters(currentWorldbook());
   return characters();
@@ -201,11 +201,11 @@ function updateCharEditorScopeUi() {
       // 说清楚「现在还没这个东西」，免得用户以为点一下就已经建好了
       el.charsSub.textContent = inBook
         ? `填好内容点「保存」才会加进这本书${book ? ` · ${book.name}` : ''}`
-        : '填好内容点「保存」，保存后才会出现在角色库里';
+        : '填好内容点「保存」，保存后才会出现在角色卡里';
     } else {
       // 保存状态胶囊（.save-pill）已提示未保存，这里说明这几栏写下去会去哪儿
       el.charsSub.textContent = inBook
-        ? `这本书里的独立副本，改它不影响角色库${book ? ` · ${book.name}` : ''}`
+        ? `这本书里的独立副本，改它不影响角色卡${book ? ` · ${book.name}` : ''}`
         : '描述与性格每轮都会注入给 AI，改完点左栏底部的「保存」';
     }
   }
@@ -266,7 +266,7 @@ function showCharForm(show) {
   if (el.charSaveState) el.charSaveState.hidden = !show;
 }
 
-// 头像（1:1，消息气泡/状态卡）与形象（2:3 竖版，角色库列表）；上传都走 ui/imageCrop.js，
+// 头像（1:1，消息气泡/状态卡）与形象（2:3 竖版，角色卡列表）；上传都走 ui/imageCrop.js，
 // 裁剪组件按目标尺寸输出，这里不再二次缩放。
 
 // 头像输出 384×384（小圆图最大 ~48px，2 倍屏也够）
@@ -309,7 +309,7 @@ function renderCharMedia() {
 
 /** 选一张本地图 → 裁剪 → dataURL；取消或出错返回 null（实现在 ui/imageCrop.js） */
 async function pickAvatar() {
-  // 用编辑器那套查找：正在新建的草稿不在角色库里，但一样要能传头像
+  // 用编辑器那套查找：正在新建的草稿不在角色卡里，但一样要能传头像
   if (!editorCharacterById(editingCharacterId)) return;
 
   const cropped = await pickAndCrop({
@@ -336,7 +336,7 @@ async function pickPortrait() {
     aspect: PORTRAIT_RATIO,
     outWidth: PORTRAIT_WIDTH,
     title: '裁剪角色形象',
-    hint: '竖版立绘，显示在角色库列表上',
+    hint: '竖版立绘，显示在角色卡列表上',
     pickTitle: '选一张角色形象'
   });
   if (!cropped) return;
@@ -418,7 +418,7 @@ function fillCharForm(character) {
   charAttrs = characterAttrs(character);
   renderCharAttrs(charAttrs);
 
-  // 「在状态栏显示」只有世界书副本用得上；角色库的卡绑进单角色会话时永远显示状态，整块收起来
+  // 「在状态栏显示」只有世界书副本用得上；角色卡绑进单角色会话时永远显示状态，整块收起来
   el.c.showInPanel.checked = character.showInPanel === true;
   renderShowInPanelBox();
 
@@ -461,7 +461,7 @@ function applyAiFill(fields) {
   return written;
 }
 
-/** 「在状态栏显示」只给世界书作用域用；角色库的卡永远显示状态，整块收起 */
+/** 「在状态栏显示」只给世界书作用域用；角色卡永远显示状态，整块收起 */
 function renderShowInPanelBox() {
   if (!el.c.showInPanelBox) return;
   el.c.showInPanelBox.classList.toggle('hidden', charEditorScope !== 'worldbook');
@@ -474,7 +474,7 @@ function renderShowInPanelBox() {
 function renderCharWorldbookBox(character) {
   if (!character) return;
 
-  // 「AI 补设定」：角色库的卡保存时建一本自己的书；世界书里的副本并进**这本书的草稿**
+  // 「AI 补设定」：角色卡保存时建一本自己的书；世界书里的副本并进**这本书的草稿**
   // （副本自己带的世界书进世界时不会被注入，见 data/cast.js 的 effectiveWorldbookIds）
   setCharBookScope(charEditorScope, currentWorldbook() ? currentWorldbook().name : '');
 
@@ -816,7 +816,7 @@ function stashCharForm() {
     .slice(0, MAX_EXPRESSIONS);
   if (expressions.length) character.expressions = expressions;
   else delete character.expressions;
-  // showInPanel 只对世界书副本写；角色库的卡写了也没用（单角色会话永远显示状态，见 cast.js）
+  // showInPanel 只对世界书副本写；角色卡写了也没用（单角色会话永远显示状态，见 cast.js）
   if (charEditorScope === 'worldbook') {
     character.showInPanel = el.c.showInPanel.checked === true;
   } else {
@@ -825,7 +825,7 @@ function stashCharForm() {
   character.updatedAt = now();
 }
 
-/** 角色列表页的「＋ 新建角色」：作用域钉死在角色库（上次可能停在世界书） */
+/** 角色列表页的「＋ 新建角色」：作用域钉死在角色卡（上次可能停在世界书） */
 function newCharacter() {
   charEditorScope = 'library';
   startCharDraft();
@@ -882,7 +882,7 @@ function startCharDraft(preset) {
   el.c.name.select();
 }
 
-/** 把新建的草稿真正写进角色库/世界书；只有点「保存角色」会走到这里 */
+/** 把新建的草稿真正写进角色卡/世界书；只有点「保存角色」会走到这里 */
 function commitCharDraft() {
   if (!charDraft) return true;
 
@@ -931,13 +931,13 @@ async function saveCharacter() {
 
   stashCharForm();
 
-  // 新建的角色到这一刻才真正被创建（进角色库 / 进这本书）
+  // 新建的角色到这一刻才真正被创建（进角色卡 / 进这本书）
   if (creating && !commitCharDraft()) {
     showToast('这本书已经不在了，角色没能创建', 'error');
     return;
   }
 
-  // 「AI 补设定」补出来的条目：角色库的卡 → 建一本书并绑上（跟着同一次写盘落地）；
+  // 「AI 补设定」补出来的条目：角色卡 → 建一本书并绑上（跟着同一次写盘落地）；
   // 副本 → 并进这本书的草稿，等世界书编辑器那边点「保存」
   const madeBook = await materializeCharBook(character, {
     scope,
@@ -979,7 +979,7 @@ async function saveCharacter() {
   }
 }
 
-// 删除角色（'library' 从角色库删 / 'worldbook' 只移除本书副本），两个入口共用。
+// 删除角色（'library' 从角色卡删 / 'worldbook' 只移除本书副本），两个入口共用。
 // ⚠️ 写盘失败必须把内存也退回去 —— EPERM 时若界面已移除还报「已删除」，重启就回来了。
 export async function deleteCharacterById(id, scope) {
   const inBook = scope === 'worldbook';
@@ -992,7 +992,7 @@ export async function deleteCharacterById(id, scope) {
   const ok = await confirmDialog({
     title: inBook ? '移除角色' : '删除角色',
     message: inBook
-      ? `把「${character.name}」从这本书里移除？角色库里的那个角色不受影响。`
+      ? `把「${character.name}」从这本书里移除？角色卡里的那个角色不受影响。`
       : `删除角色「${character.name}」？用到它的会话会变回通用助手。`,
     confirmText: inBook ? '移除' : '删除',
     danger: true
@@ -1022,7 +1022,7 @@ export async function deleteCharacterById(id, scope) {
     }
   }
 
-  // --- 从角色库删 ---
+  // --- 从角色卡删 ---
   // 记住改之前的样子，写盘失败时退回去
   const beforeChars = characters();
   const unbound = [];
@@ -1124,7 +1124,7 @@ export async function deleteCharactersByIds(ids) {
 
 // 给入口层 / 别的视图用的口子
 
-/** 打开编辑器，编辑指定角色（scope 省略 = 角色库） */
+/** 打开编辑器，编辑指定角色（scope 省略 = 角色卡） */
 export function openCharacterEditor(id, scope = 'library') {
   const nextScope = scope === 'worldbook' ? 'worldbook' : 'library';
   const different = charEditorScope !== nextScope || editingCharacterId !== (id || null);
@@ -1318,7 +1318,7 @@ export function initCharacterEditor(injected) {
   // 不用横跨整个窗口回去（2026-10-20 补的，原来故意只留页头那一处）。
   el.btnBackChar.addEventListener('click', leaveCharacterEditor);
   el.btnNewChar.addEventListener('click', newCharacter);
-  // 角色列表页的「AI 生成」：作用域钉死角色库，直接调 aiGen 入口（经入口层转手漏传就是「点了没反应」）
+  // 角色列表页的「AI 生成」：作用域钉死角色卡，直接调 aiGen 入口（经入口层转手漏传就是「点了没反应」）
   if (el.btnAiChar) {
     el.btnAiChar.addEventListener('click', () => {
       charEditorScope = 'library';

@@ -635,7 +635,7 @@ function registerStubs() {
     } catch (err) { event.returnValue = { ok: false, error: err.message }; }
   });
 
-  // --- 角色库（和 main.js 一样：一次调用可能同时带 worldbooks）---
+  // --- 角色卡（和 main.js 一样：一次调用可能同时带 worldbooks）---
   ipcMain.handle('characters:get', () => clone({ characters: store.characters }));
   ipcMain.handle('characters:save', (_event, payload) => {
     remember('characters:save', payload);
@@ -1328,7 +1328,7 @@ function registerStubs() {
       // 「烂 JSON」场景：模型多写了一句开场白、还把 JSON 包在 ``` 里。
       // 解析器要能剥掉围栏、切出花括号块，正常生成出角色。
       const messy = allText.includes('冒烟：烂JSON');
-      // 角色库那侧的「背景 / 基调」是可选的：填了才会拼进 system。
+      // 角色卡那侧的「背景 / 基调」是可选的：填了才会拼进 system。
       // 名字跟着基调变 —— 对不上就说明那段没注入。
       const withBrief = allText.includes('【背景 / 基调】');
       const payloadText = messy
@@ -1759,9 +1759,9 @@ async function probeHover(win, result) {
 
     // 复原，别影响后续（虽然之后也没别的断言了）
     await run("document.querySelector('#char-page-grid .char-card .char-card-del').style.transition = ''");
-    // elementFromPoint 要有**真实布局**：探针跑到这里时页面早就不在角色库了
+    // elementFromPoint 要有**真实布局**：探针跑到这里时页面早就不在角色卡了
     //（前面几十个场景切来切去），隐藏视图里的卡片 rect 全是 0 —— 直接点会点到侧栏。
-    // 先切回角色库再量。
+    // 先切回角色卡再量。
     await run("document.querySelector('#btn-chars').click()");
     await sleep(350);
 
@@ -1777,7 +1777,7 @@ async function probeHover(win, result) {
     })()`);
 
     result.results.push({
-      name: '角色库：卡片上删除 · 悬停时真的浮在最上层（没被封面盖住）',
+      name: '角色卡：卡片上删除 · 悬停时真的浮在最上层（没被封面盖住）',
       pass: hit === 'self',
       detail: `命中元素：${hit}${note}`
     });
@@ -1787,7 +1787,7 @@ async function probeHover(win, result) {
   }
 
   result.results.push({
-    name: '角色库：卡片上删除 · 鼠标移上去才会浮出来',
+    name: '角色卡：卡片上删除 · 鼠标移上去才会浮出来',
     pass: before === '0' && after === '1',
     detail: `移入前 opacity=${before}，移入后 opacity=${after}${note}`
   });
@@ -2690,7 +2690,7 @@ function probeImport(result) {
     push('导入：temp 字段 worldbook 没有留在角色上', !!char && !('worldbook' in char),
       char ? Object.keys(char).join(',') : '没有角色');
 
-    push('导入：单独的 lorebook JSON 进的是世界书库、不是角色库',
+    push('导入：单独的 lorebook JSON 进的是世界书库、不是角色卡',
       !!standalone && (out.characters || []).length === 1,
       `worldbooks=${(out.worldbooks || []).map((b) => b.name).join(',')} roles=${(out.characters || []).length}`);
     push('导入：World Info 的字段映射没丢（key → keys）',
@@ -2735,7 +2735,7 @@ function probeImport(result) {
       castImported.characters[0].personality === '温和可靠' &&
       typeof castImported.characters[0].id === 'string' && !!castImported.characters[0].id,
     castImported && castImported.characters[0] ? JSON.stringify(castImported.characters[0]) : '没有书');
-  push('导入：NPC 不会被当成新的角色卡塞进角色库', (castOut.characters || []).length === 0,
+  push('导入：NPC 不会被当成新的角色卡塞进角色卡', (castOut.characters || []).length === 0,
     `roles=${(castOut.characters || []).length}`);
   push('导入：书里没有 characters 时也不会凭空造副本',
     (out.worldbooks || []).length > 0 && (out.worldbooks || []).every((b) => Array.isArray(b.characters)),
@@ -3466,7 +3466,7 @@ function probeBatchLibrary(result) {
   );
   push('导入侧：能读回扩展位里的头像 / 立绘', cardImport.includes('ext.avatar') && cardImport.includes('ext.portrait'));
   push(
-    '角色库：批量按钮接了三件事（进入 / 导出 / 删除）',
+    '角色卡：批量按钮接了三件事（进入 / 导出 / 删除）',
     /btnCharBatch/.test(charList) && /exportMany/.test(charList) && /removeMany/.test(charList)
   );
   push(
@@ -3474,7 +3474,7 @@ function probeBatchLibrary(result) {
     /export async function deleteCharactersByIds/.test(editor) && /unbound\.push\(\[convo, convo\.characterId\]\)/.test(editor)
   );
   push(
-    '角色库工具条写了批量按钮组',
+    '角色卡工具条写了批量按钮组',
     /id="char-batch-active"/.test(page)
   );
 }
@@ -3957,7 +3957,7 @@ function probeWorldbookDeepSplit(result) {
  * 一直没被发现 —— 表现是**导出一本带 NPC 的世界书再导回来，书里的 NPC 一个不剩**，
  * 而那正是分享一份世界书时最想要的。
  *
- * 同时验「书里的 NPC 不会被当成新的角色卡塞进角色库」：导入结果里
+ * 同时验「书里的 NPC 不会被当成新的角色卡塞进角色卡」：导入结果里
  * `characters` 是「新增的角色卡」，世界书的 NPC 只该住在书里。
  */
 async function probeWorldbookExportRoundTrip(win, result) {
@@ -4739,7 +4739,7 @@ app.whenReady().then(async () => {
         chars: `
           document.querySelector('#btn-chars')?.click();
           await new Promise(r => setTimeout(r, 500));`,
-        // 角色库：卡片上铺的是**角色形象**（2:3 竖版立绘），点开还能看大图。
+        // 角色卡：卡片上铺的是**角色形象**（2:3 竖版立绘），点开还能看大图。
         // 测试里的角色都没有图（上传那条路被 images:pick 的桩挡着），
         // 所以这里给每张卡塞一个 2:3 的 SVG 占位立绘 —— 只为看清裁切和排版；
         // 上传那条**真路径**在「角色：头像和形象是两张图」场景里（走 ui/imageCrop.js）。
@@ -5016,7 +5016,7 @@ app.whenReady().then(async () => {
 
           // 第一次开这个角色的会话会先弹「创建你的角色」。⚠️ 要点「开始游玩」
           // （btn-start-play）**进会话** —— 点「取消」等于放弃这次聊天，
-          // 视图会退角色库，截出来就是一张角色库图（踩过）。
+          // 视图会退角色卡，截出来就是一张角色卡图（踩过）。
           // ⚠️ 这个 driver 整段是**模板字符串**：注释里千万别写反引号，
           //    一个就把字符串提前闭合了，报「Unexpected identifier」。
           //    要找元素就写纯文字名字，别写 CSS 选择器的引号形式。

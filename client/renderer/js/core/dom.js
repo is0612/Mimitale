@@ -39,9 +39,11 @@ export const el = {
   btnAccountMenuLogout: $('btn-account-menu-logout'),
   btnFolder: $('btn-folder'),
   btnChars: $('btn-chars'),
+  btnGames: $('btn-games'),
   btnPresets: $('btn-presets'),
   // 数字由 views/viewSwitch.js 铺
   footCharsCount: $('foot-chars-count'),
+  footGamesCount: $('foot-games-count'),
   footPresetsCount: $('foot-presets-count'),
   // 设置页：内容和显隐都由 views/settings.js 管
   viewSettings: $('view-settings'),
@@ -148,11 +150,21 @@ export const el = {
   viewCharEditor: $('view-char-editor'),
   viewWbEditor: $('view-wb-editor'),
   viewPresets: $('view-presets'),
+  viewGames: $('view-games'),
   charsPageSub: $('chars-page-sub'),
   charPageSearch: $('char-page-search'),
   charPageCount: $('char-page-count'),
   charPageGrid: $('char-page-grid'),
   charPageEmpty: $('char-page-empty'),
+  // 游戏卡列表页（2026-10-25 只搭布局）
+  gamesPageSub: $('games-page-sub'),
+  gamePageSearch: $('game-page-search'),
+  gamePageCount: $('game-page-count'),
+  gamePageGrid: $('game-page-grid'),
+  gamePageEmpty: $('game-page-empty'),
+  btnNewGame: $('btn-new-game'),
+  btnImportGame: $('btn-import-game'),
+  btnAiGame: $('btn-ai-game'),
   // 常态只露「批量」，进入选择态后换成另一组
   charBatchNormal: $('char-batch-normal'),
   charBatchActive: $('char-batch-active'),
@@ -187,7 +199,7 @@ export const el = {
   btnNewChar: $('btn-new-char'),
   btnDelChar: $('btn-del-char'),
   btnSaveChar: $('btn-save-char'),
-  // 左栏底部的「返回」和「AI 补充」（导出 2026-10-20 撤掉，改在角色库卡片上）
+  // 左栏底部的「返回」和「AI 补充」（导出 2026-10-20 撤掉，改在角色卡卡片上）
   btnBackChar: $('btn-back-char'),
   btnAiFillChar: $('btn-ai-fill-char'),
   btnExportConvo: $('btn-export-convo'),

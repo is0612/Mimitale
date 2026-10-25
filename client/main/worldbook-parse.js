@@ -125,7 +125,7 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
     if (entries.length >= MAX_WORLDBOOK_ENTRIES) break;
   }
 
-  // 书里的角色是独立副本（从角色库复制，之后两边各改各的）。
+  // 书里的角色是独立副本（从角色卡复制，之后两边各改各的）。
   // ⚠️ 导入外部世界书必须注入 normalizeCharacters，否则副本被静默丢掉（书进来了、NPC 全不在）。
   const characters = [];
   if (typeof normalizeCharacters === 'function') {

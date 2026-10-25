@@ -117,7 +117,7 @@ function normalizeCharacter(raw, source) {
   const id = typeof r.id === 'string' ? r.id.trim() : '';
 
   const avatar = typeof r.avatar === 'string' && r.avatar.startsWith('data:image/') ? r.avatar : '';
-  // 形象是 2:3 立绘（角色库那张竖版图），和头像（气泡上的小圆图）分开存。
+  // 形象是 2:3 立绘（角色卡那张竖版图），和头像（气泡上的小圆图）分开存。
   const portrait = typeof r.portrait === 'string' && r.portrait.startsWith('data:image/') ? r.portrait : '';
   const expressions = normalizeExpressions(r.expressions);
   const alternateGreetings = normalizeAlternateGreetings(r.alternateGreetings);

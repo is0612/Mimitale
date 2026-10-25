@@ -123,8 +123,8 @@ export function syncWorldbookLayout(book, draft, characterCount) {
   // 「本书角色」屏右上角那句：数字 + 一句「副本是副本」
   if (layout.charHint) {
     layout.charHint.textContent = chars
-      ? `${chars} 个角色 · 副本只属于这本书，改它不动角色库`
-      : '副本只属于这本书，改它不动角色库';
+      ? `${chars} 个角色 · 副本只属于这本书，改它不动角色卡`
+      : '副本只属于这本书，改它不动角色卡';
   }
 
   syncEntryCounts();

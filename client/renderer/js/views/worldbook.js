@@ -89,7 +89,7 @@ export function initWorldbook(opts = {}) {
   }
   if (el.wb.btnSyncAttrs) el.wb.btnSyncAttrs.addEventListener('click', runAsync(syncWorldbookCharAttrs));
 
-  // 从角色库多选加入
+  // 从角色卡多选加入
   el.wbPicker.btnClose.addEventListener('click', closeWorldbookCharPicker);
   el.wbPicker.btnCancel.addEventListener('click', closeWorldbookCharPicker);
   el.wbPicker.btnConfirm.addEventListener('click', runAsync(confirmWorldbookCharPicker));
@@ -537,7 +537,7 @@ function selectEntry(id) {
   if (currentEntry()) el.wb.e.title.focus({ preventScroll: true });
 }
 
-// 本书角色：从角色库复制进来的独立副本（改这边不影响角色库，反之亦然）。
+// 本书角色：从角色卡复制进来的独立副本（改这边不影响角色卡，反之亦然）。
 // 它同时就是「这本书的 NPC 名单」——GM 提示词里的名单按它拼。
 
 /** 画「本书角色」这一屏（卡片网格 + 空态引导卡） */
@@ -552,7 +552,7 @@ export function renderWorldbookChars() {
 
   const copies = worldbookCharacters(book);
 
-  // 一个副本都没有时给一张虚线引导卡，说明副本和角色库是两回事
+  // 一个副本都没有时给一张虚线引导卡，说明副本和角色卡是两回事
   if (!copies.length) {
     host.appendChild(
       h(
@@ -560,11 +560,11 @@ export function renderWorldbookChars() {
         { class: 'wb-char-empty' },
         h('h3', { text: '这本书还没有角色' }),
         h('p', {
-          text: '世界书里的角色只在绑定了这本书的会话里出现，和角色库相互独立 —— 在这里改，不会动到角色库里的原卡。'
+          text: '世界书里的角色只在绑定了这本书的会话里出现，和角色卡相互独立 —— 在这里改，不会动到角色卡里的原卡。'
         }),
         h('span', {
           class: 'wb-char-empty-hint',
-          text: `用上面的「＋ 从角色库加入」复制一个进来，或「AI 生成」按这本书已有的 ${(book.entries || []).length} 条设定起一个草稿。`
+          text: `用上面的「＋ 从角色卡加入」复制一个进来，或「AI 生成」按这本书已有的 ${(book.entries || []).length} 条设定起一个草稿。`
         })
       )
     );
@@ -589,8 +589,8 @@ export function renderWorldbookChars() {
             'strong',
             { class: 'wb-char-card-name' },
             h('span', { class: 'wb-char-card-title', text: c.name }),
-            // 「本书副本」：角色库里还有一份原件，标清楚改的是哪一份
-            h('span', { class: 'wb-local-tag', text: '本书副本', title: '从角色库复制进来的一份快照；改它不会动角色库里的原卡' })
+            // 「本书副本」：角色卡里还有一份原件，标清楚改的是哪一份
+            h('span', { class: 'wb-local-tag', text: '本书副本', title: '从角色卡复制进来的一份快照；改它不会动角色卡里的原卡' })
           )
         ),
         // 设定只读预览：真正的编辑走「编辑」按钮进角色编辑器（那里才是全集）
@@ -621,7 +621,7 @@ export function renderWorldbookChars() {
             button({
               class: 'wb-char-card-btn wb-char-card-remove',
               text: '移出本书',
-              title: '从本书移除（角色库里的不受影响）',
+              title: '从本书移除（角色卡里的不受影响）',
               onClick: runAsync(() => removeWorldbookCharacter(c.id))
             })
           )
@@ -631,7 +631,7 @@ export function renderWorldbookChars() {
   }
 }
 
-/** 把选中的角色库角色复制进本书：深拷贝一份，id 另发，两边从此互不相干 */
+/** 把选中的角色卡角色复制进本书：深拷贝一份，id 另发，两边从此互不相干 */
 async function addWorldbookCharacters(ids) {
   const book = currentWorldbook();
   if (!book) return;
@@ -678,7 +678,7 @@ function newWorldbookCharacter() {
   draftInBook();
 }
 
-/** 从本书移除一个角色副本（角色库里的角色不动） */
+/** 从本书移除一个角色副本（角色卡里的角色不动） */
 async function removeWorldbookCharacter(id) {
   const book = currentWorldbook();
   if (!book) return;
@@ -688,7 +688,7 @@ async function removeWorldbookCharacter(id) {
 
   const ok = await confirmDialog({
     title: '移除角色',
-    message: `把「${target.name}」从这本书里移除？角色库里的那个角色不受影响。`,
+    message: `把「${target.name}」从这本书里移除？角色卡里的那个角色不受影响。`,
     confirmText: '移除',
     danger: true
   });
@@ -717,7 +717,7 @@ function editWorldbookCharacter(id) {
   openInBook(id);
 }
 
-/** 把角色库同名卡的属性补进本书副本：只按名字匹配、只补副本没有的字段，已有值不覆盖，
+/** 把角色卡同名卡的属性补进本书副本：只按名字匹配、只补副本没有的字段，已有值不覆盖，
  *  也不动 description / personality 等其它字段。 */
 async function syncWorldbookCharAttrs() {
   const book = currentWorldbook();
@@ -732,7 +732,7 @@ async function syncWorldbookCharAttrs() {
   const { touched, added, missing } = syncCopyAttrsFromSource(copies, characters());
   if (!touched) {
     const why = missing.length
-      ? `这些副本在角色库里没有同名卡：${missing.join('、')}`
+      ? `这些副本在角色卡里没有同名卡：${missing.join('、')}`
       : '所有副本的属性都已经是最新的了';
     showToast(why, 'error');
     return;
@@ -788,7 +788,7 @@ async function toggleWorldbookCharShowInPanel(id, on) {
   showToast(on ? `「${target.name}」的状态会显示了` : `「${target.name}」的状态已隐藏`, 'ok');
 }
 
-// --- 从角色库多选加入 ---
+// --- 从角色卡多选加入 ---
 
 let wbPickerChars = [];
 const wbPickerPicked = new Set();
@@ -796,7 +796,7 @@ const wbPickerPicked = new Set();
 function openWorldbookCharPicker() {
   const list = characters();
   if (!list.length) {
-    showToast('角色库里还没有角色，先建一个吧', 'error');
+    showToast('角色卡里还没有角色，先建一个吧', 'error');
     return;
   }
 
@@ -819,7 +819,7 @@ function renderWorldbookCharPicker() {
   if (!wbPickerChars.length) {
     const tip = document.createElement('div');
     tip.className = 'wb-picker-empty';
-    tip.textContent = '角色库是空的';
+    tip.textContent = '角色卡是空的';
     host.appendChild(tip);
     return;
   }
@@ -888,7 +888,7 @@ export function openWorldbookEditor(id) {
 /** 打开编辑器，可选地切到某一本。⚠️ 这里**只传目标 id，不先改 editingWorldbookId**：
  *  selectWorldbook 一上来会把界面表单 stash 给还没切走的那一本，抢先改就会把旧书名写进新书。 */
 function openWorldbooksModal(targetId) {
-  // 角色库可能没开着，stashCharForm 内部会自己判断
+  // 角色卡可能没开着，stashCharForm 内部会自己判断
   stashDraft();
 
   const wanted = typeof targetId === 'string' && targetId ? targetId : editingWorldbookId;
@@ -1220,7 +1220,7 @@ export async function deleteWorldbookById(id) {
     }
   }
 
-  // 角色编辑器可能正开在这本书的副本上，退回角色库
+  // 角色编辑器可能正开在这本书的副本上，退回角色卡
   releaseScope();
 
   // ⚠️ 编辑器里正显示着这本时必须走 selectWorldbook 真正「切」走：只改 id 再重画，

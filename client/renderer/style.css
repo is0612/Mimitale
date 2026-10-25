@@ -473,9 +473,9 @@ m-button {
 /* ⚠️ 里层还得**横向**跟着宿主撑满 —— `align-items: stretch` 只管纵向，
    横向的 `flex: 0 1 auto`（默认）会让里层缩成「文字那么宽」。
    宿主宽度是父容器给的时候看不出问题（比如页头那几颗：宿主 = 内容 = 里层），
-   但宿主被父容器**抻开**时就露馅了：角色库卡片的动作行是 `flex: 1 1 0` 平分两格，
+   但宿主被父容器**抻开**时就露馅了：角色卡卡片的动作行是 `flex: 1 1 0` 平分两格，
    宿主 96px、里层只有 50px —— 按钮看着比槽位短一截、字还靠左，而且不报错。
-   2026-10-16 迁移角色库页时量出来的（宿主 96 / 里层 50）。
+   2026-10-16 迁移角色卡页时量出来的（宿主 96 / 里层 50）。
    `flex: 1 1 auto` 而不是 `width: 100%`：宿主自然宽度时 basis 就是内容宽，
    没有多余空间可长，所以页头那几颗的数字一个都不变。 */
 m-button > .mi-btn__control {
@@ -1249,7 +1249,7 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   text-overflow: ellipsis;
 }
 
-/* 入口右边的数量（角色库 / 世界书）。跟名字同一行、靠右、灰一档 ——
+/* 入口右边的数量（角色卡 / 世界书）。跟名字同一行、靠右、灰一档 ——
    数字是拿来扫一眼的，不该跟入口名抢注意力。等宽数字，两位数以上不会左右跳。 */
 .foot-count {
   flex: 0 0 auto;
@@ -3257,7 +3257,7 @@ m-button.btn-send > .mi-btn__control {
    ⚠️ 这是滑块方案唯一的「没设过」表达方式 —— 滑块本身没法为空。 */
 
 /* ---- 聊天这一屏改成「对话列 + 右侧在场角色面板」两栏 ----
-   ⚠️ 只覆盖 #view-chat：角色库 / 世界书 / 设置那几个视图仍然是上下单列。 */
+   ⚠️ 只覆盖 #view-chat：角色卡 / 世界书 / 设置那几个视图仍然是上下单列。 */
 .cast-panel {
   flex: 0 0 300px;
   display: flex;
@@ -4640,7 +4640,7 @@ m-button.btn-new > .mi-btn__control:hover {
    六、角色
    ====================================================================== */
 
-/* ------------------------------ 角色库 ------------------------------ */
+/* ------------------------------ 角色卡 ------------------------------ */
 
 /* 角色编辑表单：整页里唯一会滚的那块 */
 .char-main {
@@ -5416,7 +5416,7 @@ m-button.btn-new > .mi-btn__control:hover {
 
 /* 头像：正方形圆显示 —— 和消息气泡、状态卡里那个小圆图是同一块内容 */
 
-/* 形象：2:3 竖版 —— 和角色库列表卡上那块（#char-page-grid .char-card-avatar）
+/* 形象：2:3 竖版 —— 和角色卡列表卡上那块（#char-page-grid .char-card-avatar）
    严格一致，上传时框出来的就是列表上看到的那块。 */
 .char-avatar::after {
   position: absolute;
@@ -6143,7 +6143,7 @@ m-button.btn-new > .mi-btn__control:hover {
 
 /* ------------------------------ 世界书 ------------------------------ */
 
-/* 从角色库多选加入的弹窗 */
+/* 从角色卡多选加入的弹窗 */
 .wb-picker-card {
   max-width: 520px;
 }
@@ -7227,7 +7227,7 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--text-faint);
 }
 
-/* 列表工具条：角色库 / 世界书共用。左边搜索、右边计数 —— 卡片网格上方只有这一条，
+/* 列表工具条：角色卡 / 世界书共用。左边搜索、右边计数 —— 卡片网格上方只有这一条，
    不和页头的三个动作抢位置。 */
 .lib-toolbar {
   display: flex;
@@ -7531,7 +7531,7 @@ m-button.btn-new > .mi-btn__control:hover {
 
 /* ⚠️ `flex` 基准挂在**宿主**上（宿主就是 .char-card-actions 那个 flex 行里的 item），
    不是里层那颗 —— 写 `> .mi-btn__control` 会完全不起作用（里层不是 flex item）。
-   角色库页和世界书页的卡都已全迁到 m-button，原生 `.btn` 半边已删。 */
+   角色卡页和世界书页的卡都已全迁到 m-button，原生 `.btn` 半边已删。 */
 .char-card-actions m-button,
 .wb-card-actions m-button {
   flex: 1 1 0;
@@ -9543,7 +9543,7 @@ m-button.btn-new > .mi-btn__control:hover {
 
 /* 编辑页页头是 baseline 对齐（面包屑 / 标题 / 说明字号不同，靠基线拉平），
    按钮跟着 baseline 会往上飘，单独居中。
-   右边收 4px：它和面包屑读作一条（「← 返回  角色库 / 艾琳」），比挨着标题更近。 */
+   右边收 4px：它和面包屑读作一条（「← 返回  角色卡 / 艾琳」），比挨着标题更近。 */
 .editor-head-left .page-back {
   align-self: center;
   margin-right: -4px;
@@ -10755,7 +10755,7 @@ m-button.btn-new > .mi-btn__control:hover {
   white-space: nowrap;
 }
 
-/* 「本书副本」：同一张卡在角色库里还有一份原件，标清楚改的是哪一份 */
+/* 「本书副本」：同一张卡在角色卡里还有一份原件，标清楚改的是哪一份 */
 #view-wb-editor .wb-local-tag {
   flex: none;
   padding: 0 6px;
@@ -10832,7 +10832,7 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 空态：给一张有引导性的虚线卡，不是一片空白（改版前这里什么都不画，
-   用户不知道这里该有东西、也不知道副本和角色库是两回事） */
+   用户不知道这里该有东西、也不知道副本和角色卡是两回事） */
 #view-wb-editor .wb-char-empty {
   display: flex;
   flex-direction: column;

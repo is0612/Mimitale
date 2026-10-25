@@ -133,7 +133,7 @@ function dataDirReadmeText() {
       '',
       '各文件是什么',
       '--------------------------------',
-      '  characters.json     角色库：导入或新建的角色卡都在这（含头像和立绘）',
+      '  characters.json     角色卡：导入或新建的角色卡都在这（含头像和立绘）',
       '  worldbooks.json     世界书（含从角色卡里抽出来的内嵌世界书）',
       '  conversations.json  所有聊天记录',
       '  presets.json        预设：叠在对话上的那层指令',

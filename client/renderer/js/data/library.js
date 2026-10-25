@@ -1,4 +1,4 @@
-// 角色库 / 世界书：只读访问器。
+// 角色卡 / 世界书：只读访问器。
 // 界面和组装提示词两头共用，所以放共享数据层。
 // 只读：写入走 persist.js（落盘）和各处的编辑逻辑。
 
@@ -6,7 +6,7 @@ import { state } from '../core/state.js';
 import { uid, asArray } from '../core/util.js';
 import { normalizePanelFields } from '../core/panel-fields.js';
 
-// --- 角色库 ---
+// --- 角色卡 ---
 
 export function characters() {
   return asArray(state.characters);
@@ -52,12 +52,12 @@ export function worldbookById(id) {
   return worldbooks().find((w) => w.id === id) || null;
 }
 
-/** 本书角色 = 从角色库复制来的独立副本：改这边不影响那边 */
+/** 本书角色 = 从角色卡复制来的独立副本：改这边不影响那边 */
 export function worldbookCharacters(book) {
   return asArray(book && book.characters);
 }
 
-/** 世界书角色副本 id：单独前缀，避免和角色库 / 会话的 id 看混 */
+/** 世界书角色副本 id：单独前缀，避免和角色卡 / 会话的 id 看混 */
 export function newWorldbookCharId() {
   return `wc${uid()}`;
 }

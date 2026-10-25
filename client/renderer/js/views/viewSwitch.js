@@ -8,10 +8,11 @@ import { el } from '../core/dom.js';
 import { characters, dialoguePresets } from '../data/library.js';
 import { renderCharacterPage } from './characterList.js';
 import { renderPresetPage } from './presetList.js';
+import { renderGamePage } from './gameList.js';
 
 let currentView = 'chat';
 
-const VIEWS = ['chat', 'chars', 'charEditor', 'wbEditor', 'presets', 'settings'];
+const VIEWS = ['chat', 'chars', 'charEditor', 'wbEditor', 'presets', 'games', 'settings'];
 
 const VIEW_PARTS = [
   { name: 'chat', view: 'viewChat', btn: null },
@@ -19,6 +20,7 @@ const VIEW_PARTS = [
   { name: 'charEditor', view: 'viewCharEditor', btn: null },
   { name: 'wbEditor', view: 'viewWbEditor', btn: null },
   { name: 'presets', view: 'viewPresets', btn: 'btnPresets' },
+  { name: 'games', view: 'viewGames', btn: 'btnGames' },
   // 切换之前先由 views/settings.js 刷新；设置没有侧栏按钮（入口在账号菜单里）
   { name: 'settings', view: 'viewSettings', btn: null }
 ];
@@ -33,6 +35,8 @@ export function currentViewName() {
 function renderFootCounts() {
   const parts = [
     [el.footCharsCount, characters().length],
+    // 游戏卡数据还没建，先占 0（等 games 数据落地再补）
+    [el.footGamesCount, 0],
     [el.footPresetsCount, dialoguePresets().length]
   ];
   for (const [node, count] of parts) {
@@ -55,6 +59,7 @@ export function showView(name) {
 
   if (name === 'chars') renderCharacterPage();
   else if (name === 'presets') renderPresetPage();
+  else if (name === 'games') renderGamePage();
   else if (name === 'chat') el.input.focus();
   renderFootCounts();
 }
@@ -62,11 +67,13 @@ export function showView(name) {
 export function refreshLibraryPage() {
   if (currentView === 'chars') renderCharacterPage();
   else if (currentView === 'presets') renderPresetPage();
+  else if (currentView === 'games') renderGamePage();
   // 数量变了但没切屏时也要更新
   renderFootCounts();
 }
 
 export function initViewSwitch() {
   el.btnChars.addEventListener('click', () => showView('chars'));
+  if (el.btnGames) el.btnGames.addEventListener('click', () => showView('games'));
   if (el.btnPresets) el.btnPresets.addEventListener('click', () => showView('presets'));
 }

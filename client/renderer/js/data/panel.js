@@ -77,7 +77,7 @@ export function panelOwnerLabel(convo, owner) {
   return (card && card.name) || o;
 }
 
-/** owner id → 卡对象：先角色库，再本会话世界书副本（不能 import cast，会成环） */
+/** owner id → 卡对象：先角色卡，再本会话世界书副本（不能 import cast，会成环） */
 function findCardForOwner(convo, id) {
   const target = String(id || '').trim();
   if (!target) return null;
@@ -161,14 +161,14 @@ export function ownerIdByLabel(convo, label) {
     if (owner && owner !== 'player' && panelOwnerLabel(convo, owner) === text) return owner;
   }
 
-  // 绑定的卡优先：角色库里可能有同名卡。
+  // 绑定的卡优先：角色卡里可能有同名卡。
   const boundId = String(convo.characterId || '').trim();
   if (boundId) {
     const bound = characterById(boundId);
     if (bound && String(bound.name || '').trim() === text) return bound.id;
   }
 
-  // ⚠️ 角色库必须按名字找（characterById 只认 id），否则前缀永远拆不开。
+  // ⚠️ 角色卡必须按名字找（characterById 只认 id），否则前缀永远拆不开。
   const inLibrary = characters().find((c) => c && String(c.name || '').trim() === text);
   if (inLibrary) return inLibrary.id;
 
@@ -1262,7 +1262,7 @@ export function seedWorldbookCharactersIntoConvos(conversations, book, copies) {
   return seeded;
 }
 
-/** 把角色库同名卡的属性补进世界书副本（只补没有的字段，不覆盖已有值）。
+/** 把角色卡同名卡的属性补进世界书副本（只补没有的字段，不覆盖已有值）。
  *  纯函数，只改传入的 copies；返回 { touched, added, missing }。 */
 export function syncCopyAttrsFromSource(copies, sources) {
   const empties = { touched: 0, added: 0, missing: [] };
@@ -1293,7 +1293,7 @@ export function syncCopyAttrsFromSource(copies, sources) {
     const fresh = srcAttrs.filter((a) => a && a.name && !have.has(String(a.name).trim()));
     if (!fresh.length) continue;
 
-    // 深拷贝一份再塞（别把角色库的数组引进来，两边要各自独立）
+    // 深拷贝一份再塞（别把角色卡的数组引进来，两边要各自独立）
     for (const a of fresh) copy.attributes.push(JSON.parse(JSON.stringify(a)));
     touched += 1;
     added += fresh.length;

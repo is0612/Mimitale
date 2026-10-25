@@ -286,7 +286,7 @@ function saveConversations(payload, options) {
   }).then(() => data);
 }
 
-// --- 角色库：一个角色 = 一张卡，支持酒馆 PNG 卡（元数据藏在 tEXt 块）和 JSON，存在 characters.json ---
+// --- 角色卡：一个角色 = 一张卡，支持酒馆 PNG 卡（元数据藏在 tEXt 块）和 JSON，存在 characters.json ---
 
 function charactersFile() {
   const file = dataFile('characters.json');
@@ -301,7 +301,7 @@ function loadCharacters() {
 }
 
 /**
- * 保存角色库。⚠️ 返回写盘的 Promise，不是 data：否则写盘失败没人接，invoke 正常 resolve，渲染层的 catch 全成死代码。
+ * 保存角色卡。⚠️ 返回写盘的 Promise，不是 data：否则写盘失败没人接，invoke 正常 resolve，渲染层的 catch 全成死代码。
  */
 function saveCharacters(payload, options) {
   const opts = options || {};

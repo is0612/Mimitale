@@ -373,7 +373,7 @@ function registerIpc() {
     }
   });
 
-  // --- 角色库 ---
+  // --- 角色卡 ---
 
   ipcMain.handle('characters:get', () => loadCharacters());
 

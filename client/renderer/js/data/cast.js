@@ -1,6 +1,6 @@
 'use strict';
 
-// 「谁在说话」：把会话 + 角色库/世界书读成「谁是谁」，纯读不写。
+// 「谁在说话」：把会话 + 角色卡/世界书读成「谁是谁」，纯读不写。
 // 口径只在这里维护（提示词、气泡标签、导出共用），否则各处会互相打架。
 
 import { api } from '../core/api.js';
@@ -183,7 +183,7 @@ export function convoUserName(convo) {
   return player && player.name ? player.name : userName();
 }
 
-// 按 id 找卡：先角色库，再本会话世界书里的副本（面板 owner 存的就是这两类 id）。
+// 按 id 找卡：先角色卡，再本会话世界书里的副本（面板 owner 存的就是这两类 id）。
 export function findCardById(convo, id) {
   const target = String(id || '').trim();
   if (!target) return null;
@@ -213,7 +213,7 @@ export function panelEntities(convo) {
   const seen = new Set();
 
   const player = convoPlayer(convo);
-  // 「我」的卡：优先玩家挑的角色库卡；挑的是世界书副本时按名字在本会话书里找回。
+  // 「我」的卡：优先玩家挑的角色卡卡；挑的是世界书副本时按名字在本会话书里找回。
   let playerCard = player && player.characterId ? characterById(player.characterId) : null;
   if (!playerCard && player) {
     const playerName = convoUserName(convo);

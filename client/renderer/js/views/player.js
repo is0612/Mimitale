@@ -73,7 +73,7 @@ function updatePlayerCharPreview() {
   host.classList.remove('hidden');
 }
 
-/** 把「用角色卡当自己」的下拉填好（角色库为空时整块隐藏） */
+/** 把「用角色卡当自己」的下拉填好（角色卡为空时整块隐藏） */
 function renderPlayerCharOptions() {
   if (!el.playerCharField) return;
 
@@ -86,7 +86,7 @@ function renderPlayerCharOptions() {
   el.playerChar.innerHTML = '';
   const none = document.createElement('option');
   none.value = '';
-  none.textContent = list.length ? '（自己写一个）' : '角色库还是空的';
+  none.textContent = list.length ? '（自己写一个）' : '角色卡还是空的';
   el.playerChar.appendChild(none);
 
   for (const c of list) {
@@ -126,7 +126,7 @@ function showPlayerModal({ pending, title, sub, hint, confirmText }) {
   if (el.playerFootHint) el.playerFootHint.textContent = hint;
   if (el.btnStartPlay) el.btnStartPlay.textContent = confirmText;
 
-  // 每次打开都重列一遍角色库（可能刚加过新角色），并从空白开始
+  // 每次打开都重列一遍角色卡（可能刚加过新角色），并从空白开始
   renderPlayerCharOptions();
   el.playerName.value = '';
   el.playerProfile.value = '';
