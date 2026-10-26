@@ -48,6 +48,29 @@ export function summarizedCount(convo) {
 }
 
 /**
+ * 真正发给模型的最近一段历史：摘要覆盖点之后，再按「批式」窗口截尾。
+ * ⚠️ messages.js 发什么、rag.js 就排除什么，必须由这一家算。两处口径一分叉，
+ * 近期消息就会被当成「早先的回忆」捞回来，和原文重复还白占 topK。
+ * ⚠️ 只能截尾、不能每轮滑动：窗口每移一条，「历史第一句」就换成下一条，
+ * 上游的前缀缓存从历史开头整段作废（长对话里那是上万 token 按原价重算）。
+ * 攒到 2 倍预算才砍回目标窗口；摘要正常工作时 uncovered 只有 12~24 条，
+ * 砍这一步基本走不到。
+ */
+export function recentContextMessages(convo, maxTurns) {
+  const history = convoContextMessages(convo);
+  const covered = summarizedCount(convo);
+  // 摘要覆盖点失效（>= 历史长度）时退回 0，确保当前用户消息仍进入请求。
+  const uncovered = covered > 0 && covered < history.length ? history.slice(covered) : history;
+  const windowSize = Math.max(1, Number(maxTurns) || 20) * 2;
+  return uncovered.length > windowSize * 2 ? uncovered.slice(-windowSize) : uncovered;
+}
+
+/** 最近一段历史的条数，rag.js 用来排除「反正会进上下文」的消息 */
+export function recentContextCount(convo, maxTurns) {
+  return recentContextMessages(convo, maxTurns).length;
+}
+
+/**
  * 删掉 convo.messages[messageIndex] 之前调：把摘要的 start/end 跟着挪（挪完缩成空的段丢掉）。⚠️ start/end 是 convoContextMessages 的下标，不挪的话紧邻覆盖点那条**没被压缩过**的消息会滑进「已覆盖」区间，从此既不进摘要也不进上下文。
  */
 export function shiftSummariesForRemoval(convo, messageIndex) {

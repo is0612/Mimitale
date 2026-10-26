@@ -15,7 +15,7 @@ import { state } from '../core/state.js';
 import { characterForConvo } from './library.js';
 import { applyMacros } from './messages.js';
 import { convoUserName, effectiveWorldbookIds, isPlainChatConvo } from './cast.js';
-import { convoContextMessages } from './memory.js';
+import { convoContextMessages, recentContextCount } from './memory.js';
 import { isGmMode } from './narration.js';
 
 // 一次最多带几条进来。多了会挤掉真正最近的内容，而且 token 哗哗涨
@@ -69,10 +69,10 @@ export async function recallSection(convo) {
       // 和关键词注入用同一套规则，否则两处会给出不一致的世界书范围
       worldbookIds: effectiveWorldbookIds(convo),
       // 最近这些本来就会进上下文，别捞回来占位置。
-      // ⚠️ 口径必须和 buildApiMessages 一致：那边发出去的是最后 `maxTurns * 2` 条
-      //    （见 data/messages.js）。这里少排除一些的话，已经进上下文的近期消息
-      //    会被当成「早先的回忆」捞回来 —— 和原文重复，还白占 topK 的位置。
-      recentCount: Math.max(1, Number(settings.maxTurns) || 20) * 2,
+      // ⚠️ 条数必须和 buildApiMessages 同源（都走 data/memory.js 的 recentContextCount）：
+      //    自己另算一份的话，口径一偏，已经进上下文的近期消息会被当成「早先的回忆」
+      //    捞回来 —— 和原文重复，还白占 topK 的位置。
+      recentCount: recentContextCount(convo, settings.maxTurns),
       query,
       topK: RAG_TOP_K,
       minScore: RAG_MIN_SCORE

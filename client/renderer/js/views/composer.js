@@ -289,7 +289,8 @@ async function extendAssistantMessage(convo, endpoint, worldbook, ragSection, nu
       model: endpoint.model,
       messages,
       characterContext: characterContextForConvo(convo),
-      sampling: effectiveSampling(convo)
+      // opts.sampling 给「补救请求」单独压参数：面板补写只要抄一行状态表，不需要推理链。
+      sampling: { ...(effectiveSampling(convo) || {}), ...((opts && opts.sampling) || {}) }
     });
 
     if (!response || response.ok !== true) {
@@ -335,8 +336,11 @@ async function ensurePanelWritten(convo, endpoint, worldbook, ragSection, assist
 
   const before = String(assistant.content || '');
   // keepFinishReason：补问只是一次附加的补救请求，别让它改写这条回复的收尾信号
+  // thinking:false：补状态表是机械活（把这一轮的数值抄成一行），推理链在这里纯烧钱 ——
+  // 一次完整请求的思考量常常比状态表本身长几十倍。截断续写不在此列，那是正文，要质量。
   const res = await extendAssistantMessage(convo, endpoint, worldbook, ragSection, PANEL_PROMPT_NUDGE, {
-    keepFinishReason: true
+    keepFinishReason: true,
+    sampling: { thinking: false }
   });
   return res.ok && String(assistant.content || '') !== before;
 }

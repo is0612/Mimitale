@@ -86,6 +86,22 @@ function contextUsedLabel() {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
+/** 缓存命中率：算出 {cached, input, rate}，服务商没返回命中量时返回 null。
+ *  ⚠️ 顶栏、底部用量行都走这一份 —— 两处各算一遍迟早会出现「同一个数不一样」。 */
+function hitRateOf(usage) {
+  if (!usage) return null;
+  const cached = Number(usage.cached_tokens);
+  const input = Number(usage.prompt_tokens);
+  if (!Number.isFinite(cached) || !Number.isFinite(input) || input <= 0) return null;
+  return { cached, input, rate: Math.round((cached / input) * 100) };
+}
+
+/** 顶栏那颗「缓存 72%」；没有数据就返回空串，不显示比显示错的强 */
+function cacheHitLabel() {
+  const hit = hitRateOf(state.usage);
+  return hit ? `缓存 ${hit.rate}%` : '';
+}
+
 export function renderHeader() {
   const convo = activeConvo();
   const settings = state.settings || {};
@@ -109,6 +125,9 @@ export function renderHeader() {
     if (rounds) bits.push(`第 ${rounds} 轮`);
     const used = contextUsedLabel();
     if (used) bits.push(used);
+    // 缓存命中率紧跟输入量：它说的就是「这一坨输入里有多少是打折的」。
+    const hit = cacheHitLabel();
+    if (hit) bits.push(hit);
     el.convoMeta.textContent = bits.join(' · ');
   }
 
@@ -171,7 +190,12 @@ export function renderHeader() {
 
   if (state.usage && settings.showUsage !== false) {
     const u = state.usage;
-    let text = `本次用量：输入 ${u.prompt_tokens ?? '-'} / 输出 ${u.completion_tokens ?? '-'} tokens`;
+    // 服务商没返回命中量（比如没做前缀缓存的接口）就整段不写；
+    // 返回了 0 就老老实实写 0% —— 那说明这一轮确实一个都没命中（冷启动必然如此）。
+    const hit = hitRateOf(u);
+    let text = `本次用量：输入 ${u.prompt_tokens ?? '-'}`;
+    if (hit) text += `（缓存命中 ${hit.rate}%）`;
+    text += ` / 输出 ${u.completion_tokens ?? '-'} tokens`;
     // 思考量单独说 —— 它接近输出总量，就说明额度是被思考吃掉的。
     const rt = Number(u.reasoning_tokens);
     if (Number.isFinite(rt) && rt > 0) text += `（其中思考 ${rt}）`;

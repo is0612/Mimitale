@@ -379,6 +379,10 @@ function messageNode(message, index, character, labels, ctx) {
         auto > 0
           ? `这一条撞到「回复上限」，已经自动接着写了 ${auto} 次还是没写完 —— 可以点「继续」，或把上限调大`
           : '这一条撞到「回复上限」被截断了，可以点「继续」让它接着写';
+      // 推理模型的思考也吃这份额度。思考很长时「把上限调大」治标不治本，
+      // 关掉「深度思考」或者换个不思考的模型更直接 —— 不说出来用户只会一直加数字。
+      const think = Number(message.reasoningTokens) || 0;
+      if (think > 0) note.textContent += `（这一轮思考占了 ${think} token，它也吃同一份额度）`;
     } else {
       // finishReason 已经不是 length = 自动续写救回来了。中间断过一次，但文本不残缺
       note.textContent = '这一条中间撞到过「回复上限」，已经自动接着写完了';

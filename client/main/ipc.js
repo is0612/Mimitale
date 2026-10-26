@@ -503,7 +503,7 @@ function registerIpc() {
     });
     const hits = result.hits;
 
-    // section = 关键词命中的那批（紧跟人设之后）；deepSection = 常驻条目（送到更靠近生成位置的地方）
+    // section = 关键词命中的那批（排在对话历史之后）；deepSection = 常驻条目（更靠近生成位置）
     return {
       total: entries.length,
       scanDepth,

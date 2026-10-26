@@ -789,6 +789,22 @@ await scenario('设置：左导航切组', async () => {
   click(paramsNav);
   check('点左栏就切组', byId('sec-params').classList.contains('active') || paramsNav.classList.contains('active'));
   check('切到的这一组内容显示', visible(byId('sec-params')) && visible(byId('s-temp')));
+
+  // 「深度思考」下面那句说明必须跟着当前模型走。冒烟环境里是 test-model（非 DeepSeek），
+  // 开关存了也不会发 —— 说明必须把这件事说出来，否则就是「看着能点、点了没用」的静默失效。
+  const thinkHint = String(
+    (byId('s-thinking').closest('.check')?.querySelector('small')?.textContent || '').trim()
+  );
+  check(
+    '深度思考的说明按当前模型重写过（不是那句静态默认文案）',
+    thinkHint.includes('不收这个参数') || thinkHint.includes('回复上限'),
+    thinkHint
+  );
+  check(
+    '当前模型不收这个参数时，说明里点了模型名',
+    thinkHint.includes('不收这个参数') ? thinkHint.includes('test-model') : true,
+    thinkHint
+  );
   const thinkingBefore = byId('s-thinking').checked;
   byId('s-thinking').checked = !thinkingBefore;
   byId('s-thinking').dispatchEvent(new Event('change', { bubbles: true }));
@@ -2644,6 +2660,21 @@ await scenario('深度思考：会话参数透传', async () => {
   check('旧会话思考开关不覆盖统一设置', effectiveSampling({ sampling: { thinking: true } })?.thinking === undefined);
   check('旧会话关闭思考不覆盖默认', effectiveSampling({ sampling: { thinking: false } })?.thinking === undefined);
   check('思考参数拒绝非布尔值', effectiveSampling({ sampling: { thinking: 'true' } })?.thinking === undefined);
+
+  // 设置页那句说明靠 supportsThinking 判断。它必须和主进程 main/http.js 的闸门完全一致 ——
+  // 两边漂移的后果是「界面说这个模型支持、请求里其实没发」，用户怎么点都没反应。
+  const { supportsThinking } = await import('../renderer/js/data/providers.js');
+  const ep = (baseUrl, model) => ({ provider: { baseUrl }, model });
+  check(
+    '端点判断：DeepSeek 的两个思考模型算「收参数」',
+    ['deepseek-flash', 'deepseek-v4-pro'].every((m) => supportsThinking(ep('https://api.deepseek.com/v1', m)))
+  );
+  check('端点判断：DeepSeek 的其他模型不算', !supportsThinking(ep('https://api.deepseek.com/v1', 'deepseek-chat')));
+  check('端点判断：别的服务商一律不算', !supportsThinking(ep('https://api.openai.com/v1', 'deepseek-v4-pro')));
+  check(
+    '端点判断：地址写坏 / 没配端点时判成不收（不能抛）',
+    !supportsThinking(ep('这不是网址', 'deepseek-v4-pro')) && !supportsThinking(null)
+  );
 });
 
 await scenario('生成准备：停止后解除等待', async () => {
@@ -2979,6 +3010,60 @@ await scenario('摘要：覆盖点越界也不能吞掉当前对话', async () =
 });
 
 // ---------------------------------------------------------------------------
+//  回归：历史窗口只截尾、不每轮滑动（否则上游前缀缓存整段作废）
+//
+//  以前写的是 `uncovered.slice(-maxTurns * 2)`：每轮进来两条、最老的两条就被挤出去，
+//  「历史第一句」永远在变。模型服务商按**前缀**缓存，开头一变后面全部重算 ——
+//  长对话每轮都按原价重付上万 token。改成攒到 2 倍预算才砍回目标窗口：
+//  预算之内的请求只追加、不动开头，前缀能一直复用。
+// ---------------------------------------------------------------------------
+await scenario('上下文：历史窗口只截尾不滑动', async () => {
+  let messagesMod = null;
+  let stateMod = null;
+  try {
+    messagesMod = await import(new URL('js/data/messages.js', document.baseURI).href);
+    stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
+    check('上下文拼装模块能加载', typeof messagesMod.buildApiMessages === 'function');
+  } catch (err) {
+    check('上下文拼装模块能加载', false, (err && err.message) || String(err));
+  }
+  if (!messagesMod || typeof messagesMod.buildApiMessages !== 'function') return;
+
+  const savedSettings = stateMod.state.settings;
+  stateMod.state.settings = { ...(savedSettings || {}), maxTurns: 20 };
+
+  const convoWith = (count) => ({
+    id: `smoke-window-${count}`,
+    messages: Array.from({ length: count }, (_, i) => ({
+      role: i % 2 === 0 ? 'user' : 'assistant',
+      content: `第${i}条`
+    }))
+  });
+  // 只数真正进请求的对话消息；人设 / 预设那些 system 段不算
+  const sent = (count) =>
+    messagesMod.buildApiMessages(convoWith(count), '', '')
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => String(m.content));
+
+  const target = 20 * 2;
+  const budget = target * 2;
+
+  check('预算之内全量发送，不做任何截断', sent(budget).length === budget, `${sent(budget).length} / ${budget}`);
+  check('超出预算才砍回目标窗口', sent(budget + 2).length === target, `${sent(budget + 2).length} / ${target}`);
+
+  // 核心：多聊一轮之后，旧历史必须逐字不变 —— 这才叫「只追加、不改开头」。
+  const before = sent(70);
+  const after = sent(72);
+  check(
+    '多聊一轮后旧历史一字不改（前缀缓存还能复用）',
+    before.length === 70 && after.length === 72 && before.every((t, i) => t === after[i]),
+    `before ${before.length} / after ${after.length}`
+  );
+
+  stateMod.state.settings = savedSettings;
+});
+
+// ---------------------------------------------------------------------------
 //  回归：设置里的「默认人设」只能进「跟模型聊天」的会话，不许漏进世界模式 / 角色卡
 //
 //  真 bug：buildApiMessages 里人设原来写成 `character ? '' : assistantPersona(convo)`。
@@ -3128,8 +3213,11 @@ await scenario('默认人设：只进通用对话，不漏进世界模式和角�
 //  钉在人设之后（第 2 条消息），后面还压着历史 / 面板 / 后置指令 —— 几万 token 之后
 //  模型早忘了，于是「同一张卡在我们这儿的约束力弱于酒馆」。
 //
-//  现在：关键词条目照旧跟在人设之后；常驻条目单独一块，插在**对话后指令之后、
-//  「主角不可代写」之前**。这里直接用真模块算索引，不依赖界面。
+//  现在：关键词条目排在**对话历史之后**（理由见下）；常驻条目单独一块，插在
+//  **对话后指令之后、「主角不可代写」之前**。这里直接用真模块算索引，不依赖界面。
+//
+//  ⚠️ 关键词条目必须在历史之后：命中集合随最近 3 轮的关键词变，放在历史前面 =
+//     每轮在历史开头插一段会变的东西，上游前缀缓存整段作废（实测 90% → 30%）。
 //
 //  ⚠️ 最后一条（deep 必须排在【主角不可代写】**之前**）是这次改动最容易修坏的地方：
 //     `playerOwnershipReminder` 存在的理由就是「世界书条目太贴近生成位置，模型会把玩家
@@ -3172,7 +3260,7 @@ await scenario('世界书：常驻条目注入到靠近落笔的位置', async (
   check('【主角不可代写】还在（锚点没丢）', ownIdx >= 0, String(ownIdx));
 
   if (sectionIdx >= 0 && deepIdx >= 0 && histIdx >= 0 && ownIdx >= 0) {
-    check('关键词块排在对话历史之前（照旧紧跟人设）', sectionIdx < histIdx, `${sectionIdx} < ${histIdx}`);
+    check('关键词块排在对话历史之后（否则每轮把前缀缓存打掉）', sectionIdx > histIdx, `${sectionIdx} > ${histIdx}`);
     check('常驻块排在对话历史之后（这才叫深度注入）', deepIdx > histIdx, `${deepIdx} > ${histIdx}`);
     check('常驻块排在关键词块之后', deepIdx > sectionIdx, `${deepIdx} > ${sectionIdx}`);
     check(
@@ -3187,13 +3275,13 @@ await scenario('世界书：常驻条目注入到靠近落笔的位置', async (
     );
   }
 
-  // 兼容：老调用（和一堆测试）传的是**一个字符串** —— 那它就是关键词块，照旧的老位置。
+  // 兼容：老调用（和一堆测试）传的是**一个字符串** —— 那它就是关键词块。
   const legacyOut = messagesMod.buildApiMessages(conv, LEGACY, '');
   const legacyIdx = legacyOut.findIndex((m) => String((m && m.content) || '').includes('LEGACY-MARK'));
   const legacyHistIdx = legacyOut.findIndex((m) => String((m && m.content) || '').includes('HISTORY-MARK'));
   check('传字符串的老调用照旧生效', legacyIdx >= 0, String(legacyIdx));
-  check('老调用落在对话历史之前（老位置）', legacyIdx >= 0 && legacyHistIdx >= 0 && legacyIdx < legacyHistIdx,
-    `${legacyIdx} < ${legacyHistIdx}`);
+  check('老调用也落在对话历史之后（和对象形式同位置）', legacyIdx >= 0 && legacyHistIdx >= 0 && legacyIdx > legacyHistIdx,
+    `${legacyIdx} > ${legacyHistIdx}`);
   check(
     '老调用不会凭空多出常驻块',
     !legacyOut.some((m) => String((m && m.content) || '').includes('[世界设定 · 常驻]'))
@@ -7712,6 +7800,10 @@ await scenario('聊天：正文被截断时自动接着写完', async () => {
   // 思考 token 要标出来（usage.reasoning_tokens 由主进程归一后带上来）
   const usageText = byId('usage-text').textContent;
   check('用量行标出了思考 token', usageText.includes('其中思考 6'), usageText);
+  check('用量行标出了缓存命中率', usageText.includes('缓存命中 70%'), usageText);
+  // 顶栏副标题也带一颗 —— 底部那行是 12px 淡灰小字，真要看命中率的人不会去盯它
+  const metaText = byId('convo-meta').textContent;
+  check('顶栏副标题标出了缓存命中率', metaText.includes('缓存 70%'), metaText);
 
   check('没有错误气泡', $$('#messages .msg.error').length === 0);
   check('发送按钮恢复可用', byId('btn-send').getAttribute('data-mode') === 'send');
@@ -7747,6 +7839,13 @@ await scenario('聊天：截断续到上限后停下并提示', async () => {
   check(
     '说明里指出还能点「继续」',
     note ? note.textContent.includes('继续') : false,
+    note ? note.textContent : '无'
+  );
+  // 思考跟正文吃的是同一份「回复上限」额度。不把这件事写出来，用户看到半截正文
+  // 只会以为「模型就写这么短」，实际上额度全被推理链烧掉了（冒烟假后端每轮给 6 token）。
+  check(
+    '说明里报出了这一轮思考花了多少 token',
+    note ? /这一轮思考占了 \d+ token/.test(note.textContent) : false,
     note ? note.textContent : '无'
   );
 });

@@ -184,12 +184,13 @@ section('⑦ 语义检索不把已经在上下文里的消息再捞回来');
 {
   const rag = stripComments(read('renderer/js/data/rag.js'));
   const msg = stripComments(read('renderer/js/data/messages.js'));
-  // buildApiMessages 发出去的是最后 maxTurns * 2 条（口径以它为准）
-  ok(/const turns = Math\.max\(1,\s*Number\(settings\.maxTurns\)\s*\|\|\s*20\)/.test(msg) &&
-    /slice\(-turns \* 2\)/.test(msg),
-    'messages.js 的上下文轮数口径没变（maxTurns * 2）');
-  ok(/recentCount:\s*Math\.max\(1,\s*Number\(settings\.maxTurns\)\s*\|\|\s*20\)\s*\*\s*2/.test(rag),
-    'rag.js 的 recentCount 和 messages.js 用同一个口径（以前只排除 6 条）');
+  // 两边的窗口口径必须同源：都走 data/memory.js 的 recentContextMessages / Count
+  ok(/recentContextMessages\(convo,\s*settings\.maxTurns\)/.test(msg),
+    'messages.js 的上下文窗口走 memory.js 的 recentContextMessages');
+  ok(/recentCount:\s*recentContextCount\(convo,\s*settings\.maxTurns\)/.test(rag),
+    'rag.js 的 recentCount 和 messages.js 同源（以前只排除 6 条）');
+  ok(!/slice\(-\s*turns\s*\*\s*2\)/.test(msg),
+    '历史窗口不再每轮滑动（滑动会让上游前缀缓存从历史开头整段作废）');
 }
 
 // ---------------------------------------------------------------------------

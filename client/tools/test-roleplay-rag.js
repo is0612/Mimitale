@@ -75,7 +75,10 @@ function harness() {
     assert.ok(messages.some((message) => message.content === rag));
   }
   assert.equal(calls[0].query, 'question\nanswer', 'null/error/blank history is excluded');
-  assert.equal(calls[0].recentCount, 40, 'recent exclusion keeps the context turn count');
+  // 排除量 = 实际会进上下文的那一段（data/memory.js 的 recentContextCount），
+  // 不再写死 maxTurns * 2。这里只有 2 条有效历史，以前照样排除 40 条，
+  // 等于把本来可以捞回来的旧消息白砍掉 38 条。
+  assert.equal(calls[0].recentCount, 2, 'recent exclusion follows the real context window');
   const solo = await context.recallSection({ ...gm, gmMode: false });
   assert.ok(solo.includes('Bound NPC / Bound NPC / Player / Player'));
   const before = calls.length;

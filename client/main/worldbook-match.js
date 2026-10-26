@@ -201,8 +201,8 @@ function formatWorldbookSection(hits, header) {
   return `${header || WORLDBOOK_HEADER}\n\n${lines.join('\n\n')}`;
 }
 
-/** 把命中条目拆成两块：section（关键词命中，紧跟人设之后）、deepSection（常驻条目，送到贴近生成位置）。
- *  常驻条目多是规则类，钉在人设之后几万 token 就失去约束力，所以要拆。
+/** 把命中条目拆成两块：section（关键词命中，排在对话历史之后）、deepSection（常驻条目，贴近生成位置）。
+ *  常驻条目多是规则类，离生成位置太远就失去约束力，所以要拆。
  *  ⚠️ 判据只认 `constant === true`，不是「keys 为空」：不带关键词又没勾常驻的条目根本不会命中。 */
 function formatWorldbookSections(hits) {
   const list = Array.isArray(hits) ? hits : [];

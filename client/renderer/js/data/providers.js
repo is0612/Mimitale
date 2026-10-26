@@ -62,3 +62,17 @@ export function currentEndpoint() {
   const provider = providerById(s.activeProviderId) || providers()[0] || null;
   return provider ? { provider, model: s.activeModel || asArray(provider.models)[0] || '' } : null;
 }
+
+/** 这个端点收不收 `thinking` 参数（设置页据此决定「深度思考」说明怎么写）。
+ *  ⚠️ 必须和 `main/http.js` 的 `isDeepSeekThinkingModel` 一致：那边决定**发不发**，
+ *  这边只决定**说明怎么写**。两边漂移的后果是「界面说支持、实际没发」—— 静默失效。 */
+export function supportsThinking(endpoint) {
+  if (!endpoint || !endpoint.provider || !endpoint.model) return false;
+  let host = '';
+  try {
+    host = new URL(String(endpoint.provider.baseUrl || '')).hostname;
+  } catch (err) {
+    return false;
+  }
+  return host === 'api.deepseek.com' && /^(deepseek-flash|deepseek-v4-pro)$/i.test(endpoint.model);
+}

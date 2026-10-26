@@ -1489,8 +1489,9 @@ function registerStubs() {
         model,
         content: body,
         reasoning: '',
-        // 带 reasoning_tokens：界面要把它标在思考折叠标题和用量行上
-        usage: { prompt_tokens: 10, completion_tokens: 9, total_tokens: 19, reasoning_tokens: 6 },
+        // 带 reasoning_tokens：界面要把它标在思考折叠标题和用量行上。
+        // 带 cached_tokens：顶栏和用量行都要显示缓存命中率（10 个输入里命中 7 → 70%）。
+        usage: { prompt_tokens: 10, completion_tokens: 9, total_tokens: 19, reasoning_tokens: 6, cached_tokens: 7 },
         finishReason: stopped ? 'stop' : 'length'
       };
     }
@@ -2066,15 +2067,44 @@ function probeInjection(result) {
   // 「程序真的补问了一次」，而不只是碰巧拿到了值。
   // 认「只补这一件事」这个特征串（panel.js 的 PANEL_PROMPT_NUDGE 同理），
   // 别拿会被改写的句子开头当锚。
-  const nudgedPayload = chatPayloads.find((msgs) => {
+  // chatPayloads 与 chatSampling 是同一次请求里并排 push 的，下标一一对应 ——
+  // 靠下标把「这次请求要了什么参数」和「这次请求发了什么内容」对起来。
+  const nudgedIdx = chatPayloads.findIndex((msgs) => {
     const users = msgs.filter((m) => m && m.role === 'user');
     const last = users.length ? String(users[users.length - 1].content || '') : '';
     return last.includes('只补这一件事');
   });
   result.results.push({
     name: '属性：漏写状态表时程序补问了一次',
-    pass: !!nudgedPayload,
-    detail: nudgedPayload ? '' : '没找到带补问引导语的请求'
+    pass: nudgedIdx >= 0,
+    detail: nudgedIdx >= 0 ? '' : '没找到带补问引导语的请求'
+  });
+
+  // 补问只是把这一轮的数值抄成一行，推理链在这里纯烧钱（实测一次补问的思考量
+  // 常比状态表本身长几十倍），所以必须带 thinking:false。
+  const nudgedSampling = nudgedIdx >= 0 ? chatSampling[nudgedIdx] : null;
+  const panelNoThink = !!(nudgedSampling && nudgedSampling.thinking === false);
+  result.results.push({
+    name: '属性：补问状态表时关掉了深度思考',
+    pass: panelNoThink,
+    detail: panelNoThink ? '' : `补问请求的 sampling 是 ${JSON.stringify(nudgedSampling)}`
+  });
+
+  // 反向：截断续写/「继续」是正文，要质量，不能跟着降温。这条断言防的是
+  // 「顺手把 thinking:false 提到 extendAssistantMessage 里」那种一刀切改法。
+  const continueIdx = chatPayloads.findIndex((msgs) => {
+    const users = msgs.filter((m) => m && m.role === 'user');
+    const last = users.length ? String(users[users.length - 1].content || '') : '';
+    return last.includes('接着你上一条回复继续往下写');
+  });
+  const continueSampling = continueIdx >= 0 ? chatSampling[continueIdx] : null;
+  const continueKeepsThinking = !(continueSampling && continueSampling.thinking === false);
+  result.results.push({
+    name: '属性：续写正文不会被一起关掉深度思考',
+    pass: continueKeepsThinking,
+    detail: continueKeepsThinking
+      ? ''
+      : `续写请求带了 thinking:false：${JSON.stringify(continueSampling)}`
   });
 
   // 带范围的数值字段：注入时要告诉模型范围，并明确「超了会被拉回」。

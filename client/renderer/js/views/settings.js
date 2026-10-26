@@ -16,7 +16,7 @@ import { renderAppearanceForm } from './appearance.js';
 import { renderUserSection } from './userSettings.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
-import { providers, providerById, isBridgeProvider } from '../data/providers.js';
+import { providers, providerById, isBridgeProvider, currentEndpoint, supportsThinking } from '../data/providers.js';
 import { renderHeader } from './header.js';
 // 视图切换（单向：它只登记显隐/高亮，不认识本模块）
 import { showView, currentViewName } from './viewSwitch.js';
@@ -437,11 +437,26 @@ function savedNumber(value, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** 「深度思考」的说明跟着当前模型变：不支持这个参数时必须说出来 ——
+ *  否则开关看着能点、点了也确实存了，但请求里根本没发，属于静默失效。 */
+function updateThinkingHint() {
+  const box = el.s.thinking;
+  const label = box && box.closest ? box.closest('.check') : null;
+  const hint = label ? label.querySelector('small') : null;
+  if (!hint) return;
+  const endpoint = currentEndpoint();
+  const model = endpoint && endpoint.model ? `（${endpoint.model}）` : '';
+  hint.textContent = supportsThinking(endpoint)
+    ? '思考也算在「回复上限」的额度里，长篇扮演里它常常比正文还长。'
+    : `当前模型${model}不收这个参数，开关存了也不会发。`;
+}
+
 function fillSettingsForm(settings) {
   el.s.temp.value = savedNumber(settings.temperature, 0.7);
   el.s.maxTokens.value = Math.floor(savedNumber(settings.maxTokens, 8192));
   if (el.s.topP) el.s.topP.value = savedNumber(settings.topP, 0.95);
   if (el.s.thinking) el.s.thinking.checked = settings.thinking !== false;
+  updateThinkingHint();
   el.s.sendOnEnter.checked = settings.sendOnEnter !== false;
   el.s.showDate.checked = settings.showDate !== false;
   el.s.showUsage.checked = settings.showUsage !== false;

@@ -1,7 +1,11 @@
 'use strict';
 
 /** 消息数组：系统提示词、世界书、示例对话、历史、面板按固定顺序拼。
- *  ⚠️ 人设互斥：绑卡用卡 systemPrompt，纯聊天用默认人设，GM 一律不注入。 */
+ *  ⚠️ 顺序直接决定上游前缀缓存的命中率：**每轮会变的东西必须排在历史之后**
+ *  （语义检索、面板、选项都是），排到历史前面等于每轮把上万 token 的历史按原价重算。
+ *  实测（DeepSeek / 2130 token 输入，2026-10-26）：前缀不变、末尾追加 → 命中 90%；
+ *  前缀里换掉一段世界设定 → 只剩 30%。差的 60% 就是白付的钱。
+ *  人设互斥：绑卡用卡 systemPrompt，纯聊天用默认人设，GM 一律不注入。 */
 
 import { state } from '../core/state.js';
 import { asArray } from '../core/util.js';
@@ -11,7 +15,7 @@ import {
   WORLDBOOK_SCAN_DEPTH
 } from './library.js';
 import { compileAssistantCleaner, convoFieldDisplayNames, formatPanelForPrompt, panelGroupNames, PANEL_PROMPT_REMINDER } from './panel.js';
-import { convoContextMessages, formatSummaryForPrompt, summarizedCount } from './memory.js';
+import { convoContextMessages, formatSummaryForPrompt, recentContextMessages } from './memory.js';
 import {
   EMPHASIS_REMINDER,
   gmRuleText,
@@ -212,13 +216,9 @@ export function buildApiMessages(convo, worldbook, ragSection) {
 
   // 摘要覆盖点按同一份有效历史计数；空占位和无正文消息不发给模型。
   const history = convoContextMessages(convo);
-
-  const turns = Math.max(1, Number(settings.maxTurns) || 20);
-  // 摘要覆盖点失效时退回最近 N 轮，确保当前用户消息仍进入请求。
-  const summarized = summarizedCount(convo);
-  const covered = summarized >= history.length ? 0 : summarized;
-  const uncovered = covered > 0 ? history.slice(covered) : history;
-  const recent = uncovered.slice(-turns * 2);
+  // 窗口口径住在 data/memory.js（rag.js 共用同一份）；别在这里自己 slice，
+  // 两处一旦分叉，近期消息会被 RAG 当成「往事」捞回来。
+  const recent = recentContextMessages(convo, settings.maxTurns);
 
   const messages = [];
 
@@ -285,17 +285,8 @@ export function buildApiMessages(convo, worldbook, ragSection) {
 
   if (parts.length) messages.push({ role: 'system', content: parts.join('\n\n') });
 
-  // ---- 2. 世界书：关键词命中的设定紧跟人设之后（After Char Defs）----
-  // ⚠️ 这里只放关键词命中的；常驻条目在 6b 步，要靠生成位置近。
+  // ---- 2. 世界书：命中段见 5a、常驻段见 6b（两段都要贴着生成位置）----
   const wb = worldbookParts(worldbook);
-  if (!plainChat && wb.section.trim()) {
-    messages.push({ role: 'system', content: applyMacros(wb.section, character, me, charMacro).trim() });
-  }
-
-  // ---- 2.2 语义检索捞回的往事 / 设定（可选）----
-  if (!plainChat && String(ragSection || '').trim()) {
-    messages.push({ role: 'system', content: String(ragSection).trim() });
-  }
 
   // ---- 2.5 较早对话的摘要（先读背景再读最近对话）----
   const summaryText = formatSummaryForPrompt(convo);
@@ -328,11 +319,27 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   const panelText = plainChat ? '' : formatPanelForPrompt(convo);
   if (panelText) messages.push({ role: 'system', content: panelText });
 
-  // ---- 5b. 剧情选项：只在开了选项时注入 ----
+  // ---- 5a. 世界书：关键词命中的那批设定 ----
+  // ⚠️ 必须排在历史之后：命中集合随最近 3 轮的关键词变（WORLDBOOK_SCAN_DEPTH = 6），
+  // 放在历史前面 = 每轮都在历史开头插一段会变的东西，上游前缀缓存整段作废。
+  // 实测（DeepSeek / 2136 token 输入 / 只换掉这一段，2026-10-26）：
+  //   夹在人设和历史中间 → 命中 30%；挪到历史之后 → 命中 72%。
+  // 顺带一个好处：设定离生成位置近了，比压在几万 token 之外更有约束力。
+  if (!plainChat && wb.section.trim()) {
+    messages.push({ role: 'system', content: applyMacros(wb.section, character, me, charMacro).trim() });
+  }
+
+  // ---- 5b. 语义检索捞回的往事 / 设定（可选）----
+  // ⚠️ 同样必须在历史之后：检索结果按「最近几条对话」现算，几乎每轮都不一样。
+  if (!plainChat && String(ragSection || '').trim()) {
+    messages.push({ role: 'system', content: String(ragSection).trim() });
+  }
+
+  // ---- 5c. 剧情选项：只在开了选项时注入 ----
   const optionsText = plainChat ? '' : optionsInstruction(convo);
   if (optionsText) messages.push({ role: 'system', content: optionsText });
 
-  // ---- 5c. 表情标签：只在配了「带情绪键的表情图」时注入 ----
+  // ---- 5d. 表情标签：只在配了「带情绪键的表情图」时注入 ----
   const emoText = plainChat ? '' : expressionInstruction(convo);
   if (emoText) messages.push({ role: 'system', content: emoText });
 

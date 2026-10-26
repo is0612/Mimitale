@@ -268,14 +268,36 @@ function normalizeNetworkError(err) {
   return (err && err.message) || '未知网络错误。';
 }
 
-/** 把服务商各写各的「思考 token」归一到 usage.reasoning_tokens：有的放在
- *  completion_tokens_details，有的直接给顶层 —— 取错地方界面上就是空白。 */
+/** 取第一个能当数字用的值；Number(null) 是 0，所以 null/undefined/空串都得先排除 */
+function firstFinite(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/** 把服务商各写各的「思考 token」「缓存命中 token」归一：
+ *  思考 → usage.reasoning_tokens（有的放 completion_tokens_details，有的在顶层）
+ *  缓存 → usage.cached_tokens（DeepSeek 叫 prompt_cache_hit_tokens，OpenAI 在
+ *         prompt_tokens_details.cached_tokens，Anthropic 叫 cache_read_input_tokens）
+ *  ⚠️ 取错地方界面上就是空白，且看起来像「没省到钱」。 */
 function normalizeUsage(usage) {
   if (!usage || typeof usage !== 'object') return usage;
   if (!Number.isFinite(Number(usage.reasoning_tokens))) {
     const details = usage.completion_tokens_details || usage.output_tokens_details;
     const n = Number(details && details.reasoning_tokens);
     if (Number.isFinite(n)) usage.reasoning_tokens = n;
+  }
+  if (!Number.isFinite(Number(usage.cached_tokens))) {
+    const prompt = usage.prompt_tokens_details || usage.input_tokens_details;
+    const hit = firstFinite(
+      usage.prompt_cache_hit_tokens,
+      prompt && prompt.cached_tokens,
+      usage.cache_read_input_tokens
+    );
+    if (hit !== null) usage.cached_tokens = hit;
   }
   return usage;
 }

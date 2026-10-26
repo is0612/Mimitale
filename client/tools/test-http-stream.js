@@ -78,6 +78,23 @@ test.before(async () => {
     } else if (route === 'json-reply') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       setTimeout(() => res.end(JSON.stringify({ choices: [{ message: { content: 'complete' }, finish_reason: 'stop' }], usage: { completion_tokens: 1 } })), 100);
+    } else if (route === 'usage-deepseek') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`${sse({
+        choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 1000, completion_tokens: 10, prompt_cache_hit_tokens: 900 }
+      })}data: [DONE]\n\n`);
+    } else if (route === 'usage-openai') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.end(`${sse({
+        choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }],
+        usage: {
+          prompt_tokens: 1000,
+          completion_tokens: 10,
+          prompt_tokens_details: { cached_tokens: 800 },
+          completion_tokens_details: { reasoning_tokens: 7 }
+        }
+      })}data: [DONE]\n\n`);
     } else if (route === 'success-end') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       res.end(`${sse({ choices: [{ delta: { content: 'complete' }, finish_reason: 'stop' }] })}data: [DONE]\n\n`);
@@ -240,4 +257,18 @@ test('finish_reason无DONE时正常成功', async () => {
 test('DONE标记正常成功', async () => {
   const result = await call('done', 1000, undefined, 0);
   assert.equal(result.content, 'done');
+});
+
+// 前缀缓存的命中量各家字段名都不一样，取错地方界面上就是空白 ——
+// 看起来像「这次一分没省」，实际是没读到。
+test('缓存命中token归一到usage.cached_tokens（DeepSeek字段）', async () => {
+  const result = await call('usage-deepseek', 1000, undefined, 0);
+  assert.equal(result.usage.cached_tokens, 900);
+  assert.equal(result.usage.prompt_tokens, 1000);
+});
+
+test('缓存命中token归一到usage.cached_tokens（OpenAI字段）', async () => {
+  const result = await call('usage-openai', 1000, undefined, 0);
+  assert.equal(result.usage.cached_tokens, 800);
+  assert.equal(result.usage.reasoning_tokens, 7);
 });
