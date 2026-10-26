@@ -2748,11 +2748,12 @@ function probeImport(result) {
   }
 
   if (out) {
-    const char = (out.characters || [])[0];
+    // 这一批里还会多出一张「世界书包出来的卡」，所以按名字找，别拿 [0]
+    const char = (out.characters || []).find((c) => c.name === '导入测试角色');
     const book = (out.worldbooks || []).find((b) => b.name === '卡里自带的世界书');
     const standalone = (out.worldbooks || []).find((b) => b.name === '独立世界书');
 
-    push('导入：PNG 卡读出来了', (out.characters || []).length === 1 && !!char && char.name === '导入测试角色',
+    push('导入：PNG 卡读出来了', !!char && char.name === '导入测试角色',
       char ? `roles=${out.characters.length} name=${char.name}` : JSON.stringify(out.errors));
     push('导入：卡里内嵌的世界书被存下来了（以前整本丢掉）', !!book,
       book ? `「${book.name}」${(book.entries || []).length} 条` : JSON.stringify((out.worldbooks || []).map((b) => b.name)));
@@ -2769,9 +2770,13 @@ function probeImport(result) {
     push('导入：temp 字段 worldbook 没有留在角色上', !!char && !('worldbook' in char),
       char ? Object.keys(char).join(',') : '没有角色');
 
-    push('导入：单独的 lorebook JSON 进的是世界书库、不是角色卡',
-      !!standalone && (out.characters || []).length === 1,
-      `worldbooks=${(out.worldbooks || []).map((b) => b.name).join(',')} roles=${(out.characters || []).length}`);
+    const promotedCard = (out.characters || []).find((c) => c.name === '独立世界书');
+    push('导入：单独的 lorebook 会被包成一张同名角色卡（书没有卡就没人能打开它）',
+      !!promotedCard && !!standalone && (promotedCard.worldbookIds || [])[0] === standalone.id,
+      `cards=${JSON.stringify((out.characters || []).map((c) => c.name))} worldbookIds=${JSON.stringify(promotedCard && promotedCard.worldbookIds)}`);
+    push('导入：包出来的卡记在被包名单里（界面要单独说一句）',
+      (out.promoted || []).includes('独立世界书'),
+      JSON.stringify(out.promoted));
     push('导入：World Info 的字段映射没丢（key → keys）',
       !!standalone && (standalone.entries || []).length === 1 && standalone.entries[0].keys[0] === '导入关键词',
       standalone ? JSON.stringify(standalone.entries && standalone.entries[0]) : '没有这本书');
@@ -2779,7 +2784,7 @@ function probeImport(result) {
     push('导入：认不出来的文件只记一条错误、不影响别的文件',
       (out.errors || []).length === 1 && String(out.errors[0]).includes('随便一个文件.txt'),
       JSON.stringify(out.errors));
-    push('导入：整批结果里角色只多了一个', (out.characters || []).length === 1,
+    push('导入：PNG 卡一个 + 世界书包出来的一个 = 2', (out.characters || []).length === 2,
       `roles=${(out.characters || []).length}`);
   }
 
@@ -2814,8 +2819,10 @@ function probeImport(result) {
       castImported.characters[0].personality === '温和可靠' &&
       typeof castImported.characters[0].id === 'string' && !!castImported.characters[0].id,
     castImported && castImported.characters[0] ? JSON.stringify(castImported.characters[0]) : '没有书');
-  push('导入：NPC 不会被当成新的角色卡塞进角色卡', (castOut.characters || []).length === 0,
-    `roles=${(castOut.characters || []).length}`);
+  push('导入：书里的 NPC 不会被当成新角色卡（只包出书本身那一张）',
+    (castOut.characters || []).length === 1 &&
+      (castOut.characters || [])[0].name === '带 NPC 的世界书',
+    `roles=${JSON.stringify((castOut.characters || []).map((c) => c.name))}`);
   push('导入：书里没有 characters 时也不会凭空造副本',
     (out.worldbooks || []).length > 0 && (out.worldbooks || []).every((b) => Array.isArray(b.characters)),
     `books=${(out.worldbooks || []).map((b) => `${b.name}:${(b.characters || []).length}`).join(' ')}`);
@@ -4119,14 +4126,19 @@ async function probeWorldbookExportRoundTrip(win, result) {
       });
       const b = (back.worldbooks || [])[0];
       const cast = b && Array.isArray(b.characters) ? b.characters : [];
+      const cards = back.characters || [];
+      // 单独一份书的文件进来会被包成**一张**同名卡（书只能跟着卡走）；
+      // 书里那 2 个 NPC 不该各自变成一张卡。
       backOk =
         !!b &&
         (b.entries || []).length === 2 &&
         cast.length === 2 &&
         cast[0].name === '顾言' &&
         cast[0].personality === '温和可靠' &&
-        (back.characters || []).length === 0;
-      backDetail = `书=${b && b.name} 条目=${b ? (b.entries || []).length : 0} NPC=${cast.map((c) => c.name).join('、')} 新增角色卡=${(back.characters || []).length} errors=${JSON.stringify(
+        cards.length === 1 &&
+        cards[0].name === b.name &&
+        (cards[0].worldbookIds || [])[0] === b.id;
+      backDetail = `书=${b && b.name} 条目=${b ? (b.entries || []).length : 0} NPC=${cast.map((c) => c.name).join('、')} 新增角色卡=${cards.map((c) => c.name).join('、')} errors=${JSON.stringify(
         back.errors
       )}`;
     } catch (err) {

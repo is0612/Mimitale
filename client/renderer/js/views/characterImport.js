@@ -52,6 +52,8 @@ export async function pickImportFiles({ before, button, busyText, idleText } = {
   const added = Array.isArray(result.characters) ? result.characters : [];
   const addedBooks = Array.isArray(result.worldbooks) ? result.worldbooks : [];
   const errors = Array.isArray(result.errors) ? result.errors : [];
+  // 主进程把独立的世界书包成了同名角色卡，这里要把书名带回来单独说一句
+  const promoted = Array.isArray(result.promoted) ? result.promoted : [];
 
   if (!added.length && !addedBooks.length) {
     showToast(errors.length ? errors[0] : '没有导入任何内容', 'error');
@@ -59,7 +61,7 @@ export async function pickImportFiles({ before, button, busyText, idleText } = {
   }
 
   const { books: freshBooks, chars: freshChars } = reissueImported(addedBooks, added);
-  return { freshBooks, freshChars, errors };
+  return { freshBooks, freshChars, errors, promoted };
 }
 
 // 隔一会儿再补一条，不然会被前一条提示盖掉
@@ -81,7 +83,7 @@ async function importCards() {
   });
   if (!picked) return;
 
-  const { freshBooks, freshChars, errors } = picked;
+  const { freshBooks, freshChars, errors, promoted } = picked;
 
   state.worldbooks = [...worldbooks(), ...freshBooks];
   state.characters = [...characters(), ...freshChars];
@@ -95,7 +97,12 @@ async function importCards() {
   const parts = [];
   if (freshChars.length) parts.push(`${freshChars.length} 个角色：${freshChars.map((c) => c.name).join('、')}`);
   if (freshBooks.length) parts.push(`${freshBooks.length} 个世界书`);
-  showToast(`已导入 ${parts.join('，')}`, 'ok');
+  let text = `已导入 ${parts.join('，')}`;
+  // 世界书文件没有角色卡字段，是被包成卡的 —— 卡上除书名外都是空的，得说清楚
+  if (promoted.length) {
+    text += `（${promoted.join('、')} 是世界书文件，已建成同名角色卡：卡上的描述和开场白还是空的，去补一下）`;
+  }
+  showToast(text, 'ok');
 
   warnImportErrors(errors);
 }

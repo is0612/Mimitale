@@ -198,7 +198,7 @@ client/
 │   ├── worldbook-*.js     世界书：解析、落盘、关键词匹配
 │   ├── presets.js         预设：落盘时的归一化（说明与正文分离）
 │   ├── card-import.js     导入一个文件的解析
-│   ├── import-files.js    导入编排（读文件 → 解析 → 自动绑定）
+│   ├── import-files.js    导入编排（读文件 → 解析 → 自动绑定 / 单独的书的包成同名卡）
 │   ├── png.js             PNG 角色卡的读写（tEXt / zTXt / iTXt 里的 ccv3 / chara 块）
 │   ├── vectors.js         向量 / 余弦相似度 / 排序
 │   └── request-log.js     「请求记录」：只存内存的环形缓冲，最近 20 条

@@ -12,6 +12,9 @@
 //  断了的话表现是「卡导进来了、书也在库里，但就是不生效」——
 //  不报错、不提示，只能靠人发现。
 //
+//  ⚠️ 反过来，**独立的世界书文件**会被包成一张同名角色卡：书只能跟着卡走，
+//  没有「一本躺着的书」这种形态（世界书列表页已撤）。见 cardForWorldbook。
+//
 //  这里只负责编排：读文件、大小闸门、分派、绑定。
 //  真正的形状识别和归一化在 main/card-import.js。
 //  fs 由调用方注入，测试能喂内存里的假文件系统。
@@ -21,6 +24,20 @@
 const MAX_IMPORT_BYTES = 12 * 1024 * 1024;
 // 一次导入的文件数上限，防止手滑全选整个目录
 const MAX_IMPORT_FILES = 100;
+
+/**
+ * 把一本**独立的**世界书包成一张角色卡（卡名 = 书名，书挂在卡上）。
+ *
+ * 书和卡现在是同一个东西的两半，没有「一本躺着的书」这种形态：脱离了卡，它既没有
+ * 打开入口也没法挂到别的卡上。卡上除书名外全是空的 —— 描述 / 开场白要用户自己补。
+ *
+ * @returns {object|null} 归一化后的角色；没有归一化器时返回 null（调用方只收书）
+ */
+function cardForWorldbook(book, normalizeCharacters) {
+  if (typeof normalizeCharacters !== 'function') return null;
+  const name = String((book && book.name) || '').trim() || '未命名角色';
+  return normalizeCharacters({ name, worldbookIds: [(book && book.id) || ''].filter(Boolean), source: 'json' });
+}
 
 /**
  * 把一批文件解析成「角色 + 世界书」。
@@ -37,7 +54,8 @@ const MAX_IMPORT_FILES = 100;
  * @param {function} opts.basename   (path) => string；不传就按分隔符切
  * @param {function} opts.extname    (path) => string
  * @param {number}   [opts.maxBytes]
- * @returns {{characters: object[], worldbooks: object[], errors: string[]}}
+ * @returns {{characters: object[], worldbooks: object[], errors: string[], promoted: string[]}}
+ *          `promoted` = 被包成角色卡的那些世界书的书名
  */
 function importFiles(opts) {
   const o = opts || {};
@@ -60,9 +78,11 @@ function importFiles(opts) {
   const characters = [];
   const worldbooks = [];
   const errors = [];
+  // 被包成角色卡的世界书（书名）：渲染层要拿它单独说一句，不然用户不知道卡是哪来的
+  const promoted = [];
 
   if (typeof readFile !== 'function' || typeof parseImportFile !== 'function') {
-    return { characters, worldbooks, errors: ['导入链路没有配好（缺少 readFile / parseImportFile）'] };
+    return { characters, worldbooks, errors: ['导入链路没有配好（缺少 readFile / parseImportFile）'], promoted };
   }
 
   for (const file of paths.slice(0, MAX_IMPORT_FILES)) {
@@ -105,6 +125,13 @@ function importFiles(opts) {
 
     if (parsed.kind === 'worldbook') {
       worldbooks.push(parsed.worldbook);
+      // 🔴 书只能跟着卡走（世界书列表页已撤）：孤立的一本书进来没有任何入口能打开它，
+      //    也没法挂到别的卡上。所以包成一张同名卡，书挂在这张卡上。
+      const card = cardForWorldbook(parsed.worldbook, normalizeCharacters);
+      if (card) {
+        characters.push(card);
+        promoted.push(card.name);
+      }
       continue;
     }
 
@@ -121,7 +148,7 @@ function importFiles(opts) {
     errors.push(`一次最多导入 ${MAX_IMPORT_FILES} 个文件，剩下的被跳过了`);
   }
 
-  return { characters, worldbooks, errors };
+  return { characters, worldbooks, errors, promoted };
 }
 
 module.exports = { MAX_IMPORT_BYTES, MAX_IMPORT_FILES, importFiles };
