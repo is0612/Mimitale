@@ -21,7 +21,45 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 const byId = (x) => document.getElementById(x);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const rawSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// 死等是整套测试最大的一笔开销（257 处 sleep、合计 ~47s，占总耗时三分之二）。
+// 这里改成「界面静下来就提前返回」：DOM 连续 QUIET_MS 没有变动 = 渲染到位。
+// ⚠️ 只会早退，绝不会比调用方给的 ms 更久 —— 上限语义没变。
+// ⚠️ 它等的是**渲染**，不是**落盘**：防抖那 350ms 期间界面一样是静的。
+//    所以要断言磁盘状态的地方不能靠 sleep，得用 waitFor 轮询 getXxx()。
+let domMutations = 0;
+new MutationObserver(() => { domMutations++; }).observe(document.documentElement, {
+  subtree: true,
+  childList: true,
+  attributes: true,
+  characterData: true
+});
+const QUIET_MS = 60;
+
+// 正在流式生成时，chunk 在 IPC 里排着队，界面会静默几十毫秒 ——
+// 那不是「渲染完了」，是「下一片还没到」。把它算进静默会让断言读到半截回复。
+const generatingNow = () => {
+  const btn = byId('btn-send');
+  return !!btn && btn.getAttribute('data-mode') !== 'send';
+};
+
+async function sleep(ms) {
+  if (ms < 40) return rawSleep(ms);
+  const deadline = performance.now() + ms;
+  let seen = domMutations;
+  let quietSince = performance.now();
+  for (;;) {
+    await rawSleep(8);
+    const now = performance.now();
+    if (generatingNow() || domMutations !== seen) {
+      seen = domMutations;
+      quietSince = now;
+      continue;
+    }
+    if (now - quietSince >= QUIET_MS || now >= deadline) return;
+  }
+}
 
 const results = [];
 const notes = [];
@@ -50,7 +88,7 @@ async function waitFor(label, fn, timeout = 5000) {
     }
     if (ok) return ok;
     if (Date.now() - t0 > timeout) throw new Error(`等待超时（${timeout}ms）：${label}`);
-    await sleep(25);
+    await sleep(12);
   }
 }
 
@@ -66,7 +104,7 @@ async function settlePanelValue(name, expected, timeout = 3000) {
     const a = cs.conversations.find((c) => c.id === cs.activeId);
     if (a && a.panel && panelValByName(a.panel, name) === expected) return a;
     if (Date.now() - t0 > timeout) return null;
-    await sleep(25);
+    await sleep(12);
   }
 }
 
@@ -77,6 +115,8 @@ async function settlePanelValue(name, expected, timeout = 3000) {
 const SCENARIO_FILTER = typeof SMOKE_FILTER === 'undefined' ? { only: [], skip: [] } : SMOKE_FILTER;
 
 function scenarioSelected(name) {
+  const pick = SCENARIO_FILTER.pick || [];
+  if (pick.length) return pick.includes(name);
   const only = SCENARIO_FILTER.only || [];
   const skip = SCENARIO_FILTER.skip || [];
   if (only.length && !only.some((k) => name.includes(k))) return false;
@@ -179,29 +219,25 @@ async function openMsgMore(node) {
 }
 
 /**
- * 点角色卡上的「聊天」，并把「你是谁」那一步走完。
+ * 点角色卡上的「对话」，并把「你是谁」那一步走完。
  *
  * 开聊前会先弹这个窗（和「进世界」共用同一个），不填就是默认的「你」；
- * 传 opts.name / opts.profile 可以顺手把身份填上。
+ * 传 opts.name / opts.profile 可以顺手把身份填上，opts.greeting 挑第几条开场白。
  */
 async function startChatWith(card, opts = {}) {
-  click(buttonByText(card, '聊天'));
+  click(buttonByText(card, '对话'));
   await waitFor('「你是谁」弹窗打开', () => shown('#player-modal'));
   if (opts.name) setValue('#player-name', opts.name);
   if (opts.profile) setValue('#player-profile', opts.profile);
-  click('#btn-start-play');
 
-  // 卡上带**多条**开场白时会先弹「选一条开场白」等着（worldPlay 的
-  // applyCharacterChoice 里 await 着它）。只有一条的卡不会弹 —— 那时候
-  // 下面这个循环会因为身份弹窗已经关掉而立刻退出，一轮都不空转。
-  for (let i = 0; i < 20 && shown('#player-modal') && !shown('#pick-modal'); i += 1) await sleep(25);
-  if (shown('#pick-modal')) {
-    const rows = $$('#pick-list .pick-item');
+  // 卡上带**多条**开场白时，选择区就在这个弹窗里（一条时整块不出现，直接用那一条）
+  if (opts.greeting !== undefined) {
+    const rows = $$('#player-opening-list .opening-item');
     const idx = Math.min(Math.max(Number(opts.greeting) || 0, 0), Math.max(rows.length - 1, 0));
     if (rows[idx]) rows[idx].click();
-    await waitFor('「选一条开场白」关掉', () => !shown('#pick-modal'));
   }
 
+  click('#btn-start-play');
   await waitFor('「你是谁」弹窗关掉', () => !shown('#player-modal'));
 }
 
@@ -275,7 +311,7 @@ function addAndSelect(select, value) {
   return node;
 }
 
-/** 按按钮上的文字找按钮（卡片上的「编辑」「聊天」「游玩」都是这么找的） */
+/** 按按钮上的文字找按钮（卡片上的「编辑」「对话」都是这么找的） */
 function buttonByText(root, text) {
   if (!root) return null;
   return Array.from(root.querySelectorAll('button')).find((b) => b.textContent.trim() === text) || null;
@@ -290,33 +326,45 @@ function shown(sel) {
 /**
  * 打开某本世界书的编辑器。
  *
- * 世界书没有独立入口了：只能从角色的「自带世界书」进。这里开一张**草稿**角色
- * （不保存、不落盘，不给角色卡加卡）、绑上目标书，再点行上的「编辑」。
- * ⚠️ 每次调用都会换一张新草稿 —— 上一次的草稿没有改动提示，直接覆盖不会弹框。
+ * ⚠️ 2026-10-26 起角色卡不再能「从库里挑一本绑上」：一张卡的书只有两条来源 ——
+ *    导入的角色卡自带，或者在卡上「＋ 新建」现场写一本。所以夹具里那本「冒烟测试世界」
+ *    没有 UI 入口可以进，这里直接调编辑器模块自己那颗 `openWorldbookEditor(id)`
+ *    （角色卡行上的「编辑」按的也是它）。测的是编辑器本身，不是导航。
  */
 async function openWorldbookEditor(bookName) {
-  click('#btn-chars');
-  await waitFor('切到角色卡', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
-  click('#char-section-tab-worldbook');
-  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
-
-  click('#c-wb-add-btn');
-  await waitFor('绑定浮层出现', () => !!$('.cwb-picker'));
-  const row = $$('.cwb-picker-row').find((r) => r.textContent.includes(bookName));
-  if (!row) throw new Error(`绑定浮层里没有「${bookName}」`);
-  click(row);
-  await waitFor('绑定完成', () => $$('#c-wb-list .cwb-row').some((r) => r.textContent.includes(bookName)));
-
-  const line = $$('#c-wb-list .cwb-row').find((r) => r.textContent.includes(bookName));
-  click(buttonByText(line, '编辑'));
-  await waitFor('世界书弹窗打开', () => shown('#view-wb-editor'));
+  const [lib, wb] = await Promise.all([
+    import(new URL('js/data/library.js', document.baseURI).href),
+    import(new URL('js/views/worldbook.js', document.baseURI).href)
+  ]);
+  const book = lib.worldbooks().find((b) => String(b.name || '').includes(bookName));
+  if (!book) throw new Error(`世界书库里没有「${bookName}」`);
+  wb.openWorldbookEditor(book.id);
+  await waitFor('世界书编辑器打开', () => shown('#view-wb-editor'));
 }
 
 /**
- * 造一张**已保存**的角色卡并绑上一本书，返回角色名。
- * 世界书没有列表页之后，卡封面那颗「进入世界」是唯一的进世界入口。
+ * 把某本书挂到一张**已保存**的卡上（直接改内存 + 落盘）。
+ *
+ * ⚠️ 「从库里挑一本绑上」的入口撤了，卡的书只能自带或现场新建；测试要复用夹具那本书
+ *    只能这么挂。落的是当年 bindWorldbookToCharacter 写的同一个字段。
+ */
+async function attachBookToCard(charName, bookName) {
+  const [stateMod, persistMod] = await Promise.all([
+    import(new URL('js/core/state.js', document.baseURI).href),
+    import(new URL('js/data/persist.js', document.baseURI).href)
+  ]);
+  const book = (await savedWorldbooks()).find((b) => String(b.name || '').includes(bookName));
+  const card = (stateMod.state.characters || []).find((c) => c.name === charName);
+  if (!book || !card) throw new Error(`挂书失败：书「${bookName}」或卡「${charName}」不在`);
+  card.worldbookIds = [book.id];
+  card.updatedAt = Date.now();
+  await persistMod.persistLibrary();
+  return book;
+}
+
+/**
+ * 造一张**已保存**的角色卡，并把夹具里那本书挂给它，返回角色名。
+ * 卡上那颗「对话」是唯一的开局入口（角色卡开局就是 GM 局，卡的书跟着一起进）。
  */
 async function createCharBoundTo(bookName, charName) {
   click('#btn-chars');
@@ -325,19 +373,12 @@ async function createCharBoundTo(bookName, charName) {
   await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
   setValue('#c-name', charName);
 
-  click('#char-section-tab-worldbook');
-  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
-  click('#c-wb-add-btn');
-  await waitFor('绑定浮层出现', () => !!$('.cwb-picker'));
-  const row = $$('.cwb-picker-row').find((r) => r.textContent.includes(bookName));
-  if (!row) throw new Error(`绑定浮层里没有「${bookName}」`);
-  click(row);
-  await waitFor('绑定完成', () => $$('#c-wb-list .cwb-row').some((r) => r.textContent.includes(bookName)));
-
   click('#btn-save-char');
   await waitFor('角色保存完成', () => byId('char-save-state').dataset.state === 'saved');
-  click('#btn-close-chars');
+  if (shown('#view-char-editor')) click('#btn-close-chars');
   await waitFor('回到角色卡', () => shown('#view-chars'));
+
+  await attachBookToCard(charName, bookName);
 }
 
 async function savedCharacters() {
@@ -970,8 +1011,8 @@ await scenario('角色卡：新建角色', async () => {
 
   const card = $$('#char-page-grid .char-card')[0];
   check(
-    '卡片上有「编辑 / 导出 / 聊天」三个入口',
-    !!buttonByText(card, '编辑') && !!buttonByText(card, '导出') && !!buttonByText(card, '聊天')
+    '卡片上有「编辑 / 导出 / 对话」三个入口',
+    !!buttonByText(card, '编辑') && !!buttonByText(card, '导出') && !!buttonByText(card, '对话')
   );
   check(
     '卡片的「导出」不用进详情页就能点',
@@ -1056,7 +1097,7 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   //    2026-10-20：那颗「导出」撤了（改到角色卡卡片上），左栏底部换成「返回」+「AI 补充」。
   //    2026-10-25：角色卡编辑页裁剪 —— 头像 / 属性（模板 / 添加 / 粘贴文本）按钮一起没了，
   //    只留封面「清除」和写作区、世界书、左栏那一排。
-  const CHAR_BTN_IDS = ['btn-save-char','btn-clear-portrait','btn-first-template','btn-alt-add','c-wb-add-btn','btn-back-char','btn-ai-fill-char','btn-del-char'];
+  const CHAR_BTN_IDS = ['btn-save-char','btn-clear-portrait','btn-first-template','btn-alt-add','c-wb-new-btn','btn-back-char','btn-ai-fill-char','btn-del-char'];
   const bad = CHAR_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
   check('角色编辑器 8 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
 
@@ -1654,22 +1695,22 @@ await scenario('属性：从本书角色种到状态面板', async () => {
   );
   // 年龄/性别/种族已整体移除（身份写进角色描述即可），身份组只剩「姓名」。
 
-  // --- 3) 进入世界 → 副本属性应该种进状态面板 ---
-  // 属性属于「本书角色（副本）」，只在世界书会话里出现 —— 入口是角色卡封面那颗「进入世界」。
+  // --- 3) 和这张卡开局 → 副本属性应该种进状态面板 ---
+  // 属性属于「本书角色（副本）」，角色卡开局会把卡自带的世界书一起装上，副本的属性才种得进面板。
   click('#btn-close-chars');
   await sleep(150);
 
   const card = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('属性测试角色'));
   check('找到了宿主角色卡的卡片', !!card);
-  // 进世界（不用「聊天」：单角色聊天绑的是角色卡，属性在副本上，进世界才种得进去）
-  click(card.querySelector('.char-card-world'));
+  // 开局走「对话」：角色卡开局 = GM 局，卡的书一起进，副本属性才会被种下去
+  click(buttonByText(card, '对话'));
   await waitFor('玩家角色弹窗打开', () => shown('#player-modal'));
   // 给玩家一个名字：无主字段并回主角那步（absorbTopLevelIntoPlayer）靠玩家名判
   // 「有没有主角可以认领」—— 名字留空它就整段跳过，模型补写回来的状态表会
   // 堆成一批无主字段（见「漏状态表」那条），值落不回副本卡上。
   setValue('#player-name', '冒烟玩家');
   click('#btn-start-play');
-  await waitFor('进入世界', () => shown('#view-chat') && !shown('#player-modal'));
+  await waitFor('进入对话', () => shown('#view-chat') && !shown('#player-modal'));
   await waitFor('状态卡入口条出现', () => shown('#panel-box'));
 
   // 「当前状态」那块折叠面板的**字段列表面板**已经去掉（一个面板只能显示一个
@@ -1745,26 +1786,24 @@ await scenario('属性：从本书角色种到状态面板', async () => {
       !!byId('panel-box').closest('#cast-panel') && !byId('panel-box').closest('.chat-col'),
       `${side(byId('panel-box'), 'borderTopWidth')} / ${side(byId('panel-box'), 'backgroundColor')}`
     );
-    // 世界书会话的头像是**方的 + 浅色底**（`.convo-avatar.book`），角色会话才是
-    // 渐变圆头像 —— 属性归副本后这场进的是世界会话，列表第一项就是书会话，
-    // 所以要验的是「书会话头像确实是方的 + 浅色底」，而不是角色头像的渐变。
-    const bookAvatar = $$('.convo-avatar').find((a) => a.classList.contains('book'));
+    // 角色卡开局的会话头像走「绑了角色」那一支（渐变圆 + 角色首字），
+    // 不再是书会话的方角浅底 —— 会话上已经绑着这张卡了。
+    const convoAvatar = $$('.convo-avatar')[0];
     check(
-      '世界书会话的头像是方的（r=3，不是圆）',
-      !!bookAvatar && getComputedStyle(bookAvatar).borderTopLeftRadius === '3px',
-      bookAvatar ? getComputedStyle(bookAvatar).borderTopLeftRadius : '（没有书会话头像）'
+      '卡开局的会话头像走的是角色那一支（不是书）',
+      !!convoAvatar && !convoAvatar.classList.contains('book'),
+      convoAvatar ? convoAvatar.className : '（没有会话头像）'
     );
   }
 
-  // --- 进入世界后：入口条上既有副本（NPC）也有「我」---
-  // 「我」在玩世界书时才上入口条；这场进了世界，所以横幅上同时有「我」和副本。
+  // --- 卡开局后：入口条上既有副本（NPC）也有「我」---
+  // GM 局「我」才上入口条，所以横幅上同时有「我」和副本。
   {
     const myAvatarBtn = $$('#panel-cast .panel-avatar').find((b) => b.dataset.owner === 'player');
-    check('进入世界后入口条有「我」的头像', !!myAvatarBtn);
+    check('卡开局后入口条有「我」的头像', !!myAvatarBtn);
   }
 
-  // 顶栏的「方角书 + 线性翻页图标」在「进入世界」场景里单独验过（见下），
-  // 这里不再重复 —— 属性迁移后这场是 GM 世界会话，顶栏头像走的是「书」那一支。
+  // 顶栏头像：会话绑了卡 → 角色那一支（首字/立绘），不再是「方角书 + 线性翻页图标」。
 
   // --- 2026-10-12 晚：把「设计稿上的那几个数」逐条钉住 -------------------------
   // 为什么单开一节：这一批全是「DOM 全绿、类名全在，观感照样错」的东西 ——
@@ -1915,6 +1954,21 @@ await scenario('属性：从本书角色种到状态面板', async () => {
   }
 
   check('卡里的值是副本上的初始值', cardValue('金币') === '100', String(cardValue('金币')));
+
+  // 卡的书里有同名副本（都叫「属性测试角色」）：GM 局不再给卡单写一份主要角色段，
+  // 让位给「这个世界的人」名单里那份副本 —— 否则同一个人两份设定。
+  {
+    const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
+    const msgMod = await import(new URL('js/data/messages.js', document.baseURI).href);
+    const ca = (stateMod.state.conversations || []).find((c) => c.id === stateMod.state.activeId);
+    const sys = msgMod
+      .buildApiMessages(ca, '', '')
+      .filter((m) => m && m.role === 'system')
+      .map((m) => String(m.content || ''))
+      .join('\n');
+    check('书里有同名副本时不再重复注入主要角色段', !sys.includes('【本局主要角色】'), sys.slice(0, 120));
+    check('书里的副本仍然列在「这个世界的人」名单里', sys.includes('【这个世界的人】'), sys.slice(0, 120));
+  }
 
   // --- 4) 发一条：注入给模型的消息里必须真的带上面板 ---
   // 断言在宿主侧做（要看 chat:send 的 payload），这里只负责发出去
@@ -4478,11 +4532,11 @@ await scenario('导出', async () => {
   await sleep(300);
   check('导出会话后有提示', $('#toast').textContent.includes('已导出'), $('#toast').textContent);
 
-  // --- 空会话不该导出：点「聊天」会新建一个还没说话的空会话 ---
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  await startChatWith($$('#char-page-grid .char-card')[0]);
-  await waitFor('切回聊天视图', () => shown('#view-chat'));
+  // --- 空会话不该导出：用「＋ 新对话」造一条真的空白会话 ---
+  // ⚠️ 别用「点聊天」来造：角色卡开局在卡上没有开场白时会去生成开局，
+  //    生成完就不是空会话了，这条断言会随机翻车。
+  click('#btn-new');
+  await waitFor('切到空白会话', () => shown('#view-chat'));
   await sleep(150);
   await clickMoreItem('#btn-export-convo');
   await sleep(250);
@@ -4715,7 +4769,10 @@ await scenario('世界书：放弃未保存的改动', async () => {
 
   const names = (await savedWorldbooks()).map((b) => b.name);
   check('放弃之后改的名字没落盘', !names.includes('改了一半的名字'), JSON.stringify(names));
-  check('关掉之后回到角色编辑器（书是从那儿进的）', shown('#view-char-editor'));
+  // 关掉之后回到**进来之前那一屏**（这一场是接着上一场的编辑器，来处可能就是聊天页）。
+  // 「从角色编辑器进去、返回还在角色编辑器」那条由「自带的世界书只能新建」守。
+  const backTo = ['#view-chat', '#view-chars', '#view-settings'].find((sel) => shown(sel)) || '';
+  check('关掉之后回到了进来之前那一屏', !!backTo, backTo || '(哪一屏都没显示)');
 });
 
 // ---------------------------------------------------------------------------
@@ -4847,7 +4904,7 @@ await scenario('世界书：条目字段往返与状态筛选', async () => {
 
   // --- 重开编辑器：表单要按落盘那份回填 ---
   click('#btn-close-worldbooks');
-  await waitFor('回到角色编辑器', () => shown('#view-char-editor'));
+  await waitFor('回到来处（角色卡页）', () => shown('#view-chars'));
   await openEditor();
   const row = $$('#wb-entry-list .wb-entry').find((r) => r.textContent.includes('字段往返'));
   check('重开之后左栏里有刚才那条', !!row);
@@ -5047,45 +5104,37 @@ await scenario('AI 生成角色：角色卡', async () => {
     }
   }
 
-  // 自带世界书的卡多一条入口（封面左下角那颗），没绑书的不该有 ——
-  // 它不走操作行：四颗按钮挤在 216px 里每颗只剩 43px，装不下两字标签。
+  // 「进入世界」那条封面浮标已经并进「对话」（角色卡开局 = GM 局 + 卡上开场白），
+  // 卡片上不该再有它；开局入口只剩操作行那颗「对话」。
   {
-    const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
-    const libMod = await import(new URL('js/data/library.js', document.baseURI).href);
-    const liveBookIds = new Set(libMod.worldbooks().map((b) => b.id));
-    const byName = new Map((stateMod.state.characters || []).map((c) => [String(c.name || '').trim(), c]));
-    // 期望值自己算，不走 characterWorldbooks —— 拿被测函数当判据就等于没验
-    const shouldHave = (name) => {
-      const c = byName.get(name);
-      if (!c) return false;
-      return (Array.isArray(c.worldbookIds) ? c.worldbookIds : []).some((id) => liveBookIds.has(id));
-    };
-
     const cards = $$('#char-page-grid .char-card');
-    const names = cards.map((el) => (el.querySelector('.char-card-name') || {}).textContent || '');
-    const wrong = cards.filter((el, i) => !!el.querySelector('.char-card-world') !== shouldHave(names[i].trim()));
     check(
-      '「进入世界」只在绑了书的卡上出现',
-      cards.length > 0 && wrong.length === 0,
-      `${cards.length} 张卡，对不上：${wrong.map((el) => (el.querySelector('.char-card-name') || {}).textContent).join('、')}`
+      '卡片上不再有「进入世界」浮标',
+      cards.length > 0 && cards.every((el) => !el.querySelector('.char-card-world')),
+      `${cards.length} 张卡`
+    );
+    check(
+      '每张卡的操作行都有「对话」',
+      cards.length > 0 && cards.every((el) => !!buttonByText(el, '对话')),
+      `${cards.length} 张卡`
     );
 
-    const withBook = cards.find((el) => el.querySelector('.char-card-world'));
-    check('库里有绑了书的卡（不然这条入口没验到）', !!withBook, names.join(' / '));
-    if (withBook) {
-      check('「进入世界」压在封面里（封面的兄弟节点，不是套在封面按钮里）', !!withBook.querySelector('.wb-card-cover > .char-card-world'));
-
-      const book = (byName.get(names[cards.indexOf(withBook)].trim()).worldbookIds || [])
-        .map((id) => libMod.worldbookById(id))
-        .find(Boolean);
-      click(withBook.querySelector('.char-card-world'));
-      await waitFor('「你是谁」弹窗打开（进世界）', () => shown('#player-modal'));
+    const target = cards.find((el) => buttonByText(el, '对话'));
+    if (target) {
+      const name = String((target.querySelector('.char-card-name') || {}).textContent || '').trim();
+      click(buttonByText(target, '对话'));
+      await waitFor('「你是谁」弹窗打开', () => shown('#player-modal'));
       check(
-        '进世界的弹窗标题用的是书名',
-        !!book && byId('player-title').textContent.includes(book.name),
-        `${byId('player-title').textContent} / 期望含 ${book && book.name}`
+        '开局弹窗的标题是角色名',
+        !!name && byId('player-title').textContent.includes(name),
+        `${byId('player-title').textContent} / 期望含 ${name}`
       );
-      check('确认按钮是「开始游玩」', byId('btn-start-play').textContent.trim() === '开始游玩', byId('btn-start-play').textContent);
+      check('确认按钮是「开始对话」', byId('btn-start-play').textContent.trim() === '开始对话', byId('btn-start-play').textContent);
+      check(
+        '弹窗说明里点出了会自动开 GM',
+        byId('player-foot-hint').textContent.includes('GM'),
+        byId('player-foot-hint').textContent
+      );
       click('#btn-close-player');
       await waitFor('关掉「你是谁」弹窗', () => !shown('#player-modal'));
     }
@@ -5201,84 +5250,117 @@ await scenario('AI 生成角色：模型输出带围栏和废话', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 11.65：「AI 补设定」—— 角色编辑器里给一张卡现补一本世界书
+//  场景 11.65：「AI 补条目」—— 世界书编辑器里补，保存那本书才落盘
 //
+//  2026-10-26 从角色编辑器搬过来：它本来就是「给这本书补条目」，不是给卡补设定。
 //  假后端认「世界书编辑」+ "entries"（见 tools/smoke-test.js），回 4 条，其中一条
 //  **既非常驻、又没有关键词** —— 它永远注入不到，必须被丢掉。
-//  验：① 生成完只是草稿，不建书；② 点保存才建书、绑到这张卡；③ 保存后清单清空。
+//  验四件：① 结果直接进左栏草稿（磁盘上还是空的）；② 再补一次同名不叠；
+//         ③ 点「保存」才整本写盘；④ 卡上确实挂着这本书。
 // ---------------------------------------------------------------------------
-await scenario('AI 补设定：保存才建书', async () => {
+await scenario('AI 补条目：补进草稿，保存才落盘', async () => {
+  // 上一场生成并保存下来的「守夜人」：描述和性格都有，够 AI 读
   click('#btn-chars');
   await waitFor('切到角色卡页面', () => shown('#view-chars'));
-
-  // 上一场生成并保存下来的「守夜人」：描述和性格都有，够 AI 读
   const card = $$('#char-page-grid .char-card').find((node) => node.textContent.includes('守夜人'));
   check('角色卡里有上一场存的「守夜人」', !!card);
   click(buttonByText(card, '编辑'));
   await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
 
-  check('编辑器里有「AI 补设定」按钮', !!byId('c-wb-ai-btn'));
-  check(
-    '角色卡上标着 library 作用域',
-    !!byId('c-wb-ai-block') && byId('c-wb-ai-block').dataset.scope === 'library',
-    byId('c-wb-ai-block') && byId('c-wb-ai-block').dataset.scope
-  );
+  // 这张卡还没有书 → 现场新建一本，建完直接进编辑器
+  click('#char-section-tab-worldbook');
+  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
+  check('角色编辑器里那颗「AI 补设定」没了', !byId('c-wb-ai-btn'));
 
-  const booksBefore = (await savedWorldbooks()).length;
-  click('#c-wb-ai-btn');
+  const idsBefore = (await savedWorldbooks()).map((b) => b.id);
+  click('#c-wb-new-btn');
+  await waitFor('新建后跳进世界书编辑器', () => shown('#view-wb-editor'), 6000);
+
+  // 认 id 不认书名：书名是草稿，点「保存」之前磁盘上还是「新世界书」
+  const bookId = (await savedWorldbooks()).map((b) => b.id).find((id) => !idsBefore.includes(id));
+  check('新建的书当场就落盘了（不然卡上的 id 会指向空气）', !!bookId);
+  const diskBook = async () => (await savedWorldbooks()).find((b) => b.id === bookId);
+
+  const BOOK = '守夜人的世界书';
+  setValue('#wb-name', BOOK);
+  await sleep(120);
+
+  const btn = byId('btn-wb-ai');
+  check('世界书编辑器里有「AI 补条目」按钮',
+    !!btn && String(btn.textContent).includes('AI 补'),
+    btn && btn.textContent);
+
+  const entriesBefore = $$('#wb-entry-list .wb-entry').length;
+  check('新书里还没有条目', entriesBefore === 0, String(entriesBefore));
+
+  click('#btn-wb-ai');
   // 这颗按钮在生成时变「中止」（还能点），所以转圈圈落在状态行上
-  check('补设定：生成中状态行在转圈圈', !!$('#c-wb-ai-status .spinner'));
-  await waitFor('条目出现', () => $$('#c-wb-ai-list .cwb-ai-entry').length > 0);
-  check('补设定：出结果后转圈圈收掉了', !$('#c-wb-ai-status .spinner'));
+  check('补条目：生成中状态行在转圈圈', !!$('#wb-ai-status .spinner'));
+  await waitFor('条目进左栏', () => $$('#wb-entry-list .wb-entry').length > 0, 8000);
+  check('补条目：出结果后转圈圈收掉了', !$('#wb-ai-status .spinner'));
 
-  const rows = $$('#c-wb-ai-list .cwb-ai-entry');
+  const rows = $$('#wb-entry-list .wb-entry');
   const rowText = rows.map((r) => r.textContent).join(' / ');
   // 假后端给了 4 条，去掉那条没关键词的，应该刚好 3 条
   check('既非常驻又没关键词的那条被丢掉', rows.length === 3, `${rows.length} 条：${rowText}`);
-  check('常驻条目标着「常驻」', rows.some((r) => r.textContent.includes('常驻')), rowText);
-  check('非常驻条目显示关键词', rows.some((r) => r.textContent.includes('换班')), rowText);
-  check('状态行说明「保存才建书」', byId('c-wb-ai-status').textContent.includes('保存'), byId('c-wb-ai-status').textContent);
-  check('这次还不会有新书落盘', (await savedWorldbooks()).length === booksBefore, `${(await savedWorldbooks()).length} / ${booksBefore}`);
+  check('列表里点得到「夜班规矩」', rowText.includes('夜班规矩'), rowText);
+  check('状态行说清「点保存才写进磁盘」',
+    String(byId('wb-ai-status').textContent || '').includes('保存'),
+    byId('wb-ai-status').textContent);
+  const before = await diskBook();
+  check('没点保存之前磁盘上还是空的',
+    !!before && (before.entries || []).length === 0,
+    JSON.stringify(before && (before.entries || []).length));
 
-  // 就地改正文：点「改」展开一条，改完收起 —— 落盘的应该是改过的文字
-  const firstRow = $$('#c-wb-ai-list .cwb-ai-entry')[0];
-  click(firstRow.querySelector('.cwb-ai-edit-btn'));
-  await waitFor('正文框展开', () => !!$('#c-wb-ai-list .cwb-ai-content'));
-  const area = $('#c-wb-ai-list .cwb-ai-content');
-  check('展开的是第 1 条的正文', String(area.value).includes('换班'), area.value);
-  setValue('#c-wb-ai-list .cwb-ai-content', '改过的正文：换班要当面交接，缺一样都算事故。');
-  check('打字不会把框重画掉', $$('#c-wb-ai-list .cwb-ai-content').length === 1);
-  click($$('#c-wb-ai-list .cwb-ai-entry')[0].querySelector('.cwb-ai-edit-btn'));
-  await sleep(80);
-  check('再点一下收起', !$('#c-wb-ai-list .cwb-ai-content'));
+  // 再补一次：模型会把同一批标题照抄回来 —— 同名不该叠成两份
+  click('#btn-wb-ai');
+  await waitFor('第二次补完', () => !$('#wb-ai-status .spinner'), 8000);
+  await sleep(200);
+  check('再补一次不叠同名条目', $$('#wb-entry-list .wb-entry').length === 3,
+    `${$$('#wb-entry-list .wb-entry').length} 条`);
+  check('状态行说清「这本书已经有了」',
+    String(byId('wb-ai-status').textContent || '').includes('已经有了'),
+    byId('wb-ai-status').textContent);
 
-  click('#btn-save-char');
-  await waitFor('新书落盘', async () => (await savedWorldbooks()).length === booksBefore + 1);
+  // 点保存 → 整本书写盘
+  click('#btn-save-wb');
+  await waitFor('条目写进磁盘', async () => {
+    const book = await diskBook();
+    return !!book && (book.entries || []).length === 3;
+  }, 8000);
 
-  const books = await savedWorldbooks();
-  const book = books.find((b) => b.name === '守夜人的世界书');
-  check('建出来的书叫「守夜人的世界书」', !!book, books.map((b) => b.name).join(' / '));
-
+  const book = await diskBook();
   const entries = (book && book.entries) || [];
   check('书里有 3 条设定', entries.length === 3, String(entries.length));
-  check('就地改的正文进了书', entries.some((e) => String(e.content).includes('改过的正文')), JSON.stringify(entries.map((e) => String(e.content).slice(0, 10))));
-  check('那条没关键词的没进书', !entries.some((e) => e.title === '用不上的那条'), entries.map((e) => e.title).join(' / '));
-  check('关键词按数组存下来了', entries.some((e) => (e.keys || []).includes('换班')), JSON.stringify(entries.map((e) => e.keys)));
-  check('常驻那条落成了 constant', entries.filter((e) => e.constant).length === 1, JSON.stringify(entries.map((e) => [e.title, e.constant])));
+  check('那条没关键词的没进书',
+    !entries.some((e) => e.title === '用不上的那条'),
+    entries.map((e) => e.title).join(' / '));
+  check('关键词按数组存下来了',
+    entries.some((e) => (e.keys || []).includes('换班')),
+    JSON.stringify(entries.map((e) => e.keys)));
+  check('常驻那条落成了 constant',
+    entries.filter((e) => e.constant).length === 1,
+    JSON.stringify(entries.map((e) => [e.title, e.constant])));
+
+  // 回角色编辑器：清单里列出这本书，卡确实挂着它
+  click('#btn-close-worldbooks');
+  await waitFor('返回角色编辑器', () => shown('#view-char-editor'), 4000);
+  await sleep(150);
+  check('编辑器里那块列出了这本书',
+    String(byId('c-wb-list').textContent || '').includes(BOOK),
+    byId('c-wb-list').textContent);
+
+  // 改已有角色：保存不会自己关页，得自己点返回
+  click('#btn-save-char');
+  await waitFor('角色保存完成', () => byId('char-save-state').dataset.state === 'saved', 8000);
+  click('#btn-close-chars');
+  await waitFor('编辑器关闭', () => !shown('#view-char-editor'), 4000);
+  await sleep(200);
 
   const savedChar = (await savedCharacters()).find((c) => c.name === '守夜人');
-  check(
-    '新建的书绑到了这张卡上',
+  check('新建的书绑到了这张卡上',
     !!book && !!savedChar && (savedChar.worldbookIds || []).includes(book.id),
-    JSON.stringify(savedChar && savedChar.worldbookIds)
-  );
-  check('编辑器里那块也列出了这本书', $('#c-wb-list').textContent.includes('守夜人的世界书'), $('#c-wb-list').textContent);
-  check('保存之后草稿清单清空了', $$('#c-wb-ai-list .cwb-ai-entry').length === 0, String($$('#c-wb-ai-list .cwb-ai-entry').length));
-
-  click('#btn-close-chars');
-  await sleep(150);
-  check('保存后关闭不弹放弃确认', !shown('#confirm-modal'));
-  await waitFor('编辑器关闭', () => !shown('#view-char-editor'));
+    JSON.stringify(savedChar && savedChar.worldbookIds));
 });
 
 // ---------------------------------------------------------------------------
@@ -5415,14 +5497,14 @@ await scenario('AI 生成 NPC：依据世界书', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景 12：进入世界 —— 玩家角色弹窗
+//  场景 12：角色卡开局 —— 玩家角色弹窗（进去就是 GM 局）
 // ---------------------------------------------------------------------------
-await scenario('进入世界：用角色卡当自己', async () => {
-  // 书不再有列表页，「游玩」只剩角色卡封面那颗「进入世界」
+await scenario('角色卡开局：用角色卡当自己', async () => {
+  // 开局入口只有操作行那颗「对话」；卡自带的世界书跟着一起装进会话
   await createCharBoundTo('冒烟测试世界', '进世界的角色');
   const worldCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('进世界的角色'));
-  check('绑了书的角色卡上有「进入世界」', !!worldCard && !!worldCard.querySelector('.char-card-world'));
-  click(worldCard.querySelector('.char-card-world'));
+  check('找到「进世界的角色」的卡片', !!worldCard);
+  click(buttonByText(worldCard, '对话'));
   await waitFor('玩家角色弹窗打开', () => shown('#player-modal'));
   check('弹窗里有角色名输入框', !!byId('player-name'));
 
@@ -5444,10 +5526,26 @@ await scenario('进入世界：用角色卡当自己', async () => {
   setValue('#player-name', '改过的名字');
   check('选了之后名字仍然可改', byId('player-name').value === '改过的名字');
 
-  // --- 开始游玩：你自己的状态挪进「我的状态」卡，入口条只留人 ---
+  // --- 开始：你自己的状态挪进「我的状态」卡，入口条只留人 ---
   click('#btn-start-play');
-  await waitFor('进入世界', () => shown('#view-chat') && !shown('#player-modal'));
+  await waitFor('进入对话', () => shown('#view-chat') && !shown('#player-modal'));
   await waitFor('状态卡入口条出现', () => shown('#panel-box'));
+
+  // 角色卡开局 = GM 局；卡自带的世界书不拷进会话，靠 effectiveWorldbookIds 回落（卡上换书后老会话跟着变）
+  {
+    await sleep(200); // persistConversations 是防抖的
+    const live = (await window.mimitale.getConversations()).conversations.find(
+      (c) => c.player && c.player.name === '改过的名字'
+    );
+    check('开局会话就是 GM 局', !!live && live.gmMode === true, JSON.stringify(live && live.gmMode));
+    const castMod = await import(new URL('js/data/cast.js', document.baseURI).href);
+    const ids = live ? castMod.effectiveWorldbookIds(live) : [];
+    check(
+      '卡自带的世界书对这一局生效（不拷进会话，按回落取到）',
+      ids.length === 1 && !(live && (live.worldbookIds || []).length),
+      JSON.stringify({ effective: ids, own: live && live.worldbookIds })
+    );
+  }
 
   // 旧面板的**字段列表**已经不在了 —— 玩家自己的属性只在「我的状态」卡里。
   // 标题是「在场角色 N」（见上面那条断言）。
@@ -5456,20 +5554,14 @@ await scenario('进入世界：用角色卡当自己', async () => {
     !byId('panel-fields') && !byId('btn-panel-collapse') && !!byId('panel-box').closest('#cast-panel')
   );
 
-  // 顶栏头像（2026-09-30）：世界书会话**没绑角色卡**（主角在 convo.player 里），
-  // 所以走的是「方角 + 书名首字」那条分支 —— 形状本身就是分类，一眼区分
-  // 「跟角色聊」和「在书里玩」。只绑角色的圆头像在场景 15 里验过。
+  // 顶栏头像：会话绑着这张卡 → 走「绑了角色」那一支（角色首字/立绘），
+  // 不再是书会话的方角「书」图标 —— 形状本身就是分类，一眼区分在跟谁。
   {
     const av = byId('topbar-avatar');
     check(
-      '世界书会话的顶栏头像是方角的「书」',
-      !!av && av.classList.contains('book'),
+      '卡开局的顶栏头像走角色那一支（不是书）',
+      !!av && !av.classList.contains('book'),
       av ? av.className : 'no-node'
-    );
-    check(
-      '世界书使用线性翻页图标',
-      !!av && !!av.querySelector('svg'),
-      av ? av.textContent : ''
     );
   }
 
@@ -5498,7 +5590,7 @@ await scenario('进入世界：用角色卡当自己', async () => {
   // 会话里记下了「你用哪张卡当自己」，而且以你改过的名字为准
   await sleep(200); // persistConversations 是防抖的
   const convos = (await window.mimitale.getConversations()).conversations;
-  const worldConvo = convos.find((c) => c.title === '冒烟测试世界');
+  const worldConvo = convos.find((c) => c.player && c.player.name === '改过的名字');
   check('会话里记下了玩家角色', !!worldConvo && !!worldConvo.player, JSON.stringify(worldConvo && worldConvo.player));
   check('用的是你改过的名字', !!worldConvo && worldConvo.player.name === '改过的名字', worldConvo ? worldConvo.player.name : '');
   check('也记下了是哪张角色卡', !!worldConvo && worldConvo.player.characterId === cardId, worldConvo ? String(worldConvo.player.characterId) : '');
@@ -5603,10 +5695,15 @@ await scenario('会话：分支与存档点', async () => {
   setValue('#input', '这条是存完档之后聊的，读档应该把它退掉');
   click('#btn-send');
   await waitFor('新一轮回复完成', () => $$('#messages .msg').length > 2 && byId('btn-send').getAttribute('data-mode') === 'send', 10000);
-  // 落盘是防抖的（350ms），等久一点再读磁盘，否则读到的是上一步的快照
-  await sleep(700);
-
+  // 落盘是防抖的（350ms）：轮询到磁盘真追上界面为止，别用死等
   const grownNodes = $$('#messages .msg').length;
+  const diskCount = async () => {
+    const cs = await window.mimitale.getConversations();
+    const c = cs.conversations.find((x) => x.id === branch.id);
+    return c ? c.messages.length : -1;
+  };
+  await waitFor('新消息落盘（防抖 350ms）', async () => (await diskCount()) === grownNodes, 5000).catch(() => {});
+
   check('界面上长长了（存档之后又聊了）', grownNodes > 2, `${grownNodes} 条`);
 
   const grown = (await window.mimitale.getConversations()).conversations.find((c) => c.id === branch.id);
@@ -5675,8 +5772,26 @@ await scenario('语义检索', async () => {
   check('语义检索配置落盘了', saved.ragEnabled === true && saved.embeddingProviderId === 'p-emb' && saved.embeddingModel === 'emb-model-x', JSON.stringify({ on: saved.ragEnabled, p: saved.embeddingProviderId, m: saved.embeddingModel }));
   check('聊天模型没被动过', saved.activeProviderId === 'p-test' && saved.activeModel === 'test-model', `${saved.activeProviderId}/${saved.activeModel}`);
 
-  // 发一条「关键词命不中、但意思相关」的话
-  click('#convo-list .convo-item');
+  // 发一条「关键词命不中、但意思相关」的话。
+  // ⚠️ 得挑一条**挂着世界书、又攒够两条历史**的会话 —— 纯聊天会话 RAG 整段不注入（产品口径），
+  //    列表第一项未必是这种（场景 19 造出来的分支可能来自一条普通对话）。
+  {
+    const castMod = await import(new URL('js/data/cast.js', document.baseURI).href);
+    const store = await window.mimitale.getConversations();
+    const usable = store.conversations.filter((c) => {
+      const hist = (c.messages || []).filter(
+        (m) => m && (m.role === 'user' || m.role === 'assistant') && String(m.content || '').trim()
+      );
+      return castMod.effectiveWorldbookIds(c).length > 0 && hist.length >= 2;
+    });
+    const pick = usable[0];
+    const item = pick && $$('#convo-list .convo-item').find((it) => {
+      const t = it.querySelector('.convo-title');
+      return t && t.textContent.trim() === String(pick.title || '').trim();
+    });
+    check('找到一条挂着世界书、又有历史的会话', !!item, pick ? String(pick.title) : '一条都没有');
+    if (item) click(item);
+  }
   await waitFor('切回聊天视图', () => shown('#view-chat'));
   await sleep(200);
   setValue('#input', '那些神到底是谁？');
@@ -5855,9 +5970,13 @@ await scenario('帮我想想（补一批剧情选项）', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  角色自带的世界书：绑定 / 解绑 / 开关 / 存盘
+//  角色自带的世界书：只能现场新建 / 解绑 / 存盘
+//
+//  🔴 2026-10-26：从库里挑一本「＋ 绑定」过来的入口整个撤掉了。一张卡的书只有两条来源 ——
+//     导入的角色卡自带，或者在卡上「＋ 新建」现场写一本。所以这里守的是：
+//     ① 那颗绑定按钮**不存在**；② 新建会直接落到编辑器里；③ 解绑 / 存盘照旧。
 // ---------------------------------------------------------------------------
-await scenario('角色：绑定自带的世界书', async () => {
+await scenario('角色：自带的世界书只能新建', async () => {
   click('#btn-chars');
   await waitFor('切到角色卡页面', () => shown('#view-chars'));
   click('#btn-new-char');
@@ -5866,68 +5985,52 @@ await scenario('角色：绑定自带的世界书', async () => {
   const NAME = '自带世界书测试';
   setValue('#c-name', NAME);
   await sleep(100);
+  click('#char-section-tab-worldbook');
+  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
 
-  // 没绑定时：这一块也要显示（以前是「有绑定才显示」，导致找不到入口加书）
-  check('没绑定时这块也显示出来', shown('#c-worldbook-box'));
-  check('没绑定时有「＋ 绑定」按钮', shown('#c-wb-add-btn'));
-  check('没绑定时清单是空状态提示', $$('#c-wb-list .cwb-row').length === 0);
-  // 只能绑一本、绑上就一直生效 —— 「启用」开关已经整个撤掉了
+  // 没书时：这一块也要显示（以前是「有绑定才显示」，导致找不到入口加书）
+  check('没书时这块也显示出来', shown('#c-worldbook-box'));
+  check('没有「＋ 绑定」按钮了', !byId('c-wb-add-btn'));
+  check('有「＋ 新建」按钮（卡的书只能从这张卡长出来）', shown('#c-wb-new-btn'));
+  check('没书时清单是空状态提示', $$('#c-wb-list .cwb-row').length === 0);
+  // 只能一本、有书就一直生效 —— 「启用」开关已经整个撤掉了
   check('没有「启用自带的世界书」开关了', !byId('c-wb-switch') && !byId('c-wb-enabled'));
   check('空状态给了引导文字', String(byId('c-wb-list').textContent || '').includes('点「＋ 新建」'));
-  check('没绑定时也有「＋ 新建」按钮（世界书只能从这张卡长出来）', shown('#c-wb-new-btn'));
-
-  // 点「＋ 绑定」→ 浮层列出可选的库
-  click('#c-wb-add-btn');
-  await waitFor('选择浮层出现', () => !!$('.cwb-picker'));
-  const options = $$('.cwb-picker .cwb-picker-row');
-  check('浮层列出了可选世界书', options.length > 0, `${options.length} 个`);
-  check('浮层里有冒烟测试世界',
-    options.some((o) => String(o.textContent || '').includes('冒烟测试世界')),
-    JSON.stringify(options.map((o) => o.textContent.trim())));
-
-  // 选一本 → 绑定
-  const target = options.find((o) => String(o.textContent || '').includes('冒烟测试世界'));
-  click(target);
-  await waitFor('浮层关闭', () => !$('.cwb-picker'));
-  await waitFor('清单里出现这本', () => $$('#c-wb-list .cwb-row').length === 1);
-  await sleep(150);
-
-  check('绑定后清单里有一行', $$('#c-wb-list .cwb-row').length === 1);
-  check('行里是那本书的名字',
-    String($$('#c-wb-list .cwb-row')[0].textContent || '').includes('冒烟测试世界'));
-  // 🔴 自带世界书只能一本：绑上之后两个入口都灰掉，别再让人点出「第二本」
-  check('绑了一本后「＋ 绑定」灰掉', byId('c-wb-add-btn').disabled === true);
-  check('绑了一本后「＋ 新建」也灰掉', byId('c-wb-new-btn').disabled === true);
-  check('灰掉时给了「先解绑」的提示',
-    String(byId('c-wb-add-btn').title || '').includes('先解绑'),
-    String(byId('c-wb-add-btn').title || ''));
-  check('说明文字提到「单独聊天会带上」',
-    String(byId('c-wb-hint').textContent || '').includes('单独跟它聊天时会带上'),
+  check('说明文字说清「没有书也能聊」',
+    String(byId('c-wb-hint').textContent || '').includes('没有世界书也能聊'),
     String(byId('c-wb-hint').textContent || '').slice(0, 60));
 
-  // --- 行上的「编辑」：一步跳到这本书的详情（2026-10-20）---
+  // 点「＋ 新建」→ 造出一本并**直接进编辑器**
+  click('#c-wb-new-btn');
+  await waitFor('新建后跳进世界书编辑器', () => shown('#view-wb-editor'), 6000);
+  check('新建出来的是「新世界书」',
+    String(byId('wb-name').value || '').includes('新世界书'),
+    byId('wb-name').value);
+
+  click('#btn-close-worldbooks');
+  await waitFor('返回角色编辑器', () => shown('#view-char-editor'), 4000);
+  await sleep(150);
+
+  check('返回后清单里有一行', $$('#c-wb-list .cwb-row').length === 1);
+  check('行里是新建那本书的名字',
+    String($$('#c-wb-list .cwb-row')[0].textContent || '').includes('新世界书'));
+  // 🔴 只能一本：有了就灰掉，别让人点出第二本
+  check('有书之后「＋ 新建」灰掉', byId('c-wb-new-btn').disabled === true);
+  check('灰掉时给了「先解绑」的提示',
+    String(byId('c-wb-new-btn').title || '').includes('先解绑'),
+    String(byId('c-wb-new-btn').title || ''));
+  check('跳转这一趟不丢角色编辑器里填的内容', byId('c-name').value === NAME, byId('c-name').value);
+  check('说明文字说清了「开局会进这本书的世界」',
+    String(byId('c-wb-hint').textContent || '').includes('和这张卡开局就会进这本书的世界'),
+    String(byId('c-wb-hint').textContent || '').slice(0, 60));
+
+  // --- 行上的「编辑」排在解绑 ✕ 左边 ---
   const boundRow = $$('#c-wb-list .cwb-row')[0];
   const rowEdit = boundRow.querySelector('.cwb-row-edit');
   check('已绑的那行有「编辑」按钮', !!rowEdit);
   check('「编辑」排在解绑 ✕ 左边',
     !!rowEdit && !!rowEdit.nextElementSibling &&
     rowEdit.nextElementSibling.classList.contains('cwb-row-del'));
-  if (rowEdit) {
-    click(rowEdit);
-    await waitFor('跳到世界书编辑器', () => shown('#view-wb-editor'), 4000);
-    check('跳过去的就是绑的那一本',
-      String(byId('wb-bookbar-name').textContent || '').includes('冒烟测试世界'),
-      byId('wb-bookbar-name').textContent);
-    // 跳转不是「离开角色编辑器」：表单内容得原样留着
-    check('跳转不丢角色编辑器里填的内容', byId('c-name').value === NAME, byId('c-name').value);
-
-    click('#btn-close-worldbooks');
-    await waitFor('返回角色编辑器', () => shown('#view-char-editor'), 4000);
-    await sleep(150);
-    check('返回后还在那张卡上（没被弹「放弃改动」冲掉）',
-      byId('c-name').value === NAME, byId('c-name').value);
-    check('返回后那行「已绑世界书」还在', $$('#c-wb-list .cwb-row').length === 1);
-  }
 
   // 存盘 → worldbookIds 要落盘（归一化白名单最容易漏）
   click('#btn-save-char');
@@ -5944,47 +6047,30 @@ await scenario('角色：绑定自带的世界书', async () => {
     !!saved && !('worldbookEnabled' in saved),
     JSON.stringify(saved && saved.worldbookEnabled));
 
-  // 解绑 → 清单回到空状态
+  // 解绑 → 清单回到空状态（编辑器那一屏还留在 DOM 里，直接点行上的 ✕ 就够）
   if (saved && Array.isArray(saved.worldbookIds) && saved.worldbookIds.length) {
     click($$('#c-wb-list .cwb-row')[0].querySelector('.cwb-row-del'));
     await waitFor('解绑后清单空掉', () => $$('#c-wb-list .cwb-row').length === 0, 8000);
     await sleep(150);
     check('解绑后回到空状态提示',
       String(byId('c-wb-list').textContent || '').includes('点「＋ 新建」'));
+    check('解绑之后「＋ 新建」又能点了', byId('c-wb-new-btn').disabled === false);
   }
 });
 
 // ---------------------------------------------------------------------------
 //  角色自带的世界书：绑上之后顶部要能看出来生效
 //
-//  放在最后：这个场景会通过「聊天」入口新建一条会话，
+//  放在最后：这个场景会通过「对话」入口新建一条会话，
 //  建完当前会话就变了 —— 排在中间会把后面场景的起点搅乱
 //  （第一次放在「重新生成候选」前面，直接把那个场景弄挂了）。
 // ---------------------------------------------------------------------------
 await scenario('角色自带的世界书：顶部能看出生效', async () => {
-  // 造一张绑了世界书的角色，存档
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  click('#btn-new-char');
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
+  // 造一张带世界书的角色，存档（绑定入口已撤，书从内存挂上去 —— 见 createCharBoundTo）
   const NAME = '顶栏生效测试';
-  setValue('#c-name', NAME);
-  await sleep(80);
+  await createCharBoundTo('冒烟测试世界', NAME);
 
-  click('#c-wb-add-btn');
-  await waitFor('选择浮层出现', () => !!$('.cwb-picker'));
-  const target = $$('.cwb-picker .cwb-picker-row').find((o) =>
-    String(o.textContent || '').includes('冒烟测试世界')
-  );
-  click(target);
-  await waitFor('清单里出现这本', () => $$('#c-wb-list .cwb-row').length === 1);
-  click('#btn-save-char');
-  await waitFor('保存后弹窗自己关掉', () => !shown('#view-char-editor'), 8000);
-  await sleep(200);
-
-  // 关掉编辑器，回聊天视图（关编辑器不会自动切页，得点会话）
-  click('#btn-close-chars');
-  await sleep(200);
+  // 回聊天视图（关编辑器不会自动切页，得点会话）
   click('#convo-list .convo-item');
   await waitFor('回聊天视图', () => shown('#view-chat'));
   await sleep(250);
@@ -6000,7 +6086,7 @@ await scenario('角色自带的世界书：顶部能看出生效', async () => {
     JSON.stringify(targetChar && targetChar.worldbookIds));
 
   if (targetChar) {
-    // 用角色卡上的「聊天」入口绑定角色
+    // 用角色卡上的「对话」入口绑定角色
     // （顶部那个角色下拉在重构里已经去掉了，别再用它）
     click('#btn-chars');
     await waitFor('切到角色卡页面', () => shown('#view-chars'));
@@ -6009,9 +6095,9 @@ await scenario('角色自带的世界书：顶部能看出生效', async () => {
     if (!card) {
       check('角色卡出现在列表里', false, JSON.stringify($$('.char-card').map((c) => c.textContent.trim().slice(0, 20))));
     } else {
-      const chatBtn = buttonByText(card, '聊天');
+      const chatBtn = buttonByText(card, '对话');
       if (!chatBtn) {
-        check('角色卡上有「聊天」按钮', false, JSON.stringify(Array.from(card.querySelectorAll('button')).map((b) => b.textContent.trim())));
+        check('角色卡上有「对话」按钮', false, JSON.stringify(Array.from(card.querySelectorAll('button')).map((b) => b.textContent.trim())));
       } else {
         await startChatWith(card);
         await waitFor('回到聊天视图', () => shown('#view-chat'), 8000);
@@ -6994,11 +7080,14 @@ await scenario('选项：普通回复也要避开上一批', async () => {
 //  只读↔编辑切换、改值落盘、加字段 / 删字段。
 // ---------------------------------------------------------------------------
 await scenario('状态卡：点头像查看与编辑', async () => {
+  // 找「改过的名字」那一局（场景 12 开的角色卡局）：标题可能被首条消息顶掉，按落盘的 player 认人
+  const convosNow = (await window.mimitale.getConversations()).conversations;
+  const host = convosNow.find((c) => c.player && c.player.name === '改过的名字');
   const worldItem = $$('#convo-list .convo-item').find((it) => {
     const t = it.querySelector('.convo-title');
-    return t && t.textContent.trim() === '冒烟测试世界';
+    return t && host && t.textContent.trim() === String(host.title || '').trim();
   });
-  check('找到「冒烟测试世界」会话', !!worldItem);
+  check('找到「改过的名字」那一局会话', !!worldItem, host ? String(host.title) : '没找到');
   if (worldItem) click(worldItem);
   await waitFor('切到世界会话', () => shown('#view-chat'));
   await sleep(300);
@@ -7038,7 +7127,7 @@ await scenario('状态卡：点头像查看与编辑', async () => {
   );
   await sleep(200);
   let cv = await window.mimitale.getConversations();
-  let wc = cv.conversations.find((c) => c.title === '冒烟测试世界');
+  let wc = cv.conversations.find((c) => c.player && c.player.name === '改过的名字');
   check(
     '新字段归到玩家名下（owner=player）',
     !!wc && panelDefByName(wc.panelDefs, '心情') && panelDefByName(wc.panelDefs, '心情').owner === 'player',
@@ -7053,7 +7142,7 @@ await scenario('状态卡：点头像查看与编辑', async () => {
   moodInput.dispatchEvent(new Event('blur', { bubbles: true }));
   await sleep(300);
   cv = await window.mimitale.getConversations();
-  wc = cv.conversations.find((c) => c.title === '冒烟测试世界');
+  wc = cv.conversations.find((c) => c.player && c.player.name === '改过的名字');
   check('卡片里改的值落到了会话面板上', !!wc && wc.panel && panelValByName(wc.panel, '心情') === '开心', wc ? String(panelValByName(wc.panel, '心情')) : 'null');
 
   // --- 删掉它 ---
@@ -8355,9 +8444,6 @@ await scenario('Markdown：渲染边界', async () => {
 //  这几条都是「以前漏了」的坑，单独钉住：
 //    · 世界书 / 记忆 / 视角三个弹窗**没接进入口层的全局 Esc 链** —— 只开着它们时
 //      按 Esc 毫无反应，和别的弹窗行为不一致；
-//    · 角色编辑器里那个「＋ 绑定」选书浮层挂在 document.body 上、z-index 还比
-//      编辑器高，关编辑器时如果不一起收掉，它就悬在屏幕上（而且盖着编辑器，
-//      用户连关闭按钮都点不到了）；
 //    · 删掉「当前正在编辑」的那本世界书后，编辑器里的书名输入框还留着**刚删掉那本**
 //      的名字。这时关弹窗 → stashWorldbookName() 会把残留名字写进列表里第一本书
 //      → 别人的书被静默改名 + 覆盖开场白，而且立刻落盘。
@@ -8371,8 +8457,8 @@ await scenario('Esc 链与弹窗清理', async () => {
   await waitFor('Esc 关掉世界书弹窗', () => !shown('#view-wb-editor'));
   check('Esc 关得掉世界书弹窗', !shown('#view-wb-editor'));
 
-  // 世界书是从角色编辑器进的，关掉它之后停在这一屏上 —— 先把这屏收掉，
-  // 否则下面按 Esc 时先关的是角色编辑器（页面判定排在弹窗判定前面），记忆弹窗反而关不掉
+  // 上一次可能停在角色编辑器上 —— 先把这屏收掉，否则下面按 Esc 时先关的是它
+  // （页面判定排在弹窗判定前面），记忆弹窗反而关不掉
   if (shown('#view-char-editor')) {
     click('#btn-back-char');
     await sleep(200);
@@ -8391,42 +8477,6 @@ await scenario('Esc 链与弹窗清理', async () => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await waitFor('Esc 关掉视角弹窗', () => !shown('#perspective-modal'));
   check('Esc 关得掉视角弹窗', !shown('#perspective-modal'));
-
-  // --- 选书浮层：Esc 只关最上面那层，别顺手把编辑器也关了 ---
-  click('#btn-chars');
-  await waitFor('切到角色卡页面', () => shown('#view-chars'));
-  const card = $$('#char-page-grid .char-card')[0];
-  if (!card) {
-    check('角色卡里有一张卡可以做这个验证', false);
-    return;
-  }
-  click(buttonByText(card, '编辑'));
-  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
-
-  // 🔴 自带世界书只允许一本：这张卡要是已经绑了，「＋ 绑定」是灰的点不动 —— 先解绑再测浮层
-  click('#char-section-tab-worldbook');
-  await sleep(150);
-  const boundDel = $('#c-wb-list .cwb-row .cwb-row-del');
-  if (boundDel) {
-    click(boundDel);
-    await waitFor('解绑完成', () => $$('#c-wb-list .cwb-row').length === 0);
-  }
-
-  click('#c-wb-add-btn');
-  await waitFor('选书浮层出现', () => !!$('.cwb-picker'));
-  check('「＋ 绑定」会弹出选书浮层', !!$('.cwb-picker'));
-
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  await waitFor('Esc 关掉选书浮层', () => !$('.cwb-picker'));
-  check('Esc 关的是最上面那层选书浮层', !$('.cwb-picker'));
-  check('浮层下面的角色编辑器还开着（没被一起关掉）', shown('#view-char-editor'));
-
-  // --- 直接点 ✕ 关编辑器：残留的浮层也必须收掉 ---
-  click('#c-wb-add-btn');
-  await waitFor('选书浮层再次出现', () => !!$('.cwb-picker'));
-  click('#btn-close-chars');
-  await waitFor('角色编辑器关闭', () => !shown('#view-char-editor'));
-  check('关编辑器时残留的选书浮层被一起收掉（没悬空）', !$('.cwb-picker'));
 
   // --- 删掉当前正在编辑的那本世界书：编辑器必须真的切到另一本 ---
   const namesBefore = (await savedWorldbooks()).map((w) => w.name);
@@ -9147,8 +9197,8 @@ await scenario('预设：绑定到会话的「视角」弹窗', async () => {
   const charCard = await waitFor('角色卡里有卡可开聊', () => $$('#char-page-grid .char-card')[0]);
   check('角色卡里有卡可开聊', !!charCard);
 
-  const chatBtn = buttonByText(charCard, '聊天');
-  check('角色卡上有「聊天」按钮', !!chatBtn);
+  const chatBtn = buttonByText(charCard, '对话');
+  check('角色卡上有「对话」按钮', !!chatBtn);
   if (chatBtn) await startChatWith(charCard);
   await waitFor('切回对话视图', () => shown('#view-chat'));
 
@@ -9345,7 +9395,7 @@ await scenario('预设：导出单条与全部', async () => {
 // ---------------------------------------------------------------------------
 //  开聊前先定「你是谁」
 //
-//  点角色卡的「聊天」不再直接建会话 —— 先弹「你是谁」（和「进世界」共用同一个
+//  点角色卡的「对话」不再直接建会话 —— 先弹「你是谁」（和「进世界」共用同一个
 //  弹窗），填完才建；什么都不填就以默认的「你」开始（会话上不存 player）。
 //
 //  这个场景会**建三条新会话**，所以放在最后跑 —— 否则后面所有依赖「当前会话」
@@ -9367,10 +9417,10 @@ await scenario('开聊前先定「你是谁」', async () => {
   await waitFor('切到角色卡页面', () => shown('#view-chars'));
   const card = await waitFor('角色卡里有卡可开聊', () => $$('#char-page-grid .char-card')[0]);
 
-  // —— 点「聊天」先弹窗，这时还没建会话 ——
-  click(buttonByText(card, '聊天'));
+  // —— 点「对话」先弹窗，这时还没建会话 ——
+  click(buttonByText(card, '对话'));
   await waitFor('「你是谁」弹窗打开', () => shown('#player-modal'));
-  check('角色卡的「聊天」会先问「你是谁」', shown('#player-modal'));
+  check('角色卡的「对话」会先问「你是谁」', shown('#player-modal'));
   check('名字默认是空的（留空就是「你」）', byId('player-name').value === '', JSON.stringify(byId('player-name').value));
 
   // —— 填好身份再开始：落到新会话上 ——
@@ -9406,7 +9456,7 @@ await scenario('开聊前先定「你是谁」', async () => {
   click('#btn-chars');
   await waitFor('切回角色卡页面', () => shown('#view-chars'));
   const soloCard = $$('#char-page-grid .char-card')[0];
-  click(buttonByText(soloCard, '聊天'));
+  click(buttonByText(soloCard, '对话'));
   await waitFor('「你是谁」弹窗打开（挑卡当自己）', () => shown('#player-modal'));
 
   const selfOptions = Array.from(byId('player-char').options).filter((o) => o.value);
@@ -9427,9 +9477,9 @@ await scenario('开聊前先定「你是谁」', async () => {
 
   const castAvatars = $$('#panel-cast .panel-avatar');
   check(
-    '挑卡当自己后，绑定的角色仍在入口条里（普通聊天不显示「我」）',
+    '挑卡当自己后，入口条里「我」和这张卡都在（卡开局是 GM 局）',
     castAvatars.some((a) => a.dataset.owner !== 'player') &&
-      !castAvatars.some((a) => a.dataset.owner === 'player'),
+      castAvatars.some((a) => a.dataset.owner === 'player'),
     `入口条 ${castAvatars.length} 个：` + castAvatars.map((a) => a.dataset.owner).join('、')
   );
 
@@ -9683,7 +9733,7 @@ await scenario('默认人设：按模型可编辑，并注入没绑卡的对话'
   redrawMod.renderAll({ forceScroll: true });
   await sleep(80);
   const anonTitle = ($('#messages .empty h2') || {}).textContent || '';
-  check('没配名字时空状态标题不提名字', anonTitle === '开始聊天吧～', anonTitle);
+  check('没配名字时空状态标题不提名字', anonTitle === '开始对话吧～', anonTitle);
 
   if (convo) convo.model = model;
   redrawMod.renderAll({ forceScroll: true });
@@ -9844,51 +9894,81 @@ await scenario('世界书：＋ 事件', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  场景：开场白选择器
+//  场景：开场白在「你是谁」弹窗里挑
 //
-//  分两半测：
-//    · 组件那一半（选项渲染 / 点谁返回谁 / Esc 返回 null）—— 直接动态 import
-//      真模块来调，和宿主侧调 worldbookPayload 是同一个路子；
-//    · 接线那一半（只有一条开场白时**不该**弹）—— 走真实点击的开聊流程。
-//  多开场白的完整点击流程需要一张「导入进来就带备选开场白」的卡，
-//  冒烟里的导入夹具没有这个字段，所以那一半靠导入侧的宿主断言覆盖
-//  （见 smoke-test.js 的「备选开场白 / 作者 / 版本」两条）。
+//  两条以上才出现选择区（一条的直接用，摆成单选题只是让人多点一下），
+//  挑中的那条才是插进会话的开头 —— 不是永远第一条。
+//  多开场白是导入专有字段（备选开场白在角色编辑器里没有输入框），所以建完卡
+//  直接改内存再落盘，走真实点击开聊：
+//  （导入侧的往返由 smoke-test.js 的「备选开场白 / 作者 / 版本」那几条守着。）
 // ---------------------------------------------------------------------------
-await scenario('开场白：选择器组件', async () => {
-  const { pickFromList } = await import(new URL('js/ui/pickList.js', document.baseURI).href);
-
-  // 开着等，先把 DOM 看清楚，再点第二项
+await scenario('开场白：多条在「你是谁」弹窗里挑', async () => {
+  const NAME = '多开场白测试卡';
+  const OTHER = '第二条：清晨的渡口';
   const HTMLISH = '<b>粗体</b> 不该被解释';
-  const picked = pickFromList({
-    title: '选一条开场白',
-    hint: '测试用',
-    items: [{ text: '第一条' }, { text: '第二条', note: '默认' }, { text: '第三条' }, { text: HTMLISH }]
-  });
-  await waitFor('选择器打开', () => shown('#pick-modal'));
 
-  const rows = $$('#pick-list .pick-item');
-  check('四条候选都渲染出来了', rows.length === 4, String(rows.length));
-  check('标题和说明都填上了', byId('pick-title').textContent === '选一条开场白' && byId('pick-hint').textContent === '测试用',
-    `${byId('pick-title').textContent} / ${byId('pick-hint').textContent}`);
-  check('角标跟着候选项走', (rows[1].querySelector('.pick-item-note') || {}).textContent === '默认',
-    rows[1].textContent.slice(0, 20));
-  // 候选正文一律走 textContent —— 卡里的字是不可信内容，不许当 HTML 解释
+  click('#btn-chars');
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
+  setValue('#c-name', NAME);
+  setValue('#c-first', '第一条：雨夜的酒馆');
+  click('#btn-save-char');
+  await waitFor('角色保存完成', () => byId('char-save-state').dataset.state === 'saved');
+  if (shown('#view-char-editor')) click('#btn-close-chars');
+  await waitFor('回到角色卡', () => shown('#view-chars'));
+
+  const [stateMod, persistMod] = await Promise.all([
+    import(new URL('js/core/state.js', document.baseURI).href),
+    import(new URL('js/data/persist.js', document.baseURI).href)
+  ]);
+  const card = (stateMod.state.characters || []).find((c) => c.name === NAME);
+  check('建出了这张卡', !!card);
+  card.alternateGreetings = [OTHER, HTMLISH];
+  await persistMod.persistLibrary();
+
+  const cardEl = $$('#char-page-grid .char-card').find((c) => c.textContent.includes(NAME));
+  check('卡片在列表里', !!cardEl);
+
+  click(buttonByText(cardEl, '对话'));
+  await waitFor('「你是谁」弹窗打开', () => shown('#player-modal'));
+
+  check('弹窗里出现了开场白选择区', shown('#player-opening-field'));
+  // 选择区就在这个弹窗里，不另开一层窗 —— 另开会把底下的「你是谁」压住，Esc 也得分两次按
+  const rows = $$('#player-opening-list .opening-item');
+  check('三条候选都铺出来了', rows.length === 3, String(rows.length));
+  check('第一条默认选中', rows[0] && rows[0].getAttribute('aria-checked') === 'true', rows[0] && rows[0].getAttribute('aria-checked'));
+  check(
+    '「默认」角标只挂在第一条上',
+    (rows[0].querySelector('.opening-item-note') || {}).textContent === '默认' && !rows[1].querySelector('.opening-item-note'),
+    rows[0].textContent.slice(0, 20)
+  );
+  check('说明里报了条数', byId('player-opening-help').textContent.includes('3 条'), byId('player-opening-help').textContent);
+  // 卡里的正文是不可信内容：只能当文字显示，不许被解释成 HTML
   check(
     '候选正文里的标签是原样文字（没被解释成 HTML）',
-    rows[3].querySelector('b') === null && rows[3].textContent.includes(HTMLISH),
-    rows[3].textContent.slice(0, 30)
+    rows[2].querySelector('b') === null && rows[2].textContent.includes('<b>'),
+    rows[2].textContent.slice(0, 30)
   );
 
   click(rows[1]);
-  await waitFor('选择器关掉', () => !shown('#pick-modal'));
-  check('点第二条返回下标 1', (await picked) === 1, String(await picked));
+  check(
+    '点哪条哪条选中（单选）',
+    rows[1].getAttribute('aria-checked') === 'true' && rows[0].getAttribute('aria-checked') === 'false',
+    `${rows[0].getAttribute('aria-checked')} / ${rows[1].getAttribute('aria-checked')}`
+  );
 
-  // 取消那一路：Esc 必须返回 null，而且不能把底下的弹窗一起关掉
-  const cancelled = pickFromList({ title: '再选一次', items: [{ text: '甲' }, { text: '乙' }] });
-  await waitFor('选择器又打开了', () => shown('#pick-modal'));
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  await waitFor('Esc 后关掉', () => !shown('#pick-modal'));
-  check('Esc 返回 null', (await cancelled) === null, String(await cancelled));
+  click('#btn-start-play');
+  await waitFor('「你是谁」弹窗关掉', () => !shown('#player-modal'));
+  await waitFor('切到聊天视图', () => shown('#view-chat'));
+
+  const convo = await activeConvo();
+  const first = (convo.messages || [])[0] || {};
+  check(
+    '插的是挑中的那条，不是永远第一条',
+    first.greeting === true && String(first.content).includes(OTHER),
+    JSON.stringify(String(first.content || '').slice(0, 30))
+  );
 });
 
 await scenario('导出：备选开场白 / 作者 / 版本', async () => {
@@ -9921,7 +10001,7 @@ await scenario('导出：备选开场白 / 作者 / 版本', async () => {
   );
 });
 
-await scenario('开场白：只有一条时不弹选择器', async () => {
+await scenario('开场白：只有一条时不显示选择区', async () => {
   const NAME = '单开场白测试角色';
 
   click('#btn-chars');
@@ -9937,10 +10017,14 @@ await scenario('开场白：只有一条时不弹选择器', async () => {
   const card = $$('#char-page-grid .char-card').find((c) => c.textContent.includes(NAME));
   check('找到了这张卡', !!card);
 
-  // 开聊：只有一条开场白，整条流程里选择器一秒都不该出现
-  await startChatWith(card);
+  // 只有一条：弹窗里不该出现选择区（单选题摆出来只是让人多点一下）
+  click(buttonByText(card, '对话'));
+  await waitFor('「你是谁」弹窗打开', () => shown('#player-modal'));
+  check('只有一条开场白时不显示选择区', !shown('#player-opening-field'));
+
+  click('#btn-start-play');
+  await waitFor('「你是谁」弹窗关掉', () => !shown('#player-modal'));
   await waitFor('切到聊天视图', () => shown('#view-chat'));
-  check('只有一条开场白时没有弹过选择器', !shown('#pick-modal'));
 
   const convo = await activeConvo();
   const first = (convo.messages || [])[0] || {};
@@ -10405,7 +10489,7 @@ await scenario('批量：角色卡与世界书的选择态', async () => {
   await sleep(80);
   check('再点一次全取消', byId('char-batch-count').textContent.includes('0'), byId('char-batch-count').textContent);
 
-  // 取消退出选择态：卡片恢复「编辑 / 聊天」
+  // 取消退出选择态：卡片恢复「编辑 / 对话」
   click('#btn-char-batch-exit');
   await sleep(100);
   check('取消后退出选择态', shown('#char-batch-normal') && !shown('#char-batch-active'));
@@ -10570,6 +10654,14 @@ if ((SCENARIO_FILTER.only || []).length + (SCENARIO_FILTER.skip || []).length > 
     `--only=${(SCENARIO_FILTER.only || []).join(',') || '-'} --skip=${(SCENARIO_FILTER.skip || []).join(',') || '-'}` +
       ' —— 场景名用子串匹配，先跑 --list 看一眼'
   );
+}
+
+// --group 的名单在 tools/smoke-groups.js 里手写，场景改名后这里会**静默少跑**
+// （少跑的不会报红，只会让「这一域全绿」变得不成立）。所以逐个核对名字在不在。
+if ((SCENARIO_FILTER.pick || []).length) {
+  const allNames = new Set([...timings.map((t) => t.name), ...skippedScenarios]);
+  const missing = SCENARIO_FILTER.pick.filter((n) => !allNames.has(n));
+  check('组里每个场景名都对得上', missing.length === 0, missing.length ? `对不上：${missing.join(' / ')}` : '');
 }
 
 return { results, notes, hoverProbe, timings, skippedScenarios };

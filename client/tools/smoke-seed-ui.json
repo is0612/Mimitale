@@ -1,0 +1,234 @@
+{
+  "settings": {
+    "providers": [
+      {
+        "id": "p-test",
+        "name": "冒烟测试服务商",
+        "baseUrl": "http://127.0.0.1:9/v1",
+        "apiKey": "test-key",
+        "models": [
+          "test-model"
+        ],
+        "type": "openai"
+      },
+      {
+        "id": "p-img",
+        "name": "冒烟测试生图",
+        "baseUrl": "http://127.0.0.1:9/v1",
+        "apiKey": "test-key",
+        "models": [
+          "img-model-x"
+        ],
+        "type": "openai"
+      },
+      {
+        "id": "p-emb",
+        "name": "冒烟测试向量",
+        "baseUrl": "http://127.0.0.1:9/v1",
+        "apiKey": "test-key",
+        "models": [
+          "emb-model-x"
+        ],
+        "type": "openai"
+      }
+    ],
+    "activeProviderId": "p-test",
+    "activeModel": "test-model",
+    "temperature": 0.7,
+    "maxTokens": 512,
+    "topP": 0.95,
+    "thinking": true,
+    "theme": "dark",
+    "accent": "amber",
+    "sendOnEnter": true,
+    "showDate": false,
+    "showUsage": true,
+    "worldbookRecursiveDepth": 3,
+    "maxTurns": 20,
+    "imageProviderId": "",
+    "imageModel": "",
+    "imageSize": "1024x1024",
+    "ragEnabled": false,
+    "embeddingProviderId": "",
+    "embeddingModel": "",
+    "chatFontSize": 14,
+    "uiSize": "medium",
+    "uiFont": "default",
+    "chatBoldColor": "",
+    "chatBackground": "",
+    "chatBuiltinBackground": true,
+    "chatPadLeft": 20,
+    "chatPadRight": 20,
+    "autoContinue": true,
+    "assistantPersonas": {},
+    "settingsVersion": 2
+  },
+  "characters": [],
+  "worldbooks": [
+    {
+      "id": "w-test",
+      "name": "冒烟测试世界",
+      "characters": [],
+      "opening": "",
+      "entries": [
+        {
+          "id": "e-root",
+          "title": "世界总览",
+          "keys": [
+            "翁法罗斯"
+          ],
+          "secondaryKeys": [],
+          "selectivelogic": "AND_ANY",
+          "selectiveLogic": "AND_ANY",
+          "content": "翁法罗斯有十二泰坦。",
+          "constant": false,
+          "recursive": true,
+          "probability": 100,
+          "order": 100,
+          "enabled": true
+        },
+        {
+          "id": "e-titan",
+          "title": "十二泰坦",
+          "keys": [
+            "十二泰坦"
+          ],
+          "secondaryKeys": [],
+          "selectiveLogic": "AND_ANY",
+          "content": "十二泰坦守着火种，是这个世界的神。",
+          "constant": false,
+          "recursive": true,
+          "probability": 100,
+          "order": 100,
+          "enabled": true
+        },
+        {
+          "id": "e-flame",
+          "title": "火种",
+          "keys": [
+            "火种"
+          ],
+          "secondaryKeys": [],
+          "selectiveLogic": "AND_ANY",
+          "content": "火种是泰坦留下的力量。",
+          "constant": false,
+          "recursive": false,
+          "probability": 100,
+          "order": 100,
+          "enabled": true
+        },
+        {
+          "id": "e-unrelated",
+          "title": "无关条目",
+          "keys": [
+            "完全没人提的词"
+          ],
+          "secondaryKeys": [],
+          "selectiveLogic": "AND_ANY",
+          "content": "这条不该被带进来。",
+          "constant": false,
+          "recursive": true,
+          "probability": 100,
+          "order": 100,
+          "enabled": true
+        }
+      ]
+    }
+  ],
+  "conversations": [
+    {
+      "id": "mvp7kxdr-5zs7n8",
+      "title": "新对话",
+      "createdAt": 1793016250623,
+      "updatedAt": 1793016250623,
+      "messages": [],
+      "characterId": null,
+      "worldbookIds": [],
+      "dialoguePresetIds": null,
+      "panel": {},
+      "panelFields": [],
+      "panelDefs": {},
+      "panelManual": {},
+      "options": [],
+      "optionsSpec": {
+        "count": 4,
+        "hint": ""
+      },
+      "narrationMode": "standard",
+      "paceMode": "step",
+      "gmMode": false,
+      "summaries": [],
+      "providerId": "p-test",
+      "model": "test-model"
+    }
+  ],
+  "activeId": "mvp7kxdr-5zs7n8",
+  "presets": [
+    {
+      "id": "pr-test",
+      "name": "冒烟测试预设",
+      "description": "测试用的说明，不会发给模型。",
+      "metadata": {
+        "isImported": true,
+        "systemPromptContent": "每一轮都要推进一个具体事件，不要停在原地。"
+      },
+      "tags": [
+        "测试"
+      ],
+      "lorebookCount": 0,
+      "entryCount": 0
+    },
+    {
+      "id": "pr-entries",
+      "name": "带条目的预设",
+      "description": "",
+      "content": "最前面的总则。",
+      "tags": [],
+      "entries": [
+        {
+          "id": "pe-const",
+          "title": "常驻条目",
+          "keys": [],
+          "content": "这条每轮都带上。{{char}} 看着 {{user}} 走进来。",
+          "constant": true,
+          "enabled": true
+        },
+        {
+          "id": "pe-key",
+          "title": "关键词条目",
+          "keys": [
+            "暗号"
+          ],
+          "content": "说到「暗号」才带上这条。",
+          "constant": false,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "pr-global",
+      "name": "全局通用预设",
+      "description": "",
+      "content": "这场对话默认带上这一条。",
+      "global": true,
+      "tags": []
+    },
+    {
+      "id": "pr-entry-only",
+      "name": "只有条目的预设",
+      "description": "",
+      "content": "",
+      "tags": [],
+      "entries": [
+        {
+          "id": "pe-only",
+          "title": "唯一一条",
+          "keys": [],
+          "content": "只靠这一条生效。",
+          "constant": true,
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}

@@ -144,7 +144,30 @@ const listArg = (name) => {
 };
 const ONLY = listArg('--only');
 const SKIP = listArg('--skip');
-const FILTERED = ONLY.length > 0 || SKIP.length > 0;
+// --group=<域>：只跑一个功能域（见 tools/smoke-groups.js）。
+// 走 pick（**精确名单**）而不是 only（子串）—— 域里同时有「剧情选项」和
+// 「剧情选项：默认开」，子串匹配会让前者把后者一起捞进来，反过来还会捞进
+// 「帮我想想（补一批剧情选项）」。精确名单才能保证「这一域就这么多条」。
+const GROUPS = require('./smoke-groups.js').GROUPS;
+// 两种写法都认：`--group=chat` 和 `--group chat`（npm script 只能在末尾接参数，
+// 写成 `--group` 才能让 `npm run smoke:group -- chat` 拼得上）。
+const GROUP_EQ = (process.argv.find((a) => a.startsWith('--group=')) || '').split('=')[1] || '';
+const GROUP_POS = process.argv.indexOf('--group');
+const GROUP_KEY = GROUP_EQ || (GROUP_POS >= 0 ? process.argv[GROUP_POS + 1] || '' : '');
+if (GROUP_KEY === 'list') {
+  console.log('\n  域（--group=<名字>）：\n');
+  for (const [key, g] of Object.entries(GROUPS)) {
+    console.log(`    ${key.padEnd(10)} ${g.label}（${g.scenarios.length} 个场景）`);
+  }
+  console.log('');
+  process.exit(0);
+}
+if (GROUP_KEY && !GROUPS[GROUP_KEY]) {
+  console.error(`\n  没有这个域：${GROUP_KEY}\n  可用的有：${Object.keys(GROUPS).join(' / ')}\n`);
+  process.exit(2);
+}
+const PICK = GROUP_KEY ? GROUPS[GROUP_KEY].scenarios : [];
+const FILTERED = ONLY.length > 0 || SKIP.length > 0 || PICK.length > 0;
 // --verbose：逐条打印断言。默认只按场景打一行汇总 —— 1871 行刷屏没人看，
 // 想看细节时再加这个参数。
 const VERBOSE = process.argv.includes('--verbose');
@@ -388,6 +411,25 @@ const store = makeStore();
 // 起点也过一遍真归一化：这样 store.settings 的形状和主进程 loadSettings() 出来的
 // 完全一致（每个默认键都在），后面 settings:save 的白名单才有东西可比。
 store.settings = normalizeSettings(store.settings);
+
+// --group=<域> 的夹具：灌「这一域第一个场景开跑前」的假后端快照。
+// 快照由 `--dump-groups` 跑整套时生成（见下面 console-message 那一段）。
+// 只为让这一域的场景不必依赖前面那些造数据的场景 —— 它们被跳过了，累积状态也一起没了。
+// ⚠️ 整份覆盖（连 settings / presets 一起）：域内场景依赖的正是那一刻的设置，
+//    只挑几项灌进去等于把「前面场景改过的设置」凭空还原成默认值。
+if (PICK.length) {
+  const seedPath = path.join(__dirname, `smoke-seed-${GROUP_KEY}.json`);
+  if (fs.existsSync(seedPath)) {
+    const seed = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+    // 有个别场景要的数据是**排在它后面**的场景造的，整套跑时靠前序残留碰巧有。
+    // 这类缺口的补法写在域定义里（见 smoke-groups.js 的 patch），别在场景里改断言。
+    const group = GROUPS[GROUP_KEY];
+    if (group.patch) {
+      group.patch(seed, (key) => JSON.parse(fs.readFileSync(path.join(__dirname, `smoke-seed-${key}.json`), 'utf8')));
+    }
+    Object.assign(store, seed);
+  } else console.warn(`\n  ⚠ 没有 ${path.basename(seedPath)}，这一域会从空状态出发（多半会红）\n`);
+}
 
 // 给截图用的种子角色 / 世界书。**只在 --shot-only 下灌**，结构照着断言场景里
 // 那批卡来（属性、分组、标签都有），这样出图看到的就是真实布局该有的样子。
@@ -1699,9 +1741,11 @@ function report(result, consoleErrors, consoleWarnings, crashed) {
   if (crashed) console.log(`  ⚠ ${crashed}`);
   if (skippedScenarios.length) {
     console.log('');
+    const filterText = PICK.length
+      ? `--group=${GROUP_KEY}（${GROUPS[GROUP_KEY].label}，${PICK.length} 个场景）`
+      : `--only=${ONLY.join(',') || '-'}${SKIP.length ? ' --skip=' + SKIP.join(',') : ''}`;
     console.log(
-      `  ⚠ 跳过了 ${skippedScenarios.length} 个场景（--only=${ONLY.join(',') || '-'}` +
-        `${SKIP.length ? ' --skip=' + SKIP.join(',') : ''}）—— 这**不是**整套验证，` +
+      `  ⚠ 跳过了 ${skippedScenarios.length} 个场景（${filterText}）—— 这**不是**整套验证，` +
         '提代码前请跑一次完整的 `npm run smoke`。'
     );
     if (hostSkipped) console.log(`      （另外排除了 ${hostSkipped} 条场景外的公共断言：它们靠前序场景的状态，这里本来就不成立）`);
@@ -2175,7 +2219,7 @@ function probeInjection(result) {
 
   const playerOk = blobs.some((b) => b.includes('【玩家角色：改过的名字】'));
   result.results.push({
-    name: '进入世界：注入的是你选/改过的玩家角色',
+    name: '角色卡开局：注入的是你选/改过的玩家角色',
     pass: playerOk,
     detail: playerOk ? '' : `翻了 ${blobs.length} 次请求都没找到「【玩家角色：改过的名字】」`
   });
@@ -2183,9 +2227,17 @@ function probeInjection(result) {
   // 身份三件套（年龄/性别/种族）已整体移除，注入链路上只剩姓名
   const identityOk = blobs.some((b) => b.includes('【姓名】：改过的名字'));
   result.results.push({
-    name: '进入世界：面板里的姓名被注入给模型',
+    name: '角色卡开局：面板里的姓名被注入给模型',
     pass: identityOk,
     detail: identityOk ? '' : `翻了 ${blobs.length} 次请求都没找到「【姓名】：改过的名字」`
+  });
+
+  // 角色卡开局 = GM 局：卡要作为「本局主要角色」进提示词，否则叙述者不知道这一局围着谁开
+  const focusOk = blobs.some((b) => b.includes('【本局主要角色】') && b.includes('「进世界的角色」'));
+  result.results.push({
+    name: '角色卡开局：卡作为「本局主要角色」注入了 GM 提示词',
+    pass: focusOk,
+    detail: focusOk ? '' : `翻了 ${blobs.length} 次请求都没找到「本局主要角色 / 进世界的角色」`
   });
 }
 
@@ -4382,6 +4434,25 @@ app.whenReady().then(async () => {
   // 加场景把总时长顶过兜底超时那次，就是靠它一眼看出停在哪个场景（见 OVERALL_TIMEOUT_MS）。
   const showProgress = process.argv.includes('--progress');
 
+  // --dump-groups：跑整套时，趁每个域「第一个场景刚要开始」把假后端状态存成
+  // smoke-seed-<域名>.json，当这一域的夹具。
+  // 为什么按「域起始」而不是按「跑完」：场景断言的多半是**演变**（「角色卡一开始
+  // 是空的」「删空后显示空状态」），拿终态当起点，这些必红。
+  const dumpGroups = process.argv.includes('--dump-groups');
+  const groupStarts = new Map(); // 场景名 → 域名
+  if (dumpGroups) {
+    const order = [...fs.readFileSync(path.join(__dirname, 'smoke-renderer.js'), 'utf8')
+      .matchAll(/await scenario\('([^']+)'/g)].map((m) => m[1]);
+    const seen = new Set();
+    for (const name of order) {
+      for (const [key, g] of Object.entries(GROUPS)) {
+        if (seen.has(key) || !g.scenarios.includes(name)) continue;
+        groupStarts.set(name, key);
+        seen.add(key);
+      }
+    }
+  }
+
   win.webContents.on('console-message', (...args) => {
     // 新旧 Electron 的事件签名不一样，两种都兜住
     const first = args[0];
@@ -4389,6 +4460,16 @@ app.whenReady().then(async () => {
     const message = typeof args[2] === 'string' ? args[2] : first && first.message;
     const text = String(message == null ? '' : message);
     if (showProgress && text.startsWith('[progress]')) console.log('    ' + text);
+    // 场景开头那行 [progress] 是**无条件**打的（--progress 只管要不要显示），
+    // 所以这里能拿到「哪个场景刚开始」。此刻 store 还没被这个场景碰过。
+    if (dumpGroups && text.startsWith('[progress]') && text.includes('开始场景：')) {
+      const name = text.split('开始场景：')[1].trim();
+      const key = groupStarts.get(name);
+      if (key) {
+        fs.writeFileSync(path.join(__dirname, `smoke-seed-${key}.json`), JSON.stringify(store, null, 2));
+        console.log(`    [夹具] ${key} ← 「${name}」开跑前的状态`);
+      }
+    }
     if (level === 3 || level === 'error') consoleErrors.push(text);
     else if (level === 2 || level === 'warning') consoleWarnings.push(text);
   });
@@ -4405,7 +4486,7 @@ app.whenReady().then(async () => {
     const domScript = fs.readFileSync(path.join(__dirname, 'smoke-renderer.js'), 'utf8');
     // 场景筛选靠一个前置变量递进去（渲染侧是注入的脚本，没有 process.argv）。
     // 用 var 声明：渲染侧那段代码在同一个闭包里，var 不受 TDZ 影响。
-    const prelude = `var SMOKE_FILTER = ${JSON.stringify({ only: ONLY, skip: SKIP })};\n`;
+    const prelude = `var SMOKE_FILTER = ${JSON.stringify({ only: ONLY, skip: SKIP, pick: PICK })};\n`;
     try {
       result = await win.webContents.executeJavaScript(`(async () => {\n${prelude}${domScript}\n})()`);
     } catch (err) {
@@ -4631,10 +4712,8 @@ app.whenReady().then(async () => {
           await nap(550);
           $('#char-section-tab-worldbook')?.click(); await nap(250);
           if (!$$('#c-wb-list .cwb-row').length) {
-            $('#c-wb-add-btn')?.click(); await nap(350);
-            const row = $$('.cwb-picker-row')[0];
-            if (row) row.click();
-            await nap(400);
+            // 绑定入口撤了（2026-10-26）：卡上没书就现场新建一本，建完直接进编辑器
+            $('#c-wb-new-btn')?.click(); await nap(800);
           }
           const wbLine = $$('#c-wb-list .cwb-row')[0];
           const wbGo = wbLine && Array.from(wbLine.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
@@ -4687,10 +4766,8 @@ app.whenReady().then(async () => {
           await nap(550);
           $('#char-section-tab-worldbook')?.click(); await nap(250);
           if (!$$('#c-wb-list .cwb-row').length) {
-            $('#c-wb-add-btn')?.click(); await nap(350);
-            const row = $$('.cwb-picker-row')[0];
-            if (row) row.click();
-            await nap(400);
+            // 绑定入口撤了（2026-10-26）：卡上没书就现场新建一本，建完直接进编辑器
+            $('#c-wb-new-btn')?.click(); await nap(800);
           }
           const line = $$('#c-wb-list .cwb-row')[0];
           const go = line && Array.from(line.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
@@ -4760,9 +4837,10 @@ app.whenReady().then(async () => {
           const t = document.querySelector('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }
           document.querySelector('#btn-more')?.click();
           await new Promise(r => setTimeout(r, 350));`,
-        // 顶栏（2026-09-30）：方角「书」头像 + 视角胶囊。
-        // 找一条**没绑角色卡、绑了世界书**的会话 —— 也就是世界游玩出来的那条，
-        // 它和只绑角色的会话（圆头像 + 数值胶囊）长得不一样。
+        // 顶栏（2026-09-30）：顶栏头像 + 视角胶囊。
+        // 角色卡开局（GM 局）之后，头像走「绑了角色」那一支。
+        // （原来这里找的是「没绑卡、绑了书」的世界会话；那条入口已并进「对话」，
+        //  现在所有开局会话都绑着卡 —— 找一条头像不是中性点的即可。）
         topbarBook: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
@@ -4770,12 +4848,36 @@ app.whenReady().then(async () => {
             it.click();
             await new Promise(r => setTimeout(r, 450));
             const av = $('#topbar-avatar');
-            if (av && av.classList.contains('book')) break;
+            if (av && !av.classList.contains('plain')) break;
           }
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         chars: `
           document.querySelector('#btn-chars')?.click();
           await new Promise(r => setTimeout(r, 500));`,
+        // 「你是谁」弹窗里的开场白选择区：卡带**两条以上**才出现，挑中的那条才是会话开头。
+        // 种子卡只有一条，所以这里先塞两条进去（走真模块 + 落盘，和真实数据同一条路）。
+        // 要看的是「一屏装不装得下」：列表自己有 216px 上限，加上 7 行设定别把弹窗撑破。
+        playerModal: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+
+          $('#btn-chars')?.click(); await nap(500);
+
+          const card = $$('#char-page-grid .char-card')
+            .find(c => ((c.querySelector('.char-card-name') || {}).textContent || '').trim() === '属性测试角色');
+          const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
+          const persistMod = await import(new URL('js/data/persist.js', document.baseURI).href);
+          const target = (stateMod.state.characters || []).find(c => c.name === '属性测试角色');
+          if (target) {
+            target.alternateGreetings = [
+              '第二条：雨停之后，镇口的告示换了一张，墨迹还没干透。',
+              '第三条：你在图书馆的地下室里醒过来，桌上那盏油灯快烧完了。'
+            ];
+            await persistMod.persistLibrary();
+          }
+          const go = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '对话');
+          if (go) { go.click(); await nap(700); }`,
         // 角色卡：卡片上铺的是**角色形象**（2:3 竖版立绘），点开还能看大图。
         // 测试里的角色都没有图（上传那条路被 images:pick 的桩挡着），
         // 所以这里给每张卡塞一个 2:3 的 SVG 占位立绘 —— 只为看清裁切和排版；
@@ -4851,10 +4953,8 @@ app.whenReady().then(async () => {
           await nap(550);
           $('#char-section-tab-worldbook')?.click(); await nap(250);
           if (!$$('#c-wb-list .cwb-row').length) {
-            $('#c-wb-add-btn')?.click(); await nap(350);
-            const row = $$('.cwb-picker-row')[0];
-            if (row) row.click();
-            await nap(400);
+            // 绑定入口撤了（2026-10-26）：卡上没书就现场新建一本，建完直接进编辑器
+            $('#c-wb-new-btn')?.click(); await nap(800);
           }
           const wbLine = $$('#c-wb-list .cwb-row')[0];
           const wbGo = wbLine && Array.from(wbLine.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
@@ -4908,7 +5008,7 @@ app.whenReady().then(async () => {
               || (() => { $('#btn-chars')?.click(); return null; })();
             await nap(400);
             const card = $$('#char-page-grid .char-card')[0];
-            const chat = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '聊天');
+            const chat = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '对话');
             if (chat) chat.click();
             await nap(600);
             $('#btn-perspective')?.click();
@@ -5048,10 +5148,10 @@ app.whenReady().then(async () => {
             const n = c.querySelector('.char-card-name');
             return n && n.textContent.trim() === '属性测试角色';
           });
-          const go = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '聊天');
+          const go = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '对话');
           if (go) { go.click(); await nap(700); }
 
-          // 第一次开这个角色的会话会先弹「创建你的角色」。⚠️ 要点「开始游玩」
+          // 第一次开这个角色的会话会先弹「创建你的角色」。⚠️ 要点「开始对话」
           // （btn-start-play）**进会话** —— 点「取消」等于放弃这次聊天，
           // 视图会退角色卡，截出来就是一张角色卡图（踩过）。
           // ⚠️ 这个 driver 整段是**模板字符串**：注释里千万别写反引号，
@@ -5106,7 +5206,7 @@ app.whenReady().then(async () => {
             const n = c.querySelector('.char-card-name');
             return n && n.textContent.trim() === '属性测试角色';
           });
-          const go = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '聊天');
+          const go = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '对话');
           if (go) { go.click(); await nap(700); }
           if (!$('#player-modal')?.classList.contains('hidden')) {
             $('#btn-start-play')?.click();
@@ -5159,7 +5259,7 @@ app.whenReady().then(async () => {
             const n = c.querySelector('.char-card-name');
             return n && n.textContent.trim() === '属性测试角色';
           });
-          const go = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '聊天');
+          const go = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '对话');
           if (go) { go.click(); await nap(700); }
           if (!$('#player-modal')?.classList.contains('hidden')) {
             $('#btn-start-play')?.click();
@@ -5242,43 +5342,24 @@ app.whenReady().then(async () => {
           document.querySelector('#char-section-tab-worldbook')?.click();
           await nap(400);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
-        // 「AI 补设定」补完之后的形态（2026-10-20）：头部两颗按钮并排 +
-        // 虚线条目清单 + 状态行。要核的是:标题别把关键词挤没、✕ 贴右、虚线框间距。
-        // 条目来自假后端（见本文件 chat:send 里「世界书编辑」那一段）。
-        cwbAi: `
+        // 「AI 补条目」补完之后的形态（2026-10-26 从角色编辑器搬到世界书编辑页）：
+        // 补出来的条目直接进左栏列表，状态行说明「点保存才写进磁盘」。
+        wbAi: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
           const $ = (s) => document.querySelector(s);
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
-          $('#btn-chars')?.click();
-          await nap(400);
-          const cards = $$('#char-page-grid .char-card');
-          const card = cards.find(c => (c.textContent || '').includes('自带世界书测试')) || cards[0];
-          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (btn) btn.click();
-          await nap(600);
-          document.querySelector('#char-section-tab-worldbook')?.click();
-          await nap(300);
-          $('#c-wb-ai-btn')?.click();
-          await nap(1200);
-          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
-        // 同上，但把第一条「改」展开 —— 核的是就地改正文时那一块的高度 / 内边距 / 贴合。
-        cwbAiEdit: `
-          const $$ = (s) => Array.from(document.querySelectorAll(s));
-          const $ = (s) => document.querySelector(s);
-          const nap = (ms) => new Promise(r => setTimeout(r, ms));
-          $('#btn-chars')?.click();
-          await nap(400);
-          const cards = $$('#char-page-grid .char-card');
-          const card = cards.find(c => (c.textContent || '').includes('自带世界书测试')) || cards[0];
-          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
-          if (btn) btn.click();
-          await nap(600);
-          document.querySelector('#char-section-tab-worldbook')?.click();
-          await nap(300);
-          $('#c-wb-ai-btn')?.click();
-          await nap(1200);
-          document.querySelector('#c-wb-ai-list .cwb-ai-edit-btn')?.click();
-          await nap(350);
+          $('#btn-chars')?.click(); await nap(400);
+          const wbCard = $$('#char-page-grid .char-card').find(c => c.textContent.includes('自带世界书测试')) || $$('#char-page-grid .char-card')[0];
+          const wbEditBtn = wbCard && Array.from(wbCard.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbEditBtn) wbEditBtn.click();
+          await nap(550);
+          $('#char-section-tab-worldbook')?.click(); await nap(250);
+          const wbLine = $$('#c-wb-list .cwb-row')[0];
+          const wbGo = wbLine && Array.from(wbLine.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (wbGo) wbGo.click();
+          await nap(700);
+          $('#btn-wb-ai')?.click();
+          await nap(1500);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 按钮的 loading 态（2026-10-20）：转圈圈 + 文案 + 变灰，核的是圈圈大小 / 和文字的距离。
         // 真跑一次生成太快抓不稳这一帧，所以直接给按钮置位（和 aiGen 里点完「开始生成」同一形状）。
@@ -5321,10 +5402,8 @@ app.whenReady().then(async () => {
           await nap(550);
           $('#char-section-tab-worldbook')?.click(); await nap(250);
           if (!$$('#c-wb-list .cwb-row').length) {
-            $('#c-wb-add-btn')?.click(); await nap(350);
-            const row = $$('.cwb-picker-row')[0];
-            if (row) row.click();
-            await nap(400);
+            // 绑定入口撤了（2026-10-26）：卡上没书就现场新建一本，建完直接进编辑器
+            $('#c-wb-new-btn')?.click(); await nap(800);
           }
           const wbLine = $$('#c-wb-list .cwb-row')[0];
           const wbGo = wbLine && Array.from(wbLine.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
@@ -5716,7 +5795,7 @@ app.whenReady().then(async () => {
 
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 状态卡上的角色图：标题下面横铺一张，右下角是命中的表情名小标签。
-        // 走的是**真实路径**（角色卡点「聊天」→ 真发一轮 → 点入口条头像），
+        // 走的是**真实路径**（角色卡点「对话」→ 真发一轮 → 点入口条头像），
         // 种子卡的触发词写在假后端每轮回复都带的那句话上，所以必定命中表情甲。
         stateExpr: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -5729,7 +5808,7 @@ app.whenReady().then(async () => {
             const n = c.querySelector('.char-card-name');
             return n && n.textContent.trim() === '属性测试角色';
           });
-          const chat = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '聊天');
+          const chat = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '对话');
           if (chat) { chat.click(); await nap(700); }
 
           const input = $('#input');
@@ -5961,6 +6040,19 @@ app.whenReady().then(async () => {
               const n = document.querySelector('#view-char-editor .char-identity-pane');
               return n ? n.scrollHeight + '/' + n.clientHeight : '(无)';
             })(),
+            // 开场白选择区：显示了没 / 铺了几行 / 列表自身的高 vs 内容高
+            //（前者小于后者 = 列表内部在滚，正是长卡该有的样子）
+            opening: (() => {
+              const field = document.querySelector('#player-opening-field');
+              const list = document.querySelector('#player-opening-list');
+              if (!field || !list) return '(无)';
+              if (field.classList.contains('hidden')) return '隐藏';
+              const no = list.querySelector('.opening-item-no');
+              return '显示 行=' + list.children.length +
+                ' 列表 ' + Math.round(list.getBoundingClientRect().height) + '/' + list.scrollHeight +
+                ' 序号底=' + (no ? getComputedStyle(no).backgroundColor : '(无)') +
+                ' 勾=' + ((list.querySelector('.opening-item-mark') || {}).textContent || '(无)');
+            })(),
             // 当前那个可见弹窗的卡片实测尺寸 vs 内容区。放大状态应该刚好等于
             // window.innerWidth × innerHeight —— 「差几 px 没铺满」在缩略图上
             // **根本看不出来**，所以这里给数字。
@@ -5981,6 +6073,7 @@ app.whenReady().then(async () => {
         })()`);
         console.log(`  主题=${probe.theme} 配色=${probe.accent} 弹窗底=${probe.card} 属性卡=${probe.panel} 标签栏=${probe.tabs} 值框=${probe.value}`);
         console.log(`  弹窗卡片=${probe.modal}`);
+        if (shotArg === 'playerModal') console.log(`  开场白选择区=${probe.opening}`);
         if (probe.selProbe) console.log(`  下拉几何=${JSON.stringify(probe.selProbe)}`);
         if (probe.attrProbe) console.log(`  属性行控件=${JSON.stringify(probe.attrProbe)}`);
         if (probe.iconProbe) console.log(`  图标注入=${JSON.stringify(probe.iconProbe)}`);
@@ -6022,6 +6115,15 @@ app.whenReady().then(async () => {
     }
     app.exit(0);
     return;
+  }
+
+  // --dump-store=<路径>：把假后端跑完后的状态原样导出来。
+  // 只有一个用途 —— 抄这份真实数据当「域夹具」的种子（见 tools/smoke-groups.js）。
+  // 手写种子字段一定会漏（会话有十几个字段），漏一个就等着断言莫名其妙地红。
+  const dumpArg = (process.argv.find((a) => a.startsWith('--dump-store=')) || '').split('=')[1];
+  if (dumpArg) {
+    fs.writeFileSync(path.resolve(dumpArg), JSON.stringify(clone(store), null, 2));
+    console.log(`  已导出假后端状态：${dumpArg}`);
   }
 
   const ok = report(result, consoleErrors, consoleWarnings, crashed);

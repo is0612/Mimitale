@@ -1,0 +1,417 @@
+{
+  "settings": {
+    "providers": [
+      {
+        "id": "p-test",
+        "name": "冒烟测试服务商",
+        "baseUrl": "http://127.0.0.1:9/v1",
+        "apiKey": "test-key",
+        "models": [
+          "test-model"
+        ],
+        "type": "openai"
+      },
+      {
+        "id": "p-img",
+        "name": "冒烟测试生图",
+        "baseUrl": "http://127.0.0.1:9/v1",
+        "apiKey": "test-key",
+        "models": [
+          "img-model-x"
+        ],
+        "type": "openai"
+      },
+      {
+        "id": "p-emb",
+        "name": "冒烟测试向量",
+        "baseUrl": "http://127.0.0.1:9/v1",
+        "apiKey": "test-key",
+        "models": [
+          "emb-model-x"
+        ],
+        "type": "openai"
+      }
+    ],
+    "activeProviderId": "p-test",
+    "activeModel": "test-model",
+    "temperature": 0.7,
+    "maxTokens": 512,
+    "topP": 0.95,
+    "thinking": true,
+    "theme": "dark",
+    "accent": "amber",
+    "sendOnEnter": true,
+    "showDate": false,
+    "showUsage": true,
+    "worldbookRecursiveDepth": 3,
+    "maxTurns": 20,
+    "imageProviderId": "",
+    "imageModel": "",
+    "imageSize": "1024x1024",
+    "ragEnabled": false,
+    "embeddingProviderId": "",
+    "embeddingModel": "",
+    "chatFontSize": 14,
+    "uiSize": "medium",
+    "uiFont": "default",
+    "chatBoldColor": "",
+    "chatBackground": "",
+    "chatBuiltinBackground": true,
+    "chatPadLeft": 20,
+    "chatPadRight": 20,
+    "autoContinue": true,
+    "assistantPersonas": {},
+    "settingsVersion": 2
+  },
+  "characters": [
+    {
+      "id": "mvp7kzgj-jm4593",
+      "name": "属性测试角色",
+      "avatar": "",
+      "description": "",
+      "personality": "",
+      "scenario": "",
+      "firstMes": "",
+      "mesExample": "",
+      "systemPrompt": "",
+      "postHistoryInstructions": "",
+      "creatorNotes": "",
+      "creator": "",
+      "characterVersion": "",
+      "tags": [],
+      "attributes": [],
+      "worldbookIds": [
+        "w-test"
+      ],
+      "source": "manual",
+      "createdAt": 1793016253315,
+      "updatedAt": 1793016253348
+    }
+  ],
+  "worldbooks": [
+    {
+      "id": "w-test",
+      "name": "冒烟测试世界",
+      "entries": [
+        {
+          "id": "e-root",
+          "title": "世界总览",
+          "keys": [
+            "翁法罗斯"
+          ],
+          "secondaryKeys": [],
+          "selective": false,
+          "selectiveLogic": "AND_ANY",
+          "content": "翁法罗斯有十二泰坦。",
+          "order": 100,
+          "constant": false,
+          "recursive": true,
+          "excludeRecursion": false,
+          "matchWholeWords": false,
+          "caseSensitive": false,
+          "probability": 100,
+          "enabled": true
+        },
+        {
+          "id": "e-titan",
+          "title": "十二泰坦",
+          "keys": [
+            "十二泰坦"
+          ],
+          "secondaryKeys": [],
+          "selective": false,
+          "selectiveLogic": "AND_ANY",
+          "content": "十二泰坦守着火种，是这个世界的神。",
+          "order": 100,
+          "constant": false,
+          "recursive": true,
+          "excludeRecursion": false,
+          "matchWholeWords": false,
+          "caseSensitive": false,
+          "probability": 100,
+          "enabled": true
+        },
+        {
+          "id": "e-flame",
+          "title": "火种",
+          "keys": [
+            "火种"
+          ],
+          "secondaryKeys": [],
+          "selective": false,
+          "selectiveLogic": "AND_ANY",
+          "content": "火种是泰坦留下的力量。",
+          "order": 100,
+          "constant": false,
+          "recursive": false,
+          "excludeRecursion": false,
+          "matchWholeWords": false,
+          "caseSensitive": false,
+          "probability": 100,
+          "enabled": true
+        },
+        {
+          "id": "e-unrelated",
+          "title": "无关条目",
+          "keys": [
+            "完全没人提的词"
+          ],
+          "secondaryKeys": [],
+          "selective": false,
+          "selectiveLogic": "AND_ANY",
+          "content": "这条不该被带进来。",
+          "order": 100,
+          "constant": false,
+          "recursive": true,
+          "excludeRecursion": false,
+          "matchWholeWords": false,
+          "caseSensitive": false,
+          "probability": 100,
+          "enabled": true
+        }
+      ],
+      "characters": [
+        {
+          "id": "wcmvp7kzht-3398eo",
+          "name": "属性测试角色",
+          "avatar": "",
+          "description": "属性测试角色的设定文本",
+          "personality": "",
+          "scenario": "",
+          "firstMes": "",
+          "mesExample": "",
+          "systemPrompt": "",
+          "postHistoryInstructions": "",
+          "creatorNotes": "",
+          "creator": "",
+          "characterVersion": "",
+          "tags": [],
+          "attributes": [
+            {
+              "name": "金币",
+              "type": "text",
+              "value": "100"
+            },
+            {
+              "name": "上衣",
+              "type": "text",
+              "value": "布衣"
+            },
+            {
+              "name": "好感度",
+              "type": "meter",
+              "value": "20",
+              "min": 0,
+              "max": 100,
+              "hint": "按剧情合理增减，单轮不超过 10",
+              "group": "关系"
+            }
+          ],
+          "worldbookIds": [],
+          "showInPanel": true,
+          "source": "manual",
+          "createdAt": 1793016253361,
+          "updatedAt": 1793016253472
+        }
+      ],
+      "createdAt": 1793016253475,
+      "updatedAt": 1793016253472
+    }
+  ],
+  "conversations": [
+    {
+      "id": "mvp7kzpx-07l33i",
+      "title": "冒烟测试：属性注入",
+      "createdAt": 1793016253653,
+      "updatedAt": 1793016254160,
+      "messages": [
+        {
+          "role": "user",
+          "content": "冒烟测试：属性注入",
+          "at": 1793016253723
+        },
+        {
+          "role": "assistant",
+          "content": "冒烟测试回复 #2：我收到了。**这是加粗**，==这是高亮==。\n\n【好感度】：63/100\n剧情选项：1.「我想先喝一杯，压压惊」 / 我直接问他叫什么名字 / 3） 我假装什么都没听见，继续吃 / 我想先喝一杯，压压惊 / 这条应该被丢掉（只取前几个）\n【剧情选项】：我想先喝一杯，压压惊 / 我直接问他叫什么名字 / 我假装什么都没听见",
+          "reasoning": "",
+          "at": 1793016253739,
+          "model": "test-model",
+          "providerId": "p-test",
+          "finishReason": "stop",
+          "usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15
+          }
+        },
+        {
+          "role": "user",
+          "content": "漏状态表",
+          "at": 1793016253999
+        },
+        {
+          "role": "assistant",
+          "content": "冒烟测试回复：这一段正文写得挺顺，可这一轮我什么状态都没提。\n嗯，正文就写到这里。\n\n【金币】：88\n【上衣】：斗篷",
+          "reasoning": "",
+          "at": 1793016254006,
+          "model": "test-model",
+          "providerId": "p-test",
+          "finishReason": "stop",
+          "usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15
+          }
+        }
+      ],
+      "characterId": "mvp7kzgj-jm4593",
+      "worldbookIds": [],
+      "dialoguePresetIds": null,
+      "panel": {
+        "金币\u0000wcmvp7kzht-3398eo": "88",
+        "上衣\u0000wcmvp7kzht-3398eo": "斗篷",
+        "好感度\u0000wcmvp7kzht-3398eo": "60/100"
+      },
+      "panelFields": [
+        "金币\u0000wcmvp7kzht-3398eo",
+        "上衣\u0000wcmvp7kzht-3398eo",
+        "好感度\u0000wcmvp7kzht-3398eo"
+      ],
+      "panelDefs": {
+        "金币\u0000wcmvp7kzht-3398eo": {
+          "type": "text",
+          "owner": "wcmvp7kzht-3398eo"
+        },
+        "上衣\u0000wcmvp7kzht-3398eo": {
+          "type": "text",
+          "owner": "wcmvp7kzht-3398eo"
+        },
+        "好感度\u0000wcmvp7kzht-3398eo": {
+          "type": "meter",
+          "min": 0,
+          "max": 100,
+          "hint": "按剧情合理增减，单轮不超过 10",
+          "group": "关系",
+          "owner": "wcmvp7kzht-3398eo"
+        }
+      },
+      "panelManual": {
+        "好感度\u0000wcmvp7kzht-3398eo": 1793016253971
+      },
+      "options": [
+        "我想先喝一杯，压压惊",
+        "我直接问他叫什么名字",
+        "我假装什么都没听见"
+      ],
+      "optionsSpec": {
+        "count": 4,
+        "hint": ""
+      },
+      "narrationMode": "standard",
+      "paceMode": "step",
+      "gmMode": true,
+      "summaries": [],
+      "player": {
+        "name": "冒烟玩家",
+        "profile": "",
+        "characterId": null
+      },
+      "providerId": "p-test",
+      "model": "test-model"
+    },
+    {
+      "id": "mvp7kxdr-5zs7n8",
+      "title": "新对话",
+      "createdAt": 1793016250623,
+      "updatedAt": 1793016250814,
+      "messages": [],
+      "characterId": null,
+      "worldbookIds": [],
+      "dialoguePresetIds": null,
+      "panel": {},
+      "panelFields": [],
+      "panelDefs": {},
+      "panelManual": {},
+      "options": [],
+      "optionsSpec": {
+        "count": 4,
+        "hint": ""
+      },
+      "narrationMode": "standard",
+      "paceMode": "step",
+      "gmMode": false,
+      "summaries": [],
+      "providerId": "p-test",
+      "model": "test-model"
+    }
+  ],
+  "activeId": "mvp7kzpx-07l33i",
+  "presets": [
+    {
+      "id": "pr-test",
+      "name": "冒烟测试预设",
+      "description": "测试用的说明，不会发给模型。",
+      "metadata": {
+        "isImported": true,
+        "systemPromptContent": "每一轮都要推进一个具体事件，不要停在原地。"
+      },
+      "tags": [
+        "测试"
+      ],
+      "lorebookCount": 0,
+      "entryCount": 0
+    },
+    {
+      "id": "pr-entries",
+      "name": "带条目的预设",
+      "description": "",
+      "content": "最前面的总则。",
+      "tags": [],
+      "entries": [
+        {
+          "id": "pe-const",
+          "title": "常驻条目",
+          "keys": [],
+          "content": "这条每轮都带上。{{char}} 看着 {{user}} 走进来。",
+          "constant": true,
+          "enabled": true
+        },
+        {
+          "id": "pe-key",
+          "title": "关键词条目",
+          "keys": [
+            "暗号"
+          ],
+          "content": "说到「暗号」才带上这条。",
+          "constant": false,
+          "enabled": true
+        }
+      ]
+    },
+    {
+      "id": "pr-global",
+      "name": "全局通用预设",
+      "description": "",
+      "content": "这场对话默认带上这一条。",
+      "global": true,
+      "tags": []
+    },
+    {
+      "id": "pr-entry-only",
+      "name": "只有条目的预设",
+      "description": "",
+      "content": "",
+      "tags": [],
+      "entries": [
+        {
+          "id": "pe-only",
+          "title": "唯一一条",
+          "keys": [],
+          "content": "只靠这一条生效。",
+          "constant": true,
+          "enabled": true
+        }
+      ]
+    }
+  ]
+}
