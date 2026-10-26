@@ -79,11 +79,6 @@ export function newWorldbookCharId() {
   return `wc${uid()}`;
 }
 
-/** 会话绑定了哪些世界书（id 列表，容错老数据） */
-export function convoWorldbookIds(convo) {
-  return asArray(convo && convo.worldbookIds);
-}
-
 /**
  * 角色自带的世界书（按 id 解析成书）。
  * ⚠️ 绑过但已删的 id 一律滤掉（角色上的悬空 id 不做清理，见 worldbook.js）。
@@ -94,20 +89,12 @@ export function characterWorldbooks(character) {
 }
 
 /**
- * 这次请求实际用哪几本书：会话自己绑了就用它的，没绑才回落「角色卡自带」。
- *
- * ⚠️ 角色卡开局**不把卡的书拷进 convo.worldbookIds**（拷了就是快照，卡上换书之后老会话不再跟随）。
- *    所以凡是「按会话找书」的地方都要走这里 —— 直接用 convoWorldbookIds(convo) 在角色卡局永远是空的
- *    （右栏脚注、面板归属、导出、删除前的用量统计都会跟着漏）。
- *    只有两处必须用 convoWorldbookIds：给会话做快照（分叉）、以及「世界优先」那种要分辨来源的提示。
+ * 这一局实际用哪几本书 = **角色卡自带的那本**。
+ * 书是卡的一部分（2026-10-26 起会话不再单独绑书），所以没绑卡就是空 —— 纯聊天不用世界书。
  */
 export function effectiveWorldbookIds(convo) {
-  const convoIds = convoWorldbookIds(convo);
-  if (convoIds.length) return convoIds;
-
   const character = characterForConvo(convo);
   if (!character) return [];
-
   return asArray(character.worldbookIds);
 }
 

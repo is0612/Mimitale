@@ -1,7 +1,7 @@
 'use strict';
 
 //  views/header.js —— 对话头部（标题 / 元信息 / 提示 / 用量），只读不写。
-//  世界书的常规信息在 castPanel.js 的脚注（设计稿指定的位置），这里只留异常提示。
+//  世界书的常规信息在 castPanel.js 的脚注（设计稿指定的位置），这里只管场景行里的书名。
 //  只依赖数据层、不认识任何视图，其他模块可以放心 import 它（单向）。
 
 import { state } from '../core/state.js';
@@ -12,7 +12,7 @@ import { iconSvg } from '../ui/icons.js';
 import { currentScene } from '../data/currentScene.js';
 import { entityTone } from '../ui/avatarTone.js';
 import { currentEndpoint } from '../data/providers.js';
-import { characterForConvo, convoWorldbookIds, worldbookById } from '../data/library.js';
+import { characterForConvo, characterWorldbooks } from '../data/library.js';
 import {
   convoPanel,
   convoPanelDef,
@@ -46,14 +46,6 @@ function renderTopbarAvatar(convo, character) {
     host.classList.add(entityTone(character.id, character.name));
     if (character.avatar) host.appendChild(h('img', { src: character.avatar, alt: '' }));
     else host.textContent = String(character.name || '').slice(0, 1) || '?';
-    return;
-  }
-
-  const wbId = convoWorldbookIds(convo)[0] || '';
-  const wb = wbId ? worldbookById(wbId) : null;
-  if (wb) {
-    host.classList.add('book', entityTone(wb.id, wb.name));
-    host.innerHTML = iconSvg('book-open');
     return;
   }
 
@@ -130,15 +122,12 @@ export function renderHeader() {
     el.convoMeta.textContent = bits.join(' · ');
   }
 
-  // 这里只留异常提示（「角色自带的书这次不生效」）；常规信息在 castPanel.js 的脚注。
-  const convoBookIds = convoWorldbookIds(convo);
-  const convoBooks = convoBookIds.map((id) => worldbookById(id)).filter(Boolean);
-  const charBookIds = character && Array.isArray(character.worldbookIds) ? character.worldbookIds : [];
-  const charBooks = charBookIds.map((id) => worldbookById(id)).filter(Boolean);
-  const effectiveBooks = convoBooks.length ? convoBooks : charBooks;
+  // 书是卡的一部分：这一局用哪本书就看卡绑了哪本，没绑就不会有「世界」这一层。
+  // 常规信息在 castPanel.js 的脚注，这里只管场景行。
+  const books = character ? characterWorldbooks(character) : [];
   const storyContext = document.getElementById('story-context');
-  if (storyContext) storyContext.textContent = effectiveBooks.length
-    ? `故事进行中 / ${effectiveBooks.map(book => book.name).join(' · ')}`
+  if (storyContext) storyContext.textContent = books.length
+    ? `故事进行中 / ${books.map(book => book.name).join(' · ')}`
     : character ? `故事进行中 / ${character.name}` : '自由叙事 / 新的篇章';
   const sceneHost = document.getElementById('scene-context');
   if (sceneHost) {
@@ -148,17 +137,13 @@ export function renderHeader() {
     sceneHost.appendChild(marker);
     const scene = currentScene(convo);
     sceneHost.appendChild(h('span', { text: scene.length ? scene.map(field => field.value).join(' · ') : '故事场景，随你的叙述展开' }));
-    if (effectiveBooks.length) {
-      const books = h('span', { class: 'scene-worldbook', title: effectiveBooks.map(book => book.name).join('、') });
+    if (books.length) {
+      const bookHost = h('span', { class: 'scene-worldbook', title: books.map(book => book.name).join('、') });
       const bookIcon = h('span', { 'aria-hidden': 'true' });
       bookIcon.innerHTML = iconSvg('book-open');
-      books.append(bookIcon, document.createTextNode(effectiveBooks.map(book => book.name).join(' · ')));
-      sceneHost.appendChild(books);
+      bookHost.append(bookIcon, document.createTextNode(books.map(book => book.name).join(' · ')));
+      sceneHost.appendChild(bookHost);
     }
-  }
-
-  if (convoBooks.length && charBooks.length) {
-    el.convoMeta.textContent += ' · 角色自带的书不生效（世界优先）';
   }
 
   // 视角只在偏离默认时显示为标题旁的小胶囊。

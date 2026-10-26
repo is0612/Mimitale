@@ -15,12 +15,14 @@ import { MAX_EXPRESSIONS } from '../data/expressions.js';
 import {
   characters,
   characterAttrs,
+  characterWorldbooks,
+  worldbooks,
   worldbookById,
   worldbookCharacters,
   newWorldbookCharId
 } from '../data/library.js';
 import { persistCharacters, persistConversations, persistLibrary } from '../data/persist.js';
-import { currentWorldbook, renderBookCharacters, rerenderBookCharHosts, focusWorldbook, openWorldbookEditor, createWorldbook } from './worldbook.js';
+import { currentWorldbook, renderBookCharacters, rerenderBookCharHosts, focusWorldbook, openWorldbookEditor, createWorldbook, deleteWorldbookById } from './worldbook.js';
 import { renderCharacterPage } from './characterList.js';
 import { draftExpressionsOf } from './charExpressions.js';
 import { openAiGenModal } from './aiGen.js';
@@ -474,7 +476,7 @@ function renderCharWorldbookBox(character) {
   if (el.c.wbNewBtn) {
     el.c.wbNewBtn.disabled = full;
     el.c.wbNewBtn.title = full
-      ? '自带世界书只能有一本 —— 先解绑现在这本，再新建'
+      ? '自带世界书只能有一本 —— 先删掉现在这本，再新建'
       : '新建一本世界书，只给这个角色用';
   }
 
@@ -514,10 +516,10 @@ function renderCharWorldbookBox(character) {
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'cwb-row-del';
-      del.title = '解绑（不会删掉世界书本身）';
-      del.setAttribute('aria-label', `解绑 ${book.name}`);
+      del.title = '删除这本书（条目和角色副本会一起删掉）';
+      del.setAttribute('aria-label', `删除世界书 ${book.name}`);
       del.textContent = '✕';
-      del.addEventListener('click', () => unbindWorldbookFromCharacter(book.id));
+      del.addEventListener('click', () => deleteWorldbookFromCharacter(book.id));
 
       row.append(name, count, edit, del);
       el.c.wbList.appendChild(row);
@@ -563,7 +565,7 @@ async function createWorldbookForCharacter() {
 
   const beforeIds = Array.isArray(character.worldbookIds) ? [...character.worldbookIds] : [];
   if (beforeIds.length) {
-    showToast('自带世界书只能有一本 —— 先解绑现在这本，再新建', 'error');
+    showToast('自带世界书只能有一本 —— 先删掉现在这本，再新建', 'error');
     return;
   }
 
@@ -597,34 +599,27 @@ export function refreshCharWorldbookBox() {
   if (character) renderCharWorldbookBox(character);
 }
 
-/** 解绑（不删世界书本身） */
-async function unbindWorldbookFromCharacter(bookId) {
+/** 书行上的 ✕：真的把这本书删掉 —— 书和卡是一体的，没有「留着但不生效」这种中间态。
+ *  ⚠️ 确认框和「从卡上摘掉 id」都在 deleteWorldbookById 里，这里只管草稿卡和重画。 */
+async function deleteWorldbookFromCharacter(bookId) {
   const character = editorCharacterById(editingCharacterId);
   if (!character) return;
 
-  const book = worldbookById(bookId);
+  const draftCard = isCharDraft();
   const beforeIds = Array.isArray(character.worldbookIds) ? [...character.worldbookIds] : [];
-  const beforeUpdatedAt = character.updatedAt;
 
-  character.worldbookIds = beforeIds.filter((id) => id !== bookId);
-  character.updatedAt = now();
+  // 草稿卡还没进 state.characters —— deleteWorldbookById 摘不到它的 id，这里先摘。
+  // 删书失败要放回去，否则界面上书还在、卡却已经"没有书"。
+  if (draftCard) character.worldbookIds = beforeIds.filter((id) => id !== bookId);
+
+  const deleted = await deleteWorldbookById(bookId);
+
+  if (!deleted) {
+    if (draftCard) character.worldbookIds = beforeIds;
+    return;
+  }
+
   renderCharWorldbookBox(character);
-
-  // ⚠️ 说清楚书还在：解绑之后这张卡就再也挂不回这本了（从库里挑书绑过来的入口已撤）
-  const done = book ? `已解绑「${book.name}」—— 书还在世界书库里，只是不再跟这张卡开局` : '已解绑';
-
-  if (isCharDraft()) {
-    showToast(done);
-    return;
-  }
-
-  if (!(await persistLibrary())) {
-    character.worldbookIds = beforeIds;
-    character.updatedAt = beforeUpdatedAt;
-    renderCharWorldbookBox(character);
-    return;
-  }
-  showToast(done);
 }
 
 // 草稿 / 保存 / 删除
@@ -842,11 +837,23 @@ export async function deleteCharacterById(id, scope) {
     : characters().find((c) => c.id === id);
   if (!character) return;
 
+  // 书是卡的一部分：删卡就得连它自带的世界书一起删，否则留下一本谁也打不开的孤儿书
+  // （世界书列表页已经撤了，界面上再没有别的地方能删它）。
+  // ⚠️ 别的卡还指着同一本就别删 —— 老数据里一本书挂过多张卡（新界面造不出这种），
+  //    删这张卡不该把另一张的书也带走。
+  const ownBooks = inBook ? [] : characterWorldbooks(character).filter((book) => !characters().some(
+    (other) => other.id !== character.id && (other.worldbookIds || []).includes(book.id)
+  ));
+  const entryTotal = ownBooks.reduce((n, book) => n + (Array.isArray(book.entries) ? book.entries.length : 0), 0);
+  const bookText = ownBooks.length
+    ? `它自带的世界书「${ownBooks.map((book) => book.name).join('、')}」（${entryTotal} 条条目）也会一起删掉。`
+    : '';
+
   const ok = await confirmDialog({
     title: inBook ? '移除角色' : '删除角色',
     message: inBook
       ? `把「${character.name}」从这本书里移除？角色卡里的那个角色不受影响。`
-      : `删除角色「${character.name}」？用到它的会话会变回通用助手。`,
+      : `删除角色「${character.name}」？用到它的会话会变回通用助手。${bookText}`,
     confirmText: inBook ? '移除' : '删除',
     danger: true
   });
@@ -878,9 +885,12 @@ export async function deleteCharacterById(id, scope) {
   // --- 从角色卡删 ---
   // 记住改之前的样子，写盘失败时退回去
   const beforeChars = characters();
+  const beforeBooks = worldbooks();
+  const bookIds = new Set(ownBooks.map((book) => book.id));
   const unbound = [];
 
   state.characters = beforeChars.filter((c) => c.id !== character.id);
+  if (bookIds.size) state.worldbooks = beforeBooks.filter((w) => !bookIds.has(w.id));
 
   // 把绑定了这个角色的会话解绑，免得留下一个指向空气的 id
   for (const convo of state.conversations) {
@@ -892,8 +902,9 @@ export async function deleteCharacterById(id, scope) {
 
   actions.rerender();
 
-  if (!(await persistCharacters())) {
+  if (!(await persistLibrary())) {
     state.characters = beforeChars;
+    state.worldbooks = beforeBooks;
     for (const convo of unbound) convo.characterId = character.id;
     actions.rerender();
     return;
@@ -932,19 +943,31 @@ export async function deleteCharactersByIds(ids) {
   const names = targets.slice(0, 3).map((character) => `「${character.name}」`).join('、');
   const more = targets.length > 3 ? ` 等 ${targets.length} 个角色` : '';
   const tail = usedByConvo ? `用到它们的 ${usedByConvo} 个会话会变回通用助手。` : '';
+  // 书跟着卡一起走（同单个删除）；别的卡还指着的书留着不动
+  const ownBooks = targets
+    .flatMap((character) => characterWorldbooks(character))
+    .filter((book) => !characters().some(
+      (other) => !wanted.has(other.id) && (other.worldbookIds || []).includes(book.id)
+    ));
+  const bookText = ownBooks.length
+    ? `它们自带的 ${ownBooks.length} 本世界书（「${ownBooks.slice(0, 2).map((b) => b.name).join('、')}」${ownBooks.length > 2 ? ' 等' : ''}）会一起删掉。`
+    : '';
 
   const ok = await confirmDialog({
     title: '批量删除角色',
-    message: `删除 ${names}${more}？${tail}`,
+    message: `删除 ${names}${more}？${tail}${bookText}`,
     confirmText: '删除',
     danger: true
   });
   if (!ok) return false;
 
   const beforeChars = characters();
+  const beforeBooks = worldbooks();
+  const bookIds = new Set(ownBooks.map((book) => book.id));
   const unbound = [];
 
   state.characters = beforeChars.filter((character) => !wanted.has(character.id));
+  if (bookIds.size) state.worldbooks = beforeBooks.filter((w) => !bookIds.has(w.id));
 
   for (const convo of state.conversations) {
     if (wanted.has(convo.characterId)) {
@@ -956,9 +979,10 @@ export async function deleteCharactersByIds(ids) {
 
   actions.rerender();
 
-  if (!(await persistCharacters())) {
-    // 写盘失败 → 内存也退回去：卡还在列表里、会话绑定也恢复，界面和磁盘一致
+  if (!(await persistLibrary())) {
+    // 写盘失败 → 内存也退回去：卡还在列表里、书也还在、会话绑定也恢复，界面和磁盘一致
     state.characters = beforeChars;
+    state.worldbooks = beforeBooks;
     for (const [convo, id0] of unbound) convo.characterId = id0;
     actions.rerender();
     return false;

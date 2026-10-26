@@ -6,7 +6,7 @@
 
 import { state } from '../core/state.js';
 import { uid, now } from '../core/util.js';
-import { convoWorldbookIds, convoDialoguePresetIds } from './library.js';
+import { convoDialoguePresetIds } from './library.js';
 import { convoPanel, convoPanelDefs, convoPanelFields } from './panel.js';
 import {
   DEFAULT_NARRATION_MODE,
@@ -27,8 +27,6 @@ export function createConvo(activate) {
     updatedAt: now(),
     messages: [],
     characterId: null,
-    // 会话自己绑的世界书；没绑时 effectiveWorldbookIds 回落角色自带的 character.worldbookIds（角色卡开局不往这里拷，拷了就是快照，卡上换书后老会话不再跟随）。
-    worldbookIds: [],
     // 会话绑的预设（可挂多条）：null = 没配过 → 自动带所有「可全局」的；[] = 显式一条都不用 → 真不注入、不回落全局。
     dialoguePresetIds: null,
     // 状态面板：fields = 字段顺序，panel = 当前值，panelDefs = 类型/范围/变化规则（可选）。
@@ -65,9 +63,9 @@ export function branchSkeleton(convo, cut) {
     title: `${convo.title || '新对话'}（分支）`,
     createdAt: now(),
     updatedAt: now(),
-    // 戏本身的东西照搬：绑的角色、世界书、预设、玩家、状态面板、视角设置
+    // 戏本身的东西照搬：绑的角色、预设、玩家、状态面板、视角设置
+    // （世界书不是会话的东西 —— 它跟着卡走，分叉自然跟着卡）
     characterId: convo.characterId || null,
-    worldbookIds: [...convoWorldbookIds(convo)],
     // 分叉出来的新会话算「已配过」：照搬原会话的选择（含 null=跟随全局）
     dialoguePresetIds: (() => {
       const ids = convoDialoguePresetIds(convo);

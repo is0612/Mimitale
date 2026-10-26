@@ -9,7 +9,6 @@ import { asArray } from '../core/util.js';
 import {
   characterForConvo,
   characterById,
-  convoWorldbookIds,
   effectiveWorldbookIds,
   worldbookById,
   worldbookCharacters,
@@ -273,24 +272,18 @@ export function panelEntities(convo) {
   return out;
 }
 
-// 入口条显示名单：「我」只在 GM 局出现（世界会话绑了书、角色卡局开了 GM），普通聊天不占头像。
+// 入口条显示名单：「我」只出现在世界（GM）局，普通聊天是「跟模型对话」，玩家不是场上角色。
 export function panelCastForDisplay(convo) {
   if (!convo) return [];
   const entities = panelEntities(convo);
-  if (convoWorldbookIds(convo).length || isGmMode(convo)) return entities;
+  if (isGmMode(convo)) return entities;
   return entities.filter((e) => e.owner !== 'player');
 }
 
-// 助手那侧显示成谁：绑卡 → 角色名（GM 局的卡是主角，不再让位给书名）；进世界 → 世界名；否则 → 默认人设的名字。
+// 助手那侧显示成谁：绑卡 → 角色名（GM 局的卡是主角）；没绑卡 → 默认人设的名字。
 export function speakerName(convo) {
   const character = characterForConvo(convo);
   if (character) return character.name;
-
-  const book = convoWorldbookIds(convo)
-    .map((id) => worldbookById(id))
-    .find(Boolean);
-  if (book) return book.name;
-
   return assistantName(convo);
 }
 

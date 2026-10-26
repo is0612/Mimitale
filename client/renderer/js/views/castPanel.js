@@ -14,7 +14,7 @@ import { currentScene } from '../data/currentScene.js';
 import { persistConversations } from '../data/persist.js';
 import { fieldProgress } from '../core/panel-fields.js';
 import { panelCastForDisplay, worldbookHitCount } from '../data/cast.js';
-import { characterForConvo, convoWorldbookIds, worldbookById } from '../data/library.js';
+import { characterForConvo, characterWorldbooks } from '../data/library.js';
 import {
   convoPanel,
   convoPanelDef,
@@ -149,16 +149,12 @@ export function renderCastPanel() {
 
   const convo = activeConvo();
   const entities = convo ? panelCastForDisplay(convo) : [];
-  const books = convo ? convoWorldbookIds(convo).map((id) => worldbookById(id)).filter(Boolean) : [];
-  // 脚注必须标出来源（会话绑的 / 角色自带的），否则看不出这本书是哪来的。
   const character = convo ? characterForConvo(convo) : null;
-  const charBooks =
-    character && Array.isArray(character.worldbookIds)
-      ? character.worldbookIds.map((id) => worldbookById(id)).filter(Boolean)
-      : [];
+  // 书跟着卡走（会话不再能单独绑书），所以脚注只有一种来源
+  const books = character ? characterWorldbooks(character) : [];
 
   const scene = currentScene(convo);
-  const show = !!convo && (entities.length > 0 || books.length > 0 || charBooks.length > 0 || scene.length > 0);
+  const show = !!convo && (entities.length > 0 || books.length > 0 || scene.length > 0);
   panel.classList.toggle('hidden', !show);
   syncCollapseBtn();
   if (!show) return;
@@ -200,20 +196,12 @@ export function renderCastPanel() {
   host.appendChild(sceneBlock);
 
   if (el.castFootBook) {
-    if (books.length) {
-      el.castFootBook.textContent = `世界书 · ${books.map((b) => b.name).join('、')}`;
-    } else if (charBooks.length) {
-      const names = charBooks.map((b) => b.name).join('、');
-      el.castFootBook.textContent = `世界书 · ${names}（角色自带）`;
-    } else {
-      // 一本都没有就空着 —— 与其写一句「没有绑定世界书」占着脚注，不如什么都不说
-      el.castFootBook.textContent = '';
-    }
+    el.castFootBook.textContent = books.length ? `世界书 · ${books.map((b) => b.name).join('、')}` : '';
   }
 
   // ⚠️ 这一格是异步的：先清空，免得上一个会话的数字挂在新的会话上；
   //    回来后用 token 确认仍是最新的那次查询 —— 切会话快时会有迟到的响应。
-  renderHitCount(convo, books.length > 0 || charBooks.length > 0);
+  renderHitCount(convo, books.length > 0);
 }
 
 let hitToken = 0;

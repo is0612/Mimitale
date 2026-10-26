@@ -12,7 +12,7 @@ import { h, button, clear } from '../ui/build.js';
 import { closeModelMenu } from '../ui/modelMenu.js';
 import { entityTone } from '../ui/avatarTone.js';
 import { providers, providerById, currentEndpoint, isBridgeProvider } from '../data/providers.js';
-import { characterById, worldbookById, convoWorldbookIds, greetingChoices } from '../data/library.js';
+import { characterById, greetingChoices } from '../data/library.js';
 import { seedIdentity, seedPanelFromCharacters } from '../data/panel.js';
 import { isGmMode } from '../data/narration.js';
 import { applyMacros } from '../data/messages.js';
@@ -125,16 +125,6 @@ function convoAvatar(convo) {
     if (char.avatar) node.appendChild(h('img', { src: char.avatar, alt: '' }));
     else node.textContent = String(char.name || '').slice(0, 1) || '?';
     return node;
-  }
-
-  const wbId = convoWorldbookIds(convo)[0] || '';
-  const wb = wbId ? worldbookById(wbId) : null;
-  if (wb) {
-    return h('span', {
-      class: `convo-avatar book ${entityTone(wb.id, wb.name)}`,
-      text: String(wb.name || '').slice(0, 1) || '世',
-      title: wb.name
-    });
   }
 
   const title = String(convo.title || '').trim();

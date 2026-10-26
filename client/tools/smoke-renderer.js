@@ -1447,6 +1447,59 @@ await scenario('角色卡：卡片上删除', async () => {
 });
 
 // ---------------------------------------------------------------------------
+//  角色卡：删卡连带删掉它自带的世界书
+//
+//  书是卡的一部分 —— 卡没了，书就再没有入口能打开（世界书列表页已撤），
+//  留着只是磁盘上的垃圾。所以删卡时必须一起删，而且确认框要先说清楚。
+// ---------------------------------------------------------------------------
+await scenario('角色卡：删卡连带删掉它自带的世界书', async () => {
+  const NAME = '删卡带书测试';
+
+  click('#btn-chars');
+  await waitFor('切到角色卡', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
+  setValue('#c-name', NAME);
+  await sleep(100);
+
+  // 在这张卡上现场长一本书（书的唯一来源之一）
+  click('#char-section-tab-worldbook');
+  await waitFor('切到世界书分区', () => !byId('char-section-worldbook').hidden);
+  click('#c-wb-new-btn');
+  await waitFor('新建后进世界书编辑器', () => shown('#view-wb-editor'), 6000);
+  const bookName = String(byId('wb-name').value || '');
+  check('新建的书有名字', !!bookName, bookName);
+  click('#btn-close-worldbooks');
+  await waitFor('回角色编辑器', () => shown('#view-char-editor'), 4000);
+
+  click('#btn-save-char');
+  await waitFor('保存完成', () => byId('char-save-state').dataset.state === 'saved');
+  if (shown('#view-char-editor')) click('#btn-close-chars');
+  await waitFor('回角色卡', () => shown('#view-chars'));
+
+  const saved = (await savedCharacters()).find((c) => c.name === NAME);
+  check('卡存下来了并带上了书', !!saved && (saved.worldbookIds || []).length === 1,
+    JSON.stringify(saved && saved.worldbookIds));
+
+  const card = $$('#char-page-grid .char-card').find((c) => c.textContent.includes(NAME));
+  check('卡片在网格里', !!card);
+  click(card.querySelector('.char-card-del'));
+  await waitFor('确认框出现', () => shown('#confirm-modal'));
+  check('确认文案说清书会一起删掉',
+    String(byId('confirm-message').textContent || '').includes('世界书'),
+    String(byId('confirm-message').textContent || '').slice(0, 120));
+
+  click('#confirm-ok');
+  await waitFor('卡片消失', () => !$$('#char-page-grid .char-card').some((c) => c.textContent.includes(NAME)), 8000);
+  await sleep(200);
+
+  check('卡真的从磁盘删掉了', !(await savedCharacters()).some((c) => c.name === NAME));
+  check('自带的世界书跟着一起删掉了',
+    !(await savedWorldbooks()).some((b) => b.name === bookName),
+    bookName);
+});
+
+// ---------------------------------------------------------------------------
 //  场景 8：角色属性 → 状态面板（属性模板的完整链路）
 // ---------------------------------------------------------------------------
 await scenario('属性：从本书角色种到状态面板', async () => {
@@ -5987,11 +6040,12 @@ await scenario('帮我想想（补一批剧情选项）', async () => {
 });
 
 // ---------------------------------------------------------------------------
-//  角色自带的世界书：只能现场新建 / 解绑 / 存盘
+//  角色自带的世界书：只能现场新建 / 删除 / 存盘
 //
 //  🔴 2026-10-26：从库里挑一本「＋ 绑定」过来的入口整个撤掉了。一张卡的书只有两条来源 ——
 //     导入的角色卡自带，或者在卡上「＋ 新建」现场写一本。所以这里守的是：
-//     ① 那颗绑定按钮**不存在**；② 新建会直接落到编辑器里；③ 解绑 / 存盘照旧。
+//     ① 那颗绑定按钮**不存在**；② 新建会直接落到编辑器里；
+//     ③ 行上的 ✕ 是「删除本书」而不是解绑（世界书列表页已撤，解绑等于把书扔进黑洞）。
 // ---------------------------------------------------------------------------
 await scenario('角色：自带的世界书只能新建', async () => {
   click('#btn-chars');
@@ -6033,19 +6087,19 @@ await scenario('角色：自带的世界书只能新建', async () => {
     String($$('#c-wb-list .cwb-row')[0].textContent || '').includes('新世界书'));
   // 🔴 只能一本：有了就灰掉，别让人点出第二本
   check('有书之后「＋ 新建」灰掉', byId('c-wb-new-btn').disabled === true);
-  check('灰掉时给了「先解绑」的提示',
-    String(byId('c-wb-new-btn').title || '').includes('先解绑'),
+  check('灰掉时给了「先删掉」的提示',
+    String(byId('c-wb-new-btn').title || '').includes('先删掉'),
     String(byId('c-wb-new-btn').title || ''));
   check('跳转这一趟不丢角色编辑器里填的内容', byId('c-name').value === NAME, byId('c-name').value);
   check('说明文字说清了「开局会进这本书的世界」',
     String(byId('c-wb-hint').textContent || '').includes('和这张卡开局就会进这本书的世界'),
     String(byId('c-wb-hint').textContent || '').slice(0, 60));
 
-  // --- 行上的「编辑」排在解绑 ✕ 左边 ---
+  // --- 行上的「编辑」排在删除 ✕ 左边 ---
   const boundRow = $$('#c-wb-list .cwb-row')[0];
   const rowEdit = boundRow.querySelector('.cwb-row-edit');
   check('已绑的那行有「编辑」按钮', !!rowEdit);
-  check('「编辑」排在解绑 ✕ 左边',
+  check('「编辑」排在删除 ✕ 左边',
     !!rowEdit && !!rowEdit.nextElementSibling &&
     rowEdit.nextElementSibling.classList.contains('cwb-row-del'));
 
@@ -6064,14 +6118,33 @@ await scenario('角色：自带的世界书只能新建', async () => {
     !!saved && !('worldbookEnabled' in saved),
     JSON.stringify(saved && saved.worldbookEnabled));
 
-  // 解绑 → 清单回到空状态（编辑器那一屏还留在 DOM 里，直接点行上的 ✕ 就够）
+  // 删书 → 确认框 → 本当从磁盘消失（世界书列表页已撤，解绑会让那本书谁也打不开）
   if (saved && Array.isArray(saved.worldbookIds) && saved.worldbookIds.length) {
+    const booksBefore = await savedWorldbooks();
+    const doomed = booksBefore.find((b) => b.id === saved.worldbookIds[0]);
+
     click($$('#c-wb-list .cwb-row')[0].querySelector('.cwb-row-del'));
-    await waitFor('解绑后清单空掉', () => $$('#c-wb-list .cwb-row').length === 0, 8000);
-    await sleep(150);
-    check('解绑后回到空状态提示',
+    await waitFor('✕ 弹出「删除世界书」确认框', () => shown('#confirm-modal')
+      && String(byId('confirm-title').textContent || '').includes('删除世界书'), 8000);
+    check('确认框说清是哪张卡的书',
+      String(byId('confirm-message').textContent || '').includes(NAME),
+      String(byId('confirm-message').textContent || '').slice(0, 80));
+
+    click('#confirm-ok');
+    await waitFor('删书后清单空掉', () => $$('#c-wb-list .cwb-row').length === 0, 8000);
+    await sleep(200);
+
+    const booksAfter = await savedWorldbooks();
+    check('书真的从磁盘删掉了', !!doomed && !booksAfter.some((b) => b.id === doomed.id));
+    check('删书后回到空状态提示',
       String(byId('c-wb-list').textContent || '').includes('点「＋ 新建」'));
-    check('解绑之后「＋ 新建」又能点了', byId('c-wb-new-btn').disabled === false);
+    check('删书之后「＋ 新建」又能点了', byId('c-wb-new-btn').disabled === false);
+
+    // 卡上的悬空 id 也要摘掉，否则下次打开会显示一本打不开的书
+    const after = (await savedCharacters()).find((c) => c.name === NAME);
+    check('卡上的 worldbookIds 也空了',
+      !!after && Array.isArray(after.worldbookIds) && after.worldbookIds.length === 0,
+      JSON.stringify(after && after.worldbookIds));
   }
 });
 
@@ -6125,7 +6198,8 @@ await scenario('角色自带的世界书：顶部能看出生效', async () => {
         //    同时反过来守一条「顶栏别再重复」。
         const foot = String(byId('cast-foot-book').textContent || '');
         check('绑上角色后，右栏脚注显示它自带的世界书', foot.includes('冒烟测试世界'), foot);
-        check('并且标明了是「角色自带」', foot.includes('（角色自带）'), foot);
+        // 书只有「卡自带的」这一种来源了，再标「（角色自带）」是句废话
+        check('脚注不再标「（角色自带）」这种多余来源', !foot.includes('角色自带'), foot);
         const meta = String(byId('convo-meta').textContent || '');
         check('元信息行不再重复世界书', !meta.includes('冒烟测试世界'), meta);
       }
@@ -7545,7 +7619,7 @@ await scenario('世界书：同名属性按 owner 并存', async () => {
   }
   check('panel 模块能动态加载（场景28）', true);
 
-  const convo = { id: 'cC', worldbookIds: ['bk1'], panel: {}, panelFields: [], panelDefs: {}, messages: [] };
+  const convo = { id: 'cC', panel: {}, panelFields: [], panelDefs: {}, messages: [] };
   mod.seedPanelFromCharacters(convo, [{ id: 'wc_old', name: '老角色', attributes: [{ name: '生命', type: 'meter', min: 0, max: 100, value: '90/100' }] }], 'wc_old');
   mod.seedPanelFromCharacters(convo, [{ id: 'wc_new', name: '新来的NPC', attributes: [{ name: '生命', type: 'meter', min: 0, max: 100, value: '50/100' }] }]);
 
@@ -7633,7 +7707,6 @@ await scenario('世界书：同名副本不把玩家当 NPC', async () => {
   check('cast 模块能动态加载', true);
 
   const convo = {
-    worldbookIds: ['bk1'],
     player: { name: '姐姐', profile: '', characterId: null },
     gmMode: true
   };
@@ -8147,12 +8220,11 @@ await scenario('世界书：副本的「在状态栏显示」开关', async () =
   check('cast 模块能动态加载（场景33）', true);
 
   const key = (name, owner) => `${name}\u0000${owner}`;
-  // 造一个「进了世界」的会话：player 有字段，另有两个副本各有一个字段
+  // 🔴 会话已经不能自己绑书了（书跟着卡走），所以「这局用哪本书」只能靠一张挂书的卡。
   const mkConvo = () => ({
     gmMode: true,
-    characterId: null,
+    characterId: 'card_bk1',
     player: { name: '我', profile: '', characterId: null },
-    worldbookIds: ['bk1'],
     panel: {
       [key('姓名', 'player')]: '我',
       [key('生命', 'wc_show')]: '80/100',
@@ -8178,6 +8250,10 @@ await scenario('世界书：副本的「在状态栏显示」开关', async () =
   if (!lib || typeof lib.worldbooks !== 'function') return;
   check('library 模块能动态加载（场景33）', true);
 
+  const charList = lib.characters ? lib.characters() : null;
+  const savedChars = charList ? charList.slice() : [];
+  if (charList) charList.push({ id: 'card_bk1', name: '开关测试卡', worldbookIds: ['bk1'] });
+
   const wbList = lib.worldbooks();
   const saved = wbList.slice();
   wbList.push({
@@ -8196,14 +8272,14 @@ await scenario('世界书：副本的「在状态栏显示」开关', async () =
     check('没勾的副本不出现在入口条上', !owners.includes('wc_hide'), JSON.stringify(owners));
     check('「我」永远在第一个', owners[0] === 'player', JSON.stringify(owners));
 
-    // 关键边界：单角色聊天绑的那张卡**不看开关**（TA 就是这局主角）。
-    // 「wc_hide」在世界书里是 showInPanel:false，但当它成为会话的绑定卡时，
+    // 关键边界：这局的主角**不看开关**（TA 就是主角）。
+    // 「wc_hide」在世界书里是 showInPanel:false，但当它成了会话挑的主角时，
     // 依然必须出头像 —— 用户反馈里「状态栏不显示角色卡状态」就是这条被破坏了。
+    // （`characterId` 指向书里副本这种是老数据的形态，新会话只会是角色卡 id。）
     const soloHide = {
       gmMode: false,
       characterId: 'wc_hide',
       player: null,
-      worldbookIds: ['bk1'],
       panel: { [key('金币', 'wc_hide')]: '100' },
       panelFields: [key('金币', 'wc_hide')],
       panelDefs: { [key('金币', 'wc_hide')]: { type: 'text', owner: 'wc_hide' } },
@@ -8234,9 +8310,13 @@ await scenario('世界书：副本的「在状态栏显示」开关', async () =
       check('角色卡当单卡主角也显示（豁免开关）', so2.includes(c.id), JSON.stringify(so2));
     }
   } finally {
-    // 还原世界书列表，别污染后面的场景
+    // 还原世界书 / 角色列表，别污染后面的场景
     wbList.length = 0;
     wbList.push(...saved);
+    if (charList) {
+      charList.length = 0;
+      charList.push(...savedChars);
+    }
   }
 });
 
@@ -8272,13 +8352,17 @@ await scenario('面板：世界书同名副本的字段并回「我」', async (
       { id: 'wc_other', name: '别人', showInPanel: true, attributes: [{ name: '好感度', value: '10' }] }
     ]
   });
+  // 书只能挂在卡上（会话不再自己绑书），夹具配一张宿主卡
+  const charList = lib.characters();
+  const savedChars = charList.slice();
+  charList.push({ id: 'card_merge', name: '同名副本宿主卡', worldbookIds: ['bk_merge'] });
   const key = (name, owner) => `${name}\u0000${owner}`;
 
   try {
     // 1) 副本有、玩家没有的同名字段 → 整条搬给玩家
     const c1 = {
       player: { name: '同名人', profile: '', characterId: null },
-      worldbookIds: ['bk_merge'],
+      characterId: 'card_merge',
       panel: { [key('好感度', 'wc_dup')]: '30/100', [key('好感度', 'wc_other')]: '10/100' },
       panelFields: [key('好感度', 'wc_dup'), key('好感度', 'wc_other')],
       panelDefs: {
@@ -8307,7 +8391,7 @@ await scenario('面板：世界书同名副本的字段并回「我」', async (
     // 2) 两边都有同名字段 → 保留玩家那份值，副本键删掉
     const c2 = {
       player: { name: '同名人', profile: '', characterId: null },
-      worldbookIds: ['bk_merge'],
+      characterId: 'card_merge',
       panel: { [key('好感度', 'player')]: '88/100', [key('好感度', 'wc_dup')]: '30/100' },
       panelFields: [key('好感度', 'player'), key('好感度', 'wc_dup')],
       panelDefs: {
@@ -8326,7 +8410,7 @@ await scenario('面板：世界书同名副本的字段并回「我」', async (
     // 3) 手改标记跟着键一起搬
     const c3 = {
       player: { name: '同名人', profile: '', characterId: null },
-      worldbookIds: ['bk_merge'],
+      characterId: 'card_merge',
       panel: { [key('好感度', 'wc_dup')]: '30/100' },
       panelFields: [key('好感度', 'wc_dup')],
       panelDefs: { [key('好感度', 'wc_dup')]: { type: 'meter', max: 100, owner: 'wc_dup' } },
@@ -8348,7 +8432,7 @@ await scenario('面板：世界书同名副本的字段并回「我」', async (
     // 5) 名字对不上的副本不动（没撞名就不该合并）
     const c4 = {
       player: { name: '别人不知道我是谁', profile: '', characterId: null },
-      worldbookIds: ['bk_merge'],
+      characterId: 'card_merge',
       panel: { [key('好感度', 'wc_dup')]: '30/100' },
       panelFields: [key('好感度', 'wc_dup')],
       panelDefs: { [key('好感度', 'wc_dup')]: { type: 'meter', max: 100, owner: 'wc_dup' } },
@@ -8366,7 +8450,7 @@ await scenario('面板：世界书同名副本的字段并回「我」', async (
     const castMod = await import(new URL('js/data/cast.js', document.baseURI).href);
     const withFields = {
       player: { name: '同名人', profile: '', characterId: null },
-      worldbookIds: ['bk_merge'],
+      characterId: 'card_merge',
       panel: { [key('好感度', 'wc_dup')]: '30/100' },
       panelFields: [key('好感度', 'wc_dup')],
       panelDefs: { [key('好感度', 'wc_dup')]: { type: 'meter', max: 100, owner: 'wc_dup' } },
@@ -8388,6 +8472,8 @@ await scenario('面板：世界书同名副本的字段并回「我」', async (
   } finally {
     wbList.length = 0;
     wbList.push(...saved);
+    charList.length = 0;
+    charList.push(...savedChars);
   }
 });
 

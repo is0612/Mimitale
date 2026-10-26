@@ -4,7 +4,7 @@
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
 import { el } from '../core/dom.js';
-import { uid, now, activeConvo } from '../core/util.js';
+import { uid, now, activeConvo, asArray } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, button, clear, libraryCard } from '../ui/build.js';
@@ -17,8 +17,8 @@ import {
   worldbooks,
   worldbookById,
   worldbookCharacters,
+  characters,
   characterPortrait,
-  convoWorldbookIds,
   effectiveWorldbookIds,
   WORLDBOOK_SCAN_DEPTH,
   recursiveDepthSetting
@@ -1029,15 +1029,17 @@ export async function deleteWorldbookById(id) {
   }
 
   const charCount = worldbookCharacters(book).length;
+  const owner = characters().find((c) => asArray(c.worldbookIds).includes(book.id)) || null;
   const usedByConvo = state.conversations.filter((c) => effectiveWorldbookIds(c).includes(book.id)).length;
   const entryCount = Array.isArray(book.entries) ? book.entries.length : 0;
   const bits = [`${entryCount} 条条目`];
   if (charCount) bits.push(`${charCount} 个角色副本`);
-  const tail = usedByConvo ? `；它还在 ${usedByConvo} 个会话里生效，删掉后那些会话会失去它的设定` : '';
+  const ownerText = owner ? `它是「${owner.name}」的世界书，那张卡会变成没有书。` : '';
+  const tail = usedByConvo ? `正在用它的 ${usedByConvo} 个会话会失去这本书的设定。` : '';
 
   const ok = await confirmDialog({
     title: '删除世界书',
-    message: `删除「${book.name}」？这本书里的 ${bits.join('、')}会一起删掉${tail}。`,
+    message: `删除「${book.name}」？这本书里的 ${bits.join('、')}会一起删掉。${ownerText}${tail}`,
     confirmText: '删除',
     danger: true
   });
@@ -1045,17 +1047,18 @@ export async function deleteWorldbookById(id) {
 
   // 改之前的样子，写盘失败时按这几样退回去（理由同 characterEditor 的 deleteCharacterById）
   const beforeBooks = worldbooks();
+  const beforeChars = characters();
   const unbound = [];
 
   state.worldbooks = beforeBooks.filter((w) => w.id !== book.id);
 
-  // 会话上还绑着这本书的要一起摘掉，别留下指向空气的 id
-  for (const convo of state.conversations) {
-    const ids = convoWorldbookIds(convo);
+  // 卡上指向它的 id 一起摘掉：留着会变成悬空 id —— 卡看着「有书」，点进去打不开
+  for (const character of state.characters) {
+    const ids = asArray(character.worldbookIds);
     if (ids.includes(book.id)) {
-      convo.worldbookIds = ids.filter((wid) => wid !== book.id);
-      convo.updatedAt = now();
-      unbound.push([convo, ids]);
+      character.worldbookIds = ids.filter((wid) => wid !== book.id);
+      character.updatedAt = now();
+      unbound.push([character, ids]);
     }
   }
 
@@ -1073,7 +1076,8 @@ export async function deleteWorldbookById(id) {
   if (!(await persistLibrary())) {
     // 写盘失败：把内存也退回去，界面和磁盘一致。草稿故意留到最后才删，就是为了这一下。
     state.worldbooks = beforeBooks;
-    for (const [convo, ids] of unbound) convo.worldbookIds = ids;
+    state.characters = beforeChars;
+    for (const [character, ids] of unbound) character.worldbookIds = ids;
     // 只有「刚才正在编辑这本」才重新选中它；删的是另一本时别把编辑器从用户正看的那本切走。
     if (wasEditingBook) selectWorldbook(book.id);
     renderDirtyHint();

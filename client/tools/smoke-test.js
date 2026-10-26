@@ -5326,7 +5326,7 @@ app.whenReady().then(async () => {
           $('#btn-clear-portrait')?.classList.remove('hidden');
           await nap(200);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
-        // 角色编辑器里「世界书」那一块：一行 = 书名 + 条目数 + 编辑 + 解绑 ✕。
+        // 角色编辑器里「世界书」那一块：一行 = 书名 + 条目数 + 编辑 + 删除 ✕。
         // 2026-10-20 加了「编辑」—— 要核的是这一行没被挤成两行、四样东西的间距还匀。
         charWorldbook: `
           const $$ = (s) => Array.from(document.querySelectorAll(s));
