@@ -10,6 +10,7 @@ import {
   characterForConvo,
   characterById,
   convoWorldbookIds,
+  effectiveWorldbookIds,
   worldbookById,
   worldbookCharacters,
   showsInPanel,
@@ -18,6 +19,11 @@ import {
 } from './library.js';
 import { convoPanelFields, panelFieldOwner } from './panel.js';
 import { isGmMode } from './narration.js';
+
+// 定义搬到了 data/library.js（panel.js / convoState.js 也要用，而它们不能反向 import 这里 —— 会成环）。
+// 这里保留再导出：调用方一直是从 cast.js 拿的，别为了「整齐」把它们全改一遍。
+// ⚠️ 必须是「import 进来 + 再 export」，写成 `export {} from` 的话本模块自己就拿不到这个名字了。
+export { effectiveWorldbookIds };
 
 export function userName() {
   return '你';
@@ -56,17 +62,6 @@ export function assistantName(convo) {
 export function assistantPersona(convo) {
   const entry = assistantPersonaEntry(convo);
   return String((entry && entry.persona) || '').trim();
-}
-
-// 实际注入哪些世界书：会话绑了就只用会话的，没绑才用角色自带的（绑上就一直生效，没有开关）。
-export function effectiveWorldbookIds(convo) {
-  const convoIds = convoWorldbookIds(convo);
-  if (convoIds.length) return convoIds;
-
-  const character = characterForConvo(convo);
-  if (!character) return [];
-
-  return asArray(character.worldbookIds);
 }
 
 /** 世界书两块注入文本的空值：调用方拿到的形状永远一致 */
@@ -191,7 +186,7 @@ export function findCardById(convo, id) {
   const direct = characterById(target);
   if (direct) return direct;
 
-  for (const bookId of convoWorldbookIds(convo)) {
+  for (const bookId of effectiveWorldbookIds(convo)) {
     const book = worldbookById(bookId);
     const found = book
       ? worldbookCharacters(book).find((c) => c && c.id === target)
@@ -217,7 +212,7 @@ export function panelEntities(convo) {
   let playerCard = player && player.characterId ? characterById(player.characterId) : null;
   if (!playerCard && player) {
     const playerName = convoUserName(convo);
-    for (const bookId of convoWorldbookIds(convo)) {
+    for (const bookId of effectiveWorldbookIds(convo)) {
       const book = worldbookById(bookId);
       const copy = book
         ? worldbookCharacters(book).find((c) => c && String(c.name || '').trim() === playerName)
@@ -239,6 +234,8 @@ export function panelEntities(convo) {
 
   // 单卡会话绑的卡永远显示。⚠️ 不能拿「玩家有没有设身份」当条件 —— 否则它会掉进
   // showsInPanel（默认 false）被过滤，入口条只剩「我」。
+  // ⚠️ 也不能只做「豁免」：这里遍历的是**字段**，卡一个字段都不持有时（属性归副本后很常见）
+  //    根本不会被遍历到，得在下面补一次。
   const soloCardId = convo.characterId ? String(convo.characterId) : '';
 
   for (const name of convoPanelFields(convo)) {
@@ -261,24 +258,33 @@ export function panelEntities(convo) {
     });
   }
 
+  if (soloCardId && !seen.has(soloCardId)) {
+    const card = findCardById(convo, soloCardId);
+    seen.add(soloCardId);
+    out.push({
+      owner: soloCardId,
+      kind: 'character',
+      name: (card && card.name) || soloCardId,
+      avatar: (card && card.avatar) || '',
+      card: card || null
+    });
+  }
+
   return out;
 }
 
-// 入口条显示名单：「我」只在玩世界书的会话里出现，普通聊天里不占头像。
+// 入口条显示名单：「我」只在 GM 局出现（世界会话绑了书、角色卡局开了 GM），普通聊天不占头像。
 export function panelCastForDisplay(convo) {
   if (!convo) return [];
   const entities = panelEntities(convo);
-  if (convoWorldbookIds(convo).length) return entities;
+  if (convoWorldbookIds(convo).length || isGmMode(convo)) return entities;
   return entities.filter((e) => e.owner !== 'player');
 }
 
-// 助手那侧显示成谁：绑卡 → 角色名；进世界 → 世界名；否则 → 默认人设的名字。
+// 助手那侧显示成谁：绑卡 → 角色名（GM 局的卡是主角，不再让位给书名）；进世界 → 世界名；否则 → 默认人设的名字。
 export function speakerName(convo) {
-  // GM 模式没有「某个人」：世界名优先于会话上可能残留的绑定卡。
-  if (!isGmMode(convo)) {
-    const character = characterForConvo(convo);
-    if (character) return character.name;
-  }
+  const character = characterForConvo(convo);
+  if (character) return character.name;
 
   const book = convoWorldbookIds(convo)
     .map((id) => worldbookById(id))
@@ -300,8 +306,9 @@ export function isPlayerCharacterCopy(convo, character) {
 }
 
 // 「这个世界的人」：把书里的副本列给 GM（有长度上限）；与玩家同名的副本标成玩家扮演。
+// ⚠️ 书的范围走 effectiveWorldbookIds：角色卡开局不把书拷进会话，这里不回落就会漏掉整本书的人。
 export function worldbookCast(convo) {
-  const books = convoWorldbookIds(convo)
+  const books = effectiveWorldbookIds(convo)
     .map((id) => worldbookById(id))
     .filter(Boolean);
   const cast = books.flatMap((b) => worldbookCharacters(b));
@@ -340,4 +347,54 @@ export function worldbookCast(convo) {
     `「${playerName}」是玩家本人扮演的主角，不是 NPC —— 不要把他/她当成别的 NPC 来描写或替他说话。\n` +
     (lines.length ? `以下角色是你扮演的 NPC，各自有各自的立场、语气和说话习惯：\n` : '');
   return header + lines.join('\n');
+}
+
+// GM 局给主要角色的设定上限：卡描述可能几千字，比 NPC 名单宽，但仍要有顶
+const MAX_FOCUS_CHARS = 4000;
+
+/**
+ * GM 局里绑定的角色卡 = 本局主要角色。单列一段给叙述者 —— 不列的话 GM 不知道这一局围绕谁开。
+ * 卡自带的书里已有同名副本时**让位**（副本带属性/形象更全，cast 名单已覆盖），再写就是同一个人两份设定。
+ * 单角色扮演（非 GM）不走这里：那条路在 messages.js 里整卡注入。
+ */
+export function focusCharacterSection(convo) {
+  if (!isGmMode(convo)) return '';
+  const character = characterForConvo(convo);
+  if (!character) return '';
+
+  const cardName = String(character.name || '').trim();
+  if (!cardName) return '';
+
+  const asCopy = effectiveWorldbookIds(convo)
+    .map((id) => worldbookById(id))
+    .filter(Boolean)
+    .some((book) =>
+      worldbookCharacters(book).some((c) => c && String(c.name || '').trim() === cardName)
+    );
+  if (asCopy) return '';
+
+  const me = convoUserName(convo);
+  // 卡正文里的宏：{{char}} 指这张卡，{{user}} 指玩家（和单角色扮演同一套口径）
+  const fix = (s) =>
+    String(s || '')
+      .trim()
+      .replace(/\{\{char\}\}/gi, () => cardName)
+      .replace(/\{\{user\}\}/gi, () => me)
+      .replace(/<BOT>/gi, () => cardName)
+      .replace(/<USER>/gi, () => me);
+
+  const bits = [];
+  const desc = fix(character.description);
+  const personality = fix(character.personality);
+  const scenario = fix(character.scenario);
+  if (desc) bits.push(desc.slice(0, MAX_FOCUS_CHARS));
+  if (personality) bits.push(`【性格】${personality}`);
+  if (scenario) bits.push(`【当前场景】${scenario}`);
+
+  // 只有名字的卡也要列出来 —— 不列的话叙述者根本不知道这一局围着谁开
+  return (
+    `【本局主要角色】\n` +
+    `「${cardName}」是这一局的核心角色，由你扮演（不是玩家本人）：\n` +
+    (bits.length ? bits.join('\n') : '（这张卡没写设定，按名字和对话即兴）')
+  );
 }

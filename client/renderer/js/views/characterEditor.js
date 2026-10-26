@@ -15,7 +15,6 @@ import { MAX_EXPRESSIONS } from '../data/expressions.js';
 import {
   characters,
   characterAttrs,
-  worldbooks,
   worldbookById,
   worldbookCharacters,
   newWorldbookCharId
@@ -25,7 +24,6 @@ import { currentWorldbook, renderBookCharacters, rerenderBookCharHosts, focusWor
 import { renderCharacterPage } from './characterList.js';
 import { draftExpressionsOf } from './charExpressions.js';
 import { openAiGenModal } from './aiGen.js';
-import { initCharBookAi, resetCharBookAi, materializeCharBook, setCharBookScope } from './charBookAi.js';
 import { initCharAiFill, resetCharAiFill } from './charAiFill.js';
 import { attachAutoGrow, syncAutoGrowAll } from '../ui/auto-grow.js';
 import { mTextarea, hostOf } from '../components/index.js';
@@ -119,8 +117,6 @@ let charDraft = null; // { character, scope, bookId }
 const MAX_CHAR_WORLDBOOKS = 1;
 // 属性草稿，保存角色时才写回
 let charAttrs = [];
-// 给角色绑世界书的浮层（自己起一个，不复用世界书页的选择器）
-let worldbookPickerEl = null;
 
 // 入口层注入的动作
 let actions = { rerender: () => {} };
@@ -232,8 +228,6 @@ export async function leaveCharacterEditor({ force = false } = {}) {
     if (!ok) return;
   }
 
-  // 选书浮层挂在 body 上、z-index 比编辑页高，不收就成了悬在屏幕上的孤儿
-  closeWorldbookPicker();
   // 「AI 补充」还在等模型的话，走了就作废 —— 否则回来时表单会被上一张卡的内容糊上
   resetCharAiFill();
   discardCharDraft();
@@ -356,12 +350,10 @@ function fillCharForm(character) {
 
   renderCharMedia();
 
-  // 换了一张卡：上一张还没落盘的 AI 设定草稿不能跟过来
-  resetCharBookAi();
-  // 上一张卡的「AI 补充」请求也一样要作废，别让它把内容写进新卡的表单
+  // 上一张卡的「AI 补充」请求要作废，别让它把内容写进新卡的表单
   resetCharAiFill();
 
-  // 角色自带的世界书：清单 + 绑定按钮 + 开关
+  // 角色自带的世界书：清单 + 新建
   renderCharWorldbookBox(character);
 
   // 属性 / 表情 / 头像本页不再编辑，保持角色对象原样（聊天、面板、导出仍会读）。
@@ -424,7 +416,7 @@ function bindCharRolesBar() {
   btnAi.addEventListener('click', () => {
     const book = bound();
     if (!book) {
-      showToast('这张卡还没绑定世界书，先到「世界书」分区绑一本', 'error');
+      showToast('这张卡还没有世界书 —— 先在「世界书」分区新建一本', 'error');
       return;
     }
     // 生成的是这本书里的 NPC 副本，结果同样落到「本书角色编辑」草稿里
@@ -434,7 +426,7 @@ function bindCharRolesBar() {
   btnNew.addEventListener('click', () => {
     const book = bound();
     if (!book) {
-      showToast('这张卡还没绑定世界书，先到「世界书」分区绑一本', 'error');
+      showToast('这张卡还没有世界书 —— 先在「世界书」分区新建一本', 'error');
       return;
     }
     // 先切到这本书，再走「本书角色」的草稿（新建副本落进这本书）
@@ -446,51 +438,44 @@ function bindCharRolesBar() {
 function renderCharWorldbookBox(character) {
   if (!character) return;
 
-  // 「AI 补设定」：角色卡保存时建一本自己的书；世界书里的副本并进**这本书的草稿**
-  // （副本自己带的世界书进世界时不会被注入，见 data/cast.js 的 effectiveWorldbookIds）
-  setCharBookScope(charEditorScope, currentWorldbook() ? currentWorldbook().name : '');
-
   const ids = character && Array.isArray(character.worldbookIds) ? character.worldbookIds : [];
   const books = ids.map((id) => worldbookById(id)).filter(Boolean);
   setCharSectionCount('worldbook', String(books.length));
 
-  // 「人物列表」分区：这本绑定的世界书里的人物副本。
+  // 「人物列表」分区：这张卡自带的那本书里的人物副本。
   const bound = books[0] || null;
   const rolesHost = document.getElementById('char-book-roles');
   if (bound) {
     renderBookCharacters(bound, rolesHost);
   } else if (rolesHost) {
-    // 没绑书：给一条引导空态，比留一片白清楚 —— 告诉用户先去「世界书」分区绑一本。
+    // 没书：给一条引导空态，比留一片白清楚
     rolesHost.innerHTML = '';
     const empty = document.createElement('div');
     empty.className = 'wb-char-empty';
     empty.innerHTML =
-      '<h3>还没有绑定世界书</h3>' +
-      '<p>人物列表来自这张角色卡绑定的世界书里的「本书角色」副本。先到「世界书」分区绑定（或新建）一本，再回来看。</p>';
+      '<h3>这张卡还没有世界书</h3>' +
+      '<p>人物列表来自角色自带世界书里的「本书角色」副本。先在「世界书」分区新建一本，再回来看。</p>';
     rolesHost.appendChild(empty);
   }
   const copies = bound && Array.isArray(bound.characters) ? bound.characters : [];
   setCharSectionCount('roles', bound ? String(copies.length) : '');
 
-  // 「人物列表」头两颗按钮：没绑书就灰掉，提示先去绑
+  // 「人物列表」头两颗按钮：没书就灰掉，提示先建一本
   const btnAi = document.getElementById('btn-char-roles-ai');
   const btnNew = document.getElementById('btn-char-roles-new');
   for (const btn of [btnAi, btnNew]) {
     if (!btn) continue;
     btn.disabled = !bound;
-    btn.title = bound ? '' : '先到「世界书」分区绑定（或新建）一本世界书';
+    btn.title = bound ? '' : '先在「世界书」分区新建一本世界书';
   }
 
-  // 🔴 只能一本：已经绑上了就把「＋ 绑定 / ＋ 新建」灰掉，否则用户点了才被告知不行
+  // 🔴 只能一本：已经有书就把「＋ 新建」灰掉，否则用户点了才被告知不行
   const full = books.length >= MAX_CHAR_WORLDBOOKS;
-  for (const btn of [el.c.wbAddBtn, el.c.wbNewBtn]) {
-    if (!btn) continue;
-    btn.disabled = full;
-    btn.title = full
-      ? '自带世界书只能有一本 —— 先解绑现在这本，再换或新建'
-      : btn === el.c.wbNewBtn
-        ? '新建一本世界书并绑定给这个角色'
-        : '从世界书库里挑一本绑给这个角色';
+  if (el.c.wbNewBtn) {
+    el.c.wbNewBtn.disabled = full;
+    el.c.wbNewBtn.title = full
+      ? '自带世界书只能有一本 —— 先解绑现在这本，再新建'
+      : '新建一本世界书，只给这个角色用';
   }
 
   // --- 已绑的清单 ---
@@ -500,7 +485,7 @@ function renderCharWorldbookBox(character) {
     const empty = document.createElement('p');
     empty.className = 'field-help cwb-empty';
     empty.textContent =
-      '还没有绑定。点「＋ 新建」写一本，或「＋ 绑定」从库里挑一本 —— 单独跟这个角色聊天时会带上它。';
+      '这张卡还没有世界书 —— 点「＋ 新建」写一本。它只服务这张卡，不会和别的卡共用。';
     el.c.wbList.appendChild(empty);
   } else {
     for (const book of books) {
@@ -542,16 +527,16 @@ function renderCharWorldbookBox(character) {
   if (!books.length) {
     el.c.wbDesc.textContent = '';
     el.c.wbHint.textContent =
-      '绑定之后，这张卡单独聊天会带上这本书的设定；被绑进某个世界当角色时不生效（那条会话有自己的世界观）。';
+      '没有世界书也能聊：开局只有这张卡的设定和开场白。新建的这本只跟这张卡走，不会出现在别的卡上。';
     return;
   }
 
   const names = books.map((b) => b.name).join('、');
   const total = books.reduce((sum, b) => sum + (Array.isArray(b.entries) ? b.entries.length : 0), 0);
-  el.c.wbDesc.textContent = `已绑 ${books.length} 本（共 ${total} 条）：${names}`;
+  el.c.wbDesc.textContent = `《${names}》· ${total} 条`;
 
   el.c.wbHint.textContent =
-    '单独跟它聊天时会带上这些设定，角色卡上的「进入世界」也进这本书；但绑进某个世界当角色时不生效 —— 那条会话已经有自己的世界观了。';
+    '和这张卡开局就会进这本书的世界：条目不全部塞进去，聊到关键词才注入。';
 }
 
 /**
@@ -569,15 +554,15 @@ function openBoundWorldbook(bookId) {
   openWorldbookEditor(bookId);
 }
 
-/** 「＋ 新建」：造一本书 → 立刻绑给这张卡 → 直接进编辑器写内容。
- *  书先落盘再绑定，否则角色上的 id 会指向一本盘上没有的书（见 createWorldbook）。
- *  ⚠️ 只能一本：已经有书时**不建**（否则库里会多出一本没人绑的孤儿）。 */
+/** 「＋ 新建」：造一本书 → 挂给这张卡 → 直接进编辑器写内容。
+ *  ⚠️ 书先落盘再挂，否则角色上的 id 会指向一本盘上没有的书（见 createWorldbook）。
+ *  ⚠️ 只能一本：已经有书时**不建**（否则库里会多出一本没人认领的孤儿）。 */
 async function createWorldbookForCharacter() {
   const character = editorCharacterById(editingCharacterId);
   if (!character) return;
 
-  const ids = Array.isArray(character.worldbookIds) ? character.worldbookIds : [];
-  if (ids.length >= MAX_CHAR_WORLDBOOKS) {
+  const beforeIds = Array.isArray(character.worldbookIds) ? [...character.worldbookIds] : [];
+  if (beforeIds.length) {
     showToast('自带世界书只能有一本 —— 先解绑现在这本，再新建', 'error');
     return;
   }
@@ -585,7 +570,23 @@ async function createWorldbookForCharacter() {
   const book = await createWorldbook();
   if (!book) return;
 
-  await bindWorldbookToCharacter(book.id);
+  const hadIds = Array.isArray(character.worldbookIds);
+  const beforeUpdatedAt = character.updatedAt;
+
+  character.worldbookIds = [book.id];
+  character.updatedAt = now();
+  renderCharWorldbookBox(character);
+
+  // 还没保存过的新卡：内存里挂着就行，保存角色时跟着一起落盘
+  if (!isCharDraft() && !(await persistLibrary())) {
+    if (hadIds) character.worldbookIds = beforeIds;
+    else delete character.worldbookIds;
+    character.updatedAt = beforeUpdatedAt;
+    renderCharWorldbookBox(character);
+    showToast('世界书没挂上这张卡，回去再新建一次', 'error');
+    return;
+  }
+
   openBoundWorldbook(book.id);
 }
 
@@ -594,44 +595,6 @@ async function createWorldbookForCharacter() {
 export function refreshCharWorldbookBox() {
   const character = editorCharacterById(editingCharacterId);
   if (character) renderCharWorldbookBox(character);
-}
-
-/** 绑一本自带世界书。⚠️ 只允许一本：已经有别的书就让用户先解绑，不静默替换（会丢数据）。 */
-async function bindWorldbookToCharacter(bookId) {
-  const character = editorCharacterById(editingCharacterId);
-  if (!character) return false;
-
-  const hadIds = Array.isArray(character.worldbookIds);
-  const beforeIds = hadIds ? [...character.worldbookIds] : [];
-  if (beforeIds.includes(bookId)) {
-    showToast('这本已经绑上了');
-    return false;
-  }
-  if (beforeIds.length) {
-    showToast('自带世界书只能绑一本 —— 先解绑现在这本，再换别的', 'error');
-    return false;
-  }
-
-  const beforeUpdatedAt = character.updatedAt;
-
-  character.worldbookIds = [bookId];
-  character.updatedAt = now();
-  renderCharWorldbookBox(character);
-
-  if (isCharDraft()) {
-    showToast('已绑定世界书，保存后生效');
-    return true;
-  }
-
-  if (!(await persistLibrary())) {
-    if (hadIds) character.worldbookIds = beforeIds;
-    else delete character.worldbookIds;
-    character.updatedAt = beforeUpdatedAt;
-    renderCharWorldbookBox(character);
-    return false;
-  }
-  showToast('已绑定世界书');
-  return true;
 }
 
 /** 解绑（不删世界书本身） */
@@ -647,8 +610,11 @@ async function unbindWorldbookFromCharacter(bookId) {
   character.updatedAt = now();
   renderCharWorldbookBox(character);
 
+  // ⚠️ 说清楚书还在：解绑之后这张卡就再也挂不回这本了（从库里挑书绑过来的入口已撤）
+  const done = book ? `已解绑「${book.name}」—— 书还在世界书库里，只是不再跟这张卡开局` : '已解绑';
+
   if (isCharDraft()) {
-    showToast(book ? `已解绑「${book.name}」（书没删，还能重新绑）` : '已解绑');
+    showToast(done);
     return;
   }
 
@@ -658,104 +624,7 @@ async function unbindWorldbookFromCharacter(bookId) {
     renderCharWorldbookBox(character);
     return;
   }
-  showToast(book ? `已解绑「${book.name}」（书没删，还能重新绑）` : '已解绑');
-}
-
-/** 点「＋ 绑定」列出还没绑的世界书，勾选后一次加入；自起浮层，
- *  不复用世界书页那个方向相反、绑了模块级状态的选择器 */
-function openWorldbookPicker() {
-  const character = editorCharacterById(editingCharacterId);
-  if (!character) return;
-
-  const bound = new Set(Array.isArray(character.worldbookIds) ? character.worldbookIds : []);
-  const all = worldbooks();
-  const candidates = all.filter((b) => !bound.has(b.id));
-
-  // 🔴 自带世界书只允许一本（和主进程 main/characters.js 的 MAX_CHARACTER_WORLDBOOKS 对齐）
-  if (bound.size >= MAX_CHAR_WORLDBOOKS) {
-    showToast('自带世界书只能绑一本 —— 先解绑现在这本，再换别的', 'error');
-    return;
-  }
-  if (!all.length) {
-    showToast('世界书库还是空的 —— 点「＋ 新建」给这个角色写一本', 'error');
-    return;
-  }
-  if (!candidates.length) {
-    showToast('所有世界书都已经绑上了');
-    return;
-  }
-
-  closeWorldbookPicker();
-
-  const overlay = document.createElement('div');
-  overlay.className = 'cwb-picker';
-
-  const card = document.createElement('div');
-  card.className = 'cwb-picker-card';
-
-  const head = document.createElement('div');
-  head.className = 'cwb-picker-head';
-  const title = document.createElement('span');
-  title.className = 'cwb-picker-title';
-  title.textContent = `给「${character.name}」绑定世界书`;
-  const close = document.createElement('button');
-  close.type = 'button';
-  close.className = 'icon-btn icon-btn-sm';
-  close.title = '关闭';
-  close.setAttribute('aria-label', '关闭');
-  close.textContent = '✕';
-  close.addEventListener('click', closeWorldbookPicker);
-  head.append(title, close);
-
-  const list = document.createElement('div');
-  list.className = 'cwb-picker-list';
-
-  for (const book of candidates) {
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'cwb-picker-row';
-
-    const name = document.createElement('span');
-    name.className = 'cwb-picker-name';
-    name.textContent = book.name;
-
-    const meta = document.createElement('span');
-    meta.className = 'cwb-picker-meta';
-    const n = Array.isArray(book.entries) ? book.entries.length : 0;
-    const chars = Array.isArray(book.characters) ? book.characters.length : 0;
-    meta.textContent = chars ? `${n} 条 · ${chars} 个角色` : `${n} 条`;
-
-    row.append(name, meta);
-    // 只允许一本，选一行就等于选定
-    row.addEventListener('click', async () => {
-      closeWorldbookPicker();
-      await bindWorldbookToCharacter(book.id);
-    });
-    list.appendChild(row);
-  }
-
-  card.append(head, list);
-  overlay.appendChild(card);
-
-  // 点浮层空白处关掉
-  overlay.addEventListener('click', (event) => {
-    if (event.target === overlay) closeWorldbookPicker();
-  });
-
-  document.body.appendChild(overlay);
-  worldbookPickerEl = overlay;
-}
-
-// Esc 链用：浮层挂在 body 上、z-index(60) 高于编辑器(50)，按 Esc 应先关它
-export function isWorldbookPickerOpen() {
-  return !!worldbookPickerEl;
-}
-
-export function closeWorldbookPicker() {
-  if (worldbookPickerEl) {
-    worldbookPickerEl.remove();
-    worldbookPickerEl = null;
-  }
+  showToast(done);
 }
 
 // 草稿 / 保存 / 删除
@@ -924,8 +793,6 @@ async function saveCharacter() {
   // 「新建」还是「改已有」要在落盘前记下来：草稿一提交 charDraft 就清空
   const creating = isCharDraft();
   const scope = creating ? charDraft.scope : charEditorScope;
-  // 副本作用域要写进哪本书：草稿提交之后 charDraft 就没了，先记下来
-  const draftBookId = charDraft ? charDraft.bookId : null;
 
   stashCharForm();
 
@@ -933,18 +800,6 @@ async function saveCharacter() {
   if (creating && !commitCharDraft()) {
     showToast('这本书已经不在了，角色没能创建', 'error');
     return;
-  }
-
-  // 「AI 补设定」补出来的条目：角色卡 → 建一本书并绑上（跟着同一次写盘落地）；
-  // 副本 → 并进这本书的草稿，等世界书编辑器那边点「保存」
-  const madeBook = await materializeCharBook(character, {
-    scope,
-    bookId: scope === 'worldbook'
-      ? draftBookId || (currentWorldbook() ? currentWorldbook().id : null)
-      : null
-  });
-  if (madeBook && !madeBook.draft) {
-    renderCharWorldbookBox(character);
   }
 
   // 新建是终点（直接离开）；改已有的留在本页，多半还要接着改
@@ -1329,22 +1184,11 @@ export function initCharacterEditor(injected) {
   if (el.charPortrait) el.charPortrait.addEventListener('click', pickPortrait);
   if (el.btnClearPortrait) el.btnClearPortrait.addEventListener('click', clearPortrait);
 
-  el.c.wbAddBtn.addEventListener('click', openWorldbookPicker);
   el.c.wbNewBtn.addEventListener('click', createWorldbookForCharacter);
 
-  // 「人物列表」分区的两个按钮：AI 生成 / 新建，作用于**当前角色卡绑定的那本书**。
-  // 没绑书时两个都先提示去「世界书」分区绑一本（副本没有落脚的书）。
+  // 「人物列表」分区的两个按钮：AI 生成 / 新建，作用于**当前角色卡自带的那本书**。
+  // 没有书时两个都先提示去「世界书」分区新建一本（副本没有落脚的书）。
   bindCharRolesBar();
-
-  // 「AI 补设定」：要读**表单里当前**的卡 —— 先 stash 进草稿，刚手改的描述才带得上；
-  // 拿到条目算「有未保存的改动」，和手改走同一条路（点保存才建书、才落盘）。
-  initCharBookAi({
-    readCard: () => {
-      stashCharForm();
-      return editorCharacterById(editingCharacterId);
-    },
-    onChange: () => setCharSaveState('dirty')
-  });
 
   // 「AI 补充」：同样先 stash —— 模型要读的是**表单里**这张卡，刚手改的描述才带得上；
   // 结果只写回表单，点「保存」才进卡（applyAiFill 里派的 input 会顺手把胶囊打脏）。

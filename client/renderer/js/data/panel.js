@@ -14,11 +14,12 @@ import {
 // 写入口改完值要落盘：data 层里 panel → persist 是单向依赖，不成环。
 import { persistConversations } from './persist.js';
 // 种字段要读卡上的 attributes；复合键还要「owner id → 角色名」的解析。
+// ⚠️ 按会话找书一律走 effectiveWorldbookIds：角色卡开局不把书拷进会话，用 convoWorldbookIds 会一本都读不到。
 import {
   characterAttrs,
   characterById,
   characters,
-  convoWorldbookIds,
+  effectiveWorldbookIds,
   worldbookById,
   worldbookCharacters
 } from './library.js';
@@ -92,7 +93,7 @@ function findCardForOwner(convo, id) {
   if (direct) return direct;
 
   if (convo) {
-    for (const bookId of convoWorldbookIds(convo)) {
+    for (const bookId of effectiveWorldbookIds(convo)) {
       const book = worldbookById(bookId);
       const found = book ? worldbookCharacters(book).find((c) => c && c.id === target) : null;
       if (found) return found;
@@ -172,7 +173,7 @@ export function ownerIdByLabel(convo, label) {
   const inLibrary = characters().find((c) => c && String(c.name || '').trim() === text);
   if (inLibrary) return inLibrary.id;
 
-  for (const bookId of convoWorldbookIds(convo)) {
+  for (const bookId of effectiveWorldbookIds(convo)) {
     const book = worldbookById(bookId);
     if (!book) continue;
     const found = worldbookCharacters(book).find((c) => c && String(c.name || '').trim() === text);
@@ -701,11 +702,9 @@ export function absorbTopLevelIntoPlayer(convo, latest) {
     else if (uniqueOwnerByName.get(name) !== owner) uniqueOwnerByName.set(name, '');
   }
 
-  // 单角色聊天（绑卡且非 GM）→ 无主字段全归那张卡；不要求它已持有字段。
-  const soloCard =
-    convo.characterId && convo.gmMode !== true
-      ? findCardForOwner(convo, convo.characterId)
-      : null;
+  // 绑了卡的会话 → 无主字段全归那张卡（角色卡开局就是 GM 局，字段说的是主要角色）；
+  // 不要求它已持有字段。世界会话（没绑卡）才落到下面的主角分支。
+  const soloCard = convo.characterId ? findCardForOwner(convo, convo.characterId) : null;
   const soloOwner = soloCard ? String(convo.characterId) : '';
 
   const fields = [...convoPanelFields(convo)];
@@ -1137,7 +1136,7 @@ export function mergePlayerOwnedFields(convo) {
 
   // 本会话绑定的世界书里，名字和玩家名一样的副本 → owner 要并过来
   const aliases = new Set();
-  for (const bookId of convoWorldbookIds(convo)) {
+  for (const bookId of effectiveWorldbookIds(convo)) {
     const book = worldbookById(bookId);
     for (const copy of worldbookCharacters(book)) {
       const id = copy && copy.id ? String(copy.id) : '';

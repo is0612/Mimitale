@@ -22,6 +22,23 @@ export function characterForConvo(convo) {
   return convo ? characterById(convo.characterId) : null;
 }
 
+/**
+ * 一张卡的开场白候选（firstMes + alternateGreetings），按文本去重。
+ * ⚠️ 作者常把 first_mes 和 alternate_greetings[0] 写成一字不差，不去重会挑出两条一样的。
+ */
+export function greetingChoices(character) {
+  const list = [];
+  const seen = new Set();
+  if (!character) return list;
+  for (const raw of [character.firstMes, ...asArray(character.alternateGreetings)]) {
+    const text = typeof raw === 'string' ? raw.trim() : '';
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    list.push(text);
+  }
+  return list;
+}
+
 /** 容错老数据：老数据只有 {name, value}，归一化补出 type/min/max/hint（type 默认 text） */
 export function characterAttrs(character) {
   if (!character || !Array.isArray(character.attributes)) return [];
@@ -74,6 +91,24 @@ export function convoWorldbookIds(convo) {
 export function characterWorldbooks(character) {
   if (!character) return [];
   return asArray(character.worldbookIds).map(worldbookById).filter(Boolean);
+}
+
+/**
+ * 这次请求实际用哪几本书：会话自己绑了就用它的，没绑才回落「角色卡自带」。
+ *
+ * ⚠️ 角色卡开局**不把卡的书拷进 convo.worldbookIds**（拷了就是快照，卡上换书之后老会话不再跟随）。
+ *    所以凡是「按会话找书」的地方都要走这里 —— 直接用 convoWorldbookIds(convo) 在角色卡局永远是空的
+ *    （右栏脚注、面板归属、导出、删除前的用量统计都会跟着漏）。
+ *    只有两处必须用 convoWorldbookIds：给会话做快照（分叉）、以及「世界优先」那种要分辨来源的提示。
+ */
+export function effectiveWorldbookIds(convo) {
+  const convoIds = convoWorldbookIds(convo);
+  if (convoIds.length) return convoIds;
+
+  const character = characterForConvo(convo);
+  if (!character) return [];
+
+  return asArray(character.worldbookIds);
 }
 
 // --- 预设 ---

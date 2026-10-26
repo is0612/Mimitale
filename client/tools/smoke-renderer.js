@@ -3192,7 +3192,9 @@ await scenario('默认人设：只进通用对话，不漏进世界模式和角�
       gmOut.slice(0, 90)
     );
 
-    // --- 2) 绑角色卡的会话：卡自己的 systemPrompt 说了算，人设不参与 ---
+    // --- 2) 绑角色卡的会话 = 世界模式（2026-10-26 起固定如此，视角里已经没有 GM 开关）---
+    //     卡不再走「单角色扮演」那一套：systemPrompt 不吃（它和「你在这本书里当叙述者」打架），
+    //     改由 focusCharacterSection 注入「本局主要角色」。默认人设依然一个字都不参与。
     const cardConvo = {
       id: 'smoke-persona-card-convo',
       model: MODEL,
@@ -3201,8 +3203,17 @@ await scenario('默认人设：只进通用对话，不漏进世界模式和角�
     };
     const cardOut = blob(messagesMod.buildApiMessages(cardConvo, '', ''));
     check('角色卡：没混进「默认人设」正文', !cardOut.includes(MARK), cardOut.slice(0, 90));
-    check('角色卡：用上了卡自己的 systemPrompt', cardOut.includes('樱川大学摄影社的学长'));
-    check('角色卡：扮演规则照常注入', cardOut.includes('【扮演规则】'));
+    check(
+      '角色卡：不吃卡自己的 systemPrompt（那是单角色扮演那套的配置）',
+      !cardOut.includes('樱川大学摄影社的学长'),
+      cardOut.slice(0, 90)
+    );
+    check('角色卡：主持规则照常注入', cardOut.includes('【主持规则】'));
+    check(
+      '角色卡：卡作为「本局主要角色」进了提示词',
+      cardOut.includes('【本局主要角色】') && cardOut.includes('顾言'),
+      cardOut.slice(0, 120)
+    );
 
     // --- 3) 通用对话（对照组）：人设必须照旧生效，别修反了 ---
     const plainConvo = {
@@ -9487,8 +9498,20 @@ await scenario('开聊前先定「你是谁」', async () => {
   click('#btn-perspective');
   await waitFor('视角弹窗打开', () => shown('#perspective-modal'));
   check('视角弹窗里不再有「我是谁」', !byId('p-player-name') && !byId('p-player-char'));
+  // GM 也不再是个开关：角色卡局固定世界模式，纯聊天（没卡）根本没有世界可言
+  check('视角弹窗里没有 GM 开关', !byId('p-gm'));
   click('#btn-close-perspective');
   await sleep(60);
+
+  // 老数据兜底：当年关过 GM 的卡会话（gmMode === false），现在照样按世界模式跑
+  const narration = await import(new URL('js/data/narration.js', document.baseURI).href);
+  check(
+    '有卡的会话一律算世界模式（哪怕 gmMode 存着 false）',
+    narration.isGmMode({ characterId: 'c-x', gmMode: false }) === true &&
+      narration.isGmMode({ characterId: null, gmMode: false }) === false &&
+      narration.isGmMode({ characterId: null, gmMode: true }) === true,
+    '有卡/无卡/老世界会话三种口径'
+  );
 });
 
 // ---------------------------------------------------------------------------

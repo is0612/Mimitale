@@ -465,27 +465,19 @@
             </div>
             </div><!-- /char-text-section -->
 
-            <!-- 角色自带的世界书：导入带 character_book 的角色卡时会自动绑上，
-                 也可以在这里手动绑定。开关关掉后，这张角色无论单独聊天、
-                 还是被绑进某个世界当角色，都不会带入它自己的世界书。 -->
+            <!-- 角色自带的世界书：只有两条来源 —— 导入带 character_book 的角色卡，
+                 或者在下面「＋ 新建」现场写一本。从库里挑一本绑过来的入口已撤（2026-10-26）：
+                 一本书只服务它长出来的那张卡，设定才不串味。 -->
             <div id="c-worldbook-box" class="char-worldbook-box">
               <div class="cwb-head">
                 <span class="field-label" data-icon="book">自带世界书</span>
                 <div class="cwb-head-actions">
-                  <!-- 「AI 补设定」（2026-10-20）：读这张卡补几条世界设定，保存角色时才建书。
-                       只给角色卡用 —— 世界书副本进世界时注入的是那本书，自带书不生效。 -->
-                  <m-button id="c-wb-add-btn" variant="ghost" size="sm">＋ 绑定</m-button>
-                  <!-- 世界书只能从这张卡长出来：新建 → 自动绑定 → 直接进编辑器 -->
-                  <m-button id="c-wb-new-btn" variant="ghost" size="sm" title="新建一本世界书并绑定给这个角色">＋ 新建</m-button>
-                  <m-button id="c-wb-ai-btn" variant="ghost" size="sm">AI 补设定</m-button>
+                  <!-- 新建 → 自动挂给这张卡 → 直接进编辑器写内容 -->
+                  <m-button id="c-wb-new-btn" variant="ghost" size="sm" title="新建一本世界书，只给这个角色用">＋ 新建</m-button>
                 </div>
               </div>
               <div id="c-wb-list" class="cwb-list"></div>
-              <div id="c-wb-ai-block" class="cwb-ai">
-                <p id="c-wb-ai-status" class="field-help cwb-ai-status"></p>
-                <div id="c-wb-ai-list" class="cwb-ai-list hidden"></div>
-              </div>
-              <!-- 只能绑一本，所以没有「启用」开关了：绑上就一直生效（2026-10-24） -->
+              <!-- 只能有一本，所以没有「启用」开关：有书就一直生效 -->
               <p class="field-help" id="c-wb-desc"></p>
               <p class="field-help" id="c-wb-hint"></p>
             </div>
@@ -819,14 +811,18 @@
               </div>
               <p class="wb-side-title">条目 <span id="wb-entry-count" class="wb-count"></span></p>
               <div id="wb-entry-list" class="wb-entry-list"></div>
-              <!-- 三颗都跟「条目」走 —— 它们动的是列表，不是书 -->
+              <!-- 四颗都跟「条目」走 —— 它们动的是列表，不是书 -->
               <div class="wb-entry-actions">
                 <m-button id="btn-new-entry" variant="ghost" size="sm">＋ 条目</m-button>
                 <m-button id="btn-wb-entry-template" variant="ghost" size="sm"
                           title="种入「主线走向 / 主要人物 / 专有名词 / 事件表」四条空骨架，照着填就行">套用模板</m-button>
                 <m-button id="btn-wb-add-event" variant="ghost" size="sm"
                           title="新建一条「事件」条目：填上关键词，聊到就把这段演出来">＋ 事件</m-button>
+                <m-button id="btn-wb-ai" variant="ghost" size="sm"
+                          title="读这本书（和它所属的角色卡），补几条还没写到的设定">AI 补条目</m-button>
               </div>
+              <!-- 生成中 / 出错 / 补了几条：闲时整行收起，不占左栏高度 -->
+              <p id="wb-ai-status" class="field-help wb-ai-status hidden"></p>
               <!-- 危险动作放最下面（后果越重越靠下） -->
               <div class="wb-list-danger">
                 <m-button id="btn-del-worldbook" variant="danger" size="sm" block>删除本书</m-button>
@@ -2120,17 +2116,6 @@
           </span>
         </div>
 
-        <label class="check">
-          <input id="p-gm" type="checkbox" />
-          <span class="check-text">
-            <span class="check-title">GM 模式（主持人视角）</span>
-            <span class="check-desc">
-              开启后 AI 扮演整个世界和所有 NPC，用第三人称描写环境，你是故事主角。<br />
-              适合大世界模型：关掉时 AI 只扮演单个角色，视角就局限在那一个人身上。
-            </span>
-          </span>
-        </label>
-
         <!-- 剧情选项：跟着对话框走（每轮给几个可点选项，点一下就当玩家回复发出去）。
              之前长在角色卡的「属性」里，现在改到这里，跟角色无关、只服务这一场对话。 -->
         <div class="field field-stack">
@@ -2233,7 +2218,7 @@
     </div>
   </div>
 
-  <!-- ================= 进入世界：先创建你自己的角色 ================= -->
+  <!-- ================= 和角色卡开局：先创建你自己的角色 ================= -->
   <div id="player-modal" class="modal hidden">
     <div class="modal-card player-card" role="dialog" aria-modal="true" aria-labelledby="player-title">
       <header class="modal-head">
@@ -2265,19 +2250,27 @@
 
         <label class="field field-stack">
           <span class="field-label">你的设定</span>
-          <m-textarea id="player-profile" rows="7" spellcheck="false" placeholder="你是谁、长什么样、什么来头、会什么……&#10;例如：来自异世界的旅人，背着一把用旧的长剑，对这个世界几乎一无所知，但学得很快。"></m-textarea>
+          <m-textarea id="player-profile" rows="5" spellcheck="false" placeholder="你是谁、长什么样、什么来头、会什么……&#10;例如：来自异世界的旅人，背着一把用旧的长剑，对这个世界几乎一无所知，但学得很快。"></m-textarea>
           <span class="field-help">
             这段会作为「玩家角色」每轮注入提示词，让 AI 知道你是谁。<br />
             留空也行 —— 那样就只用名字，名字也留空就用「你」。
           </span>
         </label>
+
+        <!-- 开场白：卡上带了**两条以上**才出现（一条的直接用，0 条让模型现写）。
+             列表自己滚：语料里单卡最多 29 条。 -->
+        <div class="field field-stack hidden" id="player-opening-field">
+          <span class="field-label">从哪一条开场白开始</span>
+          <div id="player-opening-list" class="opening-list" role="radiogroup" aria-label="开场白"></div>
+          <span class="field-help" id="player-opening-help"></span>
+        </div>
       </div>
 
       <footer class="modal-foot">
         <span class="foot-hint" id="player-foot-hint"></span>
         <div class="foot-actions">
           <m-button id="btn-cancel-player" variant="ghost">取消</m-button>
-          <m-button id="btn-start-play" variant="primary">开始游玩</m-button>
+          <m-button id="btn-start-play" variant="primary">开始对话</m-button>
         </div>
       </footer>
     </div>
@@ -2317,7 +2310,7 @@
           <m-textarea id="persona-text" rows="12" spellcheck="false" aria-label="默认人设正文" placeholder="例如：&#10;你是……&#10;性格：……&#10;说话习惯：……"></m-textarea>
           <span class="field-help">
             写法和「角色卡」一样：你是谁、什么性格、怎么说话。<b>留空就是通用助手</b>（不扮演任何角色）。<br />
-            只对<b>没绑定角色卡、也没进世界</b>的对话生效 —— 一旦在某张卡上点了「聊天」、
+            只对<b>没绑定角色卡、也没进世界</b>的对话生效 —— 一旦在某张卡上点了「对话」、
             或者从世界书里「游玩」进去，这段话就不参与，改由那张卡自己的设定 / 那个世界的世界书说话。
           </span>
         </label>
@@ -2352,20 +2345,6 @@
       <div class="confirm-foot">
         <m-button id="confirm-cancel" variant="ghost">取消</m-button>
         <m-button id="confirm-ok" variant="primary">确定</m-button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= 选择开场白（备选开场白多于一条时才开） ================= -->
-  <div id="pick-modal" class="modal hidden">
-    <div class="modal-card pick-card" role="dialog" aria-modal="true" aria-labelledby="pick-title">
-      <div class="pick-head">
-        <h3 id="pick-title">选一条开场白</h3>
-        <p id="pick-hint"></p>
-      </div>
-      <div id="pick-list" class="pick-list"></div>
-      <div class="pick-foot">
-        <m-button id="pick-cancel" variant="ghost">取消</m-button>
       </div>
     </div>
   </div>

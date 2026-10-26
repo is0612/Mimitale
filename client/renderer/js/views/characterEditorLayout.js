@@ -31,7 +31,7 @@ const ADVANCED_FIELDS = ['c-system', 'c-post', 'c-notes'];
 const SECTIONS = [
   ['writing', '角色卡设定', '几栏连成一页，上下滚着就能对照'],
   ['roles', '人物列表', '这本书里的人物副本，和角色卡相互独立'],
-  ['worldbook', '世界书', '绑定角色自带的世界设定'],
+  ['worldbook', '世界书', '这张卡自带的世界设定'],
   ['advanced', '高级设置', '角色卡专属指令与作者备注']
 ];
 

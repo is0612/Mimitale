@@ -11,7 +11,7 @@ import {
   characterAttrs,
   characterForConvo,
   characters,
-  convoWorldbookIds,
+  effectiveWorldbookIds,
   worldbookById,
   characterBookPayload
 } from '../data/library.js';
@@ -78,7 +78,7 @@ function conversationMarkdown(convo) {
   const meta = [];
   if (character) meta.push(`角色：${character.name}`);
   if (player && player.name) meta.push(`我：${player.name}`);
-  const book = convoWorldbookIds(convo)
+  const book = effectiveWorldbookIds(convo)
     .map((id) => worldbookById(id))
     .find(Boolean);
   if (book) meta.push(`世界：${book.name}`);

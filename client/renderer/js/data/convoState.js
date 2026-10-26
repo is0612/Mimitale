@@ -5,7 +5,7 @@ import {
   seedIdentity, seedPanelFromCharacters, mergePlayerOwnedFields,
   syncConvoPanel, syncPlayerNameFromPanel
 } from './panel.js';
-import { characterById, convoWorldbookIds, worldbookById, worldbookCharacters } from './library.js';
+import { characterById, effectiveWorldbookIds, worldbookById, worldbookCharacters } from './library.js';
 import { syncConvoOptions } from './suggestions.js';
 
 // 只存在内存中，不污染持久化数据。新轮/重生/清空都能主动使旧选项请求失效。
@@ -42,7 +42,7 @@ export function rebuildConvoDerivedState(convo, { clear = false, priorMessages =
     seedIdentity(template, bound.name, bound.id);
     seedPanelFromCharacters(template, [bound]);
   }
-  for (const id of convoWorldbookIds(convo)) {
+  for (const id of effectiveWorldbookIds(convo)) {
     const book = worldbookById(id);
     if (book) seedPanelFromCharacters(template, worldbookCharacters(book));
   }

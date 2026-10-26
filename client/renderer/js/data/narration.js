@@ -59,8 +59,15 @@ export function narrationInstruction(convo) {
   return NARRATION_MODES[convoNarrationMode(convo)].text;
 }
 
+/**
+ * 世界（GM）模式：**角色卡局固定是**，没卡的「＋ 新对话」才是单纯聊天。
+ * ⚠️ 视角弹窗里的 GM 开关已撤（2026-10-26），所以不能只看 `convo.gmMode` ——
+ *    老会话里可能存着 false（当年手动关过），有卡就得按世界模式跑。
+ *    `gmMode === true` 留着兜没卡的老会话（以前「进入世界」那条入口建的）。
+ */
 export function isGmMode(convo) {
-  return convo?.gmMode === true;
+  if (!convo) return false;
+  return !!convo.characterId || convo.gmMode === true;
 }
 
 // 【标重点】：加粗 = 说出口的台词。

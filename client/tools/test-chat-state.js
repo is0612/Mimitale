@@ -18,7 +18,7 @@ function harness() {
   let sends = 0, world = Promise.resolve('');
   const ctx = vm.createContext({ ...fields, state, console, Date, now: () => 1000, asArray: value => Array.isArray(value) ? value : [],
     characterAttrs: c => c.attributes || [], characterById: id => [card, playerCard].find(c => c.id === id), characters: () => [card, playerCard],
-    convoWorldbookIds: () => [], worldbookById: () => null, worldbookCharacters: () => [], stripEmoTags: x => x,
+    convoWorldbookIds: () => [], effectiveWorldbookIds: () => [], worldbookById: () => null, worldbookCharacters: () => [], stripEmoTags: x => x,
     persistConversations() {}, activeConvo: () => state.conversations.find(c => c.id === state.activeId), showToast() {}, refreshAll() {}, renderAll() {},
     confirmDialog: async () => true, shiftSummariesForRemoval() {}, resetPetTurns() {}, el: { input: { focus() {} } },
     ensureConvoEndpoint: () => ({ provider: { id: 'p' }, model: 'm' }), uid: () => 'request', matchWorldbookSections: () => world,

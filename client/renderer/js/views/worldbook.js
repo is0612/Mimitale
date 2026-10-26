@@ -19,6 +19,7 @@ import {
   worldbookCharacters,
   characterPortrait,
   convoWorldbookIds,
+  effectiveWorldbookIds,
   WORLDBOOK_SCAN_DEPTH,
   recursiveDepthSetting
 } from '../data/library.js';
@@ -188,7 +189,7 @@ function renderDirtyHint() {
 }
 
 /**
- * 「AI 补设定」在**副本**作用域用：把补出来的条目并进这本书的**草稿**（不落盘）。
+ * 「AI 补条目」用：把补出来的条目并进这本书的**草稿**（不落盘）。
  *
  * ⚠️ 不能直接往 `book.entries` 里塞：世界书编辑器手里可能正压着一份脏草稿，
  *    之后点「保存」会用那份草稿整体覆盖 entries —— 直接塞的条目会被**静默吞掉**。
@@ -196,20 +197,32 @@ function renderDirtyHint() {
  *
  * @param {string} bookId
  * @param {object[]} entries 世界书条目形状（和 newEntry 造出来的一致）
- * @returns {boolean} 书不存在 / 没有可用条目 → false
+ * @returns {{ added: number, skipped: number }} added = 真加进去几条，skipped = 重名跳过几条
  */
 export function appendEntriesToBookDraft(bookId, entries) {
   const book = worldbookById(bookId);
   const list = (Array.isArray(entries) ? entries : []).filter(
     (entry) => entry && String(entry.content || '').trim()
   );
-  if (!book || !list.length) return false;
+  if (!book || !list.length) return { added: 0, skipped: 0 };
 
   // 编辑器里可能正开着某一条：先把它收进草稿，免得下面重画列表时拿旧表单回写
   stashEntryForm();
 
   const draft = draftFor(book);
-  draft.entries = [...draft.entries, ...list];
+  // 同名跳过：再点一次「AI 补条目」时模型最爱照抄写过的标题，叠进去就是两条一样的
+  const taken = new Set(draft.entries.map((e) => String((e && e.title) || '').trim()));
+  const fresh = [];
+  for (const entry of list) {
+    const title = String(entry.title || '').trim();
+    if (taken.has(title)) continue;
+    taken.add(title);
+    fresh.push(entry);
+  }
+  const skipped = list.length - fresh.length;
+  if (!fresh.length) return { added: 0, skipped };
+
+  draft.entries = [...draft.entries, ...fresh];
   if (!draft.dirty) draft.dirty = true;
 
   // 正编辑着这一本：左栏列表 / 条目数立刻跟着变，否则回到这一屏看到的还是旧列表
@@ -218,7 +231,7 @@ export function appendEntriesToBookDraft(bookId, entries) {
     renderEntryList();
   }
   renderDirtyHint();
-  return true;
+  return { added: fresh.length, skipped };
 }
 
 /** 草稿写回世界书（点「保存」时用）。返回是否真的提交了 */
@@ -689,13 +702,23 @@ async function toggleWorldbookCharShowInPanel(book, id, on) {
   //    否则用户点完浮标还是空心、以为没点上（这是「点不动」的根因）。
   rerenderBookCharHosts(book);
   // 「当前状态」入口条按当前会话的面板画，正在玩这本书就得重绘一次，头像才会立刻增删。
-  if (activeConvo() && convoWorldbookIds(activeConvo()).includes(book.id)) {
+  if (activeConvo() && effectiveWorldbookIds(activeConvo()).includes(book.id)) {
     renderAll();
   }
   showToast(on ? `「${target.name}」的状态会显示了` : `「${target.name}」的状态已隐藏`, 'ok');
 }
 
-// 编辑器只负责编辑「当前这一本」；书从角色的「自带世界书」里长出来（见 createWorldbook）。
+/** 编辑器只负责编辑「当前这一本」；书从角色的「自带世界书」里长出来（见 createWorldbook）。 */
+
+/** 「AI 补条目」要读的那本书：先把手写进输入框的内容收进草稿，模型读到的才是屏幕上这份。
+ *  ⚠️ 别在 worldbook.js 里 import charBookAi —— 那边要从这里拿 appendEntriesToBookDraft，
+ *    反过来引就成了环。接线放在入口层（main.js）。 */
+export function aiBookTarget() {
+  if (!currentWorldbook()) return null;
+  stashWorldbookName();
+  stashEntryForm();
+  return currentWorldbook();
+}
 
 /** 打开编辑器并切到指定的一本（外部要跳转时用） */
 export function openWorldbookEditor(id) {
@@ -1006,7 +1029,7 @@ export async function deleteWorldbookById(id) {
   }
 
   const charCount = worldbookCharacters(book).length;
-  const usedByConvo = state.conversations.filter((c) => convoWorldbookIds(c).includes(book.id)).length;
+  const usedByConvo = state.conversations.filter((c) => effectiveWorldbookIds(c).includes(book.id)).length;
   const entryCount = Array.isArray(book.entries) ? book.entries.length : 0;
   const bits = [`${entryCount} 条条目`];
   if (charCount) bits.push(`${charCount} 个角色副本`);

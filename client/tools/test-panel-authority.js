@@ -14,7 +14,7 @@ const ctx = vm.createContext({
   asArray: value => Array.isArray(value) ? value : [],
   characterAttrs: card => card && card.attributes || [],
   characterById: id => id === npc.id ? npc : null,
-  characters: () => [npc], convoWorldbookIds: () => [],
+  characters: () => [npc], convoWorldbookIds: () => [], effectiveWorldbookIds: () => [],
   worldbookById: () => null, worldbookCharacters: () => [],
   stripEmoTags: text => text, persistConversations() {},
 });

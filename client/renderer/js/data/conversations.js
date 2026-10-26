@@ -27,7 +27,7 @@ export function createConvo(activate) {
     updatedAt: now(),
     messages: [],
     characterId: null,
-    // 会话自己绑的世界书（「进入世界」走这里）；另有「角色自带的世界书」走 character.worldbookIds，两者由 effectiveWorldbookIds 决定用谁。
+    // 会话自己绑的世界书；没绑时 effectiveWorldbookIds 回落角色自带的 character.worldbookIds（角色卡开局不往这里拷，拷了就是快照，卡上换书后老会话不再跟随）。
     worldbookIds: [],
     // 会话绑的预设（可挂多条）：null = 没配过 → 自动带所有「可全局」的；[] = 显式一条都不用 → 真不注入、不回落全局。
     dialoguePresetIds: null,
@@ -42,8 +42,9 @@ export function createConvo(activate) {
     // count 默认 4 须和 suggestions.js 的 DEFAULT_OPTIONS_COUNT 对齐。
     options: [],
     optionsSpec: { count: 4, hint: '' },
-    // 视角设置：叙述模式、推进节奏、GM 模式。
-    // ⚠️ 纯聊天用不上这两个档（见 data/messages.js 文件头），但仍写默认值：万一被切成 GM 模式，默认档直接可用。
+    // 视角设置：叙述模式、推进节奏；gmMode 是「世界模式」的落盘记录。
+    // ⚠️ 纯聊天用不上前两个档（见 data/messages.js 文件头），但仍写默认值：绑上卡之后直接可用。
+    // gmMode 建出来是 false，「＋ 新对话」= 单纯聊天；绑卡开局会写 true（isGmMode 也认「有卡即 GM」）。
     narrationMode: DEFAULT_NARRATION_MODE,
     // 默认「一步一步」：不这样的话模型会一口气把整场戏演完，玩家只剩看的份
     paceMode: DEFAULT_PACE_MODE,

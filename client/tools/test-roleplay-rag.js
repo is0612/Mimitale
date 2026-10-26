@@ -38,6 +38,8 @@ function harness() {
     } },
     effectiveDialoguePresets: () => [], WORLDBOOK_SCAN_DEPTH: 6,
     convoPlayer: () => null, playerProfileForPrompt: () => '', worldbookCast: () => '',
+    // GM 局的主要角色段在 cast.js（这里只验宏与注入顺序，段本身由冒烟覆盖）
+    focusCharacterSection: () => '',
     convoFieldDisplayNames: () => [], panelGroupNames: () => [],
     compileAssistantCleaner: () => (text) => text,
     formatPanelForPrompt: () => '', optionsInstruction: () => '', panelEntities: () => []
@@ -64,8 +66,20 @@ function harness() {
     { role: 'user', content: 'question' }, { role: 'assistant', content: 'answer' }];
   const gm = { id: 'gm', gmMode: true, characterId: 'npc', messages: history };
   const narrator = '\u53d9\u8ff0\u8005';
-  for (const characterId of ['npc', '']) {
-    const convo = { ...gm, characterId };
+  // GM + 绑卡：卡就是「本局主要角色」，宏落到卡名（和 messages.js 同一口径，不再一律叙述者）
+  {
+    const convo = { ...gm };
+    const rag = await context.recallSection(convo);
+    assert.ok(rag.includes('Bound NPC / Bound NPC / Player / Player'));
+    assert.ok(rag.includes('【早先 · Bound NPC】'));
+    assert.ok(!rag.includes('Default assistant'));
+    const messages = context.buildApiMessages(convo, '{{char}} / <BOT> / {{user}} / <USER>', rag);
+    assert.ok(messages.some((message) => message.content === 'Bound NPC / Bound NPC / Player / Player'));
+    assert.ok(messages.some((message) => message.content === rag));
+  }
+  // GM 没绑卡：宏落成叙述者，也不能回落到默认助手的人设名
+  {
+    const convo = { ...gm, characterId: '' };
     const rag = await context.recallSection(convo);
     assert.ok(rag.includes(`${narrator} / ${narrator} / Player / Player`));
     assert.ok(!rag.includes('Bound NPC') && !rag.includes('Default assistant'));

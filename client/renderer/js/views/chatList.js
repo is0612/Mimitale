@@ -8,13 +8,13 @@ import { el } from '../core/dom.js';
 import { activeConvo, now, asArray } from '../core/util.js';
 import { api } from '../core/api.js';
 import { showToast } from '../ui/toast.js';
-import { pickFromList } from '../ui/pickList.js';
 import { h, button, clear } from '../ui/build.js';
 import { closeModelMenu } from '../ui/modelMenu.js';
 import { entityTone } from '../ui/avatarTone.js';
 import { providers, providerById, currentEndpoint, isBridgeProvider } from '../data/providers.js';
-import { characterById, worldbookById, convoWorldbookIds } from '../data/library.js';
+import { characterById, worldbookById, convoWorldbookIds, greetingChoices } from '../data/library.js';
 import { seedIdentity, seedPanelFromCharacters } from '../data/panel.js';
+import { isGmMode } from '../data/narration.js';
 import { applyMacros } from '../data/messages.js';
 import { convoUserName } from '../data/cast.js';
 import { persistConversations } from '../data/persist.js';
@@ -270,32 +270,8 @@ export function renderModelSwitch() {
   menu.scrollTop = scrollTop;
 }
 
-/** ⚠️ 按文本去重：作者常把 first_mes 和 alternate_greetings[0] 写成一字不差，不去重会有两条一样的。 */
-function greetingChoices(character) {
-  const list = [];
-  const seen = new Set();
-  for (const raw of [character.firstMes, ...asArray(character.alternateGreetings)]) {
-    const text = typeof raw === 'string' ? raw.trim() : '';
-    if (!text || seen.has(text)) continue;
-    seen.add(text);
-    list.push(text);
-  }
-  return list;
-}
-
-/** @returns {Promise<number>} 选中的下标；取消 / Esc / 点背景 → -1（= 不插开场白）。 */
-async function pickGreeting(name, greetings) {
-  const who = String(name || '').trim() || '这个角色';
-  const index = await pickFromList({
-    title: '选一条开场白',
-    hint: `${who} 带了 ${greetings.length} 条开场白，它们是同一个场景的不同入场剧本 —— 挑一条作为这次对话的开头。`,
-    items: greetings.map((text, i) => ({ text, note: i === 0 ? '默认' : '' }))
-  });
-  return index === null ? -1 : index;
-}
-
-/** 角色在角色列表页用卡片上的「聊天」按钮选 */
-export async function applyCharacterChoice(characterId) {
+/** 角色在角色列表页用卡片上的「对话」按钮选 */
+export async function applyCharacterChoice(characterId, openingIndex) {
   const convo = activeConvo();
   if (!convo) return;
 
@@ -312,18 +288,17 @@ export async function applyCharacterChoice(characterId) {
   convo.updatedAt = now();
 
   // 卡上声明过属性 / 身份四项就种进状态面板：漏了身份四项，模型不知道年龄（会把 16 岁写成 21 岁）
-  seedIdentity(convo, next.name, next.id);
+  // ⚠️ GM 局里的卡是 NPC，不是「本人」：不再把它写进姓名（那一局的「姓名」是玩家），
+  //    否则状态表里两个姓名打架、注入时被迫加 owner 前缀。
+  if (!isGmMode(convo)) seedIdentity(convo, next.name, next.id);
   seedPanelFromCharacters(convo, [next]);
 
   if (untouched) {
-    // ⚠️ 多条开场白（语料里 424/1341 张卡都有）先让用户挑：那是同一个场景的不同入场剧本，
-    //    永远只进第一条等于把一张卡当四分之一张用。
+    // 多条开场白（语料里 424/1341 张卡都有）在「你是谁」弹窗里就挑好了，这里只按下标取。
+    // ⚠️ 下标越界（卡在弹窗开着的时候被改过）就退回第一条，不插空消息。
     const greetings = greetingChoices(next);
-    let pick = 0;
-    if (greetings.length > 1) {
-      pick = await pickGreeting(next.name, greetings);
-    }
-    if (greetings.length && pick >= 0) {
+    const pick = Number.isInteger(openingIndex) && openingIndex >= 0 && openingIndex < greetings.length ? openingIndex : 0;
+    if (greetings.length) {
       convo.messages = [
         {
           role: 'assistant',

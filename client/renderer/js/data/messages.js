@@ -5,7 +5,8 @@
  *  （语义检索、面板、选项都是），排到历史前面等于每轮把上万 token 的历史按原价重算。
  *  实测（DeepSeek / 2130 token 输入，2026-10-26）：前缀不变、末尾追加 → 命中 90%；
  *  前缀里换掉一段世界设定 → 只剩 30%。差的 60% 就是白付的钱。
- *  人设互斥：绑卡用卡 systemPrompt，纯聊天用默认人设，GM 一律不注入。 */
+ *  人设互斥：绑卡用卡 systemPrompt，纯聊天用默认人设；GM 局的卡不吃 systemPrompt
+ *  （那是「你就是 X」的扮演指令，和叙述者身份打架），改走 focusCharacterSection。 */
 
 import { state } from '../core/state.js';
 import { asArray } from '../core/util.js';
@@ -33,6 +34,7 @@ import {
   assistantName,
   assistantPersona,
   worldbookCast,
+  focusCharacterSection,
   playerProfileForPrompt,
   panelEntities
 } from './cast.js';
@@ -203,8 +205,9 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   const settings = state.settings || {};
   const me = convoUserName(convo);
   const gmMode = isGmMode(convo);
-  // ⚠️ GM 没有「某个人」：即使会话上还绑着卡，也不注入卡的人设/设定/示例/对话后指令。
-  const character = gmMode ? null : characterForConvo(convo);
+  // GM 局也认绑定的卡（角色卡开局就是 GM 局）：世界会话没绑卡，行为不变；
+  // 卡的人设/性格/场景不再走下面的单角色注入，改走 focusCharacterSection（见 cast.js）。
+  const character = characterForConvo(convo);
   // 纯聊天 = 没绑卡也不是世界模式：只带人设、历史、摘要、日期和预设。
   // ⚠️ 扮演/GM 规则、世界书、玩家角色、面板、选项、表情、视角设置一个字都不注入。
   const plainChat = isPlainChatConvo(convo);
@@ -225,12 +228,14 @@ export function buildApiMessages(convo, worldbook, ragSection) {
   // ---- 1. 系统提示词 ----
   const parts = [];
 
-  // 人设互斥：绑卡用卡 systemPrompt，纯聊天用「默认人设」，GM 两者都不用。
+  // 人设互斥：单角色扮演用卡 systemPrompt，纯聊天用「默认人设」；GM 一律不用（卡走 focusCharacterSection）。
+  // ⚠️ `character && !gmMode` 这两个分支现在**走不到** —— 有卡就一定是 GM（见 narration.isGmMode）。
+  //    留着是为了将来真要恢复「单角色扮演」时不用重写整段，别当成活代码去改。
   const persona = plainChat ? assistantPersona(convo) : '';
-  const base = character ? character.systemPrompt || '' : persona;
+  const base = character && !gmMode ? character.systemPrompt || '' : persona;
   if (String(base).trim()) parts.push(applyMacros(base, character, me, charName).trim());
 
-  if (character) {
+  if (character && !gmMode) {
     if (character.description) parts.push(`【${charName}的设定】\n${applyMacros(character.description, character, me)}`);
     if (character.personality) parts.push(`【${charName}的性格】\n${applyMacros(character.personality, character, me)}`);
     if (character.scenario) parts.push(`【当前场景】\n${applyMacros(character.scenario, character, me)}`);
@@ -259,6 +264,12 @@ export function buildApiMessages(convo, worldbook, ragSection) {
         `TA 的动作、台词、心理、感受和决定都不要代写。）\n` +
         playerProfileText
     );
+  }
+
+  // GM 局里绑定的卡 = 本局主要角色，排在 cast 之前：先读主角再读世界里的其他人。
+  if (gmMode) {
+    const focus = focusCharacterSection(convo);
+    if (focus) parts.push(focus);
   }
 
   // 这个世界有哪些 NPC：不列出来 GM 就只能现编（默认对话不带，同世界书段）

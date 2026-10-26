@@ -1,6 +1,6 @@
 'use strict';
 
-//  views/perspectiveUi.js —— 视角设置弹窗（叙述模式 / 推进节奏 / GM / 预设），最终只往系统提示词拼一段文本。
+//  views/perspectiveUi.js —— 视角设置弹窗（叙述模式 / 推进节奏 / 剧情选项 / 预设），最终只往系统提示词拼一段文本。
 //  改动即时生效 + 即时落盘，没有保存按钮，所以每次 change 都要顺手刷新头部。
 //  单向 import header.js（header 只依赖数据层，不认识任何视图）。
 
@@ -20,8 +20,7 @@ import {
   NARRATION_MODES,
   PACE_MODES,
   convoNarrationMode,
-  convoPaceMode,
-  isGmMode
+  convoPaceMode
 } from '../data/narration.js';
 import { isPlainChatConvo } from '../data/cast.js';
 import { DEFAULT_OPTIONS_COUNT } from '../data/suggestions.js';
@@ -177,7 +176,6 @@ function openPerspectiveModal() {
 
   el.pNarration.value = convoNarrationMode(convo);
   el.pPace.value = convoPaceMode(convo);
-  el.pGm.checked = isGmMode(convo);
   setFieldVisible(el.pNarration, !plain);
   setFieldVisible(el.pPace, !plain);
   fillPresetList(convo);
@@ -215,8 +213,6 @@ function applyPerspectiveFromForm() {
   const pace = el.pPace.value;
   convo.paceMode = Object.prototype.hasOwnProperty.call(PACE_MODES, pace) ? pace : DEFAULT_PACE_MODE;
 
-  convo.gmMode = el.pGm.checked;
-
   convo.updatedAt = now();
 
   renderHeader();
@@ -233,7 +229,6 @@ export function initPerspectiveUi() {
   });
   el.pNarration.addEventListener('change', applyPerspectiveFromForm);
   el.pPace.addEventListener('change', applyPerspectiveFromForm);
-  el.pGm.addEventListener('change', applyPerspectiveFromForm);
   // 剧情选项：开关切换要顺带收起/展开配置区；文本用 change（失焦）落盘，别每敲一下存一次
   el.pOptionsOn.addEventListener('change', () => {
     renderOptionsConfig();

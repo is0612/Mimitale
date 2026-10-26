@@ -82,10 +82,10 @@ export async function recallSection(convo) {
       console.error('语义检索失败', result && result.error);
       return '';
     }
-    // 和主提示词一致：GM 不取残留绑定卡，也不能回落到默认助手的人设名。
-    const gmMode = isGmMode(convo);
-    const character = gmMode ? null : characterForConvo(convo);
-    return formatRagSection(result.items, character, convoUserName(convo), gmMode ? '叙述者' : '');
+    // 和主提示词一致：GM 局绑了卡就把卡当「对方」；没绑卡才落成叙述者（不能回落到默认助手人设名）。
+    const character = characterForConvo(convo);
+    if (character) return formatRagSection(result.items, character, convoUserName(convo), character.name);
+    return formatRagSection(result.items, null, convoUserName(convo), isGmMode(convo) ? '叙述者' : '');
   } catch (err) {
     console.error('语义检索失败', err);
     return '';

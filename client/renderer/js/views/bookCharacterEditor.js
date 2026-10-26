@@ -18,7 +18,7 @@ import {
   characterAttrs,
   worldbookById,
   worldbookCharacters,
-  convoWorldbookIds,
+  effectiveWorldbookIds,
   newWorldbookCharId
 } from '../data/library.js';
 import { persistCharacters, persistConversations } from '../data/persist.js';
@@ -580,7 +580,7 @@ function seedNewCharacterIntoOpenConvos(character, bookId) {
   if (!character || !bookId) return;
   let touched = 0;
   for (const convo of state.conversations) {
-    if (!convoWorldbookIds(convo).includes(bookId)) continue;
+    if (!effectiveWorldbookIds(convo).includes(bookId)) continue;
     if (seedPanelFromCharacters(convo, [character])) touched += 1;
   }
   if (touched) persistConversations(0);

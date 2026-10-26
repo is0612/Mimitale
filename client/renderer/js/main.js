@@ -42,7 +42,7 @@ import { onRefresh } from './views/refresh.js';
 import { initHeader } from './views/header.js';
 import { initPerspectiveUi, closePerspectiveModal } from './views/perspectiveUi.js';
 import { initRequestLog, closeRequestLog } from './views/requestLog.js';
-import { closePlayerModal, applyPlayerCharChoice } from './views/player.js';
+import { closePlayerModal, applyPlayerCharChoice, applyPlayerOpeningChoice } from './views/player.js';
 import { initMemoryUi, closeMemoryModal } from './views/memoryUi.js';
 import { initPanelUi } from './views/panelUi.js';
 import { initCastPanel } from './views/castPanel.js';
@@ -87,14 +87,14 @@ import { initCharacterList } from './views/characterList.js';
 import {
   initWorldbook,
   leaveWorldbookEditor,
-  stashWorldbookForm
+  stashWorldbookForm,
+  aiBookTarget
 } from './views/worldbook.js';
+import { initBookAi } from './views/charBookAi.js';
 import {
   initCharacterEditor,
   openCharacterEditor,
   leaveCharacterEditor,
-  closeWorldbookPicker,
-  isWorldbookPickerOpen,
   startCharacterDraftFromAi,
   stashCharacterForm,
   refreshCharWorldbookBox,
@@ -128,7 +128,7 @@ import {
 import { clearConvo } from './views/convoActions.js';
 import { summarizeNow } from './views/summarize.js';
 import { exportCharacterById, exportConversation, exportCharactersByIds } from './views/chatExport.js';
-import { startPlayerFlow, chatWithCharacter, playCharacterWorld } from './views/worldPlay.js';
+import { startPlayerFlow, chatWithCharacter } from './views/worldPlay.js';
 
 // 事件监听器里跑异步动作：出错只落日志，避免变成 unhandled rejection。
 function runAsync(action) {
@@ -193,7 +193,7 @@ function bindEvents() {
   if (el.btnSidebarToggle) el.btnSidebarToggle.addEventListener('click', toggleSidebar);
   applySidebarCollapsed();
 
-  // 「＋ 新对话」= 建空白会话并切到聊天屏；跟角色聊走角色卡卡片上的「聊天」。
+  // 「＋ 新对话」= 建空白会话并切到聊天屏；跟角色聊走角色卡卡片上的「对话」。
   el.btnNew.addEventListener('click', () => {
     if (state.streaming) {
       showToast('正在生成回答，先停止再新建会话');
@@ -262,11 +262,12 @@ function bindEvents() {
   // 记忆管理弹窗在 views/memoryUi.js；这里只留「手动压一段」。
   el.btnSummarizeNow.addEventListener('click', runAsync(summarizeNow));
 
-  // 进入世界前创建玩家角色
+  // 和角色卡开局前创建玩家自己的角色
   el.btnClosePlayer.addEventListener('click', closePlayerModal);
   el.btnCancelPlayer.addEventListener('click', closePlayerModal);
   el.btnStartPlay.addEventListener('click', startPlayerFlow);
   el.playerChar.addEventListener('change', applyPlayerCharChoice);
+  el.playerOpeningList.addEventListener('click', applyPlayerOpeningChoice);
   el.playerModal.addEventListener('click', (event) => {
     if (event.target === el.playerModal) closePlayerModal();
   });
@@ -372,11 +373,6 @@ function bindEvents() {
     }
     if (!el.playerModal.classList.contains('hidden')) {
       closePlayerModal();
-      return;
-    }
-    // 「绑定世界书」浮层挂在 body 上、层级比编辑器高：先关它，别顺手把编辑器关了
-    if (isWorldbookPickerOpen()) {
-      closeWorldbookPicker();
       return;
     }
     // 角色编辑器是页面不是弹窗：Esc = 返回上一屏（同页头「返回」）。
@@ -566,12 +562,11 @@ async function init() {
       if (!el.viewSettings.classList.contains('hidden')) leaveSettings();
     }
   }).catch((err) => console.error('读取登录状态失败', err));
-  // 角色卡四个按钮都跨分区，动作由入口层交给列表页。
+  // 角色卡那几颗按钮都跨分区，动作由入口层交给列表页。
   initCharacterList({
     edit: (id) => openCharacterEditor(id, 'library'),
+    // 「对话」= 角色卡开局：GM 局 + 卡上开场白（卡自带世界书也一起带上）
     chat: chatWithCharacter,
-    // 卡上那条「进入世界」：用卡自带的世界书开一局 GM
-    playWorld: playCharacterWorld,
     remove: deleteCharacterById,
     // 单张导出（列表卡片上用）和批量导出（每张一个 JSON）都跨模块，见各自模块的文件头
     exportOne: exportCharacterById,
@@ -607,6 +602,10 @@ async function init() {
       if (view === 'charEditor') refreshCharWorldbookBox();
     }
   });
+  // 世界书编辑页左栏那颗「AI 补条目」（2026-10-26 从角色编辑页搬来的）。
+  // ⚠️ 在这里接线是有意的：charBookAi 要从 worldbook.js 拿 appendEntriesToBookDraft，
+  //    反过来让 worldbook.js import charBookAi 就成了环。
+  initBookAi({ getBook: aiBookTarget });
   // 设置页保存后要重绘右上角切换器和消息列表，所以注入进去。
   initSettings({
     refreshModelSwitch: () => renderModelSwitch(),
