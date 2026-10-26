@@ -26,8 +26,7 @@ import {
   NARRATION_MODES,
   PACE_MODES,
   convoNarrationMode,
-  convoPaceMode,
-  isGmMode
+  convoPaceMode
 } from '../data/narration.js';
 import { isPlainChatConvo } from '../data/cast.js';
 import { convoSummaries } from '../data/memory.js';
@@ -164,8 +163,8 @@ export function renderHeader() {
 
   // 视角只在偏离默认时显示为标题旁的小胶囊。
   // ⛔ 纯聊天（「＋ 新对话」）一个标签都不显示：那两项对它不生效，挂出来等于撒谎。
+  // ⛔ 世界模式（GM）不占胶囊：有卡就有、恒真，挂出来只会把角色数值挤掉。
   const viewTags = [];
-  if (isGmMode(convo)) viewTags.push('GM 模式');
   if (!isPlainChatConvo(convo)) {
     const narrationMode = convoNarrationMode(convo);
     if (narrationMode !== DEFAULT_NARRATION_MODE) viewTags.push(NARRATION_MODES[narrationMode].label);

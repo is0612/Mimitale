@@ -1827,6 +1827,12 @@ await scenario('属性：从本书角色种到状态面板', async () => {
       c(byId('convo-pill'), 'borderTopLeftRadius') !== '999px',
       c(byId('convo-pill'), 'borderTopLeftRadius')
     );
+    // 世界模式（GM）不占这个位置：有卡就有、恒真，写出来只会把角色数值挤掉（2026-10-26 撤）
+    check(
+      '胶囊不再拿「GM 模式」占位',
+      !byId('convo-pill').textContent.includes('GM 模式'),
+      byId('convo-pill').textContent
+    );
 
     // 顶栏图标按钮：稿子 2:98 / 2:468 / 2:104 / 2:108 是 26×26 + 1px 描边，
     // 2026-10-12 深夜统一放大到 **32×32**。
