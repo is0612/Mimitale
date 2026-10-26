@@ -24,7 +24,7 @@ import { refreshPetCache, speakNow } from './data/petContext.js';
 import { initPetSettings, openPetSection } from './views/petSettings.js';
 import { currentEndpoint, isBridgeProvider } from './data/providers.js';
 import { convoUserName, speakerName } from './data/cast.js';
-import { characters, worldbooks, dialoguePresets } from './data/library.js';
+import { characters, worldbooks, dialoguePresets, worldbookById } from './data/library.js';
 import {
   normalizePanelDefs,
   cleanAssistantText,
@@ -88,9 +88,11 @@ import {
   initWorldbook,
   leaveWorldbookEditor,
   stashWorldbookForm,
-  aiBookTarget
+  aiBookTarget,
+  rerenderBookCharHosts
 } from './views/worldbook.js';
 import { initBookAi } from './views/charBookAi.js';
+import { initWorldbookPerson, openPersonScan } from './views/worldbookPerson.js';
 import {
   initCharacterEditor,
   openCharacterEditor,
@@ -577,7 +579,9 @@ async function init() {
   initCharacterEditor({
     rerender: () => renderAll(),
     // 角色卡编辑页「人物列表」的「＋ 新建」：先由那边 focusWorldbook 切好书，这里落到本书角色草稿
-    draftInBoundBook: () => startBookCharacterDraftInBook()
+    draftInBoundBook: () => startBookCharacterDraftInBook(),
+    // 「识别世界书人物」：清单和转换都在 worldbookPerson.js，这里只把书递过去
+    scanPersons: (book) => openPersonScan(book)
   });
   initBookCharacterEditor({ rerender: () => renderAll() });
   // AI 生成角色 / NPC：生成完交给编辑器开新草稿，看过、改过、保存才真正创建。
@@ -606,6 +610,15 @@ async function init() {
   // ⚠️ 在这里接线是有意的：charBookAi 要从 worldbook.js 拿 appendEntriesToBookDraft，
   //    反过来让 worldbook.js import charBookAi 就成了环。
   initBookAi({ getBook: aiBookTarget });
+  // 「识别世界书人物」：转换时要按 id 找回当前那本书（这里注入取书器，避免成环）
+  initWorldbookPerson({
+    getBook: (id) => worldbookById(id),
+    // 转换完：人物列表宿主 + 角色编辑页那行「已绑世界书」都要跟着刷新
+    afterApply: (book) => {
+      rerenderBookCharHosts(book);
+      refreshCharWorldbookBox();
+    }
+  });
   // 设置页保存后要重绘右上角切换器和消息列表，所以注入进去。
   initSettings({
     refreshModelSwitch: () => renderModelSwitch(),

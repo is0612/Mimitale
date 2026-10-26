@@ -4928,6 +4928,141 @@ await scenario('世界书：本书角色', async () => {
 });
 
 // ---------------------------------------------------------------------------
+//  场景：识别世界书人物（scanPersons 纯函数 + 真实转换）
+//
+//  scanPersons 不靠 AI，只数结构：标题词表 / 正文小标题指纹 / initvar 键名。
+//  这里先用真模块喂一本「带人物档案 + initvar + 一组多人 + 规则条目」的书，
+//  断言识别结果的四类（人 / 卡本人 / 一组多人 / 一票否决），再走真实 UI 点「转换」。
+// ---------------------------------------------------------------------------
+await scenario('识别世界书人物', async () => {
+  const wp = await import(new URL('js/views/worldbookPerson.js', document.baseURI).href);
+  const lib = await import(new URL('js/data/library.js', document.baseURI).href);
+
+  // 纯函数：识别结果对不对，不碰 UI
+  const book = {
+    id: 'bk-scan',
+    name: '识别测试世界',
+    entries: [
+      { id: 'e-rule', title: '[mvu_update]变量更新规则', content: '规则正文', keys: [], constant: true },
+      { id: 'e-people', title: '人物档案 - 莲', content: '# 人物档案: 莲\n## 身份与外貌\n红发。\n## 性格\n温和。', keys: ['莲'], constant: false },
+      { id: 'e-people2', title: '人物档案 - 埃尔文', content: '# 人物档案: 埃尔文\n## 背景\n情报主管。\n## 能力\n织影。', keys: ['埃尔文'], constant: false },
+      { id: 'e-multi', title: '其他角色', content: '# 其他角色\n## 华莲\n### 身份与外貌\n小巧。\n### 性格\n天真。\n## 林夏\n### 身份与外貌\n高挑。\n### 性格\n活泼。', keys: [], constant: true },
+      { id: 'e-self', title: '识别测试卡', content: '# 识别测试卡\n## 身份与外貌\n主角。\n## 性格\n骄傲。', keys: [], constant: true },
+      { id: 'e-group', title: '常见男NPC', content: '陈昊、同学、学长、老师', keys: ['陈昊'], constant: false },
+      { id: 'e-init', title: '[initvar]', content: '识别测试卡:\n  好感度: 0\n  淫乱度: 0\n莲:\n  好感度: 10\n世界:\n  当前时间: 4月12日', keys: [], constant: false }
+    ],
+    characters: []
+  };
+
+  // 造一张卡指向这本书（卡名「识别测试卡」用来判「卡本人」）
+  const savedChars = lib.characters().slice();
+  lib.characters().push({ id: 'card-scan', name: '识别测试卡', worldbookIds: ['bk-scan'], attributes: [] });
+  const savedBooks = lib.worldbooks().slice();
+  lib.worldbooks().push(book);
+
+  let result = [];
+  try {
+    result = wp.scanPersons(book);
+  } finally {
+    // 识别是纯函数，读完就还原夹具，别污染后面场景
+    lib.characters().length = 0;
+    lib.characters().push(...savedChars);
+    lib.worldbooks().length = 0;
+    lib.worldbooks().push(...savedBooks);
+  }
+
+  const person = (name) => result.find((r) => r.name === name);
+  check('识别：标题词表认出了「莲」', !!person('莲') && person('莲').kind === 'person',
+    JSON.stringify(result.map((r) => `${r.name}:${r.kind}`)));
+  check('识别：标题词表认出了「埃尔文」', !!person('埃尔文') && person('埃尔文').kind === 'person');
+  check('识别：initvar 键名交叉验证没把「莲」的数值弄丢', !!person('莲') && person('莲').vars && person('莲').vars['好感度'] === '10',
+    JSON.stringify(person('莲') && person('莲').vars));
+  check('识别：卡本人判成 self 不建副本', !!person('识别测试卡') && person('识别测试卡').kind === 'self',
+    JSON.stringify(result.map((r) => `${r.name}:${r.kind}`)));
+  check('识别：卡本人属性从 initvar 读到了', !!person('识别测试卡') && person('识别测试卡').vars && person('识别测试卡').vars['淫乱度'] === '0');
+  check('识别：一组多人的条目标成 group 不拆', result.some((r) => r.kind === 'group' && r.note.includes('常见男NPC')),
+    JSON.stringify(result.filter((r) => r.kind === 'group')));
+  check('识别：规则条目（[mvu_update]）被一票否决', !result.some((r) => r.name === '[mvu_update]变量更新规则'));
+
+  // 一组多人（## 华莲 / ## 林夏）要拆成两个人
+  const hualian = person('华莲');
+  const linxia = person('林夏');
+  check('识别：一条多人的按 ## 拆成了多个', !!hualian && !!linxia,
+    JSON.stringify(result.map((r) => r.name)));
+});
+
+// ---------------------------------------------------------------------------
+//  场景：识别世界书人物 —— 真实点按钮走转换（端到端）
+// ---------------------------------------------------------------------------
+await scenario('识别世界书人物：点按钮转成本书角色', async () => {
+  // 给夹具世界书临时塞一条人物档案，走真实 UI
+  const lib = await import(new URL('js/data/library.js', document.baseURI).href);
+  const persist = await import(new URL('js/data/persist.js', document.baseURI).href);
+  const book = lib.worldbooks().find((b) => b.name === '冒烟测试世界');
+  const savedEntries = (book && book.entries || []).slice();
+  const savedChars = (book && book.characters || []).slice();
+
+  if (book) {
+    book.entries = [...book.entries, {
+      id: 'e-scan-ui',
+      title: '人物档案 - 顾言',
+      keys: ['顾言'],
+      content: '# 人物档案: 顾言\n## 身份与外貌\n大三，学生会成员。\n## 性格\n温和可靠。',
+      constant: false
+    }];
+  }
+  await persist.persistLibrary();
+
+  try {
+    // 造一张绑这本书的卡（复用 createCharBoundTo 会把书重新挂一遍，这里直接造）
+    await createCharBoundTo('冒烟测试世界', '识别转换测试卡');
+    const hostCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('识别转换测试卡'));
+    check('造好了绑书的卡', !!hostCard);
+    click(buttonByText(hostCard, '编辑'));
+    await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
+    click('#char-section-tab-roles');
+    await waitFor('切到人物列表', () => !byId('char-section-roles').hidden);
+
+    // 点「识别世界书人物」→ 清单弹出来
+    click('#btn-char-roles-scan');
+    await waitFor('识别清单弹出', () => !!document.getElementById('wp-modal') && !document.getElementById('wp-modal').classList.contains('hidden'), 6000);
+
+    const rows = Array.from(document.querySelectorAll('#wp-list .wp-row'));
+    check('清单里列出了「顾言」', rows.some((r) => r.textContent.includes('顾言')),
+      JSON.stringify(rows.map((r) => r.textContent.trim().slice(0, 20))));
+
+    // 点「转换」→ 确认框 → 确认
+    const okBtn = document.querySelector('#wp-modal .wp-ok');
+    check('转换按钮可点（默认勾了强信号的人）', !!okBtn && !okBtn.disabled);
+    okBtn.click();
+    await waitFor('确认框出现', () => shown('#confirm-modal'), 6000);
+    click('#confirm-ok');
+    await waitFor('顾言副本出现在人物列表', () => {
+      const host = $('#char-book-roles');
+      return !!host && host.textContent.includes('顾言');
+    }, 8000);
+
+    // 落盘核验：副本进去了、原条目停用了
+    const bookNow = lib.worldbooks().find((b) => b.name === '冒烟测试世界');
+    const gby = bookNow && (bookNow.characters || []).find((c) => c.name === '顾言');
+    check('顾言副本已落盘', !!gby, JSON.stringify((bookNow && bookNow.characters || []).map((c) => c.name)));
+    check('顾言副本默认显示状态栏', !!gby && gby.showInPanel === true);
+    const srcEntry = bookNow && (bookNow.entries || []).find((e) => e.id === 'e-scan-ui');
+    check('原条目被停用（不删）', !!srcEntry && srcEntry.enabled === false, JSON.stringify(srcEntry && srcEntry.enabled));
+
+    click('#btn-close-chars');
+    await waitFor('回角色卡列表', () => shown('#view-chars'));
+  } finally {
+    // 还原夹具书（删掉临时塞的条目 + 副本，别污染后面的场景）
+    if (book) {
+      book.entries = savedEntries;
+      book.characters = savedChars;
+    }
+    await persist.persistLibrary();
+  }
+});
+
+// ---------------------------------------------------------------------------
 //  场景：世界书 —— 条目字段往返 + 状态筛选 + 预览命中的前置条件
 //
 //  C 节那 8 行里，以前只有「有几条条目 / 保存前后有没有落盘」被点过；

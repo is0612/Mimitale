@@ -407,13 +407,26 @@ function boundWorldbookOf(character) {
   return ids.map((id) => worldbookById(id)).filter(Boolean)[0] || null;
 }
 
-/** 绑定「人物列表」分区头部两颗按钮（AI 生成 / ＋ 新建）。只绑一次，点的时候现取绑定书。 */
+/** 绑定「人物列表」分区头部三颗按钮（识别世界书人物 / AI 生成 / ＋ 新建）。只绑一次，点的时候现取绑定书。 */
 function bindCharRolesBar() {
+  const btnScan = document.getElementById('btn-char-roles-scan');
   const btnAi = document.getElementById('btn-char-roles-ai');
   const btnNew = document.getElementById('btn-char-roles-new');
   if (!btnAi || !btnNew) return;
 
   const bound = () => boundWorldbookOf(editorCharacterById(editingCharacterId));
+
+  if (btnScan) {
+    btnScan.addEventListener('click', () => {
+      const book = bound();
+      if (!book) {
+        showToast('这张卡还没有世界书 —— 先在「世界书」分区新建一本', 'error');
+        return;
+      }
+      // 识别清单 / 转换都在 worldbookPerson.js，这里只负责把书递过去
+      if (typeof actions.scanPersons === 'function') actions.scanPersons(book);
+    });
+  }
 
   btnAi.addEventListener('click', () => {
     const book = bound();
@@ -462,10 +475,11 @@ function renderCharWorldbookBox(character) {
   const copies = bound && Array.isArray(bound.characters) ? bound.characters : [];
   setCharSectionCount('roles', bound ? String(copies.length) : '');
 
-  // 「人物列表」头两颗按钮：没书就灰掉，提示先建一本
+  // 「人物列表」头三颗按钮：没书就灰掉，提示先建一本
+  const btnScan = document.getElementById('btn-char-roles-scan');
   const btnAi = document.getElementById('btn-char-roles-ai');
   const btnNew = document.getElementById('btn-char-roles-new');
-  for (const btn of [btnAi, btnNew]) {
+  for (const btn of [btnScan, btnAi, btnNew]) {
     if (!btn) continue;
     btn.disabled = !bound;
     btn.title = bound ? '' : '先在「世界书」分区新建一本世界书';

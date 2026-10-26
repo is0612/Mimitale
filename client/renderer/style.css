@@ -8012,6 +8012,91 @@ m-button.btn-new > .mi-btn__control:hover {
   overflow: hidden;
 }
 
+/* --------------------------------- 识别世界书人物 ---------------------------------
+   worldbookPerson.js 的清单弹窗：和 confirm / player 一样用 .modal 外层，
+   body 里是一列「人 / 卡本人 / 一组多人」的可勾选行。 */
+.wp-card {
+  max-width: 560px;
+}
+
+.wp-body {
+  gap: 10px;
+}
+
+.wp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+
+.wp-none {
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+}
+
+.wp-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.wp-row:hover {
+  border-color: var(--accent-border-soft);
+}
+
+.wp-row input[type='checkbox'] {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.wp-row-name {
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.wp-row-src {
+  flex: 1 1 auto;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+/* 卡本人：勾选说明它不建副本，弱化一点 */
+.wp-row-self {
+  background: var(--bg-side);
+}
+
+.wp-row-self .wp-row-name {
+  color: var(--text-dim);
+}
+
+/* 一组多人：只提示，不可勾 */
+.wp-row-group {
+  opacity: 0.7;
+  cursor: default;
+  border-style: dashed;
+}
+
+.wp-row-group .wp-row-src {
+  color: var(--text-faint);
+}
+
 /* --------------------------------- 图片裁剪浮层 --------------------------------
    选好图之后、存下来之前，框一下要哪一块（ui/imageCrop.js）。
    挂在 body 上：要盖住角色编辑弹窗（z-index 60），但让确认框（70）还压得住它。
@@ -9496,9 +9581,11 @@ m-button.btn-new > .mi-btn__control:hover {
 #view-char-editor .char-book-roles-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
+/* 「识别世界书人物」比旁边两颗长，这一颗用 accent 弱高亮区分「AI 生成 / ＋ 新建」两个建草稿的动作 */
 #view-char-editor .char-book-roles-btn {
   padding: 5px 10px;
   font-family: inherit;

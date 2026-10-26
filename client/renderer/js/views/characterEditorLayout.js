@@ -111,13 +111,16 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
     // renderBookCharacters 填。这里只留宿主，别在标题下再放别的节点。
     if (key === 'roles') {
       const bar = node('div', 'char-book-roles-bar');
+      const btnScan = node('button', 'char-book-roles-btn', '识别世界书人物');
+      btnScan.type = 'button';
+      btnScan.id = 'btn-char-roles-scan';
       const btnAi = node('button', 'char-book-roles-btn', 'AI 生成');
       btnAi.type = 'button';
       btnAi.id = 'btn-char-roles-ai';
       const btnNew = node('button', 'char-book-roles-btn', '＋ 新建');
       btnNew.type = 'button';
       btnNew.id = 'btn-char-roles-new';
-      bar.append(btnAi, btnNew);
+      bar.append(btnScan, btnAi, btnNew);
       const roles = node('div', 'char-book-roles');
       roles.id = 'char-book-roles';
       roles.setAttribute('aria-label', '本书人物列表');
