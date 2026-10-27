@@ -36,8 +36,8 @@ function section(title) {
   console.log(`\n${title}`)
 }
 
-async function api(method, path, { token, body } = {}) {
-  const headers = {}
+async function api(method, path, { token, body, headers: extra } = {}) {
+  const headers = { ...extra }
   if (token) headers.authorization = `Bearer ${token}`
   // 没 body 就别带 content-type —— 后端虽然容忍了空 JSON body，但没必要去踩
   if (body !== undefined) headers['content-type'] = 'application/json'
@@ -126,13 +126,38 @@ section('守卫：两套 token 不能混用')
 
 section('客户列表')
 {
+  /* ---------------- 本脚本自己的夹具客户 ---------------- */
+  // ⚠️ 不能依赖 SEED_DEMO 造的示范客户 —— 关掉之后（干净库 / 生产）一条都没有。
+  // ⚠️ 更要紧：**别把列表第一条当成自己的测试对象**。真实用户可能就排在第一位，
+  //    后面「客户详情 / 封禁 / 发会员」会全打在他身上，末尾那步还会把他 DELETE 掉。
+  //    所以这里先造几条带固定邮箱的夹具，测试对象一律按邮箱取，不按位置取。
+  const FIXTURES = [
+    ['smoke-search@example.com', '夜航船', 'MIMI-TEST-0001'],
+    ['smoke-page1@example.com', '分页甲', null],
+    ['smoke-page2@example.com', '分页乙', null],
+    ['smoke-page3@example.com', '分页丙', null],
+    ['smoke-page4@example.com', '分页丁', null],
+    ['smoke-page5@example.com', '分页戊', null]
+  ]
+  for (const [fxEmail, nickname, inviteCode] of FIXTURES) {
+    await db.query(
+      `INSERT INTO customers (email, nickname, profile_ready, status, membership_level, invite_code)
+       VALUES ($1, $2, true, 'active', 'none', $3)
+       ON CONFLICT (email) DO UPDATE SET nickname = EXCLUDED.nickname, invite_code = EXCLUDED.invite_code`,
+      [fxEmail, nickname, inviteCode]
+    )
+  }
+  const mine = await db.query(`SELECT id FROM customers WHERE email = 'smoke-search@example.com'`)
+
   const list = await api('GET', '/api/admin/customers?page=1&pageSize=5', { token: T })
   check('列表返回 code 0', list.code === 0)
-  check('有数据（种子造了 12 个）', list.data?.total >= 12, `total=${list.data?.total}`)
+  check('有数据', list.data?.total >= FIXTURES.length, `total=${list.data?.total}`)
   check('每页 5 条', list.data?.list?.length === 5, `实际 ${list.data?.list?.length}`)
 
   const first = list.data?.list?.[0]
-  check('客户字段齐全（email/nickname/status/quota）', !!first?.email && !!first?.nickname && !!first?.status)
+  check('客户字段齐全（email/nickname/status）', !!first?.email && !!first?.nickname && !!first?.status)
+  check('带回 voucher 字段（老数据可为 null）', 'voucher' in (first ?? {}))
+  check('带回 avatar 字段', 'avatar' in (first ?? {}))
   check('时间字段是 ISO 字符串', typeof first?.createdAt === 'string' && first.createdAt.includes('T'))
 
   const banned = await api('GET', '/api/admin/customers?status=banned', { token: T })
@@ -147,7 +172,8 @@ section('客户列表')
   const nope = await api('GET', '/api/admin/customers?keyword=绝对搜不到的东西xyz', { token: T })
   check('搜不到时 total 为 0、list 是空数组', nope.data?.total === 0 && Array.isArray(nope.data?.list))
 
-  globalThis.customerId = first?.id
+  // 后面所有「改会员 / 封禁 / 发会员」都只碰这条夹具
+  globalThis.customerId = mine.rows[0]?.id
 }
 
 section('客户详情')
@@ -171,11 +197,17 @@ section('概览：今天注册了几个')
   check('trend 每项有 day 和 count', o.data?.trend?.every((t) => /^\d{4}-\d{2}-\d{2}$/.test(t.day) && typeof t.count === 'number'))
   check('trend 最后一天就是今天', o.data?.trend?.[6]?.day === new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }))
   check('memberTotal >= activeMembers', o.data?.memberTotal >= o.data?.activeMembers)
+  check(
+    '⭐ 免费期人数和会员人数分开数（免费不算会员）',
+    typeof o.data?.freeActive === 'number' && typeof o.data?.freeExpiring === 'number'
+  )
+  check('累计送出的免费天数 >= 人数 × 30（注册每人 30 天）', o.data?.freeDaysGranted >= 0, `值=${o.data?.freeDaysGranted}`)
   check('recent 最多 5 条', (o.data?.recent?.length ?? 0) <= 5)
 
   console.log(
     `    今日 ${o.data?.todayRegistered} / 昨日 ${o.data?.yesterdayRegistered} · 总客户 ${o.data?.totalCustomers} · ` +
-      `生效会员 ${o.data?.activeMembers}/${o.data?.memberTotal} · 7 天内到期 ${o.data?.expiringIn7Days} · 可用卡密 ${o.data?.unusedCards}`
+      `生效会员 ${o.data?.activeMembers}/${o.data?.memberTotal} · 免费期内 ${o.data?.freeActive} 人 · ` +
+      `累计送出 ${o.data?.freeDaysGranted} 天免费 · 可用卡密 ${o.data?.unusedCards}`
   )
 }
 
@@ -183,6 +215,8 @@ section('改客户：发会员')
 {
   const before = await api('GET', `/api/admin/customers/${globalThis.customerId}`, { token: T })
   const beforeExpire = before.data?.membershipExpireAt
+  check('详情带 freeExpireAt（免费天数到哪天）', 'freeExpireAt' in (before.data ?? {}), String(before.data?.freeExpireAt))
+  check('详情带天数流水', Array.isArray(before.data?.grants), `条数=${before.data?.grants?.length}`)
 
   const r = await api('PATCH', `/api/admin/customers/${globalThis.customerId}`, {
     token: T,
@@ -190,6 +224,11 @@ section('改客户：发会员')
   })
   check('发会员成功', r.code === 0, `code=${r.code} message=${r.message}`)
   check('等级变成 basic', r.data?.membershipLevel === 'basic')
+  check(
+    '⭐ 发会员后等级生效（免费天数不算，这里是真会员）',
+    r.data?.membershipLevel !== 'none' && Date.parse(r.data?.membershipExpireAt) > Date.now(),
+    `${r.data?.membershipLevel} / ${r.data?.membershipExpireAt}`
+  )
 
   const afterExpire = r.data?.membershipExpireAt ? Date.parse(r.data.membershipExpireAt) : 0
   const base = beforeExpire ? Math.max(Date.now(), Date.parse(beforeExpire)) : Date.now()
@@ -215,7 +254,7 @@ section('改客户：发会员')
   check('顺延 0 天 → 1001', zeroDays.code === 1001, `code=${zeroDays.code}`)
 }
 
-section('改客户：封禁 / 改额度 / 值没变不写日志')
+section('改客户：封禁 / 值没变不写日志')
 {
   const logCountBefore = (await api('GET', '/api/admin/logs?pageSize=1', { token: T })).data?.total
 
@@ -244,17 +283,22 @@ section('改客户：封禁 / 改额度 / 值没变不写日志')
   check('解封成功', unban.data?.status === 'active')
   check('解封后封禁原因被清空', unban.data?.banReason === null, `实际 ${JSON.stringify(unban.data?.banReason)}`)
 
-  const quota = await api('PATCH', `/api/admin/customers/${globalThis.customerId}`, {
+  // 状态没变 → 不该再写一条（避免刷屏式日志）
+  const beforeDup = (await api('GET', '/api/admin/logs?pageSize=1', { token: T })).data?.total
+  const dup = await api('PATCH', `/api/admin/customers/${globalThis.customerId}`, {
     token: T,
-    body: { quota: 500 }
+    body: { status: 'active' }
   })
-  check('改额度成功', quota.data?.quota === 500)
+  const afterDup2 = (await api('GET', '/api/admin/logs?pageSize=1', { token: T })).data?.total
+  check('状态没变也能正常返回', dup.code === 0 && dup.data?.status === 'active')
+  check('状态没变不写日志', afterDup2 === beforeDup, `${beforeDup} → ${afterDup2}`)
 
-  const same = await api('PATCH', `/api/admin/customers/${globalThis.customerId}`, {
+  // 额度字段已撤掉 —— 传了不该被写，返回里也不该有这个键
+  const legacy = await api('PATCH', `/api/admin/customers/${globalThis.customerId}`, {
     token: T,
     body: { quota: 500 }
   })
-  check('提交同一个额度也能正常返回（只是不写日志）', same.code === 0 && same.data?.quota === 500)
+  check('额度字段已撤掉，传了不生效', legacy.code === 0 && !('quota' in (legacy.data ?? {})), `keys=${Object.keys(legacy.data ?? {}).join(',')}`)
 }
 
 section('操作日志')
@@ -278,8 +322,6 @@ section('卡密')
 {
   const list = await api('GET', '/api/admin/cards?pageSize=100', { token: T })
   check('卡密列表 code 0', list.code === 0)
-  const used = list.data.list.find((c) => c.status === 'used')
-  check('已用卡密带 usedByEmail', !!used?.usedByEmail)
 
   const created = await api('POST', '/api/admin/cards', { token: T, body: { count: 3, expireDays: 90, note: '内部测试' } })
   check('批量生成 3 张', created.code === 0 && created.data?.created?.length === 3)
@@ -299,8 +341,18 @@ section('卡密')
   const again = await api('PATCH', `/api/admin/cards/${target.id}`, { token: T, body: { status: 'void' } })
   check('重复作废 → 1001', again.code === 1001, `code=${again.code}`)
 
-  const usedCard = list.data.list.find((c) => c.status === 'used')
-  const voidUsed = await api('PATCH', `/api/admin/cards/${usedCard.id}`, { token: T, body: { status: 'void' } })
+  // 「已使用」的卡没有接口能造（使用只发生在注册流程里），干净库上也没有现成的 ——
+  // 所以把刚生成的另一张直接标成已使用，用来验「带 usedByEmail」和「已使用不能作废」。
+  const usedTarget = created.data.created[1] ?? created.data.created[0]
+  await db.query(
+    `UPDATE invite_cards SET status = 'used', used_by_customer_id = $1, used_at = now() WHERE id = $2`,
+    [globalThis.customerId, usedTarget.id]
+  )
+  const afterUse = await api('GET', '/api/admin/cards?pageSize=100', { token: T })
+  const usedCard = afterUse.data.list.find((c) => c.id === usedTarget.id)
+  check('已用卡密带 usedByEmail', !!usedCard?.usedByEmail, `usedByEmail=${usedCard?.usedByEmail}`)
+
+  const voidUsed = await api('PATCH', `/api/admin/cards/${usedTarget.id}`, { token: T, body: { status: 'void' } })
   check('已使用的卡不能作废 → 1001', voidUsed.code === 1001, `code=${voidUsed.code}`)
 }
 
@@ -308,7 +360,7 @@ section('字典')
 {
   const d = await api('GET', '/api/admin/dicts', { token: T })
   check('字典一次拿全', d.code === 0 && Array.isArray(d.data))
-  check('5 个类型都在', ['ban_reason', 'customer_source', 'quota_preset', 'card_note', 'membership_level'].every((c) => d.data.some((b) => b.type.code === c)))
+  check('4 个类型都在', ['ban_reason', 'customer_source', 'card_note', 'membership_level'].every((c) => d.data.some((b) => b.type.code === c)))
   const ml = d.data.find((b) => b.type.code === 'membership_level')
   check('会员等级里有 basic', ml.items.some((i) => i.value === 'basic'))
 
@@ -428,14 +480,16 @@ section('客户端：图形码 → 发码 → 注册两步')
   //    驱动会按本地时区把它当成 Date，东八区就差 8 小时。
   //    声明成 timestamptz 之后驱动才解析得对。
   const dbCustomer = await db.query(
-    "SELECT membership_level, (membership_expire_at AT TIME ZONE 'UTC') AS exp_at, voucher FROM customers WHERE id = $1",
+    "SELECT membership_level, membership_expire_at, (free_expire_at AT TIME ZONE 'UTC') AS free_at, voucher FROM customers WHERE id = $1",
     [customerId]
   )
   const trial = dbCustomer.rows[0]
-  check('库里会员等级是 basic', trial?.membership_level === 'basic', `等级=${trial?.membership_level}`)
+  // 注册送的是免费天数，不是会员 —— 等级必须还是 none，会员那一列必须空着
+  check('⭐ 注册不给会员等级（送的是免费天数）', trial?.membership_level === 'none', `等级=${trial?.membership_level}`)
+  check('会员到期时间没被顺手写上', trial?.membership_expire_at === null, String(trial?.membership_expire_at))
 
-  const trialDays = trial?.exp_at ? (new Date(trial.exp_at).getTime() - Date.now()) / 86_400_000 : NaN
-  check('到期时间约 30 天后', Math.abs(trialDays - 30) < 0.01, `实际 ${trialDays.toFixed(3)} 天`)
+  const freeDays = trial?.free_at ? (new Date(trial.free_at).getTime() - Date.now()) / 86_400_000 : NaN
+  check('免费天数约 30 天后到期', Math.abs(freeDays - 30) < 0.01, `实际 ${freeDays.toFixed(3)} 天`)
   check('建号时顺手生成了凭证码', /^([A-Z0-9]{4}-){5}[A-Z0-9]{4}$/.test(trial?.voucher ?? ''), trial?.voucher)
 
   const again = await api('POST', '/api/client/auth/complete-profile', {
@@ -574,6 +628,122 @@ section('客户端：图形码 → 发码 → 注册两步')
 
   await api('PATCH', `/api/admin/customers/${customerId}`, { token: T, body: { status: 'active' } })
 
+  /* ---------------- 刷新凭证码 ---------------- */
+
+  const oldCode = voucher.data.code
+  const refreshed = await api('POST', '/api/client/auth/voucher/refresh', { token: clientToken })
+  check('刷新凭证码成功', refreshed.code === 0 && /^([A-Z0-9]{4}-){5}[A-Z0-9]{4}$/.test(refreshed.data?.code ?? ''), refreshed.data?.code)
+  check('新码和旧码不一样', refreshed.data?.code !== oldCode, `${oldCode} → ${refreshed.data?.code}`)
+
+  const oldLogin = await api('POST', '/api/client/auth/voucher-login', { body: { voucher: oldCode } })
+  check('⭐ 旧码刷新后立刻失效', oldLogin.code !== 0, `code=${oldLogin.code}`)
+
+  const newLogin = await api('POST', '/api/client/auth/voucher-login', { body: { voucher: refreshed.data.code } })
+  check('新码能登回来', newLogin.code === 0, `code=${newLogin.code} ${newLogin.message ?? ''}`)
+
+  const noAuthRefresh = await api('POST', '/api/client/auth/voucher/refresh')
+  check('刷新凭证也要登录 → 401', noAuthRefresh.status === 401, `status=${noAuthRefresh.status}`)
+
+  const adminSees = await api('GET', `/api/admin/customers/${customerId}`, { token: T })
+  check('⭐ 刷新后后台看到的是新码', adminSees.data?.voucher === refreshed.data?.code, `${adminSees.data?.voucher}`)
+
+  /* ---------------- 登录记录（IP / 方式 / 时间） ---------------- */
+
+  const loginCount = async () =>
+    Number((await db.query('SELECT count(*) AS n FROM login_logs WHERE customer_id = $1', [customerId])).rows[0].n)
+
+  const beforeLogin = await loginCount()
+  check('注册那一刻就记了一条登录', beforeLogin >= 1, `条数=${beforeLogin}`)
+
+  const wrongPass = await api('POST', '/api/client/auth/login', {
+    body: { email: newEmail, password: '这不是密码', ...(await freshCaptcha()) }
+  })
+  check('密码错 → 不记登录记录（只记成功的）', wrongPass.code !== 0 && (await loginCount()) === beforeLogin, `条数=${await loginCount()}`)
+
+  const passLogin = await api('POST', '/api/client/auth/login', {
+    body: { email: newEmail, password: 'newpass1234', ...(await freshCaptcha()) }
+  })
+  check('密码登录记一条', passLogin.code === 0 && (await loginCount()) === beforeLogin + 1)
+
+  const voucherLogin = await api('POST', '/api/client/auth/voucher-login', {
+    body: { voucher: refreshed.data.code }
+  })
+  check('凭证登录也记一条', voucherLogin.code === 0 && (await loginCount()) === beforeLogin + 2)
+
+  const loginRows = await db.query(
+    'SELECT method, ip, user_agent FROM login_logs WHERE customer_id = $1 ORDER BY created_at DESC, id DESC',
+    [customerId]
+  )
+  check('方式按先后记对了', loginRows.rows[0]?.method === 'voucher' && loginRows.rows[1]?.method === 'password', `${loginRows.rows[0]?.method}/${loginRows.rows[1]?.method}`)
+  check('记下了 IP', /^[0-9a-fA-F:.]+$/.test(loginRows.rows[0]?.ip ?? ''), loginRows.rows[0]?.ip)
+  check('记下了客户端 UA', String(loginRows.rows[0]?.user_agent ?? '').length > 0)
+
+  /* ---------------- 使用会话（打开软件 → 心跳 → 退出） ---------------- */
+
+  const sessionCount = async () =>
+    Number((await db.query('SELECT count(*) AS n FROM client_sessions WHERE customer_id = $1', [customerId])).rows[0].n)
+
+  const beforeSession = await sessionCount()
+  const launch1 = await api('POST', '/api/client/auth/launch', { token: clientToken })
+  const sid1 = launch1.data?.sessionId
+  check('⭐ 打开软件开一行会话并返回 sessionId', launch1.code === 0 && Number.isInteger(sid1) && sid1 > 0, `sessionId=${sid1}`)
+  check('会话数 +1', (await sessionCount()) === beforeSession + 1, `条数=${await sessionCount()}`)
+
+  // 心跳：先并一个，再报一个，服务端应该去重/合并，不产生新行
+  await api('POST', '/api/client/auth/launch/ping', { token: clientToken, body: { sessionId: sid1 } })
+  const pingAgain = await api('POST', '/api/client/auth/launch/ping', { token: clientToken, body: { sessionId: sid1 } })
+  check('心跳成功', pingAgain.code === 0, `code=${pingAgain.code}`)
+  check('心跳只刷新 last_seen_at，不新增会话', (await sessionCount()) === beforeSession + 1)
+
+  // 退出：结清会话
+  const exit1 = await api('POST', '/api/client/auth/launch/exit', { token: clientToken, body: { sessionId: sid1 } })
+  check('⭐ 退出结清会话', exit1.code === 0, `code=${exit1.code}`)
+  const ended = (
+    await db.query('SELECT ended_at, end_reason FROM client_sessions WHERE id = $1', [sid1])
+  ).rows[0]
+  check('退出后写上了结束时间和原因', ended?.ended_at !== null && ended?.end_reason === 'quit', JSON.stringify(ended))
+
+  // 再开一次 = 又一行（不像 login_logs 那样按天去重），并且把上一次没结清的也结掉
+  const launch2 = await api('POST', '/api/client/auth/launch', { token: clientToken })
+  const sid2 = launch2.data?.sessionId
+  check('⭐ 再开一次是新的会话（不是按天去重）', launch2.code === 0 && sid2 !== sid1, `sid1=${sid1} sid2=${sid2}`)
+  check('会话数 +1（共两次启动）', (await sessionCount()) === beforeSession + 2)
+
+  // 没带 sessionId 的 ping/exit → 参数错误
+  const pingNoId = await api('POST', '/api/client/auth/launch/ping', { token: clientToken, body: {} })
+  check('心跳缺 sessionId → 参数错误', pingNoId.code !== 0, `code=${pingNoId.code}`)
+
+  const launchNoAuth = await api('POST', '/api/client/auth/launch')
+  check('打开软件也要登录 → 401', launchNoAuth.status === 401, `status=${launchNoAuth.status}`)
+
+  // 版本号要透传进去
+  const withVer = await api('POST', '/api/client/auth/launch', { token: clientToken, headers: { 'x-app-version': '9.9.9-test' } })
+  const verRow = (
+    await db.query('SELECT app_version FROM client_sessions WHERE id = $1', [withVer.data?.sessionId])
+  ).rows[0]
+  check('⭐ 启动上报带版本号', verRow?.app_version === '9.9.9-test', String(verRow?.app_version))
+
+  // ⚠️ 守 trustProxy=false。开了它，登录记录的 IP 就等于「调用方自己填的」。
+  const spoof = await api('POST', '/api/client/auth/login', {
+    body: { email: newEmail, password: 'newpass1234', ...(await freshCaptcha()) },
+    headers: { 'x-forwarded-for': '203.0.113.7' }
+  })
+  const spoofIp = (
+    await db.query('SELECT ip FROM login_logs WHERE customer_id = $1 ORDER BY id DESC LIMIT 1', [customerId])
+  ).rows[0]?.ip
+  check('⭐ 伪造 X-Forwarded-For 不被采信', spoof.code === 0 && spoofIp !== '203.0.113.7', `ip=${spoofIp}`)
+
+
+  const withLoginLogs = await api('GET', `/api/admin/customers/${customerId}`, { token: T })
+  check('⭐ 后台详情带活动记录', Array.isArray(withLoginLogs.data?.loginLogs) && withLoginLogs.data.loginLogs.length >= 3, `条数=${withLoginLogs.data?.loginLogs?.length}`)
+  check('活动记录里没有「打开软件」（已挪去使用记录）', !(withLoginLogs.data?.loginLogs ?? []).some((l) => l.method === 'launch'))
+  check('⭐ 后台详情带使用记录', Array.isArray(withLoginLogs.data?.sessions) && withLoginLogs.data.sessions.length >= 2, `条数=${withLoginLogs.data?.sessions?.length}`)
+  check(
+    '使用记录最近的排最前',
+    Date.parse(withLoginLogs.data.sessions[0].startedAt) >=
+      Date.parse(withLoginLogs.data.sessions.at(-1).startedAt)
+  )
+
   /* ---------------- 两套 token 隔离 ---------------- */
 
   const cross = await api('GET', '/api/admin/customers', { token: clientToken })
@@ -584,9 +754,160 @@ section('客户端：图形码 → 发码 → 注册两步')
 
   /* ---------------- 清理这次冒烟造的号 ---------------- */
 
+  // 客户列表章节造的那批夹具（固定邮箱，不会误伤真实用户）
+  const fixtures = await db.query(
+    `SELECT id FROM customers WHERE email = 'smoke-search@example.com' OR email LIKE 'smoke-page%@example.com'`
+  )
+  const fixtureIds = fixtures.rows.map((r) => r.id)
+  if (fixtureIds.length > 0) {
+    await db.query(`DELETE FROM operation_logs WHERE target_type = 'customer' AND target_id = ANY($1)`, [fixtureIds])
+    await db.query(`DELETE FROM client_sessions WHERE customer_id = ANY($1)`, [fixtureIds])
+    await db.query(`DELETE FROM membership_grants WHERE customer_id = ANY($1)`, [fixtureIds])
+    await db.query(`DELETE FROM customers WHERE id = ANY($1)`, [fixtureIds])
+  }
+
   await db.query('DELETE FROM operation_logs WHERE target_type = $1 AND target_id = $2', ['customer', customerId])
+  await db.query('DELETE FROM login_logs WHERE customer_id = $1', [customerId])
+  await db.query('DELETE FROM client_sessions WHERE customer_id = $1', [customerId])
+  await db.query('DELETE FROM membership_grants WHERE customer_id = $1', [customerId])
   await db.query('DELETE FROM customers WHERE id = $1', [customerId])
   await db.query('DELETE FROM login_codes WHERE email = ANY($1)', [[email, newEmail]])
+}
+
+section('邀请码：自己发码 / 别人填码 / 归因')
+{
+  /** 造一个完整注册的号，返回它的 user 和 id */
+  async function registerOne(tag, inviteCode) {
+    const email = `smoke-inv-${tag}-${Date.now()}@example.com`
+    const cap = await api('POST', '/api/client/auth/captcha')
+    await api('POST', '/api/client/auth/code', {
+      body: { email, captchaId: cap.data.id, captchaAnswer: cap.data.answer }
+    })
+    const row = await db.query(
+      'SELECT code FROM login_codes WHERE email = $1 AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1',
+      [email]
+    )
+    const reg = await api('POST', '/api/client/auth/register', { body: { email, code: row.rows[0].code } })
+    const done = await api('POST', '/api/client/auth/complete-profile', {
+      token: reg.data?.pendingToken,
+      body: { username: tag, password: 'smoke1234', avatar: '', inviteCode: inviteCode ?? '' }
+    })
+    return { email, done }
+  }
+
+  const CODE_RE = /^MIMI-[A-Z0-9]{4}-[A-Z0-9]{4}$/
+
+  /* ---------------- 每个人注册完就有自己的码 ---------------- */
+
+  const a = await registerOne('冒烟甲')
+  check('不带码也能注册', a.done.code === 0, `code=${a.done.code} ${a.done.message ?? ''}`)
+
+  const aId = Number(a.done.data?.user?.id)
+  const aCode = a.done.data?.user?.inviteCode || ''
+  check('⭐ 注册完就有自己的邀请码', CODE_RE.test(aCode), aCode)
+  check('还没邀请过任何人', a.done.data?.user?.invitedCount === 0, String(a.done.data?.user?.invitedCount))
+
+  const aRow = await db.query('SELECT invite_code, referred_by_id FROM customers WHERE id = $1', [aId])
+  check('没填码 → 库里两个来源字段都是 null', aRow.rows[0]?.invite_code === null && aRow.rows[0]?.referred_by_id === null, JSON.stringify(aRow.rows[0]))
+
+  /* ---------------- 别人填我的码 ---------------- */
+
+  // 大小写 / 空格 / 少连字符都该认
+  const loose = ` ${aCode.toLowerCase().replace(/-/g, ' ')} `
+  const b = await registerOne('冒烟乙', loose)
+  check('⭐ 填别人的邀请码能注册（且容忍小写/空格）', b.done.code === 0, `code=${b.done.code} ${b.done.message ?? ''}`)
+
+  const bId = Number(b.done.data?.user?.id)
+  const bCode = b.done.data?.user?.inviteCode || ''
+  check('乙也有自己的码，且和甲的不一样', CODE_RE.test(bCode) && bCode !== aCode, `${aCode} / ${bCode}`)
+
+  const bRow = await db.query('SELECT invite_code, referred_by_id FROM customers WHERE id = $1', [bId])
+  check('⭐ 乙记下填的是甲的码', bRow.rows[0]?.invite_code === aCode, String(bRow.rows[0]?.invite_code))
+  check('⭐ 归因记到了甲的头上', Number(bRow.rows[0]?.referred_by_id) === aId, `referred_by_id=${bRow.rows[0]?.referred_by_id}`)
+
+  const aMe = await api('GET', '/api/client/auth/me', { token: a.done.data.token })
+  check('⭐ 甲的「已邀请」变成 1 人', aMe.data?.user?.invitedCount === 1, String(aMe.data?.user?.invitedCount))
+  check('/me 也带自己的邀请码', aMe.data?.user?.inviteCode === aCode, aMe.data?.user?.inviteCode)
+  check(
+    '⭐ 注册送的 30 天是免费天数，不算会员',
+    aMe.data?.user?.membership?.level === 'none' && aMe.data?.user?.membership?.freeDaysLeft >= 29,
+    `level=${aMe.data?.user?.membership?.level} 免费剩 ${aMe.data?.user?.membership?.freeDaysLeft} 天`
+  )
+
+  /* ---------------- 邀请奖励：每邀 1 人 +7 天免费 ---------------- */
+  check(
+    '⭐ 邀请 1 人 → 邀请人的免费天数 +7',
+    aMe.data?.user?.membership?.freeDaysLeft >= 36,
+    `免费剩 ${aMe.data?.user?.membership?.freeDaysLeft} 天`
+  )
+  check('多得了几天也算给客户端（文案要用）', aMe.data?.user?.freeDaysFromInvite === 7, String(aMe.data?.user?.freeDaysFromInvite))
+
+  const aGrants = await db.query(
+    'SELECT source, days, starts_at, expires_at FROM membership_grants WHERE customer_id = $1 ORDER BY id',
+    [aId]
+  )
+  const freeSegs = aGrants.rows.filter((r) => r.source === 'trial' || r.source === 'invite')
+  check('⭐ 邀请奖励进了天数流水', freeSegs.some((r) => r.source === 'invite' && r.days === 7), JSON.stringify(freeSegs.map((r) => r.source)))
+  check('注册那 30 天的流水也在', freeSegs.some((r) => r.source === 'trial' && r.days === 30))
+  check(
+    '⭐ 流水首尾相接（后一条从前一条到期日接着算，不能留空档）',
+    freeSegs.length === 2 &&
+      Math.abs(parseDbTime(freeSegs[1].starts_at) - parseDbTime(freeSegs[0].expires_at)) < 3000,
+    freeSegs.length === 2
+      ? `${parseDbTime(freeSegs[0].expires_at)} vs ${parseDbTime(freeSegs[1].starts_at)}`
+      : `段数=${freeSegs.length}`
+  )
+
+  /* ---------------- 码不对要被挡住 ---------------- */
+
+  const bad = await registerOne('冒烟丙', 'MIMI-ZZZZ-ZZZZ')
+  check('码不存在 → 注册被拒', bad.done.code !== 0 && String(bad.done.message).includes('邀请码'), bad.done.message)
+
+  /* ---------------- 后台卡密是另一种来源，会被消耗 ---------------- */
+
+  await db.query(`DELETE FROM invite_cards WHERE code = 'MIMI-SMOK-0001'`)
+  await db.query(
+    `INSERT INTO invite_cards (code, note, status, expire_at) VALUES ('MIMI-SMOK-0001', '冒烟测试', 'unused', NULL)`
+  )
+
+  const c = await registerOne('冒烟丁', 'MIMI-SMOK-0001')
+  check('用后台卡密也能注册', c.done.code === 0, `code=${c.done.code} ${c.done.message ?? ''}`)
+
+  const cId = Number(c.done.data?.user?.id)
+  const cardRow = await db.query(`SELECT status, used_by_customer_id FROM invite_cards WHERE code = 'MIMI-SMOK-0001'`)
+  check('⭐ 卡密被标成已使用', cardRow.rows[0]?.status === 'used', `status=${cardRow.rows[0]?.status}`)
+  check('卡密记下了谁用的', Number(cardRow.rows[0]?.used_by_customer_id) === cId)
+
+  const cRow = await db.query('SELECT invite_code, referred_by_id FROM customers WHERE id = $1', [cId])
+  check('用卡密注册 → 没有「邀请人」', cRow.rows[0]?.referred_by_id === null, String(cRow.rows[0]?.referred_by_id))
+
+  const reuseCard = await registerOne('冒烟戊', 'MIMI-SMOK-0001')
+  check('同一张卡不能注册第二次', reuseCard.done.code !== 0 && String(reuseCard.done.message).includes('用过了'), reuseCard.done.message)
+
+  /* ---------------- 后台能看出邀请关系 ---------------- */
+
+  const detail = await api('GET', `/api/admin/customers/${aId}`, { token: T })
+  check('后台详情带 invitedCount', detail.data?.invitedCount === 1, String(detail.data?.invitedCount))
+
+  const bDetail = await api('GET', `/api/admin/customers/${bId}`, { token: T })
+  check('⭐ 后台看得到「谁邀请的」', bDetail.data?.referredBy?.id === aId, JSON.stringify(bDetail.data?.referredBy))
+
+  /* ---------------- 清理 ---------------- */
+
+  // ⚠️ 按邮箱取而不是拿上面那三个 id：码填错的「丙」和重复用卡的「戊」在
+  //    complete-profile 就失败了，号已经建出来（profileReady=false），不按邮箱清会留垃圾
+  const left = await db.query(`SELECT id FROM customers WHERE email LIKE 'smoke-inv-%@example.com'`)
+  const ids = left.rows.map((r) => r.id)
+  if (ids.length) {
+    await db.query('DELETE FROM operation_logs WHERE target_type = $1 AND target_id = ANY($2)', ['customer', ids])
+    await db.query('DELETE FROM login_logs WHERE customer_id = ANY($1)', [ids])
+    await db.query('DELETE FROM client_sessions WHERE customer_id = ANY($1)', [ids])
+    await db.query('DELETE FROM membership_grants WHERE customer_id = ANY($1)', [ids])
+    await db.query('UPDATE customers SET referred_by_id = NULL WHERE referred_by_id = ANY($1)', [ids])
+    await db.query('DELETE FROM customers WHERE id = ANY($1)', [ids])
+  }
+  await db.query(`DELETE FROM invite_cards WHERE code = 'MIMI-SMOK-0001'`)
+  await db.query(`DELETE FROM login_codes WHERE email LIKE 'smoke-inv-%@example.com'`)
 }
 
 section('参数校验兜底')

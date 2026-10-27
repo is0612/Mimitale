@@ -57,21 +57,116 @@ model Customer {
   status        String    @default("active")
   /// 字典 ban_reason 的 value；解封时清空
   banReason     String?   @map("ban_reason")
-  /// 剩余额度（次）。-1 = 不限量
-  quota         Int       @default(0)
-  /// 字典 membership_level 的 value；none = 非会员（哨兵，不进字典）
+  /// 字典 membership_level 的 value；none = 非会员（哨兵，不进字典）。
+  /// ⚠️ **免费天数不是会员**：注册送的那 30 天不写等级，只写 free_expire_at
   membershipLevel    String    @default("none") @map("membership_level")
-  /// 会员到期时间。「是否过期」由它和当前时间推导，**不存 expired 布尔**
+  /// 会员到期时间（后台发的）。「是否过期」由它和当前时间推导，**不存 expired 布尔**
   membershipExpireAt DateTime? @map("membership_expire_at")
-  /// 注册时用的卡密；直接邮箱注册为 null
+  /// 免费天数用到哪天：注册送 30 天、每邀 1 人再 +7 天累加。
+  /// ⚠️ 和 membership_expire_at **互不吞噬**，权益取两者最大的那个。
+  ///    这样「免费还剩几天」就是一个减法，不用从混合区间里拆
+  freeExpireAt       DateTime? @map("free_expire_at")
+  /// 注册时填的码 —— **别人给我的**。来源可能是后台发的卡密，也可能是另一个客户的邀请码。
+  /// 卡密是一码一次，邀请码能邀多人，两者长一个形状（`MIMI-XXXX-XXXX`）。
   inviteCode    String?   @map("invite_code")
+  /// **我自己的**邀请码，别人注册时填它我就多一个被邀请者。一人一个、可邀多人。
+  /// null = 还没生成（老数据），第一次取「个人信息」时补上
+  referralCode  String?   @unique @map("referral_code")
+  /// 邀请我的人是谁（客户 id）。来源是后台卡密时为 null。
+  /// ⚠️ 只存 id 不建关系 —— 本库「不建任何外键」是定死的，删号不留残骸靠逻辑处理
+  referredById  Int?      @map("referred_by_id")
   createdAt     DateTime  @default(now()) @map("created_at")
   lastLoginAt   DateTime? @map("last_login_at")
 
   // 「今天注册了多少」每次打开后台都要查
   @@index([createdAt])
   @@index([status])
+  // 「我邀请了谁」在个人信息页要数
+  @@index([referredById])
   @@map("customers")
+}
+
+/// 客户登录记录 —— 后台「登录记录」和 IP 统计都靠它。
+///
+/// ⚠️ 单独一张表，**不要**混进 operation_logs：那张表的语义是「管理员做过什么」，
+///    admin_id / admin_name 是必填的，客户登录写进去会变成「系统自己操作了自己」。
+/// ⚠️ 只记成功登录。失败的密码尝试量大十倍，而且这块要看的是「人从哪来」，
+///    不是撞库审计（真要审计得另配限流计数）。
+model LoginLog {
+  id         Int      @id @default(autoincrement())
+  customerId Int      @map("customer_id")
+  /// password | voucher | register —— 代码枚举，不进字典。
+  /// ⚠️ 「打开软件」不在这一列了：搬到 client_sessions，那里一次启动一行更准
+  method     String   @default("password")
+  /// 客户端出口 IP。⚠️ 上了 nginx 记得开 Fastify trustProxy，否则全是 127.0.0.1
+  ip         String   @default("")
+  /// Electron 的 UA 里带客户端版本号，排查「旧版本还在用」时有用
+  userAgent  String   @default("") @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([customerId, createdAt])
+  @@index([createdAt])
+  @@map("login_logs")
+}
+
+/// 客户端使用会话 —— 一次「打开软件到关闭」记一行，时长、版本、崩溃都在这里。
+///
+/// ⚠️ 和 login_logs 的分工：login_logs 是**事件流**（登录 / 注册，回答「人从哪来」），
+///    这张表是**计量**（开了多久、什么版本、怎么结束的，回答「用得多勤」）。
+///    所以「打开软件」从 login_logs 撤掉，搬到这里 —— 每次启动一行，比按天去重更准。
+/// ⚠️ 结束时间靠「下次启动结清」而不是 before-quit 同步上报：强杀 / 断电 / 崩溃
+///    都没法在退出那一刻写库，只能下次启动用最后心跳时间当结束时间补上。
+///    所以 ended_at 可能和真实退出差一个心跳间隔（5 分钟），算「每天用了多久」够用。
+model ClientSession {
+  id         Int       @id @default(autoincrement())
+  customerId Int       @map("customer_id")
+  /// 这次启动的进程（同一天开两次 = 两行）
+  startedAt  DateTime  @default(now()) @map("started_at") @db.Timestamp(3)
+  /// 心跳刷新；没心跳过就是 null
+  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamp(3)
+  /// 结束时间；null = 还没结清（下一次启动 / exit 会补上）
+  endedAt    DateTime? @map("ended_at") @db.Timestamp(3)
+  /// quit（正常退）/ crash（崩溃）/ unknown（没结清、心跳也停了）
+  endReason  String?   @map("end_reason")
+  /// end_reason = crash 时的补充：render-process-gone 的 reason / 退出码
+  endDetail  String    @default("") @map("end_detail")
+  /// 客户端版本号，排查「谁还在用老版本」的唯一线索
+  appVersion String    @default("") @map("app_version")
+  /// 会话结束时的出口 IP（客户端可能换网，所以只存结束时的）
+  ip         String    @default("") @map("ip")
+  userAgent  String    @default("") @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
+
+  @@index([customerId, startedAt])
+  @@index([endedAt])
+  @@map("client_sessions")
+}
+
+/// 天数流水 —— 每给客户加一次天数就写一条。
+///
+/// ⚠️ 别想着在 customers 上存一个「这份会员是什么来源」的字段：一个人可能
+///    注册送 30 天 + 邀请 3 人 +21 天 + 后台续 30 天，一个值怎么说都是错的。
+///    要回答的从来不是「他是哪种会员」，而是「这些天是谁给的」。
+/// ⚠️ startsAt / expiresAt 记的是**这一段天数的区间**，后一次从前一次的到期日接着算，
+///    所以按区间求和就能精确拆出「免费几天、会员几天」，不用再猜。
+model MembershipGrant {
+  id         Int      @id @default(autoincrement())
+  customerId Int      @map("customer_id")
+  days       Int
+  /// trial（注册）/ invite（邀请）/ admin（后台发）—— 代码枚举，不进字典
+  source     String
+  /// 一句话说明，例：「每邀 1 人 +7 天」「邀请人：小明」
+  note       String   @default("")
+  /// 这 7 天是因为谁得的：invite 存被邀请人 id，admin 存管理员 id
+  refId      Int?     @map("ref_id")
+  /// 这段天数从哪天开始（= 加之前的到期日和今天取大的）
+  startsAt   DateTime @map("starts_at")
+  /// 到哪天结束。⚠️ 同一客户相邻两条必须首尾相接，中间的空档会算错「还剩几天」
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([customerId, createdAt])
+  @@map("membership_grants")
 }
 
 /// 操作日志 —— 只由后端写，没有写入接口
@@ -80,7 +175,7 @@ model OperationLog {
   adminId    Int      @map("admin_id")
   /// 冗余存一份：管理员改了昵称，历史日志不该跟着变
   adminName  String   @map("admin_name")
-  /// customer.ban / customer.unban / customer.quota / customer.membership
+  /// customer.ban / customer.unban / customer.membership
   /// card.create / card.void / dict.create / dict.update / dict.delete
   action     String
   /// customer | card | dict
@@ -88,7 +183,7 @@ model OperationLog {
   targetId   Int?     @map("target_id")
   /// 同样冗余：客户改了昵称，老日志还是当时的名字
   targetName String   @map("target_name")
-  /// 一句话说清改了什么，例：「额度 100 → 500」
+  /// 一句话说清改了什么，例：「发会员：初级会员 +30 天（新开通）」
   detail     String
   ip         String   @default("")
   createdAt  DateTime @default(now()) @map("created_at")

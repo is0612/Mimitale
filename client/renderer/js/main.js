@@ -74,7 +74,7 @@ import {
   closeAccountModal,
   isAccountModalOpen
 } from './views/accountModal.js';
-// 设置页第一栏「用户信息」：账号资料 / 头像 / 密码 / 凭证
+// 设置页第一栏「个人信息」：账号资料 / 头像 / 密码 / 凭证
 import { initUserSettings, renderUserSection } from './views/userSettings.js';
 // 意见反馈弹窗：现在只是占位（没后端可发），点「发送」会诚实地说没发出去
 import {
@@ -543,7 +543,7 @@ async function init() {
   initViewSwitch();
   // 游戏卡列表页（只搭了布局，占位按钮给个「还在搭」的提示）。
   initGameList();
-  // 账号：登录成功后弹窗自己关掉，侧栏那一格和设置页「用户信息」都要跟着变。
+  // 账号：登录成功后弹窗自己关掉，侧栏那一格和设置页「个人信息」都要跟着变。
   initAccountModal({
     onSessionChange: (user) => {
       renderAccount(user);
@@ -553,7 +553,7 @@ async function init() {
   initUserSettings({ openLogin: () => openAccountModal(), onUserChange: renderAccount });
   initFeedbackModal();
   // 左下角那一格：未登录点开登录窗，已登录点开菜单（设置 / 意见反馈 / 退出登录）。
-  // ⚠️ 菜单里的「设置」直接落到「用户信息」那一组 —— 用户点自己的头像再看设置，
+  // ⚠️ 菜单里的「设置」直接落到「个人信息」那一组 —— 用户点自己的头像再看设置，
   //    想看的是自己的资料，不是上次停在的模型配置。
   initAccount({
     openLogin: () => openAccountModal(),

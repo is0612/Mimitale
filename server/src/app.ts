@@ -24,7 +24,10 @@ export async function buildApp(): Promise<FastifyInstance> {
       ? { level: 'info' }
       : { level: 'info', transport: undefined },
     // 客户里的昵称、卡密备注都可能有中文，别被 body 大小坑到
-    bodyLimit: 1024 * 1024
+    bodyLimit: 1024 * 1024,
+    // ⚠️ 默认关。开了就等于信任请求头里的 X-Forwarded-For，只有前面真有 nginx /
+    //    云负载均衡时才该开，否则登录记录的 IP 是别人随手写的。
+    trustProxy: env.trustProxy
   })
 
   // 后台是纯前端（vite dev 5173 / 将来的 nginx），必然跨域

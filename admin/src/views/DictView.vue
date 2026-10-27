@@ -11,8 +11,8 @@
  *   ─────────────       ──────────────
  *   封禁原因            客户状态 active/banned
  *   客户来源            卡密状态 unused/used/void
- *   额度预设            管理员角色 super/normal
- *   卡密备注分类        操作日志的动作类型
+ *   卡密备注分类        管理员角色 super/normal
+ *                       操作日志的动作类型
  *
  *   为什么？因为**放进去的那些不会让程序变灵活**：
  *   后端写着 `if (status === 'banned')`，你在字典里加个第三态，
@@ -184,7 +184,6 @@ async function submitType(): Promise<void> {
 const USED_BY: Record<string, string> = {
   ban_reason: '封禁弹层的「封禁原因」下拉；客户详情里的封禁原因',
   customer_source: '客户列表的「来源」列；客户详情的「来源」',
-  quota_preset: '改额度弹层里的快捷按钮',
   card_note: '生成卡密弹层里的「备注分类」下拉'
 }
 </script>
@@ -193,7 +192,7 @@ const USED_BY: Record<string, string> = {
   <div class="page">
     <el-alert type="info" :closable="false" class="tip">
       <template #title>
-        字典只用来放「加一条新值不需要改代码」的枚举（封禁原因、来源、额度预设、卡密备注）。
+        字典只用来放「加一条新值不需要改代码」的枚举（封禁原因、来源、卡密备注）。
         客户状态、卡密状态、管理员角色这类**参与代码判断**的枚举不放这里 ——
         放进来了也加不出真正生效的值，只会变出一个「选得动但不发生什么」的假选项。
       </template>

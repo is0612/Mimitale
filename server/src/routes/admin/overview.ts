@@ -34,7 +34,11 @@ export const adminOverviewRoutes: FastifyPluginAsync = async (app) => {
       activeMembers,
       memberTotal,
       expiringIn7Days,
+      freeActive,
+      freeExpiring,
+      freeGrantedRows,
       todayActive,
+      sessionStats,
       unusedCards,
       recent,
       trendRows
@@ -50,17 +54,46 @@ export const adminOverviewRoutes: FastifyPluginAsync = async (app) => {
       prisma.customer.count(),
       prisma.customer.count({ where: { status: 'banned' } }),
 
-      // 「会员」= 等级不是 none 且还没到期（过期状态由到期时间推导，不存字段）
+      // 「会员」= 后台发过、等级不是 none、且还没到期。**不含免费天数**
       prisma.customer.count({ where: { ...member, membershipExpireAt: { gt: now } } }),
       prisma.customer.count({ where: member }),
       prisma.customer.count({
         where: { ...member, membershipExpireAt: { gt: now, lte: sevenDaysLater } }
       }),
 
+      // 免费天数还没用完的人 —— 这批是「还没转化」的盘子
+      prisma.customer.count({ where: { freeExpireAt: { gt: now } } }),
+      // 免费 7 天内到期：最该推付费的那批
+      prisma.customer.count({ where: { freeExpireAt: { gt: now, lte: sevenDaysLater } } }),
+      // 累计送出去多少天免费（注册 + 邀请），不按人算，按天算
+      prisma.membershipGrant.groupBy({
+        by: ['source'],
+        where: { source: { in: ['trial', 'invite'] } },
+        _sum: { days: true }
+      }),
+
       // 今天有动作的客户（登录过）
       prisma.customer.count({
         where: { lastLoginAt: { gte: todayRange.start, lt: todayRange.end } }
       }),
+
+      // 使用会话统计：今天开过软件的人数 + 近 7 天平均单次会话时长（分钟）。
+      // ⚠️ 结束时间用 COALESCE(ended_at, last_seen_at, started_at) ——
+      //    没结清（还开着）的会话取最后心跳，开了但一次心跳都没赶上的取开始时间。
+      //    超过 12 小时的幽灵会话（挂机不关）不算进平均，否则平均时长会被拉到几十小时。
+      prisma.$queryRaw<Array<{ today_users: number; avg_minutes: number }>>`
+        SELECT
+          (SELECT COUNT(DISTINCT customer_id)::int
+             FROM client_sessions
+            WHERE started_at >= ${todayRange.start} AND started_at < ${todayRange.end}) AS today_users,
+          (SELECT COALESCE(ROUND(AVG(
+                    EXTRACT(EPOCH FROM (COALESCE(ended_at, last_seen_at, started_at) - started_at)) / 60
+                  ))::int, 0)
+             FROM client_sessions
+            WHERE started_at >= ${trendSince}
+              AND EXTRACT(EPOCH FROM (COALESCE(ended_at, last_seen_at, started_at) - started_at)) <= 12 * 3600
+          ) AS avg_minutes
+      `,
 
       prisma.inviteCard.count({ where: { status: 'unused' } }),
 
@@ -91,7 +124,13 @@ export const adminOverviewRoutes: FastifyPluginAsync = async (app) => {
       activeMembers,
       memberTotal,
       expiringIn7Days,
+      freeActive,
+      freeExpiring,
+      // 累计送出去的免费天数（注册 + 邀请），按天算不按人算
+      freeDaysGranted: freeGrantedRows.reduce((sum, r) => sum + (r._sum.days ?? 0), 0),
       todayActive,
+      todaySessionUsers: sessionStats[0]?.today_users ?? 0,
+      avgSessionMinutes: sessionStats[0]?.avg_minutes ?? 0,
       unusedCards,
       trend,
       recent: recent.map(toCustomer)

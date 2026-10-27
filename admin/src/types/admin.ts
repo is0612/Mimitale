@@ -77,22 +77,45 @@ export type CustomerStatus = 'active' | 'banned'
  */
 export type MembershipLevel = string
 
+/** 一段天数的来源：注册赠送 / 邀请奖励 / 后台发 */
+export type GrantSource = 'trial' | 'invite' | 'admin'
+
 export interface Customer {
   id: number
   /** 客户在 Mimitale 客户端里注册用的邮箱 */
   email: string
   nickname: string
+  /**
+   * 头像，`data:image/jpeg;base64,...`（客户端压到 256×256，约 14KB 字符）。
+   * 没设头像为 null。⚠️ 列表接口也带它 —— 一页 10 条约 170KB，所以别再调大列表页尺寸，
+   * 否则这个接口会变成拖慢后台的那一个。
+   */
+  avatar: string | null
   status: CustomerStatus
   /** 最近一次被封的原因，值来自字典 ban_reason。解封后清空 */
   banReason: string | null
-  /** 剩余额度（次）。-1 表示不限量 */
-  quota: number
   /** 会员等级。none = 非会员 */
   membershipLevel: MembershipLevel
   /** 会员到期时间（ISO 8601）。非会员为 null；已过期的会保留历史到期时间 */
   membershipExpireAt: string | null
-  /** 注册时用的邀请码；直接邮箱注册则为 null */
+  /**
+   * 免费天数用到哪天（注册送 30 天 + 每邀 1 人 7 天）。
+   * ⚠️ 跟 membershipExpireAt **互不吞噬**，实际权益取两者更晚的那个。
+   *    这不是会员 —— 等级仍然是 none。
+   */
+  freeExpireAt: string | null
+  /** 注册时填的码（**别人给我的**）：后台发的卡密，或另一个客户的邀请码。直接邮箱注册为 null */
   inviteCode: string | null
+  /** **我自己的**邀请码，别人注册时填它。一人一个、能邀多人。null = 老数据，还没补 */
+  referralCode: string | null
+  /** 邀请我的人是谁（客户 id）。来源是后台卡密时为 null */
+  referredById: number | null
+  /**
+   * 24 位登录凭证码（`XXXX-XXXX-…`）。换机器 / 重装后靠它登回来。
+   * 用户可以在客户端里自己刷新，刷新后这里看到的就是新码、旧码立刻失效。
+   * 还没生成过（老数据）为 null。
+   */
+  voucher: string | null
   /** 注册时间 */
   createdAt: string
   /** 最后一次登录客户端的时间；从未登录过为 null */
@@ -122,7 +145,6 @@ export interface CustomerListRes {
  */
 export interface UpdateCustomerReq {
   status?: CustomerStatus
-  quota?: number
   /** 封禁原因 —— 值来自字典 ban_reason（只有 status 改成 banned 时才有意义） */
   banReason?: string
   /** 发会员 —— 目标等级（目前只有 basic） */
@@ -135,11 +157,73 @@ export interface UpdateCustomerReq {
  * 7. GET /api/admin/customers/{id}
  *    客户详情 = 客户本身 + 他的邀请码来自哪张卡 + 他身上的操作记录
  */
+/**
+ * 一条客户活动。⚠️ 失败尝试**不记**（量大十倍，而且这块看的是「人从哪来」）
+ */
+export interface LoginLog {
+  id: number
+  /** password | voucher | register */
+  method: string
+  /** 客户端出口 IP。部署在 nginx 后面要开 Fastify 的 trustProxy，否则全是 127.0.0.1 */
+  ip: string
+  /** Electron 的 UA，带客户端版本号 */
+  userAgent: string
+  createdAt: string
+}
+
+/**
+ * 一次「打开软件到关闭」的使用会话。
+ * ⚠️ 结束时间靠「下次启动结清」补，可能比真实退出晚一个心跳间隔（5 分钟）。
+ */
+export interface ClientSession {
+  id: number
+  startedAt: string
+  /** 最后心跳；一次心跳都没赶上就是 null */
+  lastSeenAt: string | null
+  /** 结束时间；null = 还没结清（还开着） */
+  endedAt: string | null
+  /** quit | crash | unknown */
+  endReason: string | null
+  /** crash 时的补充（render-process-gone 的 reason） */
+  endDetail: string
+  /** 客户端版本号 */
+  appVersion: string
+  ip: string
+}
+
+/**
+ * 一次「加天数」。同一个客户可能有好几条 —— 注册送、邀了 3 个人、你后台续过。
+ * ⚠️ startsAt / expiresAt 是**这一段天数**的区间，相邻两条首尾相接。
+ */
+export interface MembershipGrant {
+  id: number
+  days: number
+  /** trial 注册赠送 | invite 邀请奖励 | admin 后台发 */
+  source: GrantSource
+  /** 一句话说明，例：「邀请了 小明 +7 天」 */
+  note: string
+  /** invite 是哪个被邀请人换来的；admin 是哪个管理员发的 */
+  refId: number | null
+  startsAt: string
+  expiresAt: string
+  createdAt: string
+}
+
 export interface CustomerDetail extends Customer {
-  /** 注册时用的那张卡；直接邮箱注册则为 null */
+  /** 注册时用的那张卡；直接邮箱注册 / 被客户邀请的则为 null */
   usedCard: InviteCard | null
   /** 针对这个客户发生过的操作，最近的在前 */
   logs: OperationLog[]
+  /** 他邀请了几个人（对方注册时填的是他的 referralCode） */
+  invitedCount: number
+  /** 是谁邀请的他；来源是后台卡密或直接邮箱注册则为 null */
+  referredBy: { id: number; nickname: string; email: string } | null
+  /** 最近 30 条活动记录（登录 / 注册），最近的在前 */
+  loginLogs: LoginLog[]
+  /** 天数流水，最近的在前。这里能看出「这些天谁给的」 */
+  grants: MembershipGrant[]
+  /** 最近 30 次使用会话（打开到关闭），最近的在前 */
+  sessions: ClientSession[]
 }
 
 /* ------------------------------------------------------------------ */
@@ -156,7 +240,6 @@ export interface CustomerDetail extends Customer {
 export type LogAction =
   | 'customer.ban'
   | 'customer.unban'
-  | 'customer.quota'
   | 'customer.membership'
   | 'card.create'
   | 'card.void'
@@ -174,7 +257,7 @@ export interface OperationLog {
   targetId: number | null
   /** 被操作对象的名字，用于直接阅读（客户昵称 / 卡密 / 字典项） */
   targetName: string
-  /** 一句话说清改了什么，例：「额度 100 → 500」 */
+  /** 一句话说清改了什么，例：「发会员：初级会员 +30 天」 */
   detail: string
   ip: string
   createdAt: string
@@ -264,7 +347,7 @@ export interface UpdateCardReq {
 /**
  * ⚠️ 字典只收「真字典」—— 加了新值**不需要改代码**的那些。
  *
- * 该进字典：封禁原因、客户来源、额度预设、卡密备注分类
+ * 该进字典：封禁原因、客户来源、卡密备注分类
  *           （这些是纯业务数据，运营自己加一个「刷屏」不需要重新部署）
  *
  * 不该进字典：客户状态、卡密状态、管理员角色
@@ -346,14 +429,24 @@ export interface OverviewRes {
   yesterdayRegistered: number
   totalCustomers: number
   bannedCustomers: number
-  /** 会员：等级不是 none **且** 还没到期 */
+  /** 会员：后台发过、等级不是 none **且** 还没到期。**不含免费天数** */
   activeMembers: number
   /** 发过会员的总数（含已过期）—— activeMembers 和它的差就是「过期待续」 */
   memberTotal: number
-  /** 7 天内到期的人数，该催续费的那批 */
+  /** 会员 7 天内到期的人数，该催续费的那批 */
   expiringIn7Days: number
+  /** 免费天数还没用完的人数 —— 还没转化的盘子 */
+  freeActive: number
+  /** 免费天数 7 天内到期的人数 —— 最该推付费的那批 */
+  freeExpiring: number
+  /** 累计送出去多少天免费（注册 + 邀请），按天算不按人算 */
+  freeDaysGranted: number
   /** 今天登录过的客户数（不是注册，是登录） */
   todayActive: number
+  /** 今天开过软件的人数（去重，按 client_sessions） */
+  todaySessionUsers: number
+  /** 近 7 天平均单次会话时长（分钟，排除超过 12 小时的挂机幽灵会话） */
+  avgSessionMinutes: number
   /** 还没被用掉的卡密 */
   unusedCards: number
   /** 近 7 天每天的注册数。中间没人注册的那天补 0，不连成一条假曲线 */

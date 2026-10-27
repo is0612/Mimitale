@@ -12,8 +12,10 @@ import CustomerDialogs from '@/components/CustomerDialogs.vue'
 import {
   CUSTOMER_STATUS_LABEL,
   CUSTOMER_STATUS_TAG,
-  formatQuota,
+  formatDay,
   formatTime,
+  freeDaysLeft,
+  freeState,
   membershipState
 } from '@/config/labels'
 import type { Customer, CustomerStatus } from '@/types'
@@ -63,19 +65,24 @@ function openDetail(row: Customer): void {
   router.push({ name: 'customer-detail', params: { id: row.id } })
 }
 
-/** 会员等级这一列的显示名：等级显示名走字典；已过期的直接标「已过期」，而不是还挂着等级名 */
+/**
+ * 这一列显示「他现在还能用到什么时候」，不是「他是什么等级的会员」——
+ * 注册用户等级是 none，但他有 30 天免费天数，显示「非会员」会让人以为他一点权益都没有。
+ */
 function memberLabel(row: Customer): string {
-  const s = membershipState(row)
-  if (s === 'none') return '非会员'
-  if (s === 'expired') return '已过期'
-  return dict.labelOf('membership_level', row.membershipLevel)
+  if (membershipState(row) === 'active') return dict.labelOf('membership_level', row.membershipLevel)
+  const free = freeDaysLeft(row)
+  if (free !== null) return `免费 ${free} 天`
+  if (membershipState(row) === 'expired' || freeState(row) === 'expired') return '已用完'
+  return '无'
 }
 
+/** 会员绿、免费橙、用完红、从没有过灰 */
 function memberTag(row: Customer): TagType {
-  const s = membershipState(row)
-  if (s === 'none') return 'info'
-  if (s === 'expired') return 'danger'
-  return 'success'
+  if (membershipState(row) === 'active') return 'success'
+  if (freeDaysLeft(row) !== null) return 'warning'
+  if (membershipState(row) === 'expired' || freeState(row) === 'expired') return 'danger'
+  return 'info'
 }
 
 onMounted(load)
@@ -109,15 +116,23 @@ onMounted(load)
     <el-card shadow="never" class="panel">
       <el-table v-loading="loading" :data="rows" stripe @row-dblclick="openDetail">
         <el-table-column prop="id" label="ID" width="56" />
-        <el-table-column prop="nickname" label="昵称" width="112" show-overflow-tooltip />
-        <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
-        <el-table-column label="邀请码" width="150">
+        <el-table-column label="昵称" width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="who">
+              <img v-if="row.avatar" class="avatar" :src="row.avatar" alt="" />
+              <span v-else class="avatar">{{ row.nickname.slice(0, 1) }}</span>
+              <span class="nick">{{ row.nickname }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="email" label="邮箱" min-width="140" show-overflow-tooltip />
+        <el-table-column label="邀请码" width="120">
           <template #default="{ row }">
             <span v-if="row.inviteCode" class="mono">{{ row.inviteCode }}</span>
             <span v-else class="muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="120">
+        <el-table-column label="状态" width="76">
           <template #default="{ row }">
             <el-tag :type="CUSTOMER_STATUS_TAG[row.status as CustomerStatus]" size="small" disable-transitions>
               {{ CUSTOMER_STATUS_LABEL[row.status as CustomerStatus] }}
@@ -127,12 +142,12 @@ onMounted(load)
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column label="会员等级" width="104">
+        <el-table-column label="当前权益" width="104">
           <template #default="{ row }">
             <el-tag :type="memberTag(row)" size="small" disable-transitions>{{ memberLabel(row) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="会员到期" width="150">
+        <el-table-column label="会员到期" width="132">
           <template #default="{ row }">
             <span v-if="membershipState(row) === 'none'" class="muted">—</span>
             <span v-else :class="{ expired: membershipState(row) === 'expired' }">
@@ -140,21 +155,18 @@ onMounted(load)
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="额度" width="78">
-          <template #default="{ row }">
-            <span :class="{ exhausted: row.quota === 0 }">{{ formatQuota(row.quota) }}</span>
-          </template>
-        </el-table-column>
         <el-table-column label="注册时间" width="138">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
-        <el-table-column label="最后登录" width="138">
-          <template #default="{ row }">{{ formatTime(row.lastLoginAt) }}</template>
+        <el-table-column label="最后登录" min-width="118">
+          <template #default="{ row }">
+            <span v-if="row.lastLoginAt" :title="formatTime(row.lastLoginAt)">{{ formatDay(row.lastLoginAt) }}</span>
+            <span v-else class="muted">—</span>
+          </template>
         </el-table-column>
-        <el-table-column label="操作" width="236" fixed="right">
+        <el-table-column label="操作" width="168" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">详情</el-button>
-            <el-button link type="primary" @click="dialogs?.openQuota(row)">改额度</el-button>
             <el-button link type="primary" @click="dialogs?.openMembership(row)">发会员</el-button>
             <el-button
               v-if="row.status === 'active'"
@@ -193,6 +205,40 @@ onMounted(load)
   gap: 14px;
 }
 
+/* 昵称列：头像 + 名字。没设头像就用首字占位，别让那一列忽宽忽窄 */
+.who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #eeedfe;
+  color: #534ab7;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  overflow: hidden;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.nick {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .panel :deep(.el-card__body) {
   padding: 14px 16px;
 }
@@ -223,10 +269,6 @@ onMounted(load)
 
 .muted {
   color: #b4b2a9;
-}
-
-.exhausted {
-  color: #a32d2d;
 }
 
 .expired {

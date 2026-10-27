@@ -43,5 +43,16 @@ export const env = {
    * 只在没有真实邮件通道时有意义 —— 本地开发时省得开 mailpit。
    * 生产必须为 false（docker-compose 里已经这么设了）。
    */
-  devEchoCode: process.env.DEV_ECHO_CODE !== 'false'
+  devEchoCode: process.env.DEV_ECHO_CODE !== 'false',
+
+  /**
+   * 信任反向代理转发来的 X-Forwarded-For。
+   *
+   * ⚠️ 默认 **false**：不信任就等于用 TCP 层的真实对端地址，客户端伪造
+   *    X-Forwarded-For 也没用。所以别为了「让 IP 好看点」随手开 ——
+   *    直连公网时开了，任何人都能把自己的 IP 写成任意值。
+   * ⚠️ 只有「前面确实有一层 nginx / 云负载均衡」时才设 true，
+   *    否则登录记录和操作日志里的 IP 会全是 127.0.0.1。
+   */
+  trustProxy: process.env.TRUST_PROXY === 'true'
 } as const

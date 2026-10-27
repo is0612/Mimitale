@@ -10,7 +10,7 @@
 //    voucher  抄 24 位凭证码登录
 //
 //  ⚠️ 「已登录」不再是这块弹窗的一屏：登录成功后弹窗直接关掉，侧栏那一格变成
-//     头像 + 用户名；资料 / 密码 / 凭证都在**设置 → 用户信息**（views/userSettings.js）。
+//     头像 + 用户名；资料 / 密码 / 凭证都在**设置 → 个人信息**（views/userSettings.js）。
 //
 //  ⚠️ 这里只画界面、收输入，请求都在 data/account.js（它再走 preload → 主进程假后端）。
 //  ⚠️ 不 import views/account.js —— 侧栏那一格的刷新由入口层注入 onSessionChange，
@@ -98,6 +98,7 @@ function cacheNodes() {
   nodes.setupName = $('acc-setup-name');
   nodes.setupPassword = $('acc-setup-password');
   nodes.setupPassword2 = $('acc-setup-password2');
+  nodes.setupInvite = $('acc-setup-invite');
   nodes.setupError = $('acc-setup-error');
   nodes.btnFinish = $('btn-account-finish');
   nodes.btnSetupBack = $('btn-setup-back');
@@ -266,7 +267,7 @@ async function pickAvatar() {
 
 function afterLogin(user, message) {
   onSessionChange(user);
-  // 2026-10-23：不再跳「我的账号」面板 —— 关掉弹窗，账号相关的都在设置 → 用户信息
+  // 2026-10-23：不再跳「我的账号」面板 —— 关掉弹窗，账号相关的都在设置 → 个人信息
   closeAccountModal();
   resetForms();
   if (message) showToast(message, 'ok');
@@ -285,6 +286,8 @@ function resetForms() {
     nodes.regHint.classList.remove('account-hint-dev');
   }
   if (nodes.voucherCode) nodes.voucherCode.value = '';
+  // 邀请码跟着整份表单一起清 —— 它是第二步的字段，但换个人注册就该重新填
+  if (nodes.setupInvite) nodes.setupInvite.value = '';
   showPane('login');
 }
 
@@ -398,7 +401,9 @@ async function submitFinish() {
       accountId: pending.accountId,
       username,
       password,
-      avatar: avatarDraft
+      avatar: avatarDraft,
+      // 选填 —— 空字符串表示没填，服务端据此不记归因
+      inviteCode: nodes.setupInvite ? nodes.setupInvite.value.trim() : ''
     });
     pending = null;
     avatarDraft = '';
@@ -465,7 +470,7 @@ async function submitVoucherLogin() {
  */
 export function openAccountModal(which) {
   if (accountUser()) {
-    showToast('已经登录了，改资料去「设置 → 用户信息」', 'ok');
+    showToast('已经登录了，改资料去「设置 → 个人信息」', 'ok');
     return;
   }
   if (which === 'register') {

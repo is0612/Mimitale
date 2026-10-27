@@ -66,6 +66,9 @@ services:
       SMTP_SECURE: 'false'
       MAIL_FROM: 'Mimitale <no-reply@mimitale.local>'
       DEV_ECHO_CODE: 'false'
+      SEED_DEMO: 'false'
+      # 容器直接暴露端口，前面没有代理；真挂 nginx 时改成 'true'
+      TRUST_PROXY: 'false'
     ports:
       - '127.0.0.1:8080:8080'
 

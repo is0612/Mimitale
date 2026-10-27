@@ -12,7 +12,7 @@ import { fillSelect } from '../ui/controls.js';
 import { openPetSection } from './petSettings.js';
 // 外观那一组（见 index.html 的 #sec-appearance），同样单向 import
 import { renderAppearanceForm } from './appearance.js';
-// 设置页第一栏「用户信息」的内容在 views/userSettings.js（账号资料 / 头像 / 密码 / 凭证）
+// 设置页第一栏「个人信息」的内容在 views/userSettings.js（账号资料 / 头像 / 密码 / 凭证）
 import { renderUserSection } from './userSettings.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
@@ -147,7 +147,7 @@ export function setEditingProvider(id) {
 // 分组导航：一个版块 = 一组，点左栏只显示那一组。当前选中不落盘（只是「刚才翻到哪了」），
 // 但同一次运行里离开再进来会回到原样（currentSectionId）。
 
-/** 这次运行里选中哪一组（存 section 的 id）。默认第一组「用户信息」（2026-10-23 起） */
+/** 这次运行里选中哪一组（存 section 的 id）。默认第一组「个人信息」（2026-10-23 起） */
 let currentSectionId = 'sec-user';
 
 /** 切到某一组：左栏高亮、右栏只显示对应卡片、内容滚回顶部。id 不认识就什么都不做。 */
@@ -176,7 +176,7 @@ export function showSettingsSection(id) {
 
   // 切到「外观」时回填一次：它读的是内存里的设置，不填会留着上一次的颜色。
   if (id === 'sec-appearance') renderAppearanceForm();
-  // 用户信息这一栏读的是账号状态（可能在登录弹窗里刚变过），每次进来重铺一遍。
+  // 个人信息这一栏读的是账号状态（可能在登录弹窗里刚变过），每次进来重铺一遍。
   if (id === 'sec-user') renderUserSection();
 }
 
@@ -813,7 +813,7 @@ function readSettingsForm() {
 
 /**
  * 打开设置页。
- * @param {string} [section] 指定落到哪一组（比如从账号菜单进来要看「用户信息」）。
+ * @param {string} [section] 指定落到哪一组（比如从账号菜单进来要看「个人信息」）。
  *   不传就回到这次运行里上次停留的那组。
  *   ⚠️ 只认字符串。调用方可能把它当 click 监听器绑（那样第一个参数是 PointerEvent），
  *      所以这里必须挡一下，否则会拿事件对象去拼 `querySelector('#[object PointerEvent]')`。

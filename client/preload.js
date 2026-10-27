@@ -143,6 +143,7 @@ contextBridge.exposeInMainWorld('mimitale', {
   accountVoucherLogin: (payload) => ipcRenderer.invoke('account:voucher-login', payload),
   accountLogout: () => ipcRenderer.invoke('account:logout'),
   accountVoucher: () => ipcRenderer.invoke('account:voucher'),
+  accountRefreshVoucher: () => ipcRenderer.invoke('account:refresh-voucher'),
   accountUpdateProfile: (payload) => ipcRenderer.invoke('account:update-profile', payload),
   accountChangePassword: (payload) => ipcRenderer.invoke('account:change-password', payload),
   accountChangeEmail: (payload) => ipcRenderer.invoke('account:change-email', payload),

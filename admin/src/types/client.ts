@@ -14,7 +14,7 @@
  * 和后台侧（./admin.ts）的关键区别：
  *   - 客户能自助注册（这是设计），管理员不能（那是漏洞）
  *   - 客户侧返回的 `ClientUser` 和后台的 `Customer` **是两个形状**，别想着统一：
- *     后台要看额度/会员/封禁原因/卡密，客户端只关心「我是谁、我叫什么、我的头像」
+ *     后台要看会员/封禁原因/卡密，客户端只关心「我是谁、我叫什么、我的头像、我的会员」
  *
  * 统一约定见 ./index.ts：`{ code, message, data }`，`code === 0` 成功，
  * 认证走 `Authorization: Bearer <token>`，认证失败才返回 HTTP 401。
@@ -25,9 +25,35 @@
 /* ------------------------------------------------------------------ */
 
 /**
+ * 会员状态。
+ *
+ * ⚠️ 「有没有过期」由服务端算好给 `active`，客户端**不要**自己拿 expireAt 和本地时钟比 ——
+ *    用户改系统时间就能把过期会员变成会员。判定口径在 `server/src/routes/client/auth.ts`。
+ */
+export interface ClientMembership {
+  /** 会员等级：none = 非会员（哨兵值，不在字典里）| basic | medium | premium */
+  level: string
+  /** 等级显示名，来自字典；非会员固定「非会员」 */
+  name: string
+  /** 还能用（免费天数或会员任一未过期） */
+  active: boolean
+  /** 免费天数还剩几天（注册 + 邀请）。没送过 / 已用完 = null */
+  freeDaysLeft: number | null
+  /** 免费天数用到哪天 */
+  freeExpireAt: string | null
+  /** 会员还剩几天（后台发的）。没有 / 已过期 = null */
+  memberDaysLeft: number | null
+  /** 会员用到哪天 */
+  memberExpireAt: string | null
+  /** 权益真正到哪天 = 两个里更晚的那个 */
+  until: string | null
+}
+
+/**
  * ⚠️ 跟 `./admin.ts` 的 `Customer` **不是同一个东西**。
  * - `id` 是字符串（客户端从第一天就用 UUID，渲染层可能拿它做字符串比较）
  * - `username` 在服务端那一列叫 `nickname`（后台列表显示成「昵称」），**同一列**
+ * - 会员只给「够显示」的四个字段，不给封禁原因和内部分级依据
  */
 export interface ClientUser {
   id: string
@@ -39,6 +65,16 @@ export interface ClientUser {
   createdAt: string
   /** 有没有走完注册第二步。false = 建了号但没设资料，不算注册成功 */
   profileReady: boolean
+  membership: ClientMembership
+  /**
+   * **我自己的**邀请码（`MIMI-XXXX-XXXX`），发给别人、对方注册时填。
+   * 一人一个、能邀多人。空字符串 = 还没生成（老数据，服务端会在 /me 里补上）
+   */
+  inviteCode: string
+  /** 我邀请了几个人（他们注册时填了我的码）。只统计走完注册第二步的 */
+  invitedCount: number
+  /** 邀请已经给我挣到多少天免费（= invitedCount × 每人天数）。服务端算，客户端别写死 7 */
+  freeDaysFromInvite: number
 }
 
 /* ------------------------------------------------------------------ */

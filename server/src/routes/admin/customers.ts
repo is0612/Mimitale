@@ -7,7 +7,8 @@ import { dictLabel } from '../../lib/dict.js'
 import { pushLog, type LogEntry } from '../../lib/log.js'
 import { toCard, toCustomer, toLog } from '../../lib/dto.js'
 import { currentAdmin } from '../../lib/whoami.js'
-import { DAY_MS, dayOf } from '../../lib/time.js'
+import { dayOf } from '../../lib/time.js'
+import { grantDaysIn } from '../../lib/membership.js'
 
 /** 和 mock 保持一致的翻页收口：pageSize 最大 100，最小 1 */
 function paging(query: Record<string, unknown>): { page: number; pageSize: number; skip: number; take: number } {
@@ -24,8 +25,8 @@ function textOf(value: unknown): string {
  * 客户管理。前缀 /api/admin
  *
  * 三条从 mock 抄过来的规矩：
- *   ① 封禁和改额度**值没变就不写日志** —— 重复提交同一个额度不该刷出噪音
- *   ② 业务写库和写日志在同一个事务里，不会出现「额度改了但没记录」
+ *   ① 封禁**值没变就不写日志** —— 重复提交同一个状态不该刷出噪音
+ *   ② 业务写库和写日志在同一个事务里，不会出现「会员发了但没记录」
  *   ③ 发会员从 max(现在, 原到期日) 顺延，不是从今天重新算
  */
 export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
@@ -70,26 +71,81 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
     const customer = await prisma.customer.findUnique({ where: { id } })
     if (!customer) return fail(ApiCode.NOT_FOUND, '客户不存在')
 
-    const [card, logs] = await Promise.all([
+    const [card, logs, invitedCount, referrer, loginLogs, grants, sessions] = await Promise.all([
       prisma.inviteCard.findFirst({ where: { usedByCustomerId: id } }),
       prisma.operationLog.findMany({
         where: { targetType: 'customer', targetId: id },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 200
+      }),
+      // 「他邀请了几个人」和「谁邀请的他」都要现查 —— 都是逻辑字段，没有关系表
+      prisma.customer.count({ where: { referredById: id } }),
+      customer.referredById
+        ? prisma.customer.findUnique({
+            where: { id: customer.referredById },
+            select: { id: true, nickname: true, email: true }
+          })
+        : null,
+      // 最近 30 次登录就够看「从哪来、几点来」，一次拉全量只会把详情页拖慢
+      prisma.loginLog.findMany({
+        where: { customerId: id },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 30
+      }),
+      // 天数流水：这 60 天里哪 30 天是送的、哪 30 天是发的，全在这里
+      prisma.membershipGrant.findMany({
+        where: { customerId: id },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 100
+      }),
+      // 使用会话：最近 30 次「打开到关闭」，看时长和版本
+      prisma.clientSession.findMany({
+        where: { customerId: id },
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+        take: 30
       })
     ])
 
     return ok({
       ...toCustomer(customer),
       usedCard: card ? toCard(card, customer.email) : null,
-      logs: logs.map(toLog)
+      logs: logs.map(toLog),
+      invitedCount,
+      referredBy: referrer,
+      loginLogs: loginLogs.map((l) => ({
+        id: l.id,
+        method: l.method,
+        ip: l.ip,
+        userAgent: l.userAgent,
+        createdAt: l.createdAt.toISOString()
+      })),
+      grants: grants.map((g) => ({
+        id: g.id,
+        days: g.days,
+        source: g.source,
+        note: g.note,
+        refId: g.refId,
+        startsAt: g.startsAt.toISOString(),
+        expiresAt: g.expiresAt.toISOString(),
+        createdAt: g.createdAt.toISOString()
+      })),
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        startedAt: s.startedAt.toISOString(),
+        lastSeenAt: s.lastSeenAt?.toISOString() ?? null,
+        endedAt: s.endedAt?.toISOString() ?? null,
+        endReason: s.endReason,
+        endDetail: s.endDetail,
+        appVersion: s.appVersion,
+        ip: s.ip
+      }))
     })
   })
 
   /**
-   * PATCH /api/admin/customers/:id —— 封禁 / 解封 / 改额度 / 发会员
+   * PATCH /api/admin/customers/:id —— 封禁 / 解封 / 发会员
    *
-   * 一次请求可以带多个字段（比如同时改额度又发会员），
+   * 一次请求可以带多个字段（比如封禁的同时发会员），
    * 每个**真正发生变化**的字段各落一条日志。
    */
   app.patch('/customers/:id', async (request) => {
@@ -137,21 +193,9 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    /* ---------------- 改额度 ---------------- */
-    if (typeof body.quota === 'number' && Number.isFinite(body.quota)) {
-      const next = Math.floor(body.quota)
-      if (next !== target.quota) {
-        data.quota = next
-        const show = (n: number): string => (n === -1 ? '不限量' : String(n))
-        logs.push({
-          ...base,
-          action: 'customer.quota',
-          detail: `额度 ${show(target.quota)} → ${show(next)}`
-        })
-      }
-    }
-
     /* ---------------- 发会员 ---------------- */
+    /** 会员天数不在 data 里改 —— 它要锁行 + 写流水，只能在事务里走 grantDaysIn */
+    let grant: { level: string; label: string; days: number } | null = null
     if (body.membershipLevel !== undefined) {
       const level = String(body.membershipLevel).trim()
       const label = await dictLabel('membership_level', level)
@@ -166,28 +210,44 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
         return fail(ApiCode.INVALID_PARAM, '顺延天数要是正整数')
       }
 
-      // 还在有效期就往后接，已过期或非会员从今天起算
-      const now = Date.now()
-      const from = target.membershipExpireAt ? Math.max(now, target.membershipExpireAt.getTime()) : now
-      const expireAt = new Date(from + days * DAY_MS)
-
-      data.membershipLevel = level
-      data.membershipExpireAt = expireAt
-
-      logs.push({
-        ...base,
-        action: 'customer.membership',
-        detail: `发会员：${label} +${days} 天（${
-          target.membershipLevel === 'none' ? '新开通' : '续费'
-        }，到期 ${dayOf(expireAt)}）`
-      })
+      grant = { level, label, days }
     }
 
     // 一个字段都没变 —— 回原样，不写库也不写日志
-    if (logs.length === 0) return ok(toCustomer(target))
+    if (logs.length === 0 && !grant) return ok(toCustomer(target))
 
     const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.customer.update({ where: { id }, data })
+      // 只发会员时 data 是空的，别白跑一次 update
+      let row = Object.keys(data).length > 0 ? await tx.customer.update({ where: { id }, data }) : target
+
+      if (grant) {
+        // 还在有效期就往后接，已过期或从没发过就从今天起算（grantDaysIn 里算）
+        const result = await grantDaysIn(tx, {
+          customerId: id,
+          days: grant.days,
+          source: 'admin',
+          wallet: 'member',
+          level: grant.level,
+          refId: admin.id,
+          note: '后台发会员'
+        })
+        row = result.customer
+
+        await pushLog(
+          {
+            ...base,
+            action: 'customer.membership',
+            detail: `发会员：${grant.label} +${grant.days} 天（${
+              target.membershipLevel === 'none' ? '新开通' : '续费'
+            }，到期 ${dayOf(result.grant.expiresAt)}）`,
+            adminId: admin.id,
+            adminName: admin.nickname,
+            ip: request.ip
+          },
+          tx
+        )
+      }
+
       for (const log of logs) {
         await pushLog({ ...log, adminId: admin.id, adminName: admin.nickname, ip: request.ip }, tx)
       }

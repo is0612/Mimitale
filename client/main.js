@@ -24,6 +24,7 @@ const { app, BrowserWindow } = require('electron');
 const { createWindow, getMainWindow } = require('./main/window.js');
 const { registerIpc } = require('./main/ipc.js');
 const { startPet, shutdownPet } = require('./main/pet-ipc.js');
+const { reportLaunch, startHeartbeat, reportExit } = require('./main/account.js');
 
 // ---------------------------------------------------------------------------
 //  主进程兜底：别把 JS 异常弹成系统对话框
@@ -136,6 +137,8 @@ if (yieldToOther) {
       console.error('[pet] 退出收尾失败:', err.message);
     }
     clearInstanceMarker();
+    // 结清使用会话（正常退出）。不 await —— 别让这次上报拖着窗口不消失
+    reportExit('quit');
   });
 
   app.whenReady().then(() => {
@@ -144,6 +147,19 @@ if (yieldToOther) {
     // 桌宠必须在主窗口建好之后才起：注册 IPC 时起的话，
     // 桌面上会先冒出一只宠物、过一会儿主界面才出来
     startPet();
+
+    // 「打开软件」上报（带版本号）+ 起 5 分钟心跳。不 await —— 网络慢的时候不能拖着窗口不显示
+    void reportLaunch(app.getVersion());
+    startHeartbeat();
+
+    // 渲染进程崩溃时结清会话，把原因带上去（crash + render-process-gone 的 reason）。
+    // 崩溃后 Electron 会自动重建窗口，这里只管把这次会话标记成 crash。
+    const mainWindow = getMainWindow();
+    if (mainWindow) {
+      mainWindow.webContents.on('render-process-gone', (_event, details) => {
+        reportExit('crash', `render-process-gone:${details.reason}`);
+      });
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

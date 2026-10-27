@@ -22,7 +22,7 @@ export function fetchCustomers(query: CustomerListQuery): Promise<CustomerListRe
   })
 }
 
-/** 6. 改客户状态（封禁 / 解封）/ 改额度。每次变更后端都会落一条操作日志 */
+/** 6. 改客户状态（封禁 / 解封）、发会员。每次变更后端都会落一条操作日志 */
 export function updateCustomer(id: number, payload: UpdateCustomerReq): Promise<Customer> {
   return request<Customer>({
     url: `/admin/customers/${id}`,

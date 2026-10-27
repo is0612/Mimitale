@@ -5,3 +5,6 @@ node_modules/
 
 # Prisma 本地生成的客户端
 src/generated/
+
+# 清库前导出的临时备份 —— 里面有客户邮箱和密码哈希，绝不提交
+backup/

@@ -118,7 +118,8 @@ function goCustomer(id: number): void {
           <div class="stat-label">生效会员</div>
           <div class="stat-value">{{ data.activeMembers }}</div>
           <div class="stat-foot">
-            <span class="dim">发过会员的一共 {{ data.memberTotal }} 个</span>
+            <span class="dim">共发过 {{ data.memberTotal }} 个</span>
+            <span v-if="data.expiringIn7Days > 0" class="warn"> · {{ data.expiringIn7Days }} 个快到期</span>
             <el-progress
               v-if="data.memberTotal > 0"
               :percentage="memberRate"
@@ -129,12 +130,13 @@ function goCustomer(id: number): void {
           </div>
         </div>
 
-        <div class="stat-card" :class="{ 'stat-card--warn': data.expiringIn7Days > 0 }">
-          <div class="stat-label">7 天内到期</div>
-          <div class="stat-value">{{ data.expiringIn7Days }}</div>
+        <div class="stat-card" :class="{ 'stat-card--warn': data.freeExpiring > 0 }">
+          <div class="stat-label">免费天数</div>
+          <div class="stat-value">{{ data.freeActive }}</div>
           <div class="stat-foot">
-            <span v-if="data.expiringIn7Days > 0" class="warn">这批该催续费了</span>
-            <span v-else class="dim">暂时没人到期</span>
+            <span v-if="data.freeExpiring > 0" class="warn">{{ data.freeExpiring }} 个 7 天内用完</span>
+            <span v-else class="dim">没人快用完</span>
+            <span class="dim"> · 累计送出 {{ data.freeDaysGranted }} 天</span>
           </div>
         </div>
       </div>
@@ -194,6 +196,8 @@ function goCustomer(id: number): void {
 
       <div class="footnote">
         今天有 <strong>{{ data.todayActive }}</strong> 个客户登录过 ·
+        打开软件 <strong>{{ data.todaySessionUsers }}</strong> 人 ·
+        近 7 天平均单次用 <strong>{{ data.avgSessionMinutes }}</strong> 分钟 ·
         还能发 <strong>{{ data.unusedCards }}</strong> 张卡密
         <el-button link type="primary" size="small" style="margin-left: 8px" @click="load">
           刷新

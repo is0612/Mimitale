@@ -40,12 +40,16 @@ export function toCustomer(c: Customer): CustomerDTO {
     id: c.id,
     email: c.email,
     nickname: c.nickname,
+    avatar: c.avatar,
     status: c.status === 'banned' ? 'banned' : 'active',
     banReason: c.banReason,
-    quota: c.quota,
     membershipLevel: c.membershipLevel,
     membershipExpireAt: c.membershipExpireAt?.toISOString() ?? null,
+    freeExpireAt: c.freeExpireAt?.toISOString() ?? null,
     inviteCode: c.inviteCode,
+    referralCode: c.referralCode,
+    referredById: c.referredById,
+    voucher: c.voucher,
     createdAt: c.createdAt.toISOString(),
     lastLoginAt: c.lastLoginAt?.toISOString() ?? null
   }

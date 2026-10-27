@@ -982,6 +982,7 @@ function registerIpc() {
   ipcMain.handle('account:voucher-login', accountCall((payload) => accountApi.loginWithVoucher(payload)));
   ipcMain.handle('account:logout', accountCall(() => accountApi.logout()));
   ipcMain.handle('account:voucher', accountCall(() => accountApi.getVoucher()));
+  ipcMain.handle('account:refresh-voucher', accountCall(() => accountApi.refreshVoucher()));
   ipcMain.handle('account:update-profile', accountCall((payload) => accountApi.updateProfile(payload)));
   ipcMain.handle('account:change-password', accountCall((payload) => accountApi.changePassword(payload)));
   ipcMain.handle('account:change-email', accountCall((payload) => accountApi.changeEmail(payload)));

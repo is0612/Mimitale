@@ -1,67 +1,25 @@
 <script setup lang="ts">
 /**
- * 客户的两个操作弹层：改额度 / 封禁。
+ * 客户的三个操作弹层：发会员 / 封禁 / 解封。
  *
  * 抽成组件是因为**列表页和详情页都要用** —— 抄两遍必然会走样
  * （改了一处忘另一处，是后台项目最常见的烂法）。
  *
  * 用法：父组件放 `<CustomerDialogs ref="dialogs" @done="load" />`，
- *      然后在按钮里调 `dialogs.value?.openQuota(row)`。
+ *      然后在按钮里调 `dialogs.value?.openMembership(row)`。
  *
- * 封禁原因和额度预设都来自**字典**，所以运营在字典页加一条，
+ * 封禁原因和会员等级都来自**字典**，所以运营在字典页加一条，
  * 这里的下拉立刻多一个选项。
  */
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { updateCustomer } from '@/api/customer'
 import { useDictStore } from '@/stores/dict'
-import { formatQuota, formatTime, membershipState } from '@/config/labels'
+import { formatTime, membershipState } from '@/config/labels'
 import type { Customer } from '@/types'
 
 const emit = defineEmits<{ done: [] }>()
 const dict = useDictStore()
-
-/* ---------------- 改额度 ---------------- */
-
-const quotaVisible = ref(false)
-const quotaTarget = ref<Customer | null>(null)
-const quotaValue = ref(0)
-
-/** 字典 quota_preset —— 快捷按钮，省得每次手打数字 */
-const quotaPresets = computed(() => dict.optionsOf('quota_preset'))
-
-const quotaHint = computed(() => {
-  const n = Number(quotaValue.value)
-  if (!Number.isFinite(n)) return '请填整数'
-  if (n === -1) return '不限量'
-  if (n === 0) return '能登录，但一次也用不了'
-  if (n < 0) return '只有 -1 表示不限量，其它负数没有意义'
-  return `还能用 ${n} 次`
-})
-
-function openQuota(row: Customer): void {
-  quotaTarget.value = row
-  quotaValue.value = row.quota
-  quotaVisible.value = true
-}
-
-async function submitQuota(): Promise<void> {
-  const target = quotaTarget.value
-  if (!target) return
-  const n = Number(quotaValue.value)
-  if (!Number.isFinite(n) || !Number.isInteger(n)) {
-    ElMessage.warning('额度要填整数')
-    return
-  }
-  try {
-    await updateCustomer(target.id, { quota: n })
-    ElMessage.success(`「${target.nickname}」额度已改为 ${formatQuota(n)}`)
-    quotaVisible.value = false
-    emit('done')
-  } catch {
-    // 错误提示已在 request 层统一处理
-  }
-}
 
 /* ---------------- 封禁 ---------------- */
 
@@ -187,39 +145,10 @@ async function submitMembership(): Promise<void> {
   }
 }
 
-defineExpose({ openQuota, openBan, submitUnban, openMembership })
+defineExpose({ openBan, submitUnban, openMembership })
 </script>
 
 <template>
-  <!-- 改额度 -->
-  <el-dialog v-model="quotaVisible" title="修改额度" width="440px">
-    <div v-if="quotaTarget" class="dlg-body">
-      <div class="dlg-target">
-        {{ quotaTarget.nickname }}
-        <span class="dlg-mail">{{ quotaTarget.email }}</span>
-      </div>
-      <div class="dlg-label">快捷选择</div>
-      <div class="presets">
-        <el-button
-          v-for="p in quotaPresets"
-          :key="p.value"
-          size="small"
-          :type="Number(quotaValue) === Number(p.value) ? 'primary' : 'default'"
-          @click="quotaValue = Number(p.value)"
-        >
-          {{ p.label }}
-        </el-button>
-      </div>
-      <div class="dlg-label">或者手填</div>
-      <el-input v-model.number="quotaValue" placeholder="整数，-1 表示不限量" />
-      <div class="hint">{{ quotaHint }}</div>
-    </div>
-    <template #footer>
-      <el-button @click="quotaVisible = false">取消</el-button>
-      <el-button type="primary" @click="submitQuota">保存</el-button>
-    </template>
-  </el-dialog>
-
   <!-- 封禁 -->
   <el-dialog v-model="banVisible" title="封禁客户" width="440px">
     <div v-if="banTarget" class="dlg-body">

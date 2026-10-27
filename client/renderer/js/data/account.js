@@ -54,6 +54,23 @@ export async function loadAccount() {
   return cachedUser;
 }
 
+/**
+ * 重新拉一次会话（会员是后台改的，本地快照不会自己变）。
+ *
+ * ⚠️ 跟 loadAccount 的差别在失败时：这里**保留**已登录态、照旧返回缓存。
+ *    loadAccount 是首屏判断「登没登录」，拉不到就当没登录；这颗刷新按钮
+ *    如果也那样，服务器抖一下就会把正在用的人显示成未登录。
+ */
+export async function refreshAccount() {
+  try {
+    const result = unwrap(await api.accountSession(), '刷新失败');
+    cachedUser = result.user || null;
+  } catch (err) {
+    console.warn('[account] 刷新登录状态失败，沿用本地快照:', (err && err.message) || err);
+  }
+  return cachedUser;
+}
+
 /** 换一张图形校验码 → { id, image, expiresIn } */
 export async function newCaptcha() {
   return unwrap(await api.accountCaptcha(), '校验码获取失败');
@@ -96,6 +113,14 @@ export async function logout() {
 /** 取登录凭证（画卡片要的字段）→ { code, username, email, avatar, createdAt } */
 export async function getVoucher() {
   return unwrap(await api.accountVoucher(), '读取登录凭证失败');
+}
+
+/**
+ * 换一张新凭证码 → 同形状。⚠️ 旧码服务端直接覆盖，调用前必须让用户确认。
+ * 返回的形状里没有 user，所以不动 cachedUser。
+ */
+export async function refreshVoucher() {
+  return unwrap(await api.accountRefreshVoucher(), '刷新凭证码失败');
 }
 
 export async function updateProfile(payload) {

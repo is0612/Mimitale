@@ -12,13 +12,13 @@
  *          把它塞进字典，只能改显示名，加不出真正生效的选项，
  *          结果是界面上多出一个「选得动、但什么都不发生」的假旋钮。
  *
- *   不需要 → 放字典（封禁原因、客户来源、额度预设、卡密备注）。
+ *   不需要 → 放字典（封禁原因、客户来源、卡密备注）。
  *           运营自己加一个「刷屏」不用重新部署，这才是字典该干的事。
  *
  * 这条边界是有意的，别为了「统一」把这些也搬进字典。
  */
 
-import type { CardStatus, CustomerStatus, LogAction, MembershipLevel } from '@/types'
+import type { CardStatus, CustomerStatus, GrantSource, LogAction, MembershipLevel } from '@/types'
 
 /** el-tag 支持的类型 */
 export type TagType = 'success' | 'info' | 'warning' | 'danger'
@@ -27,7 +27,6 @@ export type TagType = 'success' | 'info' | 'warning' | 'danger'
 export const LOG_ACTION_LABEL: Record<LogAction, string> = {
   'customer.ban': '封禁客户',
   'customer.unban': '解封客户',
-  'customer.quota': '调整额度',
   'customer.membership': '发会员',
   'card.create': '生成卡密',
   'card.void': '作废卡密',
@@ -40,7 +39,6 @@ export const LOG_ACTION_LABEL: Record<LogAction, string> = {
 export const LOG_ACTION_TAG: Record<LogAction, TagType> = {
   'customer.ban': 'danger',
   'customer.unban': 'success',
-  'customer.quota': 'info',
   'customer.membership': 'success',
   'card.create': 'info',
   'card.void': 'danger',
@@ -53,7 +51,6 @@ export const LOG_ACTION_TAG: Record<LogAction, TagType> = {
 export const LOG_ACTION_OPTIONS: LogAction[] = [
   'customer.ban',
   'customer.unban',
-  'customer.quota',
   'customer.membership',
   'card.create',
   'card.void',
@@ -61,6 +58,32 @@ export const LOG_ACTION_OPTIONS: LogAction[] = [
   'dict.update',
   'dict.delete'
 ]
+
+/** 活动类型 —— 代码枚举（服务端 record 的入参），不进字典 */
+export const LOGIN_METHOD_LABEL: Record<string, string> = {
+  password: '密码登录',
+  voucher: '凭证登录',
+  register: '注册即登录'
+}
+
+export const LOGIN_METHOD_TAG: Record<string, TagType> = {
+  password: 'info',
+  voucher: 'warning',
+  register: 'success'
+}
+
+/** 使用会话的结束原因 —— 代码枚举，不进字典 */
+export const SESSION_END_REASON_LABEL: Record<string, string> = {
+  quit: '正常退出',
+  crash: '崩溃',
+  unknown: '未知（下次启动结清）'
+}
+
+export const SESSION_END_REASON_TAG: Record<string, TagType> = {
+  quit: 'success',
+  crash: 'danger',
+  unknown: 'info'
+}
 
 /** 客户状态 */
 export const CUSTOMER_STATUS_LABEL: Record<CustomerStatus, string> = {
@@ -86,6 +109,39 @@ export function membershipState(c: {
 }): 'none' | 'active' | 'expired' {
   if (c.membershipLevel === 'none' || !c.membershipExpireAt) return 'none'
   return Date.parse(c.membershipExpireAt) > Date.now() ? 'active' : 'expired'
+}
+
+/**
+ * 免费天数还剩几天（向上取整，今天到期 = 1）。没送过 / 已用完 = null。
+ * ⚠️ 跟服务端 `lib/membership.ts` 的 entitlementOf 同一算法，两边不一致会出现
+ *    「后台说还剩 3 天、客户端说已结束」。
+ */
+export function freeDaysLeft(c: { freeExpireAt: string | null }): number | null {
+  if (!c.freeExpireAt) return null
+  const ms = Date.parse(c.freeExpireAt) - Date.now()
+  return ms > 0 ? Math.ceil(ms / 86_400_000) : null
+}
+
+/** 免费天数状态：没送过 / 还能用 / 已用完 */
+export function freeState(c: { freeExpireAt: string | null }): 'none' | 'active' | 'expired' {
+  if (!c.freeExpireAt) return 'none'
+  return Date.parse(c.freeExpireAt) > Date.now() ? 'active' : 'expired'
+}
+
+/**
+ * 一段天数的来源 —— 送了几天、谁给的。
+ * `trial` / `invite` 都是免费天数，`admin` 是会员。
+ */
+export const GRANT_SOURCE_LABEL: Record<GrantSource, string> = {
+  trial: '注册赠送',
+  invite: '邀请奖励',
+  admin: '后台发会员'
+}
+
+export const GRANT_SOURCE_TAG: Record<GrantSource, TagType> = {
+  trial: 'info',
+  invite: 'warning',
+  admin: 'success'
 }
 
 /** 卡密状态 */
@@ -121,9 +177,4 @@ export function formatTime(value: string | null): string {
 export function formatDay(value: string | null): string {
   if (!value) return '—'
   return formatTime(value).slice(0, 10)
-}
-
-/** 额度显示：-1 → 不限量 */
-export function formatQuota(quota: number): string {
-  return quota === -1 ? '不限量' : String(quota)
 }

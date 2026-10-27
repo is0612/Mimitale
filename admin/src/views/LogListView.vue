@@ -69,7 +69,7 @@ onMounted(load)
     <el-alert type="info" :closable="false" class="tip">
       <template #title>
         日志由后端在动作发生时自动写入，只有「查」没有「改」——
-        封禁、改额度、生成或作废卡密、改动字典，都会在这里留下一条。
+        封禁、发会员、生成或作废卡密、改动字典，都会在这里留下一条。
       </template>
     </el-alert>
 

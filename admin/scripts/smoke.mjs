@@ -154,13 +154,14 @@ try {
     const q = await call({ url: '/admin/customers', method: 'get', params: { page: 1, pageSize: 100 }, headers: auth(token) })
     const target = q.data.data.list.find((c) => c.status === 'active')
 
+    // 额度字段已撤掉：传了也不该被认，返回里也不该有它
     const quota = await call({ url: `/admin/customers/${target.id}`, method: 'patch', body: { quota: 42 }, headers: auth(token) })
-    check('改额度生效', quota.data.data?.quota === 42, JSON.stringify(quota.data).slice(0, 120))
+    check('额度字段已撤掉，传了不生效', quota.data.data?.quota === undefined && quota.data.data?.status === 'active', JSON.stringify(quota.data).slice(0, 120))
 
     const ban = await call({ url: `/admin/customers/${target.id}`, method: 'patch', body: { status: 'banned' }, headers: auth(token) })
     check('封禁生效', ban.data.data?.status === 'banned')
 
-    const missing = await call({ url: '/admin/customers/99999', method: 'patch', body: { quota: 1 }, headers: auth(token) })
+    const missing = await call({ url: '/admin/customers/99999', method: 'patch', body: { status: 'banned' }, headers: auth(token) })
     check('不存在的客户 → 40400', missing.data.code === 40400, JSON.stringify(missing.data))
   }
 
@@ -235,14 +236,14 @@ try {
     check('详情里的日志也 +1', midDetail.data.data.logs.length === beforeCount + 1, `${beforeCount} → ${midDetail.data.data.logs.length}`)
     check('封禁原因存到了客户身上', midDetail.data.data.banReason === 'spam', String(midDetail.data.data.banReason))
 
-    // 改额度
-    await call({ url: `/admin/customers/${target.id}`, method: 'patch', body: { quota: 777 }, headers: auth(token) })
-    const afterQuota = await call({ url: '/admin/logs', method: 'get', params: { page: 1, pageSize: 5 }, headers: auth(token) })
-    check('改额度后日志 total +1', afterQuota.data.data.total === logTotal + 2, `got ${afterQuota.data.data.total}`)
-    check('额度日志带前后值', afterQuota.data.data.list[0].action === 'customer.quota' && String(afterQuota.data.data.list[0].detail).includes('777'), afterQuota.data.data.list[0].detail)
+    // 发会员
+    await call({ url: `/admin/customers/${target.id}`, method: 'patch', body: { membershipLevel: 'basic', membershipDays: 30 }, headers: auth(token) })
+    const afterMember = await call({ url: '/admin/logs', method: 'get', params: { page: 1, pageSize: 5 }, headers: auth(token) })
+    check('发会员后日志 total +1', afterMember.data.data.total === logTotal + 2, `got ${afterMember.data.data.total}`)
+    check('会员日志带天数', afterMember.data.data.list[0].action === 'customer.membership' && String(afterMember.data.data.list[0].detail).includes('30'), afterMember.data.data.list[0].detail)
 
-    // 值没变 → 不该产生日志（避免刷屏式日志）
-    await call({ url: `/admin/customers/${target.id}`, method: 'patch', body: { quota: 777 }, headers: auth(token) })
+    // 值没变 → 不该产生日志（避免刷屏式日志）；此刻这个客户已经是 banned，再封一次应当无动作
+    await call({ url: `/admin/customers/${target.id}`, method: 'patch', body: { status: 'banned' }, headers: auth(token) })
     const same = await call({ url: '/admin/logs', method: 'get', params: { page: 1, pageSize: 5 }, headers: auth(token) })
     check('值没变就不写日志', same.data.data.total === logTotal + 2, `got ${same.data.data.total}`)
 
@@ -319,7 +320,7 @@ try {
     const all = await call({ url: '/admin/dicts', method: 'get', headers: auth(token) })
     check('code 0', all.data.code === 0, JSON.stringify(all.data).slice(0, 120))
     const list = all.data.data ?? []
-    check('有 5 个字典类型', list.length === 5, `got ${list.length}`)
+    check('有 4 个字典类型', list.length === 4, `got ${list.length}`)
     check('每个类型都有数据项', list.every((b) => b.items.length > 0))
 
     const ml = list.find((b) => b.type.code === 'membership_level')
@@ -400,6 +401,7 @@ try {
     // 给非会员发 30 天初级会员
     const grant = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'basic', membershipDays: 30 }, headers: auth(token) })
     check('发会员 → level basic', grant.data.data?.membershipLevel === 'basic', JSON.stringify(grant.data).slice(0, 120))
+    check('发完就是真会员（等级不是 none）', grant.data.data?.membershipLevel === 'basic', String(grant.data.data?.membershipLevel))
     check('到期时间在未来', Date.parse(grant.data.data?.membershipExpireAt) > Date.now(), String(grant.data.data?.membershipExpireAt))
 
     // 发中级 / 高级会员 —— 等级是字典值，接口不该只认 basic
@@ -425,6 +427,15 @@ try {
     // 错误分支
     const badLevel = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'diamond', membershipDays: 30 }, headers: auth(token) })
     check('不存在的等级 → 1001', badLevel.data.code === 1001, JSON.stringify(badLevel.data))
+
+    // 概览：两个数必须能对上（前端卡片直接拿这两个数展示，对不上就是自相矛盾）
+    const ov = await call({ url: '/admin/overview', method: 'get', headers: auth(token) })
+    const o = ov.data.data
+    check(
+      '概览：免费期人数和会员人数分开给',
+      typeof o.freeActive === 'number' && typeof o.freeExpiring === 'number' && o.freeActive >= 0,
+      `免费期内 ${o.freeActive} · 7 天内用完 ${o.freeExpiring} · 累计送出 ${o.freeDaysGranted} 天`
+    )
 
     const noneLevel = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'none', membershipDays: 30 }, headers: auth(token) })
     check('把 none 当等级发 → 1001', noneLevel.data.code === 1001, JSON.stringify(noneLevel.data))

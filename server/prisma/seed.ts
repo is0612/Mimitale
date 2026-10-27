@@ -83,19 +83,6 @@ const DICTS: SeedDict[] = [
     ]
   },
   {
-    code: 'quota_preset',
-    name: '额度预设',
-    remark: '改额度时的快捷选项，省得每次手打数字',
-    items: [
-      ['不限量', '-1', '永久不限次数'],
-      ['500 次', '500', ''],
-      ['200 次', '200', ''],
-      ['100 次', '100', '试用装常用'],
-      ['50 次', '50', ''],
-      ['停用', '0', '能登录但用不了']
-    ]
-  },
-  {
     code: 'card_note',
     name: '卡密备注分类',
     remark: '生成卡密时选，方便日后按来源统计',
@@ -229,7 +216,10 @@ async function seedDemo(): Promise<void> {
     const createdAt = at(offset, 9 + (i % 9), (i * 7) % 60)
     const usingCard = i < 5 ? cards[i] : null
 
-    // 会员：前 3 个生效中（第 3 个 7 天内到期）、接着 2 个已过期、其余非会员
+    // 免费天数：注册就送 30 天（不是会员）。注册早的人自然已经用完
+    const freeExpireAt = new Date(createdAt.getTime() + 30 * DAY)
+
+    // 会员：前 3 个生效中（第 3 个 7 天内到期）、接着 2 个已过期、其余从没发过
     let membershipLevel = 'none'
     let membershipExpireAt: Date | null = null
     if (i === 0) {
@@ -257,15 +247,41 @@ async function seedDemo(): Promise<void> {
         // 第 2 个封禁，其余正常
         status: i === 2 ? 'banned' : 'active',
         banReason: i === 2 ? 'spam' : null,
-        quota: [-1, 500, 200, 100, 50, 0][i % 6]!,
         membershipLevel,
         membershipExpireAt,
+        freeExpireAt,
         inviteCode: usingCard ? usingCard.code : null,
         createdAt,
         lastLoginAt: new Date(createdAt.getTime() + 3600_000)
       }
     })
     customers.push({ id: customer.id, nickname: customer.nickname })
+
+    // 天数流水：每个人都有一条注册赠送；发过会员的再补一条
+    await prisma.membershipGrant.create({
+      data: {
+        customerId: customer.id,
+        days: 30,
+        source: 'trial',
+        note: '注册赠送 30 天免费',
+        startsAt: createdAt,
+        expiresAt: freeExpireAt
+      }
+    })
+    if (membershipExpireAt) {
+      const from = new Date(Math.min(freeExpireAt.getTime(), membershipExpireAt.getTime()))
+      const to = new Date(Math.max(freeExpireAt.getTime(), membershipExpireAt.getTime()))
+      await prisma.membershipGrant.create({
+        data: {
+          customerId: customer.id,
+          days: Math.max(1, Math.round((to.getTime() - from.getTime()) / DAY)),
+          source: 'admin',
+          note: '后台发会员',
+          startsAt: from,
+          expiresAt: to
+        }
+      })
+    }
 
     if (usingCard) {
       await prisma.inviteCard.update({
@@ -311,8 +327,7 @@ async function seedDemo(): Promise<void> {
         : []),
       ...(demo
         ? [
-            log('customer.membership', 'customer', demo.id, demo.nickname, '发会员：初级会员 +30 天（新开通）', at(0, 9, 5)),
-            log('customer.quota', 'customer', demo.id, demo.nickname, '额度 50 → 500', at(0, 9, 40))
+            log('customer.membership', 'customer', demo.id, demo.nickname, '发会员：初级会员 +30 天（新开通）', at(0, 9, 5))
           ]
         : []),
       log('card.create', 'card', cards[0]?.id ?? null, cards[0]?.code ?? '', '生成 13 张卡密（种子用户），180 天后过期', at(6, 15))

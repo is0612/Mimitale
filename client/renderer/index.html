@@ -1019,11 +1019,11 @@
 
         <div class="settings-shell">
           <nav class="settings-nav" aria-label="设置分组">
-            <!-- 用户信息排第一（2026-10-23）：账号相关的事都收在这一栏，别再塞进「行为」里 -->
+            <!-- 个人信息排第一（2026-10-23）：账号相关的事都收在这一栏，别再塞进「行为」里 -->
             <button class="settings-nav-item active" type="button" data-target="sec-user">
               <span class="settings-nav-icon" aria-hidden="true" data-icon="user"></span>
               <span class="settings-nav-text">
-                <span class="settings-nav-title">用户信息</span>
+                <span class="settings-nav-title">个人信息</span>
                 <span class="settings-nav-desc">头像、用户名与密码</span>
               </span>
             </button>
@@ -1090,14 +1090,14 @@
           </nav>
 
           <div class="settings-content page-body settings-body">
-        <!-- 用户信息（2026-10-23）：账号相关的都收在这一栏。
+        <!-- 个人信息（2026-10-23）：账号相关的都收在这一栏。
              ⚠️ 这一栏**没有**「已开 N / M 项」那种统计 —— 它不是开关集合。
              未登录时整块换成一句说明 + 登录按钮，不显示半空的表单。 -->
         <section class="panel-section" id="sec-user">
           <div class="section-head">
             <span class="section-icon" aria-hidden="true" data-icon="user"></span>
             <span class="section-heading">
-              <span class="section-title">用户信息</span>
+              <span class="section-title">个人信息</span>
               <span class="section-desc">点头像就能换；用户名、邮箱和密码都在下面改</span>
             </span>
           </div>
@@ -1119,6 +1119,29 @@
                 <p id="user-email-view" class="user-email">—</p>
                 <p id="user-since" class="user-since"></p>
               </div>
+            </div>
+
+            <div class="user-block" id="user-member-block">
+              <div class="user-member-head">
+                <p class="user-block-title">会员 / 免费天数</p>
+                <span id="user-member-badge" class="user-member-badge" data-active="0">—</span>
+              </div>
+              <div class="user-member-foot">
+                <p id="user-member-line" class="user-member-line"></p>
+                <m-button id="btn-user-refresh-member" variant="ghost" size="sm">刷新</m-button>
+              </div>
+              <p id="user-member-error" class="account-error" role="alert"></p>
+            </div>
+
+            <div class="user-block">
+              <p class="user-block-title">邀请好友</p>
+              <p class="field-help">把你的码发给朋友，他注册时填进「邀请码」就算你邀请的，你多 7 天免费。</p>
+              <div class="user-invite-row">
+                <span id="user-invite-code" class="user-invite-code">—</span>
+                <m-button id="btn-user-copy-invite" variant="ghost" size="sm">复制邀请链接</m-button>
+              </div>
+              <p id="user-invite-count" class="user-invite-count"></p>
+              <p id="user-invite-error" class="account-error" role="alert"></p>
             </div>
 
             <div class="user-block">
@@ -1191,7 +1214,9 @@
               <div class="user-actions">
                 <m-button id="btn-user-export-voucher" variant="ghost" size="sm">导出凭证图（PNG）</m-button>
                 <m-button id="btn-user-copy-voucher" variant="ghost" size="sm">复制凭证码</m-button>
+                <m-button id="btn-user-refresh-voucher" variant="ghost" size="sm">刷新凭证码</m-button>
               </div>
+              <p class="field-help">刷新后旧码立刻作废，之前导出的凭证图也就不能用了。</p>
               <p id="user-voucher-error" class="account-error" role="alert"></p>
             </div>
           </div>
@@ -1955,6 +1980,11 @@
           <label class="field field-stack">
             <span class="field-label">确认密码</span>
             <m-input id="acc-setup-password2" type="password" placeholder="再输一遍" autocomplete="new-password" aria-label="确认密码"></m-input>
+          </label>
+          <label class="field field-stack">
+            <span class="field-label">邀请码（选填）</span>
+            <m-input id="acc-setup-invite" maxlength="16" placeholder="MIMI-XXXX-XXXX" autocomplete="off" spellcheck="false" aria-label="邀请码"></m-input>
+            <span class="field-help">朋友发给你的那个码；没有就留空</span>
           </label>
           <p id="acc-setup-error" class="account-error" role="alert"></p>
           <m-button id="btn-account-finish" variant="primary" block>完成注册</m-button>

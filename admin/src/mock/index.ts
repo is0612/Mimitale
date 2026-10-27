@@ -15,7 +15,7 @@
  *      客户能在客户端自助注册，管理员绝对不能自助注册（那是漏洞）。
  *
  *   ② **操作日志只由后端写入，前端没有写入接口。**
- *      封禁 / 改额度 / 生成卡密 / 作废卡密 / 改字典，都在同一个 handler 里
+ *      封禁 / 发会员 / 生成卡密 / 作废卡密 / 改字典，都在同一个 handler 里
  *      顺手写一条日志。这不是「顺便加的功能」—— 日志如果靠前端上报，
  *      那它记录的就只是「前端愿意上报的部分」，出事时一文不值。
  *
@@ -36,13 +36,16 @@ import {
   type Customer,
   type CustomerDetail,
   type CustomerStatus,
+  type ClientSession,
   type DictBundle,
   type DictItem,
   type DictType,
   type InviteCard,
   type LogAction,
   type LogListQuery,
+  type LoginLog,
   type MembershipLevel,
+  type MembershipGrant,
   type OperationLog,
   type UpdateCardReq,
   type UpdateCustomerReq,
@@ -104,7 +107,6 @@ const NICK_POOL = [
 
 function seedCustomers(): Customer[] {
   const rng = makeRng(20261008)
-  const QUOTA_POOL = [-1, 500, 200, 100, 50, 0]
   // 和字典 ban_reason 的 value 对应（mock 里写死一份，真实后端直接查字典表）
   const BAN_REASON_POOL = ['spam', 'card_resale', 'api_abuse']
   const list: Customer[] = []
@@ -132,12 +134,21 @@ function seedCustomers(): Customer[] {
       id: i + 1,
       email: `user${String(i + 1).padStart(3, '0')}@example.com`,
       nickname: NICK_POOL[i % NICK_POOL.length],
+      // mock 里不放 base64 图 —— 26 条 × 14KB 会把假后端撑得比真后端还慢
+      avatar: null,
       status: banned ? 'banned' : 'active',
       banReason: banned ? BAN_REASON_POOL[Math.floor(rng() * BAN_REASON_POOL.length)] : null,
-      quota: QUOTA_POOL[Math.floor(rng() * QUOTA_POOL.length)],
       membershipLevel,
       membershipExpireAt,
+      // 注册就送 30 天免费（不是会员，是免费天数）。老号自然过期、新号还在期内
+      freeExpireAt: new Date(createdAt + 30 * DAY).toISOString(),
       inviteCode: rng() > 0.55 ? `MIMI-${randCode(rng, 4)}-${randCode(rng, 4)}` : null,
+      // 自己的邀请码：一人一个，形状和卡密一样（真实的在 server 里颁发）
+      referralCode: `MIMI-${randCode(rng, 4)}-${randCode(rng, 4)}`,
+      // 造几条「被某个客户邀请」的关系，详情页的「邀请人」才有东西看
+      referredById: null as number | null,
+      // 24 位凭证码 = 6 组 4 位，跟 server/src/lib/voucher.ts 的 makeVoucher 同形状
+      voucher: [0, 1, 2, 3, 4, 5].map(() => randCode(rng, 4)).join('-'),
       createdAt: new Date(createdAt).toISOString(),
       lastLoginAt: everLogged
         ? new Date(createdAt + Math.floor(rng() * (NOW - createdAt))).toISOString()
@@ -149,10 +160,16 @@ function seedCustomers(): Customer[] {
   list[1] = {
     ...list[1],
     nickname: '露西娅',
-    quota: -1,
     inviteCode: 'MIMI-DEMO-8888',
     membershipLevel: 'basic',
     membershipExpireAt: new Date(NOW + 28 * DAY).toISOString()
+  }
+
+  // 邀请关系：让 4 个人是被露西娅拉来的，她的「已邀请」才不是 0。
+  // ⚠️ 他们注册时填的是露西娅的邀请码，不是卡密 —— 两种来源只会有一种
+  for (const c of list.slice(2, 6)) {
+    c.referredById = list[1].id
+    c.inviteCode = list[1].referralCode
   }
   return list
 }
@@ -177,8 +194,9 @@ function seedCards(list: Customer[]): InviteCard[] {
   }
 
   // ① 每个「有邀请码」的客户，对应一张已使用的卡 —— 数据要能对得上
+  // ⚠️ 被人邀请来的（referredById 有值）不算：他们填的是别人的邀请码，不是卡密
   for (const c of list) {
-    if (!c.inviteCode) continue
+    if (!c.inviteCode || c.referredById) continue
     used.add(c.inviteCode)
     cards.push({
       id: id++,
@@ -237,7 +255,7 @@ function seedCards(list: Customer[]): InviteCard[] {
  * ⚠️ 只放「真字典」。判断标准就一条：
  *    **加一条新数据，需不需要改代码？**
  *
- *    不需要 → 该进字典（封禁原因、客户来源、额度预设、卡密备注）
+ *    不需要 → 该进字典（封禁原因、客户来源、卡密备注）
  *    需要   → 别放进来（客户状态、卡密状态、管理员角色、日志动作类型）
  *             因为后端有 `if (status === 'banned')`，字典里加个第三态
  *             只会让界面多出一个选得动、但什么都不发生的选项。
@@ -264,17 +282,6 @@ const DICT_SEEDS: SeedDict[] = [
       ['邮箱直注', 'email', '没填邀请码，直接邮箱注册'],
       ['邀请码', 'invite', '注册时填了卡密'],
       ['后台导入', 'import', '预留给批量导入，目前没有产生途径']
-    ]
-  },
-  {
-    type: { code: 'quota_preset', name: '额度预设', remark: '改额度时的快捷选项，省得每次手打数字', createdAt: '' },
-    items: [
-      ['不限量', '-1', '永久不限次数'],
-      ['500 次', '500', ''],
-      ['200 次', '200', ''],
-      ['100 次', '100', '试用装常用'],
-      ['50 次', '50', ''],
-      ['停用', '0', '能登录但用不了']
     ]
   },
   {
@@ -319,6 +326,55 @@ function seedDicts(): DictBundle[] {
 let customers: Customer[] = seedCustomers()
 let cards: InviteCard[] = seedCards(customers)
 let dicts: DictBundle[] = seedDicts()
+
+/**
+ * 天数流水。真实后端每加一次天数写一条，这里按种子客户补出来：
+ * 每人一条「注册赠送 30 天」，会员再过一条「后台发会员」。
+ */
+let grantSeq = 0
+/** 契约里没有 customerId（详情只返回这个人的流水），内存里得留着才能筛 */
+type MockGrant = MembershipGrant & { customerId: number }
+const grants: MockGrant[] = []
+for (const c of customers) {
+  if (!c.freeExpireAt) continue
+  const start = Date.parse(c.createdAt)
+  const end = Date.parse(c.freeExpireAt)
+  grants.push({
+    id: (grantSeq += 1),
+    customerId: c.id,
+    days: Math.round((end - start) / DAY),
+    source: 'trial',
+    note: '注册赠送 30 天免费',
+    refId: null,
+    startsAt: new Date(start).toISOString(),
+    expiresAt: new Date(end).toISOString(),
+    createdAt: new Date(start).toISOString()
+  })
+
+  if (c.membershipExpireAt) {
+    const mEnd = Date.parse(c.membershipExpireAt)
+    grants.push({
+      id: (grantSeq += 1),
+      customerId: c.id,
+      days: Math.max(1, Math.round(Math.abs(mEnd - end) / DAY)),
+      source: 'admin',
+      note: '后台发会员',
+      // 假数据里没有真管理员 id，用 1（种子管理员是星宝）
+      refId: 1,
+      startsAt: new Date(Math.min(end, mEnd)).toISOString(),
+      expiresAt: new Date(Math.max(end, mEnd)).toISOString(),
+      createdAt: new Date(Math.min(end, mEnd)).toISOString()
+    })
+  }
+}
+
+/** 详情返回时把 customerId 剥掉，形状跟契约对齐 */
+function grantsOf(customerId: number): MembershipGrant[] {
+  return grants
+    .filter((g) => g.customerId === customerId)
+    .map(({ customerId: _drop, ...rest }) => rest)
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+}
 
 let logSeq = 0
 const logs: OperationLog[] = []
@@ -381,21 +437,7 @@ function seedLogs(): void {
     })
   }
 
-  // ② 一些改额度
-  for (let i = 0; i < 9; i++) {
-    const c = customers[Math.floor(rng() * customers.length)]
-    const before = [0, 50, 100, 200][Math.floor(rng() * 4)]
-    const after = [100, 200, 500, -1][Math.floor(rng() * 4)]
-    add(Date.parse(c.createdAt) + Math.floor(rng() * 60 + 3) * DAY, {
-      ...base,
-      action: 'customer.quota',
-      targetId: c.id,
-      targetName: c.nickname,
-      detail: `额度 ${before} → ${after === -1 ? '不限量' : after}`
-    })
-  }
-
-  // ③ 生成卡密
+  // ② 生成卡密
   for (const card of cards.filter((c) => c.status === 'unused').slice(0, 6)) {
     add(Date.parse(card.createdAt), {
       adminId: me.id,
@@ -408,7 +450,7 @@ function seedLogs(): void {
     })
   }
 
-  // ④ 作废卡密
+  // ③ 作废卡密
   for (const card of cards.filter((c) => c.status === 'void')) {
     add(Date.parse(card.createdAt) + 3 * DAY, {
       adminId: me.id,
@@ -421,7 +463,7 @@ function seedLogs(): void {
     })
   }
 
-  // ⑤ 给最前面那个「眼熟的客户」补几条，详情页打开就有东西看
+  // ④ 给最前面那个「眼熟的客户」补一条，详情页打开就有东西看
   const demo = customers[1]
   if (demo) {
     add(Date.parse(demo.createdAt) + 1 * DAY, {
@@ -430,20 +472,6 @@ function seedLogs(): void {
       targetId: demo.id,
       targetName: demo.nickname,
       detail: '发会员：初级会员 +30 天（新开通）'
-    })
-    add(Date.parse(demo.createdAt) + 2 * DAY, {
-      ...base,
-      action: 'customer.quota',
-      targetId: demo.id,
-      targetName: demo.nickname,
-      detail: '额度 50 → 100'
-    })
-    add(Date.parse(demo.createdAt) + 20 * DAY, {
-      ...base,
-      action: 'customer.quota',
-      targetId: demo.id,
-      targetName: demo.nickname,
-      detail: '额度 100 → 不限量'
     })
   }
 
@@ -618,7 +646,64 @@ function handleListCustomers({ query, headers }: MockCtx): MockOutcome {
   return ok(paginate(filtered, query))
 }
 
-/** GET /api/admin/customers/{id} —— 详情：客户 + 他的卡 + 他身上的日志 */
+/**
+ * 造几条活动记录。真后端只记成功的、且从建表那天才开始有 ——
+ * 这里连「注册即登录」那次也补上，详情页打开就有东西看。
+ */
+const MOCK_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) mimitale/1.0.0 Chrome/126.0.6478.234 Electron/31.3.1 Safari/537.36'
+
+function seedLoginLogs(c: Customer): LoginLog[] {
+  const ip = `11${(c.id * 7) % 90 + 10}.${(c.id * 13) % 200 + 20}.${(c.id * 3) % 250 + 1}.${(c.id * 17) % 250 + 1}`
+  const rows: LoginLog[] = [
+    { id: c.id * 10, method: 'register', ip, userAgent: MOCK_UA, createdAt: c.createdAt }
+  ]
+  if (c.lastLoginAt) {
+    const last = Date.parse(c.lastLoginAt)
+    rows.push({ id: c.id * 10 + 1, method: 'password', ip, userAgent: MOCK_UA, createdAt: new Date(last).toISOString() })
+    rows.push({
+      id: c.id * 10 + 2,
+      method: 'voucher',
+      ip,
+      userAgent: MOCK_UA,
+      createdAt: new Date(last - 3 * DAY).toISOString()
+    })
+  }
+  return rows.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+}
+
+/** 造几条使用会话，详情页「使用记录」卡打开就有东西看 */
+function seedSessions(c: Customer): ClientSession[] {
+  const ip = `11${(c.id * 7) % 90 + 10}.${(c.id * 13) % 200 + 20}.${(c.id * 3) % 250 + 1}.${(c.id * 17) % 250 + 1}`
+  const rows: ClientSession[] = []
+  if (c.lastLoginAt) {
+    const last = Date.parse(c.lastLoginAt)
+    const start = last - 42 * 60_000 // 42 分钟前开始
+    rows.push({
+      id: c.id * 100 + 1,
+      startedAt: new Date(start).toISOString(),
+      lastSeenAt: new Date(start + 40 * 60_000).toISOString(),
+      endedAt: new Date(start + 42 * 60_000).toISOString(),
+      endReason: 'quit',
+      endDetail: '',
+      appVersion: '1.0.0',
+      ip
+    })
+    rows.push({
+      id: c.id * 100 + 2,
+      startedAt: new Date(last - 3 * DAY).toISOString(),
+      lastSeenAt: new Date(last - 3 * DAY + 8 * 60_000).toISOString(),
+      endedAt: new Date(last - 3 * DAY + 9 * 60_000).toISOString(),
+      endReason: 'crash',
+      endDetail: 'render-process-gone:oom',
+      appVersion: '1.0.0',
+      ip
+    })
+  }
+  return rows.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+}
+
+/** GET /api/admin/customers/{id} —— 详情：客户 + 他的卡 + 他的登录与操作记录 */
 function handleGetCustomer({ params, headers }: MockCtx): MockOutcome {
   const admin = requireAdmin(headers)
   if (!admin) return expired()
@@ -626,15 +711,21 @@ function handleGetCustomer({ params, headers }: MockCtx): MockOutcome {
   const c = customers.find((x) => x.id === Number(params.id))
   if (!c) return fail(ApiCode.NOT_FOUND, '客户不存在')
 
+  const referrer = c.referredById ? customers.find((x) => x.id === c.referredById) : null
   const detail: CustomerDetail = {
     ...c,
     usedCard: cards.find((card) => card.usedByCustomerId === c.id) ?? null,
-    logs: logs.filter((l) => l.targetType === 'customer' && l.targetId === c.id)
+    logs: logs.filter((l) => l.targetType === 'customer' && l.targetId === c.id),
+    invitedCount: customers.filter((x) => x.referredById === c.id).length,
+    referredBy: referrer ? { id: referrer.id, nickname: referrer.nickname, email: referrer.email } : null,
+    loginLogs: seedLoginLogs(c),
+    grants: grantsOf(c.id),
+    sessions: seedSessions(c)
   }
   return ok(detail)
 }
 
-/** PATCH /api/admin/customers/{id} —— 封禁 / 解封 / 改额度（每个动作都落一条日志） */
+/** PATCH /api/admin/customers/{id} —— 封禁 / 解封 / 发会员（每个动作都落一条日志） */
 function handleUpdateCustomer({ params, body, headers }: MockCtx): MockOutcome {
   const admin = requireAdmin(headers)
   if (!admin) return expired()
@@ -643,13 +734,11 @@ function handleUpdateCustomer({ params, body, headers }: MockCtx): MockOutcome {
   if (!target) return fail(ApiCode.NOT_FOUND, '客户不存在')
 
   const req = body as unknown as UpdateCustomerReq
-  let changed = false
 
   if (req.status === 'active' || req.status === 'banned') {
     const next = req.status
     if (next !== target.status) {
       target.status = next
-      changed = true
       if (next === 'banned') {
         const reason = String(req.banReason ?? '').trim()
         target.banReason = reason || null
@@ -678,24 +767,6 @@ function handleUpdateCustomer({ params, body, headers }: MockCtx): MockOutcome {
     }
   }
 
-  if (typeof req.quota === 'number') {
-    const next = Math.floor(req.quota)
-    if (next !== target.quota) {
-      const before = target.quota
-      target.quota = next
-      changed = true
-      pushLog({
-        adminId: admin.id,
-        adminName: admin.nickname,
-        action: 'customer.quota',
-        targetType: 'customer',
-        targetId: target.id,
-        targetName: target.nickname,
-        detail: `额度 ${before === -1 ? '不限量' : before} → ${next === -1 ? '不限量' : next}`
-      })
-    }
-  }
-
   // 发会员：把等级设为传进来的字典值，从「当前到期时间（若还在有效期）或现在」顺延 N 天。
   // 没收费功能，会员全靠这里手动发 —— 客户到期来找你，你就给他续。
   // 等级直接取字典 membership_level 的 value，运营加一档这里自动支持，不用改代码。
@@ -719,7 +790,17 @@ function handleUpdateCustomer({ params, body, headers }: MockCtx): MockOutcome {
     const wasNone = target.membershipLevel === 'none'
     target.membershipLevel = level
     target.membershipExpireAt = new Date(next).toISOString()
-    changed = true
+    grants.push({
+      id: (grantSeq += 1),
+      customerId: target.id,
+      days,
+      source: 'admin',
+      note: '后台发会员',
+      refId: admin.id,
+      startsAt: new Date(base).toISOString(),
+      expiresAt: new Date(next).toISOString(),
+      createdAt: new Date().toISOString()
+    })
     pushLog({
       adminId: admin.id,
       adminName: admin.nickname,
@@ -733,7 +814,6 @@ function handleUpdateCustomer({ params, body, headers }: MockCtx): MockOutcome {
     })
   }
 
-  if (!changed) return ok(target)
   return ok(target)
 }
 
@@ -1076,6 +1156,10 @@ function handleOverview({ headers }: MockCtx): MockOutcome {
 
   const members = customers.filter((c) => c.membershipLevel !== 'none')
   const stillValid = members.filter((c) => c.membershipExpireAt && Date.parse(c.membershipExpireAt) > NOW)
+  const freeValid = customers.filter((c) => c.freeExpireAt && Date.parse(c.freeExpireAt) > NOW)
+  const freeExpiring = freeValid.filter((c) => Date.parse(c.freeExpireAt ?? '') <= NOW + 7 * DAY)
+  // 累计送出去的免费天数（注册 + 邀请），按天算不按人算
+  const freeDaysGranted = grants.filter((g) => g.source !== 'admin').reduce((s, g) => s + g.days, 0)
   const expiring = stillValid.filter(
     (c) => c.membershipExpireAt && Date.parse(c.membershipExpireAt) <= NOW + 7 * DAY
   )
@@ -1093,7 +1177,12 @@ function handleOverview({ headers }: MockCtx): MockOutcome {
     activeMembers: stillValid.length,
     memberTotal: members.length,
     expiringIn7Days: expiring.length,
+    freeActive: freeValid.length,
+    freeExpiring: freeExpiring.length,
+    freeDaysGranted,
     todayActive: customers.filter((c) => c.lastLoginAt && dayOf(c.lastLoginAt) === todayKey).length,
+    todaySessionUsers: customers.filter((c) => c.lastLoginAt && dayOf(c.lastLoginAt) === todayKey).length,
+    avgSessionMinutes: 35,
     unusedCards: cards.filter((c) => c.status === 'unused').length,
     trend,
     recent: [...customers].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 5)

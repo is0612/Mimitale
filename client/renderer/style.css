@@ -7677,7 +7677,7 @@ m-button.btn-new > .mi-btn__control:hover {
   padding-top: 0;
 }
 
-/* ------------------------------ 设置页 · 用户信息（2026-10-23） ------------------------------ */
+/* ------------------------------ 设置页 · 个人信息（2026-10-23） ------------------------------ */
 /* 未登录时整块换掉：不摆一堆半空的表单，只给一句说明 + 一颗按钮 */
 .user-guest {
   display: flex;
@@ -7811,6 +7811,80 @@ m-button.btn-new > .mi-btn__control:hover {
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
+}
+
+/* 会员：徽标 + 状态。都是只读，值全部来自服务器 */
+.user-member-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.user-member-badge {
+  padding: 1px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+/* 生效中才上主色；过期 / 非会员保持灰，避免一眼看过去像还亮着 */
+.user-member-badge[data-active="1"] {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.user-member-line {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+
+/* 状态在左、刷新在右，同一行 —— 单独给按钮一行会平白多出十几像素 */
+.user-member-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.user-member-foot m-button {
+  flex: 0 0 auto;
+}
+
+/* 邀请：码在左、复制在右。码要能选中复制，所以不能只做成文本 */
+.user-invite-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.user-invite-code {
+  padding: 3px 10px;
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: var(--fs-sm);
+  letter-spacing: 0.04em;
+  user-select: text;
+}
+
+.user-invite-code[data-empty="1"] {
+  color: var(--text-faint);
+  letter-spacing: 0;
+}
+
+.user-invite-count {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
 }
 
 /* 输入框 + 右边一颗按钮 */

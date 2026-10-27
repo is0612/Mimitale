@@ -4613,6 +4613,13 @@ app.whenReady().then(async () => {
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-models"]')?.click();
           await new Promise(r => setTimeout(r, 250));`,
+        // 个人信息页：会员块（「免费还剩 N 天」）、邀请块、凭证块三块挤在同一栏，
+        // 会员那行多两个字会不会把右边的刷新按钮挤下去，只有图看得出来。
+        userSettings: `
+          document.querySelector('#btn-account-open-settings')?.click();
+          await new Promise(r => setTimeout(r, 700));
+          document.querySelector('.settings-nav-item[data-target="sec-user"]')?.click();
+          await new Promise(r => setTimeout(r, 400));`,
         // 行为开关分组：主要验证「开关行卡片 + 开关靠右 + 头部统计」。
         settingsBehavior: `
           document.querySelector('#btn-account-open-settings')?.click();
@@ -5060,7 +5067,7 @@ app.whenReady().then(async () => {
         // ⚠️ 这段是模板字符串：注释里不能有反引号，正则里的反斜杠要写两条。
         // ⚠️ 它会真的往冒烟数据目录写一个账号（邮箱带时间戳，不撞）——
         //    冒烟场景开头会先退出登录，所以不会影响断言。
-        // 账号弹窗 · 已登录之后：走菜单进「设置 → 用户信息」，顺便看凭证卡在设置页里的样子。
+        // 账号弹窗 · 已登录之后：走菜单进「设置 → 个人信息」，顺便看凭证卡在设置页里的样子。
         // ⚠️ 这段是模板字符串：注释里不能有反引号，正则里的反斜杠要写两条。
         // ⚠️ 它会真的往冒烟数据目录写一个账号（邮箱带时间戳，不撞）——
         //    冒烟场景开头会先退出登录，所以不会影响断言。
@@ -5093,7 +5100,7 @@ app.whenReady().then(async () => {
           fill('#acc-setup-password2', 'mimitale2026');
           $('#btn-account-finish')?.click();
           await nap(1400);
-          // 走菜单进设置页的用户信息
+          // 走菜单进设置页的个人信息
           $('#btn-account')?.click();
           await nap(400);
           $('#btn-account-open-settings')?.click();

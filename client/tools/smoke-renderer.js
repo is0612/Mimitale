@@ -412,7 +412,7 @@ function panelDefByName(defs, name) {
 //  设置只给登录用户：未登录时界面上没有那颗齿轮，唯一可达的是账号菜单里的「设置」
 //  —— 菜单收着（hidden），click() 照样能触发，和以前点隐藏齿轮同一个手法：
 //  这里测的是设置页本身，不是入口权限。
-//  ⚠️ 菜单那一项落到「用户信息」组，而绝大多场景按第 1 组（模型服务）写断言，
+//  ⚠️ 菜单那一项落到「个人信息」组，而绝大多场景按第 1 组（模型服务）写断言，
 //     所以进来后统一点回模型组。
 // ---------------------------------------------------------------------------
 async function openSettingsPage() {
@@ -812,7 +812,7 @@ await scenario('设置页', async () => {
 //  要守住四件事：
 //   ① 点左栏能切组（一次只显示一组，别的组是真看不见）；
 //   ② 换组**不能让表单失效** —— 没显示的那一组里的值照样读得到、存得住；
-//   ③ 关掉再打开，落在「用户信息」组（入口是账号菜单那一项，不记上次翻到哪）；
+//   ③ 关掉再打开，落在「个人信息」组（入口是账号菜单那一项，不记上次翻到哪）；
 //   ④ 分组名 old 接口 expandSettingsSection(id) 仍能指定切到某一组。
 // ---------------------------------------------------------------------------
 await scenario('设置：左导航切组', async () => {
@@ -864,12 +864,12 @@ await scenario('设置：左导航切组', async () => {
   const saved = ((await window.mimitale.getSettings()).settings || {});
   check('没显示的那一组里的值照样落盘', Number(saved.maxTokens) === 2048, String(saved.maxTokens));
 
-  // 关掉再打开：入口只有账号菜单那一项，它固定落到「用户信息」组
+  // 关掉再打开：入口只有账号菜单那一项，它固定落到「个人信息」组
   // （这一屏记「上次翻到哪组」的老约定随齿轮一起没了）
   click('#btn-account-open-settings');
   await waitFor('设置页再开', () => shown('#view-settings'));
   check(
-    '重开落在用户信息组（账号菜单固定落这里）',
+    '重开落在个人信息组（账号菜单固定落这里）',
     visible(byId('sec-user')) && !visible(byId('sec-params')),
     `user=${visible(byId('sec-user'))} params=${visible(byId('sec-params'))}`
   );
@@ -4348,14 +4348,14 @@ await scenario('侧栏：入口网格与收起', async () => {
 //     一个盖住界面的弹窗、一个变了的侧栏都会把它们带歪。
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-//  场景：账号全流程 —— 注册 → 左下角菜单 → 设置页用户信息 → 凭证登录
+//  场景：账号全流程 —— 注册 → 左下角菜单 → 设置页个人信息 → 凭证登录
 //
 //  ⚠️ 图形码是**图**，自动测试读不到；主进程只在 MIMITALE_ACCOUNT_TEST=1 时把答案
 //     一起回给界面，渲染层挂在输入框的 dataset.answer 上（界面上不显示）。
 //  ⚠️ 邮箱带时间戳：冒烟的数据目录是复用的，写死一个值第二次跑就会「已注册」。
 //  ⚠️ 场景结束必须**退出登录并关掉弹窗** —— 后面还有布局和截图断言。
 // ---------------------------------------------------------------------------
-await scenario('账号：注册 → 左下角菜单 → 用户信息 → 凭证登录', async () => {
+await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证登录', async () => {
   const answerOf = (sel) => {
     const node = $(sel);
     return node ? String(node.dataset.answer || '') : '';
@@ -4485,18 +4485,26 @@ await scenario('账号：注册 → 左下角菜单 → 用户信息 → 凭证�
   click('#btn-close-feedback');
   await waitFor('反馈窗关掉', () => !shown('#feedback-modal'));
 
-  // --- 设置 → 用户信息 ---
+  // --- 设置 → 个人信息 ---
   click('#btn-account');
   await waitFor('菜单再打开', () => shown('#account-menu'));
   click('#btn-account-open-settings');
   await waitFor('切到设置页', () => shown('#view-settings'));
-  await waitFor('用户信息那一栏可见', () => shown('#sec-user'));
-  check('用户信息是第一栏（默认就选中它）',
+  await waitFor('个人信息那一栏可见', () => shown('#sec-user'));
+  check('个人信息是第一栏（默认就选中它）',
     $('#sec-user')?.classList.contains('hidden') === false &&
       document.querySelector('.settings-nav-item.active')?.getAttribute('data-target') === 'sec-user');
   check('账号菜单点完自己收起', !shown('#account-menu'));
   check('资料头显示的是用户名', $('#user-name-view')?.textContent.trim() === '烟雾测试员',
     $('#user-name-view')?.textContent);
+
+  // 注册送的是「免费天数」，不是会员 —— 文案必须这么说，否则用户以为自己买过会员。
+  // 徽章里放不下「还剩 N 天」，那是下面那行的活儿。
+  const memberLine = $('#user-member-line')?.textContent.trim() || '';
+  check('会员那行写的是免费还剩几天', /^免费还剩 \d+ 天/.test(memberLine), memberLine);
+  check('徽章写「免费中」（不是会员等级）',
+    $('#user-member-badge')?.textContent.trim() === '免费中',
+    $('#user-member-badge')?.textContent);
 
   await waitFor('凭证图生成', () => ($('#user-voucher')?.src || '').startsWith('data:image/png'), 6000);
   const voucher = await pngSize($('#user-voucher').src);

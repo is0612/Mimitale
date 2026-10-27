@@ -1,7 +1,7 @@
 'use strict';
 
 // ============================================================================
-//  views/userSettings.js —— 设置页第一栏「用户信息」（2026-10-23）
+//  views/userSettings.js —— 设置页第一栏「个人信息」（2026-10-23）
 //
 //  头像（点了就换）/ 用户名 / 邮箱（走验证码）/ 密码 / 登录凭证。
 //  账号相关的界面从「账号弹窗的我的账号面板」整体搬到这儿 —— 左下角那颗按钮
@@ -17,15 +17,18 @@ import { showToast } from '../ui/toast.js';
 import { iconHtml } from '../ui/icons.js';
 import { pickAvatarDataUrl } from '../ui/avatarImage.js';
 import { drawVoucherCard } from '../ui/voucherCard.js';
+import { confirmDialog } from '../ui/confirm.js';
 import { saveExport } from '../data/export.js';
 import {
   accountUser,
+  refreshAccount,
   newCaptcha,
   sendEmailCode,
   updateProfile,
   changePassword,
   changeEmail,
-  getVoucher
+  getVoucher,
+  refreshVoucher
 } from '../data/account.js';
 
 const nodes = {};
@@ -64,6 +67,16 @@ function cacheNodes() {
   nodes.btnSaveName = $('btn-user-save-name');
   nodes.nameError = $('user-name-error');
 
+  nodes.memberBadge = $('user-member-badge');
+  nodes.memberLine = $('user-member-line');
+  nodes.memberError = $('user-member-error');
+  nodes.btnRefreshMember = $('btn-user-refresh-member');
+
+  nodes.inviteCode = $('user-invite-code');
+  nodes.inviteCount = $('user-invite-count');
+  nodes.inviteError = $('user-invite-error');
+  nodes.btnCopyInvite = $('btn-user-copy-invite');
+
   nodes.emailInput = $('user-email-input');
   nodes.emailCaptcha = $('user-email-captcha');
   nodes.emailCaptchaImg = $('user-email-captcha-img');
@@ -83,6 +96,7 @@ function cacheNodes() {
   nodes.voucher = $('user-voucher');
   nodes.btnExportVoucher = $('btn-user-export-voucher');
   nodes.btnCopyVoucher = $('btn-user-copy-voucher');
+  nodes.btnRefreshVoucher = $('btn-user-refresh-voucher');
   nodes.voucherError = $('user-voucher-error');
 }
 
@@ -108,6 +122,9 @@ export function initUserSettings(opts = {}) {
   nodes.btnSavePass?.addEventListener('click', savePassword);
   nodes.btnExportVoucher?.addEventListener('click', exportVoucher);
   nodes.btnCopyVoucher?.addEventListener('click', copyVoucher);
+  nodes.btnRefreshVoucher?.addEventListener('click', renewVoucher);
+  nodes.btnRefreshMember?.addEventListener('click', refreshMembership);
+  nodes.btnCopyInvite?.addEventListener('click', copyInvite);
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +136,8 @@ function setError(which, message) {
     name: nodes.nameError,
     email: nodes.emailError,
     pass: nodes.passError,
+    member: nodes.memberError,
+    invite: nodes.inviteError,
     voucher: nodes.voucherError
   }[which];
   if (box) box.textContent = String(message || '');
@@ -133,6 +152,16 @@ function setBtnLabel(button, text) {
   if (!button) return;
   if (typeof button.setLabel === 'function') button.setLabel(text);
   else button.textContent = text;
+}
+
+/**
+ * 主进程 / preload 没重启时，IPC 抛的是一串技术黑话（No handler registered /
+ * is not a function），直接摆给用户看等于没说。翻译成一句能照做的话。
+ */
+function ipcErrorText(err, fallback) {
+  const raw = (err && err.message) || '';
+  if (/No handler registered|is not a function/i.test(raw)) return '客户端更新过了，重启一次就好';
+  return raw || fallback;
 }
 
 function formatDay(iso) {
@@ -193,7 +222,7 @@ function startResend(seconds) {
 // ---------------------------------------------------------------------------
 
 /**
- * 刷新「用户信息」整栏。settings.js 在切到 sec-user 时调它（未登录也要调，
+ * 刷新「个人信息」整栏。settings.js 在切到 sec-user 时调它（未登录也要调，
  * 因为用户可能在弹窗里刚登录完就切过来了）。
  */
 export function renderUserSection() {
@@ -209,6 +238,10 @@ export function renderUserSection() {
   }
 
   fillHead(user);
+  renderMembership(user);
+  renderInvite(user);
+  // 快照里没有会员字段或邀请码（老版本存的 / 离线时写的）→ 静默补一次，别让这几块一直空着
+  if (!user.membership || !user.inviteCode) void refreshMembership({ quiet: true });
   refreshCaptcha();
   renderVoucher(user);
 }
@@ -220,6 +253,134 @@ function fillHead(user) {
   if (nodes.since) nodes.since.textContent = user.createdAt ? `${formatDay(user.createdAt)} 注册` : '';
   if (nodes.nameInput) nodes.nameInput.value = user.username || '';
   paintAvatar(nodes.avatarImg, user.avatar, user.username || user.email);
+}
+
+// ---------------------------------------------------------------------------
+//  会员（只读，值由后台改）
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+//  会员 / 免费天数（只读，值由后台改）
+// ---------------------------------------------------------------------------
+
+/**
+ * 纯函数：会员数据 → 文案。
+ *
+ * 两个钱包，谁在有效期就说谁：
+ *   ① 有会员（后台发的）→「会员剩 X 天」
+ *   ② 只有免费天数（注册送 30 天 + 每邀 1 人 7 天）→「免费还剩 X 天」
+ *   ③ 都过期 → 说最后一次是哪天用完的
+ *
+ * ⚠️ 「有没有过期」只认服务端给的 `active` / `*DaysLeft`，**不要**自己拿日期和
+ *    本地时钟比 —— 用户把系统时间往前调就能把自己变成永久会员。
+ */
+function membershipCopy(m) {
+  const active = !!(m && m.active);
+  const free = m && typeof m.freeDaysLeft === 'number' ? m.freeDaysLeft : null;
+  const member = m && typeof m.memberDaysLeft === 'number' ? m.memberDaysLeft : null;
+
+  let badge = '—';
+  let line = '';
+
+  if (!m) {
+    line = '会员信息还没读到';
+  } else if (member !== null) {
+    badge = m.name || '会员';
+    line = member <= 1 ? '会员今天到期' : `会员剩 ${member} 天 · ${formatDay(m.memberExpireAt)} 到期`;
+  } else if (free !== null) {
+    badge = '免费中';
+    line = free <= 1 ? '免费天数今天用完' : `免费还剩 ${free} 天 · ${formatDay(m.freeExpireAt)} 到期`;
+  } else {
+    badge = '已结束';
+    const last = m.memberExpireAt || m.freeExpireAt;
+    line = last ? `已于 ${formatDay(last)} 用完，开通会员继续用` : '还没有开始用';
+  }
+
+  return { badge, active, line };
+}
+
+function renderMembership(user) {
+  const copy = membershipCopy(user && user.membership);
+
+  if (nodes.memberBadge) {
+    nodes.memberBadge.textContent = copy.badge;
+    nodes.memberBadge.dataset.active = copy.active ? '1' : '0';
+  }
+  if (nodes.memberLine) nodes.memberLine.textContent = copy.line;
+}
+
+// ---------------------------------------------------------------------------
+//  邀请好友（码由服务端发，客户端只显示和复制）
+// ---------------------------------------------------------------------------
+
+/**
+ * 纯函数：拼要复制出去的那段话。
+ *
+ * 不做 `mimitale://` 也不做网址 —— 现在没有域名，自定义协议还要写注册表，
+ * 装不装客户端都能用的一句话最稳（用户选的就是这个）。
+ */
+function inviteText(code) {
+  return `来试试「如我所书」，注册时填邀请码 ${code}`;
+}
+
+function renderInvite(user) {
+  const code = (user && user.inviteCode) || '';
+  const count = (user && user.invitedCount) || 0;
+
+  if (nodes.inviteCode) {
+    nodes.inviteCode.textContent = code || '还没生成';
+    nodes.inviteCode.dataset.empty = code ? '0' : '1';
+  }
+  if (nodes.inviteCount) {
+    // 邀请是「每邀 1 人 +7 天免费」，人数后面直接把这笔天数说出来，
+    // 不然用户不知道自己赚了多少
+    const bonus = (user && user.freeDaysFromInvite) || 0;
+    nodes.inviteCount.textContent =
+      count > 0 ? `已经邀请了 ${count} 人，多得了 ${bonus} 天免费` : '还没有人用你的码';
+  }
+  if (nodes.btnCopyInvite) nodes.btnCopyInvite.disabled = !code;
+}
+
+async function copyInvite() {
+  setError('invite', '');
+  const code = ((accountUser() || {}).inviteCode || '').trim();
+  if (!code) return setError('invite', '邀请码还没生成，点上面的「刷新」试试');
+
+  try {
+    await api.copyText(inviteText(code));
+    showToast('邀请链接已复制，粘给朋友就行', 'ok');
+  } catch (err) {
+    setError('invite', ipcErrorText(err, '复制失败'));
+  }
+}
+
+/**
+ * 重拉一次 /me。发会员、补邀请码都在服务端做，客户端不会自己知道。
+ * quiet = 静默（进页面时补字段用），不转圈、不弹提示。
+ */
+async function refreshMembership(opts = {}) {
+  const quiet = opts.quiet === true;
+  setError('member', '');
+  if (!quiet) setBusy(nodes.btnRefreshMember, true);
+
+  try {
+    const user = await refreshAccount();
+    if (!user) {
+      // 只有 token 真失效才走到这儿（主进程已经清掉登录态），跟着退回未登录
+      onUserChange(null);
+      renderUserSection();
+      return;
+    }
+    renderMembership(user);
+    // 这里刷的是整份 /me，邀请码和人数也一起变了
+    renderInvite(user);
+    onUserChange(user);
+    if (!quiet) showToast('会员信息已刷新', 'ok');
+  } catch (err) {
+    if (!quiet) setError('member', (err && err.message) || '刷新失败');
+  } finally {
+    if (!quiet) setBusy(nodes.btnRefreshMember, false);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -431,6 +592,41 @@ async function copyVoucher() {
     showToast('凭证码已复制', 'ok');
   } catch (err) {
     setError('voucher', (err && err.message) || '复制失败');
+  }
+}
+
+/**
+ * 换一张新凭证码。
+ *
+ * ⚠️ 这是**不可撤销**的：服务端直接覆盖旧码，刷新成功那一刻之前导出的图 / 抄下来的码
+ *    全部作废。所以必须先问一句，而且不许「顺手刷新」。
+ */
+async function renewVoucher() {
+  setError('voucher', '');
+
+  const ok = await confirmDialog({
+    title: '刷新凭证码？',
+    message: '换一张新的 24 位码，之前那张立刻失效 —— 之前导出的凭证图、抄下来的码都登不进来了。',
+    confirmText: '刷新',
+    danger: true
+  });
+  if (!ok) return;
+
+  setBusy(nodes.btnRefreshVoucher, true);
+  try {
+    const info = await refreshVoucher();
+    // 缓存里还是旧码，必须整份换掉，否则「复制」会复制到已经作废的那张
+    voucherCache = info;
+    voucherCode = info.code || '';
+    if (nodes.voucher) {
+      nodes.voucher.src = await drawVoucherCard(info);
+      nodes.voucher.dataset.code = voucherCode;
+    }
+    showToast('凭证码换好了，旧的已经失效', 'ok');
+  } catch (err) {
+    setError('voucher', ipcErrorText(err, '刷新失败'));
+  } finally {
+    setBusy(nodes.btnRefreshVoucher, false);
   }
 }
 

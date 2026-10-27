@@ -112,10 +112,10 @@ function networkError() {
  *     换不到才清登录态、让用户重新登
  */
 async function request(method, pathname, options = {}) {
-  const { body, auth = false, token = '' } = options;
+  const { body, auth = false, token = '', headers: extraHeaders = {} } = options;
 
   const state = loadState();
-  const headers = {};
+  const headers = { ...extraHeaders };
   if (body !== undefined) headers['content-type'] = 'application/json';
 
   const bearer = token || (auth ? state.token : '');
@@ -141,7 +141,7 @@ async function request(method, pathname, options = {}) {
   if (res.status === 401) {
     // 临时令牌（注册第二步）换 token 是没意义的，直接报
     if (auth && !token && state.refreshToken && (await tryRefresh(state.refreshToken))) {
-      return request(method, pathname, { body, auth, token: '' });
+      return request(method, pathname, { body, auth, token: '', headers: extraHeaders });
     }
     clearSession();
     const err = new Error('登录已过期，重新登录一次');
@@ -253,14 +253,19 @@ async function register(payload) {
   return { accountId: data.accountId, email: data.email, needsProfile: data.needsProfile !== false };
 }
 
-/** 注册第二步：用户名 + 密码 + 头像 → 账号可用并直接登进去 */
+/** 注册第二步：用户名 + 密码 + 头像（+ 邀请码，选填）→ 账号可用并直接登进去 */
 async function completeProfile(payload) {
   const input = payload || {};
   const state = loadState();
   if (!state.pendingToken) throw new Error('注册信息过期了，重新来一遍');
 
   const data = await request('POST', '/client/auth/complete-profile', {
-    body: { username: input.username, password: input.password, avatar: input.avatar },
+    body: {
+      username: input.username,
+      password: input.password,
+      avatar: input.avatar,
+      inviteCode: input.inviteCode || ''
+    },
     token: state.pendingToken
   });
 
@@ -312,6 +317,16 @@ async function getVoucher() {
   return request('GET', '/client/auth/voucher', { auth: true });
 }
 
+/**
+ * 换一张新凭证码 → 同形状。
+ *
+ * ⚠️ 旧码在服务端被**直接覆盖**，刷新成功那一刻之前导出的凭证图就都作废了。
+ *    界面上必须先问一句再调。
+ */
+async function refreshVoucher() {
+  return request('POST', '/client/auth/voucher/refresh', { auth: true });
+}
+
 /** 改资料（用户名 / 头像） */
 async function updateProfile(payload) {
   const input = payload || {};
@@ -345,8 +360,98 @@ async function changeEmail(payload) {
   return { user: data.user };
 }
 
+/**
+ * 客户端使用会话上报。
+ *
+ * 一次「打开软件到关闭」对应服务端 client_sessions 里的一行：
+ *   reportLaunch    启动时开新会话，拿回 sessionId
+ *   reportHeartbeat 每 5 分钟报一次心跳（服务端据此算「用了多久」）
+ *   reportExit      退出时报结束（quit / crash）
+ *
+ * ⚠️ 只在主进程里调，**不要**挂到 getSession 上 —— 设置页那颗「刷新」
+ *    也走 getSession，那样一天能记十几次。
+ * ⚠️ 失败一律静默：账号服务器挂了不该让用户看到报错弹窗。
+ * ⚠️ 版本号由 main.js 传进来（account.js 是纯 HTTP 模块，不碰 electron）。
+ */
+
+/** 当前会话的 sessionId，启动后由 reportLaunch 填上 */
+let currentSessionId = 0;
+
+/** 心跳定时器；退出时清掉，别让它吊着进程 */
+let heartbeatTimer = null;
+
+/**
+ * 启动上报 —— 开新会话，拿回 sessionId。
+ * @param {string} appVersion 客户端版本号（main.js 从 app.getVersion() 取）
+ */
+async function reportLaunch(appVersion = '') {
+  const state = loadState()
+  if (!state.token) return;
+  try {
+    const data = await request('POST', '/client/auth/launch', {
+      auth: true,
+      headers: { 'x-app-version': appVersion }
+    });
+    currentSessionId = Number(data?.sessionId) || 0;
+  } catch (err) {
+    currentSessionId = 0;
+    console.warn('[account] 启动上报失败（不影响使用）:', err.message);
+  }
+}
+
+/**
+ * 心跳 —— 每 5 分钟报一次，让服务端知道「这 5 分钟还在用」。
+ * 服务端按天去重 + 内存合并，量级上不会打爆接口。
+ */
+function startHeartbeat() {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    if (!currentSessionId) return;
+    const state = loadState();
+    if (!state.token) return;
+    // 失败静默 + 不 await：心跳丢了就丢了，下一次再报
+    request('POST', '/client/auth/launch/ping', {
+      auth: true,
+      body: { sessionId: currentSessionId }
+    }).catch((err) => console.warn('[account] 心跳失败（不影响使用）:', err.message));
+  }, 5 * 60 * 1000);
+  // 别让心跳 timer 吊住进程退出
+  if (heartbeatTimer && typeof heartbeatTimer.unref === 'function') heartbeatTimer.unref();
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+/**
+ * 退出上报 —— 结清当前会话。
+ * @param {'quit'|'crash'} reason 正常退出 / 崩溃
+ * @param {string} detail crash 时的补充（render-process-gone 的 reason 之类）
+ */
+function reportExit(reason = 'quit', detail = '') {
+  if (!currentSessionId) return;
+  const state = loadState();
+  if (!state.token) return;
+  // 用 fetch 直接发，不 await：进程马上要退了，等它返回反而拖慢退出
+  fetch(`${API_BASE}/client/auth/launch/exit`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${state.token}` },
+    body: JSON.stringify({ sessionId: currentSessionId, reason, detail })
+  }).catch(() => {
+    // 退出那一刻网络往往已经半死不活，写不写得到看运气；下次启动会兜底结清
+  });
+  stopHeartbeat();
+}
+
 module.exports = {
   getSession,
+  reportLaunch,
+  startHeartbeat,
+  stopHeartbeat,
+  reportExit,
   createCaptcha,
   sendEmailCode,
   register,
@@ -355,6 +460,7 @@ module.exports = {
   loginWithVoucher,
   logout,
   getVoucher,
+  refreshVoucher,
   updateProfile,
   changePassword,
   changeEmail,

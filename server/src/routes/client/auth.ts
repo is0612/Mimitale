@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
+import type { ClientUser } from '@contract'
 import type { Customer } from '../../generated/prisma/client.js'
 import { prisma } from '../../prisma.js'
 import { env } from '../../env.js'
@@ -9,9 +10,13 @@ import { hashPassword, verifyPassword } from '../../lib/password.js'
 import { issueTokens, issuePendingToken, readRefreshToken } from '../../lib/auth.js'
 import { createCaptcha, verifyCaptcha } from '../../lib/captcha.js'
 import { makeVoucher, normalizeVoucher } from '../../lib/voucher.js'
+import { newInviteCode } from '../../lib/cardCode.js'
 import { sendLoginCode } from '../../lib/mail.js'
 import { currentCustomerId } from '../../lib/whoami.js'
 import { DAY_MS } from '../../lib/time.js'
+import { dictLabel } from '../../lib/dict.js'
+import { entitlementOf, grantDaysIn } from '../../lib/membership.js'
+import { openSession, touchSession, closeSession } from '../../lib/session.js'
 
 /**
  * 客户侧账号 —— 前缀 /api/client/auth
@@ -30,8 +35,14 @@ import { DAY_MS } from '../../lib/time.js'
  *   ⑥ POST /voucher-login     24 位凭证码（换机器用）
  */
 
-/** 头像上限（base64 字符数，约 300KB 原图）—— 客户端上传前已经压到 256×256 */
-const MAX_AVATAR_CHARS = 400 * 1000
+/**
+ * 头像上限（base64 字符数）。
+ *
+ * 客户端压到 256×256 JPEG 后正常是 14KB 图 / 19K 字符，这里留三倍余量就够 ——
+ * 原来写的 40 万（约 300KB 原图）等于没设：客户端真压漏了、或者有人直接打接口，
+ * 也照样能塞进去。客户端那边有 50K 的预算自适应降质量，别让两边差太远。
+ */
+const MAX_AVATAR_CHARS = 60 * 1000
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
@@ -41,8 +52,11 @@ const CODE_COOLDOWN_MS = 60_000
 const CODE_DAILY_LIMIT = 30
 const CODE_MAX_TRIES = 5
 
-/** 新用户送的免费试用 */
+/** 注册送的免费天数 —— 注意这不是「送会员」，等级仍然是 none */
 const TRIAL_DAYS = 30
+
+/** 每邀 1 人邀请人得几天。无上限，想刷就刷（收费本来也不贵） */
+const INVITE_BONUS_DAYS = 7
 
 function textOf(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -81,19 +95,128 @@ function normalizeAvatar(value: unknown): string {
 }
 
 /**
+ * 注册时填的邀请码 —— 大小写、空格、少写连字符都容忍（跟凭证码一个脾气）。
+ * 空 = 没填，返回 ''。**只做形状校验，码存不存在由 resolveInvite 查库**。
+ */
+function normalizeInviteInput(value: unknown): string {
+  let raw = textOf(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  if (!raw) return ''
+  // 只写 8 位也认（7K2M9QXA），前面那段 MIMI- 可有可无
+  if (raw.length === 12 && raw.startsWith('MIMI')) raw = raw.slice(4)
+  if (raw.length !== 8) throw biz('邀请码是 MIMI-XXXX-XXXX 这个样子，检查一下')
+  return `MIMI-${raw.slice(0, 4)}-${raw.slice(4)}`
+}
+
+/**
+ * 这个码是哪种来源。
+ *
+ * 先查卡密（后台发的，一码一次），查不到再查客户自己的邀请码（一码能邀多人）。
+ * 两者形状一样，所以顺序不能反 —— 卡密是花钱买的/活动发的，优先消耗它。
+ */
+type Invite =
+  | { kind: 'none' }
+  | { kind: 'card'; code: string; cardId: number }
+  | { kind: 'customer'; code: string; inviterId: number }
+
+async function resolveInvite(code: string, selfId: number): Promise<Invite> {
+  if (!code) return { kind: 'none' }
+
+  const card = await prisma.inviteCard.findUnique({ where: { code } })
+  if (card) {
+    if (card.status === 'void') throw biz('这张卡已经作废了')
+    if (card.status === 'used') throw biz('这张卡已经被用过了')
+    if (card.expireAt && card.expireAt.getTime() <= Date.now()) throw biz('这张卡过期了')
+    return { kind: 'card', code, cardId: card.id }
+  }
+
+  const inviter = await prisma.customer.findUnique({ where: { referralCode: code }, select: { id: true } })
+  if (inviter) {
+    // 自己填自己没意义（注册时还不可能，是防以后「改绑」写错）
+    if (inviter.id === selfId) throw biz('不能填自己的邀请码')
+    return { kind: 'customer', code, inviterId: inviter.id }
+  }
+
+  throw biz('邀请码不对，检查一下有没有抄错')
+}
+
+/**
+ * 会员状态 —— 两个钱包分开报，客户端自己决定怎么说。
+ *
+ * ⚠️ 跟后台 `admin/src/config/labels.ts` 同一口径：过期由到期时间推导，库里不存 expired。
+ * ⚠️ **免费天数不是会员**：`level` 只反映后台发的会员，免费用户恒为 none。
+ *    想在界面上说「试用会员」的，改成「免费还剩 N 天」。
+ */
+async function clientMembership(c: Customer) {
+  const e = entitlementOf(c)
+  const level = c.membershipLevel || 'none'
+  const isMember = level !== 'none' && e.memberDaysLeft !== null
+
+  return {
+    level: isMember ? level : 'none',
+    // 等级名走字典，运营改了名字客户端跟着变；非会员是哨兵值，字典里没有
+    name: isMember ? await dictLabel('membership_level', level) : '非会员',
+    active: e.active,
+    // 免费天数（注册送 + 邀请奖励），剩余为 null 就是已用完
+    freeDaysLeft: e.freeDaysLeft,
+    freeExpireAt: e.freeExpireAt?.toISOString() ?? null,
+    // 会员（后台发的）
+    memberDaysLeft: e.memberDaysLeft,
+    memberExpireAt: e.memberExpireAt?.toISOString() ?? null,
+    // 权益真正到哪天（两个钱包里更晚的那个）
+    until: e.until?.toISOString() ?? null
+  }
+}
+
+/**
  * 给客户端的账号形状 —— 跟客户端 `publicUser()` 完全一致。
  * ⚠️ id 转成字符串：客户端原来用 UUID，渲染层可能拿它做字符串比较。
  *    服务端内部是自增 int，但**别把它当凭据**（认证一律走 token）。
+ * ⚠️ 等级名要查字典，所以这里是 async —— 加字段时别写成同步的。
  */
-function toClientUser(c: Customer) {
+async function toClientUser(c: Customer): Promise<ClientUser> {
+  const invitedCount = await prisma.customer.count({ where: { referredById: c.id } })
+
   return {
     id: String(c.id),
     email: c.email,
     username: c.nickname,
     avatar: c.avatar ?? '',
     createdAt: c.createdAt.toISOString(),
-    profileReady: c.profileReady
+    profileReady: c.profileReady,
+    membership: await clientMembership(c),
+    inviteCode: c.referralCode ?? '',
+    invitedCount,
+    // 「每邀 1 人 +7 天」只在这里定义一次，客户端拿来算「多得了几天」
+    freeDaysFromInvite: invitedCount * INVITE_BONUS_DAYS
   }
+}
+
+/**
+ * 保证这个人有自己的邀请码 —— 老数据没有，第一次取账号信息时补一个。
+ *
+ * 和 `/voucher` 的懒生成同一套路：迁移里不写随机码（SQL 拼 8 位随机太重），
+ * 放到这里撞一次唯一索引就换一个。
+ */
+async function ensureReferralCode(c: Customer): Promise<Customer> {
+  if (c.referralCode) return c
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = newInviteCode()
+    const clash = await prisma.customer.findFirst({
+      where: { OR: [{ referralCode: candidate }, { voucher: candidate }] },
+      select: { id: true }
+    })
+    if (clash) continue
+    // 卡密表也要避开：注册时先查卡密、再查邀请码，同码共存会分不清是谁的
+    const card = await prisma.inviteCard.findUnique({ where: { code: candidate }, select: { id: true } })
+    if (card) continue
+    return prisma.customer.update({ where: { id: c.id }, data: { referralCode: candidate } })
+  }
+
+  // 31^8 的空间里连撞 5 次基本等于库坏了，这次先不补，别把整个 /me 弄挂
+  return c
 }
 
 /** 封禁了就拦住，登录、换码、凭证登录都一样 */
@@ -104,6 +227,65 @@ function assertNotBanned(customer: Customer | null): void {
       ApiCode.ACCOUNT_BANNED
     )
   }
+}
+
+/**
+ * 记一条登录记录 —— 后台「登录记录」和 IP 统计都靠它。
+ *
+ * ⚠️ 只记成功的那次。失败的密码尝试不记：量会大十倍，而这块要看的是
+ *    「人从哪来、什么时候来」，不是撞库审计（那要另配限流计数）。
+ * ⚠️ 记日志失败**不能让登录失败** —— 表没了也得让人进得来，只 warn。
+ * ⚠️ 上了 nginx 记得给 Fastify 开 trustProxy，否则这里全是 127.0.0.1。
+ */
+async function recordLogin(
+  request: FastifyRequest,
+  customerId: number,
+  method: 'password' | 'voucher' | 'register'
+): Promise<void> {
+  await writeActivity(request, customerId, method)
+}
+
+/** 写一条活动记录。失败只 warn —— 记日志不能把登录拦掉 */
+async function writeActivity(
+  request: FastifyRequest,
+  customerId: number,
+  method: 'password' | 'voucher' | 'register'
+): Promise<void> {
+  try {
+    await prisma.loginLog.create({
+      data: {
+        customerId,
+        method,
+        ip: request.ip || '',
+        // UA 里带着 Electron/客户端版本号，排查「旧版本还在用」时是唯一线索
+        userAgent: String(request.headers['user-agent'] ?? '').slice(0, 200)
+      }
+    })
+  } catch (err) {
+    request.log.warn({ err }, '写活动记录失败（登录照常）')
+  }
+}
+
+/** 画那张凭证卡要的字段 —— 取凭证和刷新凭证共用同一个形状 */
+function voucherPayload(c: Customer) {
+  return {
+    code: c.voucher ?? '',
+    username: c.nickname,
+    email: c.email,
+    avatar: c.avatar ?? '',
+    createdAt: c.createdAt.toISOString(),
+    version: 1
+  }
+}
+
+/** 造一张没被占用的凭证码；连撞 5 次就放弃（返回空串） */
+async function makeFreeVoucher(): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = makeVoucher()
+    const clash = await prisma.customer.findUnique({ where: { voucher: candidate }, select: { id: true } })
+    if (!clash) return candidate
+  }
+  return ''
 }
 
 /**
@@ -139,25 +321,6 @@ async function consumeEmailCode(email: string, code: string): Promise<void> {
 
   codeTries.delete(email)
   await prisma.loginCode.update({ where: { id: entry.id }, data: { consumedAt: new Date() } })
-}
-
-/**
- * 新用户送哪一档会员。
- * 优先字典里叫 basic 的那档；运营改名/删了就往回退，别让注册直接失败。
- */
-async function trialLevel(): Promise<string> {
-  const basic = await prisma.dictItem.findFirst({
-    where: { typeCode: 'membership_level', value: 'basic', enabled: true },
-    select: { value: true }
-  })
-  if (basic) return basic.value
-
-  const fallback = await prisma.dictItem.findFirst({
-    where: { typeCode: 'membership_level', enabled: true },
-    orderBy: [{ sort: 'asc' }, { id: 'asc' }],
-    select: { value: true }
-  })
-  return fallback?.value ?? 'none'
 }
 
 /* ------------------------------------------------------------------ */
@@ -244,7 +407,6 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
           // 先拿邮箱前缀顶着，第二步会覆盖成用户自己填的
           nickname: email.split('@')[0] || '旅人',
           status: 'active',
-          quota: 0,
           profileReady: false
         }
       }))
@@ -260,7 +422,7 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
   })
 
   /**
-   * ④ 注册第二步：用户名 + 密码 + 头像 → 账号正式可用
+   * ④ 注册第二步：用户名 + 密码 + 头像（+ 邀请码，选填）→ 账号正式可用
    *
    * 这一步用 pendingToken 认证（不走 clientGuard —— 那个会拒绝 pending）。
    */
@@ -272,6 +434,7 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
     const username = normalizeUsername(body.username)
     const password = normalizePassword(body.password)
     const avatar = normalizeAvatar(body.avatar)
+    const inviteCode = normalizeInviteInput(body.inviteCode)
 
     const customer = await prisma.customer.findUnique({ where: { id: customerId } })
     if (!customer) return fail(ApiCode.NOT_FOUND, '注册信息过期了，重新来一遍')
@@ -279,7 +442,8 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
 
     assertNotBanned(customer)
 
-    const level = await trialLevel()
+    const invite = await resolveInvite(inviteCode, customer.id)
+
     const now = new Date()
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -292,25 +456,75 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
       }
       if (!voucher) throw biz('凭证码生成失败，稍后再试')
 
-      return tx.customer.update({
+      // 自己的邀请码也在这里发 —— 别等第一次进「个人信息」才补，那样刚注册的人
+      // 找不到码可以发出去
+      let referralCode: string | null = null
+      for (let attempt = 0; attempt < 5 && !referralCode; attempt += 1) {
+        const candidate = newInviteCode()
+        const clash = await tx.customer.findFirst({
+          where: { OR: [{ referralCode: candidate }, { voucher: candidate }] },
+          select: { id: true }
+        })
+        if (!clash) referralCode = candidate
+      }
+      if (!referralCode) throw biz('邀请码生成失败，稍后再试')
+
+      // 卡密是花钱买的，必须真的消耗掉；条件更新挡住两个人同时用同一张卡
+      if (invite.kind === 'card') {
+        const used = await tx.inviteCard.updateMany({
+          where: { id: invite.cardId, status: 'unused' },
+          data: { status: 'used', usedByCustomerId: customer.id, usedAt: now }
+        })
+        if (used.count === 0) throw biz('这张卡刚被别人用掉了，换一张')
+      }
+
+      const registered = await tx.customer.update({
         where: { id: customer.id },
         data: {
           nickname: username,
           avatar: avatar || null,
           passwordHash: await hashPassword(password),
           voucher,
+          referralCode,
           profileReady: true,
           lastLoginAt: now,
-          // 试用会员在这里发 —— 只有走完第二步的号才算「真的注册了」，
-          // 后台的「今日注册」也跟着只算这些人
-          membershipLevel: level,
-          membershipExpireAt: new Date(now.getTime() + TRIAL_DAYS * DAY_MS)
+          // 没填码就别写 null 占位，两类来源靠「有没有 inviteCode」区分
+          ...(invite.kind === 'none' ? {} : { inviteCode: invite.code }),
+          ...(invite.kind === 'customer' ? { referredById: invite.inviterId } : {})
         }
       })
+
+      // 注册送的 30 天是**免费天数**，不是会员（等级留在 none）。
+      // 只有走完第二步的号才算「真的注册了」，后台的「今日注册」也跟着只算这些人
+      const result = await grantDaysIn(tx, {
+        customerId: registered.id,
+        days: TRIAL_DAYS,
+        source: 'trial',
+        wallet: 'free',
+        note: `注册赠送 ${TRIAL_DAYS} 天免费`
+      })
+
+      // 受邀注册时给邀请人加天数。
+      // ⚠️ 别用它的返回值 —— 那返回的是**邀请人**那一行，拿它当注册结果会把
+      //    新注册的人替换成邀请人（token 也会发给邀请人）。只发天数，结果丢掉。
+      if (invite.kind === 'customer') {
+        await grantDaysIn(tx, {
+          customerId: invite.inviterId,
+          days: INVITE_BONUS_DAYS,
+          source: 'invite',
+          wallet: 'free',
+          refId: registered.id,
+          note: `邀请了 ${registered.nickname} +${INVITE_BONUS_DAYS} 天`
+        })
+      }
+
+      return result.customer
     })
 
     // 形状跟客户端那 12 个通道对齐：`{ user, token, refreshToken, expiresIn }`
-    return ok({ user: toClientUser(updated), ...issueTokens(app, 'client', updated.id) })
+    // 注册完就是一次登录 —— 记成 register，后台看得出「这个人是刚注册的」
+    await recordLogin(request, updated.id, 'register')
+    return ok({ user: await toClientUser(updated), ...issueTokens(app, 'client', updated.id) })
   })
 
   /** ⑤ 邮箱 + 密码 + 图形码登录 */
@@ -334,7 +548,8 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
       data: { lastLoginAt: new Date() }
     })
 
-    return ok({ user: toClientUser(fresh), ...issueTokens(app, 'client', fresh.id) })
+    await recordLogin(request, fresh.id, 'password')
+    return ok({ user: await toClientUser(fresh), ...issueTokens(app, 'client', fresh.id) })
   })
 
   /** ⑥ 凭证码登录 —— 换机器 / 重装之后用 */
@@ -352,7 +567,8 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
       data: { lastLoginAt: new Date() }
     })
 
-    return ok({ user: toClientUser(fresh), ...issueTokens(app, 'client', fresh.id) })
+    await recordLogin(request, fresh.id, 'voucher')
+    return ok({ user: await toClientUser(fresh), ...issueTokens(app, 'client', fresh.id) })
   })
 
   /** ⑦ 刷新 token */
@@ -381,9 +597,54 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
 export const clientAuthProtectedRoutes: FastifyPluginAsync = async (app) => {
   /** ⑧ 会话 —— 客户端首屏靠它判断「登没登录」 */
   app.get('/me', async (request) => {
-    const customer = await prisma.customer.findUnique({ where: { id: currentCustomerId(request) } })
+    let customer = await prisma.customer.findUnique({ where: { id: currentCustomerId(request) } })
     if (!customer) return fail(ApiCode.NOT_FOUND, '账号不存在')
-    return ok({ user: toClientUser(customer) })
+    // 老数据没有自己的邀请码 —— 顺手补一个，别让「个人信息」那块空着
+    customer = await ensureReferralCode(customer)
+    return ok({ user: await toClientUser(customer) })
+  })
+
+  /**
+   * ⑧ 客户端启动 —— 开一次新使用会话，返回 sessionId（心跳 / 退出要用）。
+   *
+   * ⚠️ 客户端**只在主进程启动时**调这一个接口，别挂在 /me 上：
+   *    设置页点「刷新」也走 /me，那样一天会记十几次。
+   * 老版本客户端不会调它 —— 所以「今日活跃」仍然以登录为准，
+   * 会话数据只用来回答「开了多久、什么版本、怎么结束的」。
+   */
+  app.post('/launch', async (request) => {
+    const customerId = currentCustomerId(request)
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { status: true }
+    })
+    if (!customer) return fail(ApiCode.NOT_FOUND, '账号不存在')
+
+    // 封禁的号也开会话 —— 后台正想知道「封了他还在不在开」
+    const sessionId = await openSession(request, customerId)
+    return ok({ sessionId })
+  })
+
+  /** ⑧b 心跳。5 分钟一次，只更新 last_seen_at；服务端内存合并，不是每次都写库 */
+  app.post('/launch/ping', async (request) => {
+    const customerId = currentCustomerId(request)
+    const sessionId = Number((request.body as { sessionId?: number })?.sessionId)
+    if (!Number.isInteger(sessionId) || sessionId <= 0) return fail(ApiCode.INVALID_PARAM, '缺少 sessionId')
+
+    touchSession(request, customerId, sessionId)
+    return ok({ ok: true })
+  })
+
+  /** ⑧c 退出。结清会话；客户端不 await，这里也容忍写失败 */
+  app.post('/launch/exit', async (request) => {
+    const customerId = currentCustomerId(request)
+    const body = (request.body ?? {}) as { sessionId?: number; reason?: string; detail?: string }
+    const sessionId = Number(body.sessionId)
+    if (!Number.isInteger(sessionId) || sessionId <= 0) return fail(ApiCode.INVALID_PARAM, '缺少 sessionId')
+
+    const reason = body.reason === 'crash' ? 'crash' : 'quit'
+    await closeSession(request, customerId, sessionId, reason, body.detail ?? '')
+    return ok({ ok: true })
   })
 
   /** ⑨ 登出。JWT 无状态，服务端没什么可清的 —— 客户端丢掉 token 即可 */
@@ -395,23 +656,32 @@ export const clientAuthProtectedRoutes: FastifyPluginAsync = async (app) => {
     if (!customer) return fail(ApiCode.NOT_FOUND, '账号不存在')
 
     if (!customer.voucher) {
-      for (let attempt = 0; attempt < 5 && !customer.voucher; attempt += 1) {
-        const candidate = makeVoucher()
-        const clash = await prisma.customer.findUnique({ where: { voucher: candidate }, select: { id: true } })
-        if (clash) continue
-        customer = await prisma.customer.update({ where: { id: customer.id }, data: { voucher: candidate } })
-      }
-      if (!customer.voucher) return fail(ApiCode.SERVER_ERROR, '凭证码生成失败，稍后再试')
+      const code = await makeFreeVoucher()
+      if (!code) return fail(ApiCode.SERVER_ERROR, '凭证码生成失败，稍后再试')
+      customer = await prisma.customer.update({ where: { id: customer.id }, data: { voucher: code } })
     }
 
-    return ok({
-      code: customer.voucher,
-      username: customer.nickname,
-      email: customer.email,
-      avatar: customer.avatar ?? '',
-      createdAt: customer.createdAt.toISOString(),
-      version: 1
+    return ok(voucherPayload(customer))
+  })
+
+  /**
+   * 换一张新的凭证码。
+   *
+   * ⚠️ 旧的**立刻失效**：凭证码是「换机器 / 重装后登回来」的唯一凭据，
+   *    两张同时有效等于留了一把旧钥匙。客户端那边必须先让用户确认再调。
+   */
+  app.post('/voucher/refresh', async (request) => {
+    const me = await prisma.customer.findUnique({
+      where: { id: currentCustomerId(request) },
+      select: { id: true }
     })
+    if (!me) return fail(ApiCode.NOT_FOUND, '账号不存在')
+
+    const code = await makeFreeVoucher()
+    if (!code) return fail(ApiCode.SERVER_ERROR, '凭证码生成失败，稍后再试')
+
+    const updated = await prisma.customer.update({ where: { id: me.id }, data: { voucher: code } })
+    return ok(voucherPayload(updated))
   })
 
   /** ⑪ 改资料（用户名 / 头像）。邮箱和密码各有自己的接口 */
@@ -424,11 +694,11 @@ export const clientAuthProtectedRoutes: FastifyPluginAsync = async (app) => {
 
     if (Object.keys(data).length === 0) {
       const same = await prisma.customer.findUnique({ where: { id: currentCustomerId(request) } })
-      return ok({ user: toClientUser(same!) })
+      return ok({ user: await toClientUser(same!) })
     }
 
     const updated = await prisma.customer.update({ where: { id: currentCustomerId(request) }, data })
-    return ok({ user: toClientUser(updated) })
+    return ok({ user: await toClientUser(updated) })
   })
 
   /**
@@ -449,7 +719,7 @@ export const clientAuthProtectedRoutes: FastifyPluginAsync = async (app) => {
       where: { id: customer.id },
       data: { passwordHash: await hashPassword(normalizePassword(body.password)) }
     })
-    return ok({ user: toClientUser(updated) })
+    return ok({ user: await toClientUser(updated) })
   })
 
   /**
@@ -471,7 +741,7 @@ export const clientAuthProtectedRoutes: FastifyPluginAsync = async (app) => {
     await consumeEmailCode(email, textOf(body.code))
 
     const updated = await prisma.customer.update({ where: { id: customer.id }, data: { email } })
-    return ok({ user: toClientUser(updated) })
+    return ok({ user: await toClientUser(updated) })
   })
 }
 
