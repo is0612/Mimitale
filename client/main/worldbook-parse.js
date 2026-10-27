@@ -178,7 +178,7 @@ function worldbookFromLorebook(raw, fallbackName, makeId, opts) {
   if (!raw || typeof raw !== 'object') return null;
   const o = opts || {};
   const book = normalizeWorldbook(raw, fallbackName, makeId, o.normalizeCharacters, o.maxCharacters);
-  if (!book.entries.length) return null;
+  if (!book.entries.length && !book.characters.length) return null;
   return book;
 }
 
