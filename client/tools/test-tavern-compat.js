@@ -3,7 +3,7 @@
 // node --test tools/test-tavern-compat.js
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { normalizeWorldbook } = require('../main/worldbook-parse.js');
+const { normalizeWorldbook, worldbookFromCharacterBook, worldbookFromLorebook } = require('../main/worldbook-parse.js');
 const { entryMatches } = require('../main/worldbook-match.js');
 
 const rawBook = {
