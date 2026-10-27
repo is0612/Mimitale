@@ -498,6 +498,60 @@ export function panelFieldOwner(convo, key) {
   return typeof owner === 'string' && owner ? owner : '';
 }
 
+/** 清理已移除角色的活动状态，并屏蔽删除时刻之前的旧状态行；聊天记录本身不改写。 */
+export function removePanelOwnerFields(convo, ownerId, ownerName = '') {
+  const owner = String(ownerId || '').trim();
+  if (!convo || !owner) return false;
+
+  const panel = convoPanel(convo);
+  const defs = convoPanelDefs(convo);
+  const manual = convo.panelManual && typeof convo.panelManual === 'object' ? convo.panelManual : {};
+  const candidates = new Set([
+    ...convoPanelFields(convo),
+    ...Object.keys(panel),
+    ...Object.keys(defs),
+    ...Object.keys(manual)
+  ]);
+  const removed = [...candidates].filter((key) => panelFieldOwner(convo, key) === owner);
+  if (!removed.length) return false;
+
+  const clashes = clashingFieldNames(convo);
+  const labels = new Set();
+  for (const key of removed) {
+    const name = panelKeyParts(key).name;
+    if (!name) continue;
+    const hasOtherOwner = [...candidates].some((otherKey) =>
+      otherKey !== key &&
+      panelKeyParts(otherKey).name === name &&
+      panelFieldOwner(convo, otherKey) !== owner
+    );
+    if (!hasOtherOwner) labels.add(name);
+    if (ownerName && !hasOtherOwner) labels.add(String(ownerName).trim() + OWNER_LABEL_SEP + name);
+    if (!clashes.has(name)) labels.add(owner + OWNER_LABEL_SEP + name);
+  }
+
+  const timestamp = now();
+  const previous = Array.isArray(convo.panelSuppressedLabels) ? convo.panelSuppressedLabels : [];
+  convo.panelSuppressedLabels = [
+    ...previous.filter((item) => item && typeof item.label === 'string' && !labels.has(item.label)),
+    ...[...labels].map((label) => ({ label, at: timestamp }))
+  ].slice(-400);
+
+  convo.panelFields = convoPanelFields(convo).filter((key) => !removed.includes(key));
+  const nextPanel = { ...panel };
+  const nextDefs = { ...defs };
+  const nextManual = { ...manual };
+  for (const key of removed) {
+    delete nextPanel[key];
+    delete nextDefs[key];
+    delete nextManual[key];
+  }
+  convo.panel = nextPanel;
+  convo.panelDefs = nextDefs;
+  convo.panelManual = nextManual;
+  return true;
+}
+
 /** 会话里去重的显示名（有归属冲突才是「角色名·字段名」），用作 knownFields */
 export function convoFieldDisplayNames(convo) {
   const clash = clashingFieldNames(convo);
