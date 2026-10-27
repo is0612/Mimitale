@@ -2236,6 +2236,87 @@ await scenario('无主状态字段：并回主角，不单开世界卡', async (
 });
 
 // ---------------------------------------------------------------------------
+//  场景 9.5.1：删除角色副本后，历史状态不会把字段复活
+// ---------------------------------------------------------------------------
+await scenario('删除角色副本后清理状态字段且不改写聊天历史', async () => {
+  const panelMod = await import(new URL('js/data/panel.js', document.baseURI).href);
+  const key = panelMod.panelKey('好感度', 'deleted-copy');
+  const convo = {
+    id: 'panel-owner-suppression',
+    player: { name: '阿甲' },
+    characterId: null,
+    worldbookIds: [],
+    panel: { [key]: '80/100' },
+    panelFields: [key],
+    panelDefs: { [key]: { type: 'meter', min: 0, max: 100, owner: 'deleted-copy' } },
+    panelManual: { [key]: 1234 },
+    messages: [
+      { role: 'assistant', content: '【好感度】：80/100', at: 1000 },
+      { role: 'assistant', content: '【顾言·好感度】：90/100', at: 1200 }
+    ]
+  };
+
+  const removed = panelMod.suppressPanelOwners(convo, [{ id: 'deleted-copy', name: '顾言' }]);
+  check(
+    '删除角色时同时清除其面板值、定义和手动编辑标记',
+    removed && convo.panelFields.length === 0 &&
+      !Object.hasOwn(convo.panel, key) &&
+      !Object.hasOwn(convo.panelDefs, key) &&
+      !Object.hasOwn(convo.panelManual, key) &&
+      convo.panelSuppressed.length === 1,
+    JSON.stringify({ fields: convo.panelFields, panel: convo.panel, defs: convo.panelDefs, manual: convo.panelManual })
+  );
+
+  panelMod.syncConvoPanel(convo);
+  check(
+    '重扫历史不会让已删除角色的裸字段或带名前缀字段复活',
+    convo.panelFields.length === 0 && Object.keys(convo.panel).length === 0,
+    JSON.stringify({ fields: convo.panelFields, panel: convo.panel })
+  );
+  check(
+    '清理状态不会删除或改写聊天正文',
+    convo.messages.length === 2 &&
+      convo.messages[0].content === '【好感度】：80/100' &&
+      convo.messages[1].content === '【顾言·好感度】：90/100',
+    JSON.stringify(convo.messages)
+  );
+});
+
+// 同名字段仍由另一位在场角色持有时，删除只能清理已删除 owner 的字段。
+// 带已删除角色名前缀的历史行应被屏蔽；不能误伤另一位角色的值。
+// ---------------------------------------------------------------------------
+await scenario('删除一个同名字段 owner 时保留其他角色的字段', async () => {
+  const panelMod = await import(new URL('js/data/panel.js', document.baseURI).href);
+  const deletedKey = panelMod.panelKey('好感度', 'deleted-copy');
+  const liveKey = panelMod.panelKey('好感度', 'live-copy');
+  const convo = {
+    id: 'panel-owner-suppression-shared',
+    player: { name: '阿甲' },
+    characterId: null,
+    worldbookIds: [],
+    panel: { [deletedKey]: '80/100', [liveKey]: '45/100' },
+    panelFields: [deletedKey, liveKey],
+    panelDefs: {
+      [deletedKey]: { type: 'meter', min: 0, max: 100, owner: 'deleted-copy' },
+      [liveKey]: { type: 'meter', min: 0, max: 100, owner: 'live-copy' }
+    },
+    messages: [
+      { role: 'assistant', content: '【顾言·好感度】：80/100', at: 1000 }
+    ]
+  };
+  panelMod.suppressPanelOwners(convo, [{ id: 'deleted-copy', name: '顾言' }]);
+  panelMod.syncConvoPanel(convo);
+  check(
+    '删除后其他角色同名字段仍保留，且不重建已删除角色的字段',
+    convo.panelFields.includes(liveKey) &&
+      convo.panel[liveKey] === '45/100' &&
+      !convo.panelFields.includes(deletedKey) &&
+      !convo.panelFields.includes('顾言·好感度'),
+    JSON.stringify({ fields: convo.panelFields, panel: convo.panel })
+  );
+});
+
+// ---------------------------------------------------------------------------
 //  场景 9.6：面板字段数到顶时，不能把认领不成的无主字段删掉
 //
 //  真 bug：absorbTopLevelIntoPlayer 的 claim() 只在「目标键真的建出来了」时才该
