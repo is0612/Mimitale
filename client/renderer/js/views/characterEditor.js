@@ -10,7 +10,7 @@ import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { h, clear } from '../ui/build.js';
 import { showView, currentViewName } from './viewSwitch.js';
-import { MAX_PANEL_FIELDS } from '../data/panel.js';
+import { MAX_PANEL_FIELDS, suppressPanelOwners } from '../data/panel.js';
 import { MAX_EXPRESSIONS } from '../data/expressions.js';
 import {
   characters,
@@ -891,6 +891,10 @@ export async function deleteCharacterById(id, scope) {
         rerenderBookCharHosts(book);
         return;
       }
+      for (const convo of state.conversations) {
+        suppressPanelOwners(convo, [{ id: character.id, name: character.name }]);
+      }
+      persistConversations(0);
       showToast(`已移除「${character.name}」`);
       return;
     }
@@ -901,16 +905,27 @@ export async function deleteCharacterById(id, scope) {
   const beforeChars = characters();
   const beforeBooks = worldbooks();
   const bookIds = new Set(ownBooks.map((book) => book.id));
+  const removedOwners = [
+    { id: character.id, name: character.name },
+    ...ownBooks.flatMap((book) => worldbookCharacters(book)
+      .filter((copy) => copy && copy.id)
+      .map((copy) => ({ id: copy.id, name: copy.name })))
+  ];
   const unbound = [];
+  const playerBindings = [];
 
   state.characters = beforeChars.filter((c) => c.id !== character.id);
   if (bookIds.size) state.worldbooks = beforeBooks.filter((w) => !bookIds.has(w.id));
 
-  // 把绑定了这个角色的会话解绑，免得留下一个指向空气的 id
+  // 清除会话与玩家角色对这张卡的引用；会话中的玩家名字 / 档案快照仍保留。
   for (const convo of state.conversations) {
     if (convo.characterId === character.id) {
       convo.characterId = null;
       unbound.push(convo);
+    }
+    if (convo.player && convo.player.characterId === character.id) {
+      playerBindings.push([convo, convo.player]);
+      convo.player = { ...convo.player, characterId: null };
     }
   }
 
@@ -920,8 +935,14 @@ export async function deleteCharacterById(id, scope) {
     state.characters = beforeChars;
     state.worldbooks = beforeBooks;
     for (const convo of unbound) convo.characterId = character.id;
+    for (const [convo, player] of playerBindings) convo.player = player;
     actions.rerender();
     return;
+  }
+
+  // 卡和它独占的世界书都删除成功后，才清理会话里的对应状态 owner。
+  for (const convo of state.conversations) {
+    suppressPanelOwners(convo, removedOwners);
   }
 
   // 编辑器正开在这个角色上就离开它；放在写盘成功之后（失败时角色还在，不该关编辑器）
@@ -978,7 +999,14 @@ export async function deleteCharactersByIds(ids) {
   const beforeChars = characters();
   const beforeBooks = worldbooks();
   const bookIds = new Set(ownBooks.map((book) => book.id));
+  const removedOwners = [
+    ...targets.map((character) => ({ id: character.id, name: character.name })),
+    ...ownBooks.flatMap((book) => worldbookCharacters(book)
+      .filter((copy) => copy && copy.id)
+      .map((copy) => ({ id: copy.id, name: copy.name })))
+  ];
   const unbound = [];
+  const playerBindings = [];
 
   state.characters = beforeChars.filter((character) => !wanted.has(character.id));
   if (bookIds.size) state.worldbooks = beforeBooks.filter((w) => !bookIds.has(w.id));
@@ -989,6 +1017,10 @@ export async function deleteCharactersByIds(ids) {
       unbound.push([convo, convo.characterId]);
       convo.characterId = null;
     }
+    if (convo.player && wanted.has(convo.player.characterId)) {
+      playerBindings.push([convo, convo.player]);
+      convo.player = { ...convo.player, characterId: null };
+    }
   }
 
   actions.rerender();
@@ -998,8 +1030,14 @@ export async function deleteCharactersByIds(ids) {
     state.characters = beforeChars;
     state.worldbooks = beforeBooks;
     for (const [convo, id0] of unbound) convo.characterId = id0;
+    for (const [convo, player] of playerBindings) convo.player = player;
     actions.rerender();
     return false;
+  }
+
+  // 主卡与随卡一起删除的世界书副本 owner 一并清理，避免同名字段彼此误判。
+  for (const convo of state.conversations) {
+    suppressPanelOwners(convo, removedOwners);
   }
 
   // 编辑器正开在被删的某一张上：没有可编辑的对象了，离开它
