@@ -5049,6 +5049,8 @@ await scenario('识别世界书人物：点按钮转成本书角色', async () =
     const rows = Array.from(document.querySelectorAll('#wp-list .wp-row'));
     check('清单里列出了「顾言」', rows.some((r) => r.textContent.includes('顾言')),
       JSON.stringify(rows.map((r) => r.textContent.trim().slice(0, 20))));
+    check('停用条目不会再次进入识别清单', !rows.some((r) => r.textContent.includes('停用条目测试')),
+      JSON.stringify(rows.map((r) => r.textContent.trim().slice(0, 30))));
 
     // 点「转换」→ 确认框 → 确认
     const okBtn = document.querySelector('#wp-modal .wp-ok');
