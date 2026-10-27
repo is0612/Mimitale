@@ -5003,13 +5003,32 @@ await scenario('识别世界书人物：点按钮转成本书角色', async () =
   const savedChars = (book && book.characters || []).slice();
 
   if (book) {
-    book.entries = [...book.entries, {
-      id: 'e-scan-ui',
-      title: '人物档案 - 顾言',
-      keys: ['顾言'],
-      content: '# 人物档案: 顾言\n## 身份与外貌\n大三，学生会成员。\n## 性格\n温和可靠。',
-      constant: false
-    }];
+    book.entries = [...book.entries,
+      {
+        id: 'e-scan-ui',
+        title: '人物档案 - 顾言',
+        keys: ['顾言'],
+        content: '# 人物档案: 顾言\n## 身份与外貌\n大三，学生会成员。\n## 性格\n温和可靠。',
+        constant: false,
+        enabled: true
+      },
+      {
+        id: 'e-scan-ui-2',
+        title: '人物档案 - 顾言',
+        keys: ['顾言补充'],
+        content: '# 顾言补充档案\n## 人物关系\n与林夏是朋友。',
+        constant: false,
+        enabled: true
+      },
+      {
+        id: 'e-scan-ui-disabled',
+        title: '人物档案 - 停用条目测试',
+        keys: ['停用条目测试'],
+        content: '# 停用测试\n## 身份\n这条不应参与扫描。',
+        constant: false,
+        enabled: false
+      }
+    ];
   }
   await persist.persistLibrary();
 
