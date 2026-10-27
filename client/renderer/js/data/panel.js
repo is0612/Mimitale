@@ -575,6 +575,86 @@ function healPrefixedKeys(convo) {
   return true;
 }
 
+/**
+ * 删除角色/世界书副本时清理它持有的状态字段，但不改写聊天历史。
+ * 用 panelSuppressed 记录历史标签和删除时间，避免下次重扫把旧字段复活。
+ * owners: [{ id, name }]；一次删多个 owner 时一起传入，才能正确判断同名字段是否仍有归属。
+ */
+export function suppressPanelOwners(convo, owners) {
+  if (!convo) return false;
+
+  const targetById = new Map();
+  for (const item of asArray(owners)) {
+    const id = String(item && (item.id || item.owner) || '').trim();
+    if (!id) continue;
+    const name = String(item && item.name || panelOwnerLabel(convo, id) || id).trim();
+    targetById.set(id, name || id);
+  }
+  if (!targetById.size) return false;
+
+  const fields = convoPanelFields(convo);
+  const removeKeys = fields.filter((key) => targetById.has(panelFieldOwner(convo, key)));
+  if (!removeKeys.length) return false;
+
+  const removed = new Set(removeKeys);
+  const at = now();
+  const panel = { ...convoPanel(convo) };
+  const defs = { ...convoPanelDefs(convo) };
+  const manual = convo.panelManual && typeof convo.panelManual === 'object'
+    ? { ...convo.panelManual }
+    : null;
+  const suppressions = Array.isArray(convo.panelSuppressed)
+    ? [...convo.panelSuppressed]
+    : [];
+
+  for (const key of removeKeys) {
+    const { name: field } = panelKeyParts(key);
+    const owner = panelFieldOwner(convo, key);
+    const ownerName = targetById.get(owner) || owner;
+    const ambiguous = fields.some((otherKey) => {
+      if (removed.has(otherKey) || panelKeyParts(otherKey).name !== field) return false;
+      return panelFieldOwner(convo, otherKey) !== owner;
+    });
+
+    // 不覆盖旧标记：旧标记负责屏蔽删除前的历史，新标记负责这次删除。
+    suppressions.push({ owner, ownerName, field, at, ambiguous });
+    delete panel[key];
+    delete defs[key];
+    if (manual) delete manual[key];
+  }
+
+  convo.panelFields = fields.filter((key) => !removed.has(key));
+  convo.panel = panel;
+  convo.panelDefs = defs;
+  if (manual) convo.panelManual = manual;
+  convo.panelSuppressed = suppressions;
+  convo.updatedAt = at;
+  return true;
+}
+
+/** 判断历史字段行是否属于已删除角色；聊天正文保留，只有状态面板重扫时忽略它。 */
+function isSuppressedPanelEntry(convo, rawName, msg) {
+  const suppressions = Array.isArray(convo && convo.panelSuppressed) ? convo.panelSuppressed : [];
+  if (!suppressions.length) return false;
+
+  const label = String(rawName == null ? '' : rawName).trim();
+  const messageAt = Number(msg && msg.at) || 0;
+  return suppressions.some((item) => {
+    if (!item || typeof item !== 'object') return false;
+    const field = String(item.field || '').trim();
+    const ownerName = String(item.ownerName || '').trim();
+    if (!field || !ownerName) return false;
+
+    // 带已删除角色名前缀的标签永远不应再作为活动角色字段出现。
+    if (label === `${ownerName}${OWNER_LABEL_SEP}${field}`) return true;
+
+    // 裸字段名无法区分其它仍在场的同名字段时，宁可保留，也不能误删别人的状态。
+    if (label !== field || item.ambiguous) return false;
+    const deletedAt = Number(item.at) || 0;
+    return !messageAt || messageAt <= deletedAt;
+  });
+}
+
 export function syncConvoPanel(convo) {
   if (!convo || !Array.isArray(convo.messages)) return false;
 
@@ -619,6 +699,7 @@ export function syncConvoPanel(convo) {
 
     const found = extractPanelFromText(content, knownNames, convo);
     for (const [rawName, value] of found) {
+      if (isSuppressedPanelEntry(convo, rawName, msg)) continue;
       // 模型可能带「角色名·字段名」前缀：拆出归属，拆不开就退回无主字段。
       const { owner, name } = parseFieldLabel(convo, rawName);
       const key = panelKey(name, owner);
