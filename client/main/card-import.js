@@ -172,7 +172,8 @@ function characterFromCard(card, avatar, source, fallbackName, makeWorldbookId, 
       creator: d.creator,
       characterVersion: d.character_version,
       tags: d.tags,
-      attributes
+      attributes,
+      expressions: Array.isArray(ext.expressions) ? ext.expressions : d.expressions
     },
     source
   );
