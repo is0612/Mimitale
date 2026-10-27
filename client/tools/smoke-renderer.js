@@ -5068,8 +5068,15 @@ await scenario('识别世界书人物：点按钮转成本书角色', async () =
     const gby = bookNow && (bookNow.characters || []).find((c) => c.name === '顾言');
     check('顾言副本已落盘', !!gby, JSON.stringify((bookNow && bookNow.characters || []).map((c) => c.name)));
     check('顾言副本默认显示状态栏', !!gby && gby.showInPanel === true);
+    check('同名多条档案正文全部迁移', !!gby &&
+      gby.description.includes('大三，学生会成员。') &&
+      gby.description.includes('与林夏是朋友。'),
+      String(gby && gby.description || '').slice(0, 500));
     const srcEntry = bookNow && (bookNow.entries || []).find((e) => e.id === 'e-scan-ui');
-    check('原条目被停用（不删）', !!srcEntry && srcEntry.enabled === false, JSON.stringify(srcEntry && srcEntry.enabled));
+    const srcEntry2 = bookNow && (bookNow.entries || []).find((e) => e.id === 'e-scan-ui-2');
+    check('已迁移的来源条目均被停用', !!srcEntry && !!srcEntry2 &&
+      srcEntry.enabled === false && srcEntry2.enabled === false,
+      JSON.stringify([srcEntry && srcEntry.enabled, srcEntry2 && srcEntry2.enabled]));
 
     click('#btn-close-chars');
     await waitFor('回角色卡列表', () => shown('#view-chars'));
