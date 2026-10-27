@@ -695,14 +695,19 @@ export async function deleteCharacterById(id, scope) {
   // 记住改之前的样子，写盘失败时退回去
   const beforeChars = characters();
   const unbound = [];
+  const playerBindings = [];
 
   state.characters = beforeChars.filter((c) => c.id !== character.id);
 
-  // 把绑定了这个角色的会话解绑，免得留下一个指向空气的 id
+  // 删除卡时同时清理会话里的卡引用；玩家已复制到会话的名字和设定不变。
   for (const convo of state.conversations) {
     if (convo.characterId === character.id) {
       convo.characterId = null;
       unbound.push(convo);
+    }
+    if (convo.player && convo.player.characterId === character.id) {
+      convo.player = { ...convo.player, characterId: null };
+      playerBindings.push(convo);
     }
   }
 
@@ -711,6 +716,7 @@ export async function deleteCharacterById(id, scope) {
   if (!(await persistCharacters())) {
     state.characters = beforeChars;
     for (const convo of unbound) convo.characterId = character.id;
+    for (const convo of playerBindings) if (convo.player) convo.player.characterId = character.id;
     actions.rerender();
     return;
   }
