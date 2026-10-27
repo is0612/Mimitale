@@ -185,6 +185,27 @@ test('书的角色副本往返保留备选开场白、作者与版本号（不�
   assert.equal(copy.characterVersion, '1.2.3');
 });
 
+test('只有角色副本、没有条目的世界书也能导入', () => {
+  const options = { normalizeCharacters: (raw) => normalizeCharacter(raw, 'json') };
+  const lorebook = worldbookFromLorebook({
+    name: '空人物册',
+    entries: {},
+    characters: [{ name: '守卫', description: '守门人' }]
+  }, 'fallback', () => 'lore-empty', options);
+  assert.ok(lorebook);
+  assert.equal(lorebook.characters[0].name, '守卫');
+
+  const inner = worldbookFromCharacterBook({
+    name: '内嵌空书',
+    entries: [],
+    characters: [{ name: '向导', description: '负责带路' }]
+  }, '主角', () => 'inner-empty', options);
+  assert.ok(inner);
+  assert.equal(inner.characters[0].name, '向导');
+
+  assert.equal(worldbookFromLorebook({ name: '真正的空书', entries: [] }, 'empty', () => 'empty', options), null);
+});
+
 test('世界书简介存盘后不丢（导出读的就是它）', async () => {
   const [library] = await renderer;
   const once = normalize({ name: '书', description: '这座城的三条规矩。', entries: [{ key: ['门'], content: '正文' }] });
