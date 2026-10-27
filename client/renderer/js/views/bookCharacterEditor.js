@@ -11,7 +11,7 @@ import { uid, now } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { showView, currentViewName } from './viewSwitch.js';
-import { MAX_PANEL_FIELDS, seedPanelFromCharacters } from '../data/panel.js';
+import { MAX_PANEL_FIELDS, seedPanelFromCharacters, suppressPanelOwners } from '../data/panel.js';
 import { MAX_EXPRESSIONS } from '../data/expressions.js';
 import {
   characters,
@@ -686,6 +686,11 @@ export async function deleteCharacterById(id, scope) {
         rerenderBookCharHosts(book);
         return;
       }
+      // 清除这个副本名下的面板字段，但不删除聊天历史内容。
+      for (const convo of state.conversations) {
+        suppressPanelOwners(convo, [{ id: character.id, name: character.name }]);
+      }
+      persistConversations(0);
       showToast(`已移除「${character.name}」`);
       return;
     }
@@ -719,6 +724,11 @@ export async function deleteCharacterById(id, scope) {
     for (const convo of playerBindings) if (convo.player) convo.player.characterId = character.id;
     actions.rerender();
     return;
+  }
+
+  // 删除成功后才清理面板 owner；写盘失败的回滚路径不会碰会话状态。
+  for (const convo of state.conversations) {
+    suppressPanelOwners(convo, [{ id: character.id, name: character.name }]);
   }
 
   // 编辑器正开在这个角色上就离开它；放在写盘成功之后（失败时角色还在，不该关编辑器）
@@ -784,6 +794,12 @@ export async function deleteCharactersByIds(ids) {
     for (const [convo, id0] of unbound) convo.characterId = id0;
     actions.rerender();
     return false;
+  }
+
+  // 多张卡一起删除时一次性传入 owner 集合，避免同名字段被误判为仍在场。
+  const removedOwners = targets.map((character) => ({ id: character.id, name: character.name }));
+  for (const convo of state.conversations) {
+    suppressPanelOwners(convo, removedOwners);
   }
 
   // 编辑器正开在被删的某一张上：没有可编辑的对象了，离开它
