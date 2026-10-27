@@ -312,6 +312,47 @@ function entryToDescription(entry) {
   return text;
 }
 
+/** 同一人物拆在多条档案中时，迁移全部正文而不是只拿第一条。 */
+function entryDescriptions(entries) {
+  const seen = new Set();
+  const blocks = [];
+  for (const entry of asArray(entries)) {
+    const text = entryToDescription(entry);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    blocks.push(text);
+  }
+  return blocks.join('\n\n');
+}
+
+function mergeDescription(existing, addition) {
+  const oldText = String(existing || '').trim();
+  const newText = String(addition || '').trim();
+  if (!newText) return oldText;
+  if (!oldText) return newText;
+  const blocks = oldText.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
+  const seen = new Set(blocks);
+  for (const block of newText.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean)) {
+    if (!seen.has(block)) {
+      blocks.push(block);
+      seen.add(block);
+    }
+  }
+  return blocks.join('\n\n');
+}
+
+function mergeAttributes(existing, incoming) {
+  const result = asArray(existing).map((item) => item && typeof item === 'object' ? { ...item } : item);
+  const seen = new Set(result.map((item) => String(item && item.name || '').trim()).filter(Boolean));
+  for (const item of asArray(incoming)) {
+    const name = String(item && item.name || '').trim();
+    if (!name || seen.has(name)) continue;
+    result.push({ ...item, name });
+    seen.add(name);
+  }
+  return result;
+}
+
 // --- 清单弹窗 + 转换 ---
 
 let openBookId = null;
@@ -435,67 +476,91 @@ async function applyScan() {
   if (!ok) { close(); return; }
 
   // --- 改之前的样子（写盘失败回滚用）---
-  const beforeChars = worldbookCharacters(book).slice();
+  const beforeChars = JSON.parse(JSON.stringify(worldbookCharacters(book)));
   const beforeEntries = worldbookEntries(book).map((e) => ({ ...e }));
   const beforeUpdated = book.updatedAt;
 
-  const existingNames = new Set(worldbookCharacters(book).map((c) => String(c.name || '').trim()));
+  const existingByName = new Map();
+  for (const character of worldbookCharacters(book)) {
+    const name = String(character && character.name || '').trim();
+    if (name && !existingByName.has(name)) existingByName.set(name, character);
+  }
   let made = 0;
+  let updated = 0;
 
-  // 建副本
+  // 跨库修改卡本人信息前留快照，保证保存失败后可完整恢复。
+  const card = selfs.length ? characters().find((c) => asArray(c.worldbookIds).includes(book.id)) : null;
+  const beforeCard = card ? {
+    hadAttributes: Object.prototype.hasOwnProperty.call(card, 'attributes'),
+    attributes: card.attributes === undefined ? undefined : JSON.parse(JSON.stringify(card.attributes)),
+    hadDescription: Object.prototype.hasOwnProperty.call(card, 'description'),
+    description: card.description,
+    hadUpdatedAt: Object.prototype.hasOwnProperty.call(card, 'updatedAt'),
+    updatedAt: card.updatedAt
+  } : null;
+
+  // 所有同名来源合并进同一副本；如果已存在同名副本，也补齐新内容。
   for (const s of people) {
-    if (!s.name || existingNames.has(s.name)) continue;
-    const entry = s.entries[0] || null;
+    if (!s.name) continue;
+    const desc = entryDescriptions(s.entries);
     const attrs = s.vars ? varsToAttributes(s.vars) : [];
-    book.characters = [
-      ...worldbookCharacters(book),
-      {
-        id: newWorldbookCharId(),
-        name: s.name,
-        description: entry ? entryToDescription(entry) : '',
-        personality: '',
-        scenario: '',
-        firstMes: '',
-        mesExample: '',
-        systemPrompt: '',
-        postHistoryInstructions: '',
-        creatorNotes: '',
-        tags: [],
-        attributes: attrs,
-        showInPanel: true,
-        createdAt: now(),
-        updatedAt: now()
+    const existing = existingByName.get(s.name);
+    if (existing) {
+      const oldDescription = String(existing.description || '').trim();
+      const nextDescription = mergeDescription(oldDescription, desc);
+      const nextAttributes = mergeAttributes(existing.attributes, attrs);
+      if (nextDescription !== oldDescription ||
+          JSON.stringify(nextAttributes) !== JSON.stringify(asArray(existing.attributes))) {
+        existing.description = nextDescription;
+        existing.attributes = nextAttributes;
+        existing.updatedAt = now();
+        updated += 1;
       }
-    ];
-    existingNames.add(s.name);
+      continue;
+    }
+
+    const copy = {
+      id: newWorldbookCharId(),
+      name: s.name,
+      description: desc,
+      personality: '',
+      scenario: '',
+      firstMes: '',
+      mesExample: '',
+      systemPrompt: '',
+      postHistoryInstructions: '',
+      creatorNotes: '',
+      tags: [],
+      attributes: attrs,
+      showInPanel: true,
+      createdAt: now(),
+      updatedAt: now()
+    };
+    book.characters = [...worldbookCharacters(book), copy];
+    existingByName.set(s.name, copy);
     made += 1;
   }
 
-  // 卡本人：属性写卡上
+  // 卡本人：属性按字段名去重，正文合并全部来源；重复执行不会重复追加。
   let selfAttr = 0;
-  if (selfs.length) {
-    const card = characters().find((c) => asArray(c.worldbookIds).includes(book.id));
+  if (card) {
     for (const s of selfs) {
-      if (!card) break;
-      const attrs = s.vars ? varsToAttributes(s.vars) : [];
-      if (attrs.length) {
-        card.attributes = [...asArray(card.attributes), ...attrs];
-        card.updatedAt = now();
-        selfAttr += attrs.length;
-      }
-      // 正文并进卡描述（去重：已经有了就跳过）
-      const desc = s.entries[0] ? entryToDescription(s.entries[0]) : '';
-      if (desc && !String(card.description || '').includes(desc.slice(0, 40))) {
-        card.description = String(card.description || '').trim() + (String(card.description || '').trim() ? '\n\n' : '') + desc;
-        card.updatedAt = now();
-      }
+      const oldAttrs = asArray(card.attributes);
+      const nextAttrs = mergeAttributes(oldAttrs, s.vars ? varsToAttributes(s.vars) : []);
+      selfAttr += Math.max(0, nextAttrs.length - oldAttrs.length);
+      if (nextAttrs.length !== oldAttrs.length) card.attributes = nextAttrs;
+
+      const oldDescription = String(card.description || '').trim();
+      const nextDescription = mergeDescription(oldDescription, entryDescriptions(s.entries));
+      if (nextDescription !== oldDescription) card.description = nextDescription;
+      if (nextAttrs.length !== oldAttrs.length || nextDescription !== oldDescription) card.updatedAt = now();
     }
   }
 
-  // 停用命中过的原条目（不删）
-  const touched = new Set(picked.flatMap((s) => s.entries.map((e) => e.id)));
-  for (const e of book.entries) {
-    if (touched.has(e.id) && e.enabled !== false) e.enabled = false;
+  // 仅停用确实迁移到副本或卡上的条目；NPC 组只是提示，不会被误停用。
+  const touched = new Set([...people, ...(card ? selfs : [])].flatMap((s) => s.entries));
+  for (const e of worldbookEntries(book)) {
+    if (touched.has(e) && e.enabled !== false) e.enabled = false;
   }
   book.updatedAt = now();
 
@@ -503,6 +568,14 @@ async function applyScan() {
     book.characters = beforeChars;
     book.entries.splice(0, book.entries.length, ...beforeEntries);
     book.updatedAt = beforeUpdated;
+    if (card && beforeCard) {
+      if (beforeCard.hadAttributes) card.attributes = beforeCard.attributes;
+      else delete card.attributes;
+      if (beforeCard.hadDescription) card.description = beforeCard.description;
+      else delete card.description;
+      if (beforeCard.hadUpdatedAt) card.updatedAt = beforeCard.updatedAt;
+      else delete card.updatedAt;
+    }
     showToast('转换失败，已还原', 'error');
     close();
     return;
@@ -511,7 +584,11 @@ async function applyScan() {
   // 转换完让入口层重绘（人物列表宿主 / 角色编辑页那行「已绑世界书」）—— 这里不反向 import worldbook.js
   if (typeof afterApply === 'function') afterApply(book);
 
-  showToast(made ? `已建 ${made} 个人物` + (selfAttr ? `、卡上写了 ${selfAttr} 个属性` : '') : '已转换', 'ok');
+  const summary = [];
+  if (made) summary.push(`新建 ${made} 个人物`);
+  if (updated) summary.push(`合并 ${updated} 个已有副本`);
+  if (selfAttr) summary.push(`卡上新增 ${selfAttr} 个属性`);
+  showToast(summary.length ? summary.join('、') : '已转换（没有发现新的资料）', 'ok');
   close();
 }
 
