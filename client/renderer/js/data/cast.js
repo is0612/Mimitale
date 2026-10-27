@@ -334,7 +334,6 @@ export function worldbookCast(convo) {
   const cast = books.flatMap((b) => worldbookCharacters(b));
   if (!cast.length) return '';
 
-  const playerName = convoUserName(convo);
   const heroName = String((characterForConvo(convo) || {}).name || '').trim();
   const npcCopies = cast.filter((c) =>
     !isPlayerCharacterCopy(convo, c) &&
