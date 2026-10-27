@@ -57,7 +57,11 @@ export function characterCardPayload(character, options = {}) {
         mimitale: {
           attributes: characterAttrs(character),
           ...(Array.isArray(character.expressions) && character.expressions.length
-            ? { expressions: character.expressions }
+            ? {
+                expressions: character.expressions.map((item) =>
+                  withImages ? item : { ...item, image: '' }
+                )
+              }
             : {}),
           // 只有 JSON 导出才带图（见函数头：PNG 导出时图就是文件本身）
           ...(withImages && typeof character.avatar === 'string' && character.avatar
