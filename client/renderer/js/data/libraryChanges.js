@@ -39,6 +39,12 @@ export function createLibraryChanges({ records, save, saveNow }) {
     return { current, upserts, deletes };
   }
 
+  // 用已确认的快照判断关窗时是否仍有未保存变更。
+  function hasPendingChanges() {
+    const change = pending();
+    return change.upserts.length > 0 || change.deletes.length > 0;
+  }
+
   function payload(change) {
     return { upserts: change.upserts.map(([, text]) => JSON.parse(text)), deletes: change.deletes };
   }
@@ -90,5 +96,5 @@ export function createLibraryChanges({ records, save, saveNow }) {
     };
   }
 
-  return { markLoaded, flush, flushNow, beginBatch };
+  return { markLoaded, hasPendingChanges, flush, flushNow, beginBatch };
 }
