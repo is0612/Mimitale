@@ -2317,6 +2317,40 @@ await scenario('删除一个同名字段 owner 时保留其他角色的字段', 
 });
 
 // ---------------------------------------------------------------------------
+//  场景 9.5.2：整本书一起删除时，同名字段都被删除应一起屏蔽
+// ---------------------------------------------------------------------------
+await scenario('整本世界书删除多个角色时不复活同名历史字段', async () => {
+  const panelMod = await import(new URL('js/data/panel.js', document.baseURI).href);
+  const firstKey = panelMod.panelKey('好感度', 'book-copy-a');
+  const secondKey = panelMod.panelKey('好感度', 'book-copy-b');
+  const convo = {
+    id: 'panel-book-owner-suppression',
+    player: { name: '阿甲' },
+    characterId: null,
+    worldbookIds: [],
+    panel: { [firstKey]: '80/100', [secondKey]: '35/100' },
+    panelFields: [firstKey, secondKey],
+    panelDefs: {
+      [firstKey]: { type: 'meter', min: 0, max: 100, owner: 'book-copy-a' },
+      [secondKey]: { type: 'meter', min: 0, max: 100, owner: 'book-copy-b' }
+    },
+    messages: [
+      { role: 'assistant', content: '【好感度】：70/100', at: 1000 }
+    ]
+  };
+  const removed = panelMod.suppressPanelOwners(convo, [
+    { id: 'book-copy-a', name: '顾言' },
+    { id: 'book-copy-b', name: '林夏' }
+  ]);
+  panelMod.syncConvoPanel(convo);
+  check(
+    '一次删除多个 owner 后，同名裸字段历史不会重新生成',
+    removed && convo.panelFields.length === 0 && Object.keys(convo.panel).length === 0,
+    JSON.stringify({ fields: convo.panelFields, panel: convo.panel, suppressed: convo.panelSuppressed })
+  );
+});
+
+// ---------------------------------------------------------------------------
 //  场景 9.6：面板字段数到顶时，不能把认领不成的无主字段删掉
 //
 //  真 bug：absorbTopLevelIntoPlayer 的 claim() 只在「目标键真的建出来了」时才该
