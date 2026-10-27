@@ -143,6 +143,21 @@ test('跨书同 id 的条目不会被递归轮吞掉', () => {
   assert.deepEqual(bare.hits.map((e) => e.id), ['dup']);
 });
 
+test('停用条目不会在首轮或递归轮命中', () => {
+  const disabledRoot = entry('disabled-root', {
+    keys: ['alpha'], content: 'beta', recursive: true, enabled: false
+  });
+  const disabledChild = entry('disabled-child', {
+    keys: ['beta'], content: 'disabled child', enabled: false
+  });
+  const result = matchWorldbookEntries([disabledRoot, disabledChild], 'alpha', { recursiveDepth: 2 });
+  assert.deepEqual(result.hits.map((item) => item.id), []);
+
+  const root = entry('root', { keys: ['alpha'], content: 'beta', recursive: true, enabled: true });
+  const recursive = matchWorldbookEntries([root, disabledChild], 'alpha', { recursiveDepth: 1 });
+  assert.deepEqual(recursive.hits.map((item) => item.id), ['root']);
+});
+
 test('跨书同 id 的条目各自抽签，不共用一次概率结果', () => {
   const a = entry('dup', { worldbookId: 'A', keys: ['alpha'], probability: 50 });
   const b = entry('dup', { worldbookId: 'B', keys: ['alpha'], probability: 50 });
