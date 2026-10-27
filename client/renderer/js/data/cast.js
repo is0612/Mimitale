@@ -26,7 +26,7 @@ function mergePromptText(preferred, fallback) {
   if (!a) return b;
   if (!b || a === b || a.includes(b)) return a;
   if (b.includes(a)) return b;
-  return `${a}\n\n${b}`;
+  return a + '\n\n' + b;
 }
 
 function applyCastMacros(text, character, convo) {
@@ -39,15 +39,10 @@ function applyCastMacros(text, character, convo) {
     [String.fromCharCode(60, 85, 83, 69, 82, 62), userName]
   ];
   let result = String(text == null ? '' : text);
-  for (const [macro, value] of macros) result = result.replace(new RegExp(macro.replace(/[.*+?^${}()|[\]\\]/g, '\\function mergePromptText(preferred, fallback) {
-  const a = String(preferred || '').trim();
-  const b = String(fallback || '').trim();
-  if (!a) return b;
-  if (!b || a === b || a.includes(b)) return a;
-  if (b.includes(a)) return b;
-  return `${a}\n\n${b}`;
-}
-'), 'gi'), () => value);
+  for (const [macro, value] of macros) {
+    const escaped = macro.replace(/[{}]/g, '\\$&');
+    result = result.replace(new RegExp(escaped, 'gi'), () => value);
+  }
   return result;
 }
 
