@@ -13,6 +13,7 @@ import { entityTone } from '../ui/avatarTone.js';
 import { openLightbox } from '../ui/lightbox.js';
 import { showView, currentViewName } from './viewSwitch.js';
 import { persistLibrary, persistConversations } from '../data/persist.js';
+import { suppressPanelOwners } from '../data/panel.js';
 import {
   worldbooks,
   worldbookById,
@@ -663,6 +664,13 @@ async function removeWorldbookCharacter(book, id) {
     rerenderBookCharHosts(book);
     return;
   }
+
+  // 只在书库写盘成功后清理会话状态；历史聊天正文保留。
+  for (const convo of state.conversations) {
+    suppressPanelOwners(convo, [{ id: target.id, name: target.name }]);
+  }
+  persistConversations(0);
+  if (activeConvo() && effectiveWorldbookIds(activeConvo()).includes(book.id)) renderAll();
   showToast('已移除', 'ok');
 }
 
@@ -1028,7 +1036,10 @@ export async function deleteWorldbookById(id) {
     stashEntryForm();
   }
 
-  const charCount = worldbookCharacters(book).length;
+  const removedOwners = worldbookCharacters(book)
+    .filter((character) => character && character.id)
+    .map((character) => ({ id: character.id, name: character.name }));
+  const charCount = removedOwners.length;
   const owner = characters().find((c) => asArray(c.worldbookIds).includes(book.id)) || null;
   const usedByConvo = state.conversations.filter((c) => effectiveWorldbookIds(c).includes(book.id)).length;
   const entryCount = Array.isArray(book.entries) ? book.entries.length : 0;
@@ -1087,6 +1098,10 @@ export async function deleteWorldbookById(id) {
   // 真的写进磁盘了，草稿才可以丢
   wbDrafts.delete(book.id);
 
+  // 一本书的角色副本会一起消失，一次性清理这些 owner，避免同名字段互相误判。
+  for (const convo of state.conversations) {
+    suppressPanelOwners(convo, removedOwners);
+  }
   persistConversations(0);
   showToast('世界书已删除');
   return true;
