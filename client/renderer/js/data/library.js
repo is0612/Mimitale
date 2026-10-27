@@ -157,7 +157,9 @@ export function recursiveDepthSetting() {
   return Number.isFinite(value) && value >= 0 && value <= 5 ? Math.floor(value) : 1;
 }
 
-/** 角色副本的导出形状：只带设定、属性和已有图片，省去绑定 id / 时间戳等运行字段 */
+/** 角色副本的导出形状：只带设定、属性和已有图片，省去绑定 id / 时间戳等运行字段。
+ *  ⚠️ 白名单式：主角色模型（main/characters.js）支持的设定字段这里漏一个，
+ *  「导出书 → 再导回」就会静默丢掉它。 */
 function worldbookCharacterPayload(character) {
   const c = character && typeof character === 'object' ? character : {};
   const out = {
@@ -170,8 +172,12 @@ function worldbookCharacterPayload(character) {
     systemPrompt: c.systemPrompt || '',
     postHistoryInstructions: c.postHistoryInstructions || '',
     creatorNotes: c.creatorNotes || '',
+    creator: c.creator || '',
+    characterVersion: c.characterVersion || '',
     tags: asArray(c.tags)
   };
+  const greetings = asArray(c.alternateGreetings).filter((text) => typeof text === 'string' && text.trim());
+  if (greetings.length) out.alternateGreetings = greetings;
   if (Array.isArray(c.attributes) && c.attributes.length) out.attributes = c.attributes;
   if (typeof c.avatar === 'string' && c.avatar) out.avatar = c.avatar;
   if (typeof c.portrait === 'string' && c.portrait) out.portrait = c.portrait;

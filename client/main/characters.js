@@ -47,11 +47,13 @@ function normalizeAlternateGreetings(value) {
   const seen = new Set();
   for (const item of value) {
     if (typeof item !== 'string') continue;
-    // 两端空白先剪掉：卡里的开场白常以空行开头，留着会让预览第一屏是空的
-    const text = item.trim();
+    // 两端空白先剪掉：卡里的开场白常以空行开头，留着会让预览第一屏是空的。
+    // ⚠️ 先截断再去重：两条只有第 10000 字之后不同的开场白，截完会变成一样的，
+    //    先按原文去重就会留下两条重复选项。
+    const text = item.trim().slice(0, MAX_GREETING_CHARS);
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    out.push(text.slice(0, MAX_GREETING_CHARS));
+    out.push(text);
     if (out.length >= MAX_ALTERNATE_GREETINGS) break;
   }
   return out;

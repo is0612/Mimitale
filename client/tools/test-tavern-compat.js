@@ -155,3 +155,45 @@ test('v2内嵌书满足必需字段类型并保留开场白、NPC及条目设置
     assert.deepEqual(back.entries[0][field], original.entries[0][field], field);
   }
 });
+
+test('书的角色副本往返保留备选开场白、作者与版本号（不降格成空）', async () => {
+  const [library] = await renderer;
+  const original = normalize({
+    name: '带完整副本的书',
+    entries: [{ key: ['门'], content: '正文' }],
+    characters: [{
+      name: '守卫',
+      firstMes: '站住。',
+      alternateGreetings: ['又一个想进城的。', '这么晚了还来？'],
+      creator: '某作者',
+      characterVersion: '1.2.3',
+      tags: ['NPC']
+    }]
+  });
+  // 兜底路径（library.js 的 worldbookCharacterPayload 白名单）必须保住这几项
+  const payload = library.worldbookPayload(original);
+  assert.deepEqual(payload.characters[0].alternateGreetings, original.characters[0].alternateGreetings);
+  assert.equal(payload.characters[0].creator, '某作者');
+  assert.equal(payload.characters[0].characterVersion, '1.2.3');
+
+  const back = normalize(payload);
+  const copy = back.characters[0];
+  assert.deepEqual(copy.alternateGreetings, original.characters[0].alternateGreetings);
+  assert.equal(copy.creator, '某作者');
+  assert.equal(copy.characterVersion, '1.2.3');
+});
+
+test('世界书简介存盘后不丢（导出读的就是它）', async () => {
+  const [library] = await renderer;
+  const once = normalize({ name: '书', description: '这座城的三条规矩。', entries: [{ key: ['门'], content: '正文' }] });
+  assert.equal(once.description, '这座城的三条规矩。');
+  assert.equal(normalize(once).description, '这座城的三条规矩。');
+  assert.equal(library.worldbookPayload(once).description, '这座城的三条规矩。');
+});
+
+test('备选开场白先截断再去重，不产生两条相同的长开场', () => {
+  const { normalizeAlternateGreetings } = require('../main/characters.js');
+  const base = 'a'.repeat(10000);
+  const list = normalizeAlternateGreetings([`${base}X`, `${base}Y`]);
+  assert.equal(list.length, 1, '截断后完全相同 = 同一条，留两条会让开局看到重复选项');
+});

@@ -194,6 +194,21 @@ section('⑦ 语义检索不把已经在上下文里的消息再捞回来');
 }
 
 // ---------------------------------------------------------------------------
+section('⑧ 角色卡+世界书是一张卡：开局提示词与保存守卫');
+{
+  const worldPlay = stripComments(read('renderer/js/views/worldPlay.js'));
+  // 开场生成走的一定是共享格式器 —— 玩家设定里的 {{user}} 等宏必须换成玩家名，
+  // 否则开场那条请求收到的是字面宏，和后续对话不一致。
+  ok(/playerProfileForPrompt\(convo\)/.test(worldPlay), '开场生成用 playerProfileForPrompt 替换玩家设定里的宏');
+  ok(!/player\.profile\s*\}/.test(worldPlay), '开场生成不再把 player.profile 原样拼进提示词');
+
+  const persist = stripComments(read('renderer/js/data/persist.js'));
+  // 世界书没读进来时，书一本都写不下去；此时存角色会留下指向空气的 worldbookIds。
+  ok(/if\s*\(!worldbooksLoaded\s*&&\s*worldbooks\(\)\.length\)/.test(persist),
+    'persistCharacters 在世界书未加载且内存里有书时拒绝保存（不留悬空绑定）');
+}
+
+// ---------------------------------------------------------------------------
 console.log('');
 if (failures.length) {
   console.log(`✗ ${failures.length} 条失败 / 共 ${passed + failures.length} 条`);

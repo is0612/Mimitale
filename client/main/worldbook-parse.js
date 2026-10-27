@@ -145,6 +145,9 @@ function normalizeWorldbook(raw, fallbackName, makeId, normalizeCharacters, maxC
   return {
     id: id || genId(),
     name: name.slice(0, 120),
+    // 书自己的简介（酒馆 lorebook / character_book 都带）。导出时读的就是它，
+    // 这里不保留的话「导入 → 存盘 → 导出」会静默变成空串。
+    description: String(r.description || '').slice(0, 20000),
     entries,
     characters,
     createdAt: Number(r.createdAt) || Date.now(),

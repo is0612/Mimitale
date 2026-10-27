@@ -185,8 +185,18 @@ export function persistPresets(immediate) {
 
 /**
  * 提交角色及已加载世界书的变化，返回写盘结果；未变化的记录不发回主进程。
+ *
+ * ⚠️ 世界书没读进来时**不能**照常存角色：书是卡的一部分（worldbookIds），
+ * 此时内存里的书一本都写不下去，存了角色就等于把它绑到一本盘上没有的书上，
+ * 重启后书消失、卡变成「没有世界书」。宁可这次不存（改动留在内存里重试），
+ * 也别写出一条悬空绑定。
  */
 export function persistCharacters(immediate) {
+  if (!worldbooksLoaded && worldbooks().length) {
+    showToast('世界书上次没能读出来，这次先别保存角色卡 —— 重启应用再试，免得卡上的世界书丢掉', 'error');
+    return Promise.resolve(false);
+  }
+
   if (immediate) {
     if (worldbooksLoaded) flushCharacterWorldbooks(true);
     else characterChanges.flushNow();

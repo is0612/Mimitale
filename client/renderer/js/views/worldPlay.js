@@ -11,7 +11,13 @@ import { uid, now, activeConvo } from '../core/util.js';
 import { showToast } from '../ui/toast.js';
 import { characterById, characterWorldbooks, worldbookCharacters, characterForConvo } from '../data/library.js';
 import { seedIdentity, seedPanelFromCharacters, mergePlayerOwnedFields } from '../data/panel.js';
-import { convoUserName, convoPlayer, worldbookCast, focusCharacterSection } from '../data/cast.js';
+import {
+  convoUserName,
+  convoPlayer,
+  playerProfileForPrompt,
+  worldbookCast,
+  focusCharacterSection
+} from '../data/cast.js';
 import { gmRuleText } from '../data/narration.js';
 import { ensureConvoEndpoint } from '../data/providers.js';
 import { createConvo } from '../data/conversations.js';
@@ -130,7 +136,10 @@ async function generateWorldOpening(convo, books) {
     const me = convoUserName(convo);
     const parts = [gmRuleText('', me, convo)];
     const player = convoPlayer(convo);
-    if (player && player.profile) parts.push(`【玩家角色：${player.name || me}】\n${player.profile}`);
+    // ⚠️ 和正式对话走同一个格式器：玩家设定里的 {{user}}/{{char}}/<USER>/<BOT>
+    // 必须换成玩家名，否则开场这段收到的是一串字面宏（后续对话却是替换过的）。
+    const profile = playerProfileForPrompt(convo);
+    if (profile) parts.push(`【玩家角色：${(player && player.name) || me}】\n${profile}`);
     // 主要角色和世界 NPC 走正式对话同一套注入，开局里的人不会凭空出现
     const focus = focusCharacterSection(convo);
     if (focus) parts.push(focus);
