@@ -498,6 +498,66 @@ export function panelFieldOwner(convo, key) {
   return typeof owner === 'string' && owner ? owner : '';
 }
 
+/**
+ * 删除角色 owner 的状态值和定义。只有能明确判断归属的旧状态行才会从消息中移除，
+ * 避免角色重名时误删另一角色的历史。
+ */
+export function removePanelOwnerFields(convo, ownerId, ownerName = '') {
+  const owner = String(ownerId || '').trim();
+  if (!convo || !owner) return false;
+
+  const panel = convoPanel(convo);
+  const defs = convoPanelDefs(convo);
+  const manual = convo.panelManual && typeof convo.panelManual === 'object' ? convo.panelManual : {};
+  const candidates = new Set([
+    ...convoPanelFields(convo),
+    ...Object.keys(panel),
+    ...Object.keys(defs),
+    ...Object.keys(manual)
+  ]);
+  const removed = [...candidates].filter((key) => panelFieldOwner(convo, key) === owner);
+  if (!removed.length) return false;
+
+  const labels = new Set();
+  for (const key of removed) {
+    const name = panelKeyParts(key).name;
+    if (!name) continue;
+    const hasOtherOwner = [...candidates].some((otherKey) =>
+      otherKey !== key &&
+      panelKeyParts(otherKey).name === name &&
+      panelFieldOwner(convo, otherKey) !== owner
+    );
+    if (!hasOtherOwner) labels.add(name);
+    if (ownerName && !hasOtherOwner) labels.add(String(ownerName).trim() + OWNER_LABEL_SEP + name);
+    labels.add(owner + OWNER_LABEL_SEP + name);
+  }
+
+  convo.panelFields = convoPanelFields(convo).filter((key) => !removed.includes(key));
+  const nextPanel = { ...panel };
+  const nextDefs = { ...defs };
+  const nextManual = { ...manual };
+  for (const key of removed) {
+    delete nextPanel[key];
+    delete nextDefs[key];
+    delete nextManual[key];
+  }
+  convo.panel = nextPanel;
+  convo.panelDefs = nextDefs;
+  convo.panelManual = nextManual;
+
+  const linePattern = /^\\s*(?:[-*+]\\s+)?【([^】\\n]+)】\\s*[:：].*$/;
+  for (const message of Array.isArray(convo.messages) ? convo.messages : []) {
+    if (!message || message.role !== 'assistant' || typeof message.content !== 'string') continue;
+    const lines = message.content.split('\\n');
+    const filtered = lines.filter((line) => {
+      const match = line.match(linePattern);
+      return !match || !labels.has(match[1].trim());
+    });
+    if (filtered.length !== lines.length) message.content = filtered.join('\\n');
+  }
+  return true;
+}
+
 /** 会话里去重的显示名（有归属冲突才是「角色名·字段名」），用作 knownFields */
 export function convoFieldDisplayNames(convo) {
   const clash = clashingFieldNames(convo);
