@@ -179,6 +179,7 @@ function worldbookCharacterPayload(character) {
   const greetings = asArray(c.alternateGreetings).filter((text) => typeof text === 'string' && text.trim());
   if (greetings.length) out.alternateGreetings = greetings;
   if (Array.isArray(c.attributes) && c.attributes.length) out.attributes = c.attributes;
+  if (Array.isArray(c['expressions']) && c['expressions'].length) out['expressions'] = c['expressions'];
   if (typeof c.avatar === 'string' && c.avatar) out.avatar = c.avatar;
   if (typeof c.portrait === 'string' && c.portrait) out.portrait = c.portrait;
   if (c.showInPanel === true) out.showInPanel = true;
