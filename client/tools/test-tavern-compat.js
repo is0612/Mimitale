@@ -148,7 +148,9 @@ test('v2内嵌书满足必需字段类型并保留开场白、NPC及条目设置
   assert.equal(typeof item.extensions, 'object');
   assert.equal(item.extensions.selectiveLogic, 2);
   const back = normalize(payload);
-  assert.equal(back.opening, original.opening);
+  // opening 不是世界书字段；比较两个 undefined 会让测试空通过。
+  assert.equal(Object.hasOwn(back, 'opening'), false);
+  assert.equal(back.name, original.name);
   const stableChars = (chars) => chars.map(({ id, createdAt, updatedAt, ...char }) => char);
   assert.deepEqual(stableChars(back.characters), stableChars(normalize({ characters: original.characters }).characters));
   for (const field of ['keys', 'secondaryKeys', 'selectiveLogic', 'content', 'order', 'enabled', 'probability', 'recursive', 'caseSensitive', 'matchWholeWords']) {
