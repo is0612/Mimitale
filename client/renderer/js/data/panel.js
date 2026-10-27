@@ -593,16 +593,23 @@ export function suppressPanelOwners(convo, owners) {
   if (!targetById.size) return false;
 
   const fields = convoPanelFields(convo);
-  const removeKeys = fields.filter((key) => targetById.has(panelFieldOwner(convo, key)));
-  if (!removeKeys.length) return false;
-
-  const removed = new Set(removeKeys);
-  const at = now();
   const panel = { ...convoPanel(convo) };
   const defs = { ...convoPanelDefs(convo) };
   const manual = convo.panelManual && typeof convo.panelManual === 'object'
     ? { ...convo.panelManual }
     : null;
+  // 以 owner 字段身份为准：即使某个旧定义/手动标记已不在 panelFields，也要一起清掉。
+  const candidates = new Set([
+    ...fields,
+    ...Object.keys(panel),
+    ...Object.keys(defs),
+    ...Object.keys(manual || {})
+  ]);
+  const removeKeys = [...candidates].filter((key) => targetById.has(panelFieldOwner(convo, key)));
+  if (!removeKeys.length) return false;
+
+  const removed = new Set(removeKeys);
+  const at = now();
   const suppressions = Array.isArray(convo.panelSuppressed)
     ? [...convo.panelSuppressed]
     : [];
