@@ -10261,7 +10261,6 @@ await scenario('导出：备选开场白 / 作者 / 版本', async () => {
       alternateGreetings: ['第二条', '第三条'],
       creator: '某作者',
       characterVersion: '2.2',
-      expressions: [{ name: '微笑', keywords: ['温和'], key: 'happy', default: true, image: 'data:image/png;base64,AAAA' }],
       tags: []
     }) || {}
   ).data || {};
