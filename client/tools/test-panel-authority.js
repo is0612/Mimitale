@@ -112,4 +112,53 @@ declared.messages = [reply('【HP】：25/100', 10)];
 ctx.syncConvoPanel(declared);
 assert.equal(declared.panel['HP\0npc'], '25/100');
 assert.equal(declared.panel['HP\0player'], '50/100');
-console.log('panel authority: manual timestamps, alias ordering, range and owner isolation passed');
+// Deleted role owners must be removed from the panel without mutating chat history.
+const deleted = convo();
+deleted.messages = [
+  reply('【HP】：20/100', 10),
+  reply('【Alice·HP】：80/100', 20),
+];
+deleted.panelManual = { [key('npc')]: 123 };
+assert.equal(ctx.suppressPanelOwners(deleted, [{ id: 'npc', name: 'Alice' }]), true);
+assert.equal(deleted.panelFields.length, 0, 'deleted owner fields are removed');
+assert.deepEqual(Object.keys(deleted.panel), [], 'deleted owner values are removed');
+assert.deepEqual(Object.keys(deleted.panelDefs), [], 'deleted owner definitions are removed');
+assert.deepEqual(Object.keys(deleted.panelManual), [], 'deleted owner manual timestamps are removed');
+ctx.syncConvoPanel(deleted);
+assert.equal(deleted.panelFields.length, 0, 'old bare and prefixed history cannot resurrect deleted owner fields');
+assert.deepEqual(
+  deleted.messages.map(message => message.content),
+  ['【HP】：20/100', '【Alice·HP】：80/100'],
+  'chat messages remain unchanged'
+);
+
+// If a remaining owner shares the field name, preserve its value while suppressing the deleted label.
+const shared = convo();
+ctx.appendPanelFields(shared, [{ name: 'HP', owner: 'player', value: '30/100' }]);
+shared.messages = [reply('【Alice·HP】：80/100', 10)];
+ctx.suppressPanelOwners(shared, [{ id: 'npc', name: 'Alice' }]);
+ctx.syncConvoPanel(shared);
+assert.equal(shared.panel[key('player')], '30/100', 'another owner keeps the same-name field');
+assert.ok(!shared.panelFields.includes(key('npc')), 'deleted owner field stays removed');
+
+// Deleting a whole book may remove multiple owners sharing one field; evaluate them as one set.
+const removedBook = {
+  id: 'removed-book',
+  player: { name: 'Hero' },
+  characterId: null,
+  messages: [reply('【HP】：55/100', 10)],
+  panelFields: ['HP\0copy-a', 'HP\0copy-b'],
+  panel: { 'HP\0copy-a': '80/100', 'HP\0copy-b': '35/100' },
+  panelDefs: {
+    'HP\0copy-a': { type: 'meter', owner: 'copy-a' },
+    'HP\0copy-b': { type: 'meter', owner: 'copy-b' },
+  },
+};
+assert.equal(ctx.suppressPanelOwners(removedBook, [
+  { id: 'copy-a', name: 'Alice' }, { id: 'copy-b', name: 'Bob' },
+]), true);
+ctx.syncConvoPanel(removedBook);
+assert.equal(removedBook.panelFields.length, 0, 'all deleted book owners are removed together');
+assert.deepEqual(Object.keys(removedBook.panel), [], 'bare history from deleted book does not return');
+
+console.log('panel authority: manual timestamps, alias ordering, range, owner isolation and deletion suppression passed');
