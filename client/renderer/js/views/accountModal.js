@@ -336,7 +336,9 @@ async function requestCode() {
     consumeCaptcha('register');
     if (nodes.regHint) {
       if (result.devCode) {
-        // ⚠️ 假后端专用：真后端不会回 devCode，这一行接上服务器就没有了
+        // 服务端 DEV_ECHO_CODE=true（本地开发）时才回 devCode —— 那时邮件照发，
+        // 只是额外把码给界面一份，省得去 mailpit 网页里抄。生产关掉这个开关，
+        // 就只会走下面的「验证码已发出」分支。
         nodes.regHint.textContent = `演示模式：邮件没有真发出去，验证码是 ${result.devCode}`;
         nodes.regHint.classList.add('account-hint-dev');
       } else {

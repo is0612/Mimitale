@@ -1,0 +1,40 @@
+{
+  "name": "mimitale-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mimitale 账号中心 —— 只管账号与会员，不碰角色卡、聊天记录、本地设置",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:app": "node --import tsx --watch src/index.ts",
+    "start": "node --import tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose up -d db mail",
+    "db:down": "docker compose down",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset --force",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.1",
+    "@fastify/jwt": "^10.2.5",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "dotenv": "^18.0.9",
+    "fastify": "^5.12.7",
+    "nodemailer": "^10.2.1",
+    "pg": "^8.16.3",
+    "prisma": "7.10.1",
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,498 +1,348 @@
 'use strict';
 
 // ============================================================================
-//  main/account.js —— 账号体系的「假后端」（2026-10-23）
+//  main/account.js —— 账号体系的客户端实现（2026-10-27 接上真后端）
 //
-//  服务器还没买（腾讯云香港那台还在购物车里），但登录流程要能真走一遍：
-//  图形校验码 → 发邮箱验证码 → 两步注册 → 密码登录 → 凭证码登录 → 导出凭证。
+//  以前这里是「假后端」：账号存 data/account.json、验证码存主进程内存、
+//  图形码答案也在本地。现在全部走 HTTP，逻辑在 server/src/routes/client/auth.ts。
 //
-//  ⚠️ 每个函数都是**按真实后端的接口形状**写的：接服务器时把函数体换成一次
-//     fetch / 本地代理，渲染层（views/accountModal.js、data/account.js）一行都不用改。
+//  ⚠️ 对外**形状一个字没改** —— ipc.js 那 12 个通道、preload、渲染层
+//     （data/account.js、views/accountModal.js）全都不用动。
+//     这是当初定「通道名和返回形状按真后端定」的回报。
 //
-//  ⚠️ 假后端的三处妥协（真后端必须改掉，注释里都标了「真后端」）：
-//     1. 图形校验码和答案都留在主进程内存里；
-//     2. 邮箱验证码没真发出去 —— 直接把码回给界面显示（`devCode`）；
-//     3. 账号数据落在本机 data/account.json，不是数据库，也没有并发控制。
+//  ⚠️ 本地只留三样东西：accessToken、refreshToken、user 快照。
+//     密码、凭证码、验证码**一个字都不落盘**。
 //
-//  ⚠️ 密码只存 scrypt 加盐哈希，任何时候都不回传明文（连长度都不回）。
+//  ⚠️ 服务器不通时**不踢人**：已经登录的继续用缓存里的 user，聊天照常
+//     （聊天本来就不经过账号服务器）。只有 token 真失效（401）才清登录态。
 // ============================================================================
-
-const crypto = require('node:crypto');
 
 const { dataFile, writeJson, loadJsonWithFallback } = require('./store.js');
 
-/** 当前格式版本；将来加字段（比如云同步开关）时按它升级 */
-const ACCOUNT_VERSION = 1;
+/**
+ * 账号服务器地址。
+ *
+ * 现在是本机开发地址。买了域名之后改成 `https://api.你的域名.com/api`
+ * —— 只改这一处（决策 5：别把 IP 硬编码进客户端，将来搬家是灾难）。
+ */
+const API_BASE = process.env.MIMITALE_API_BASE || 'http://127.0.0.1:8080/api';
 
-/** 图形校验码：5 分钟过期，一次性（错了也作废，前端自动换一张） */
-const CAPTCHA_TTL_MS = 5 * 60 * 1000;
+/** 本地账号文件版本。1 = 老的假后端（accounts 数组），2 = 现在这套（token） */
+const ACCOUNT_VERSION = 2;
 
-/** 邮箱验证码：10 分钟有效，60 秒内不许重发，最多试 5 次 */
-const CODE_TTL_MS = 10 * 60 * 1000;
-const CODE_RESEND_MS = 60 * 1000;
-const CODE_MAX_TRIES = 5;
-
-/** 头像存进 JSON 的体积上限（base64 字符数，约 300KB → 原图 220KB 左右） */
-const MAX_AVATAR_CHARS = 400 * 1000;
-
-/** 校验码字符集：去掉 0/O/1/I/L 这些抄错就说不清的 */
-const CAPTCHA_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const VOUCHER_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-
-// --- 只在内存里的运行态（重启即失效，和真后端「会话 / 待验证码」的语义一致） ---
-/** captchaId → { answer, expiresAt } */
-const captchas = new Map();
-/** 邮箱 → { code, expiresAt, sentAt, tries } */
-const emailCodes = new Map();
+/** 网络超时 —— 服务器不可达时别让人干等 */
+const TIMEOUT_MS = 15000;
 
 // ---------------------------------------------------------------------------
-//  存储
+//  本地存储（只有 token 和 user 快照）
 // ---------------------------------------------------------------------------
 
 function accountFile() {
   return dataFile('account.json');
 }
 
-/** 读账号库；文件不存在 / 读坏都当空库，不拦启动 */
+/**
+ * 读本地登录态。
+ *
+ * ⚠️ version < 2 或结构不对的文件一律当「没登录」——
+ *    老假后端的账号只在那个 JSON 里存在过，服务端根本没有，
+ *    硬读出来只会让人以为还登着，然后每个请求都 401。
+ */
 function loadState() {
+  const empty = { version: ACCOUNT_VERSION, token: '', refreshToken: '', user: null, pendingToken: '', pendingEmail: '' };
+
   let raw = null;
   try {
     raw = loadJsonWithFallback(accountFile());
   } catch (err) {
-    console.warn('[account] 账号文件读失败，按空库处理:', err.message);
+    console.warn('[account] 本地登录态读失败，按未登录处理:', err.message);
+    return empty;
   }
-  const data = raw && typeof raw === 'object' ? raw : {};
-  const accounts = Array.isArray(data.accounts)
-    ? data.accounts.filter((a) => a && typeof a.email === 'string' && a.id)
-    : [];
-  const session =
-    data.session && data.session.accountId && accounts.some((a) => a.id === data.session.accountId)
-      ? data.session
-      : null;
-  return { version: ACCOUNT_VERSION, accounts, session };
+
+  if (!raw || typeof raw !== 'object' || raw.version !== ACCOUNT_VERSION) return empty;
+
+  return {
+    version: ACCOUNT_VERSION,
+    token: typeof raw.token === 'string' ? raw.token : '',
+    refreshToken: typeof raw.refreshToken === 'string' ? raw.refreshToken : '',
+    user: raw.user && typeof raw.user === 'object' ? raw.user : null,
+    // 注册第一步到第二步之间的临时令牌（10 分钟），只活在这中间
+    pendingToken: typeof raw.pendingToken === 'string' ? raw.pendingToken : '',
+    pendingEmail: typeof raw.pendingEmail === 'string' ? raw.pendingEmail : ''
+  };
 }
 
 function saveState(state) {
-  return writeJson(accountFile(), {
-    version: ACCOUNT_VERSION,
-    accounts: state.accounts,
-    session: state.session
+  return writeJson(accountFile(), state);
+}
+
+function patchState(patch) {
+  const state = Object.assign(loadState(), patch);
+  saveState(state);
+  return state;
+}
+
+function clearSession() {
+  return patchState({ token: '', refreshToken: '', user: null });
+}
+
+/** 当前登录用户（没登录返回 null） */
+function currentUser() {
+  const state = loadState();
+  return state.token ? state.user : null;
+}
+
+// ---------------------------------------------------------------------------
+//  HTTP
+// ---------------------------------------------------------------------------
+
+function networkError() {
+  const err = new Error('连不上账号服务器，检查一下网络，或者稍后再试');
+  err.network = true;
+  return err;
+}
+
+/**
+ * 发一个请求，返回 `data`。
+ *
+ * 约定（跟服务端一致）：
+ *   - `code === 0` 成功
+ *   - `code !== 0` 业务错误，message 是中英人话，直接抛给界面
+ *   - HTTP 401 才是「登录失效」—— 这时自动用 refreshToken 换一次新 token 再重试，
+ *     换不到才清登录态、让用户重新登
+ */
+async function request(method, pathname, options = {}) {
+  const { body, auth = false, token = '' } = options;
+
+  const state = loadState();
+  const headers = {};
+  if (body !== undefined) headers['content-type'] = 'application/json';
+
+  const bearer = token || (auth ? state.token : '');
+  if (bearer) headers.authorization = `Bearer ${bearer}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${pathname}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal
+    });
+  } catch (err) {
+    throw networkError();
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (res.status === 401) {
+    // 临时令牌（注册第二步）换 token 是没意义的，直接报
+    if (auth && !token && state.refreshToken && (await tryRefresh(state.refreshToken))) {
+      return request(method, pathname, { body, auth, token: '' });
+    }
+    clearSession();
+    const err = new Error('登录已过期，重新登录一次');
+    err.unauthorized = true;
+    throw err;
+  }
+
+  let payload = null;
+  try {
+    payload = await res.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    throw new Error(`账号服务器返回了看不懂的内容（HTTP ${res.status}）`);
+  }
+
+  if (payload.code !== 0) {
+    throw new Error(payload.message || '操作失败');
+  }
+
+  return payload.data;
+}
+
+/** 用 refreshToken 换新 token；成功返回 true */
+async function tryRefresh(refreshToken) {
+  try {
+    const res = await fetch(`${API_BASE}/client/auth/refresh`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
+    const payload = await res.json();
+    if (payload.code !== 0 || !payload.data || !payload.data.token) return false;
+    patchState({ token: payload.data.token });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 登录成功后统一落盘 */
+function persistSession(data) {
+  patchState({
+    token: data.token || '',
+    refreshToken: data.refreshToken || '',
+    user: data.user || null,
+    pendingToken: '',
+    pendingEmail: ''
+  });
+  return { user: data.user || null };
+}
+
+// ---------------------------------------------------------------------------
+//  对外能力 —— 名字和返回形状跟假后端那版一模一样
+// ---------------------------------------------------------------------------
+
+/**
+ * 当前登录的账号。
+ *
+ * ⚠️ 服务器连不上时**保持登录**（用缓存里的 user）——
+ *    账号服务器挂了不该导致所有人被踢下线、连聊天都用不了。
+ *    只有 token 真的失效（401）才清。
+ */
+async function getSession() {
+  const state = loadState();
+  if (!state.token) return { user: null };
+
+  try {
+    const data = await request('GET', '/client/auth/me', { auth: true });
+    // 顺手刷新本地快照 —— 头像/昵称可能在别的机器上改过
+    patchState({ user: data.user });
+    return { user: data.user };
+  } catch (err) {
+    if (err.unauthorized) return { user: null };
+    console.warn('[account] 拉取会话失败，沿用本地快照:', err.message);
+    return { user: currentUser() };
+  }
+}
+
+/** 换一张图形校验码 → { id, image, expiresIn } */
+async function createCaptcha() {
+  return request('POST', '/client/auth/captcha');
+}
+
+/** 发邮箱验证码（必须先过图形码）→ { email, expiresIn, deliver, devCode? } */
+async function sendEmailCode(payload) {
+  const input = payload || {};
+  return request('POST', '/client/auth/code', {
+    body: {
+      email: input.email,
+      captchaId: input.captchaId,
+      captchaAnswer: input.captchaAnswer
+    }
   });
 }
 
-function currentAccount(state) {
-  const data = state || loadState();
-  if (!data.session) return null;
-  return data.accounts.find((a) => a.id === data.session.accountId) || null;
-}
-
-/** 对外的账号形状：**不含密码哈希和盐**，也不含凭证码（要单独取） */
-function publicUser(account) {
-  if (!account) return null;
-  return {
-    id: account.id,
-    email: account.email,
-    username: account.username || '',
-    avatar: account.avatar || '',
-    createdAt: account.createdAt || '',
-    profileReady: !!account.profileReady
-  };
-}
-
-// ---------------------------------------------------------------------------
-//  校验与规整
-// ---------------------------------------------------------------------------
-
-function normalizeEmail(value) {
-  const email = String(value || '').trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new Error('邮箱格式不对，检查一下');
-  if (email.length > 120) throw new Error('邮箱太长了');
-  return email;
-}
-
-function normalizeUsername(value) {
-  const name = String(value || '').trim();
-  if (name.length < 2) throw new Error('用户名至少 2 个字');
-  if (name.length > 20) throw new Error('用户名最多 20 个字');
-  return name;
-}
-
-function normalizePassword(value) {
-  const password = String(value == null ? '' : value);
-  if (password.length < 8) throw new Error('密码至少 8 位');
-  if (password.length > 128) throw new Error('密码最多 128 位');
-  return password;
-}
-
-/** 头像只收图片 data URL；超过上限就报错（前端会先压到 256×256 再传） */
-function normalizeAvatar(value) {
-  const avatar = String(value || '').trim();
-  if (!avatar) return '';
-  if (!/^data:image\/(png|jpeg|webp);base64,/i.test(avatar)) {
-    throw new Error('头像格式不认识（只收 PNG / JPEG / WebP）');
-  }
-  if (avatar.length > MAX_AVATAR_CHARS) throw new Error('头像太大了，换一张小一点的');
-  return avatar;
-}
-
-function hashPassword(password, salt) {
-  return crypto.scryptSync(password, salt, 32).toString('hex');
-}
-
-function makeVoucher() {
-  // 24 个字符，每 4 位一组：XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
-  // ⚠️ 别用 `byte % 32` 取字符：上面那套字符集只有 31 个（去掉了 0/O/1/I/L），
-  //    下标 31 会取到 undefined，拼出来就是 `...-NKEu-ndef-ined-...` 这种鬼东西。
-  //    randomInt 是无偏的，顺便把「31 不是 2 的幂」那点模偏差也绕开了。
-  const chars = [];
-  for (let i = 0; i < 24; i += 1) chars.push(VOUCHER_ALPHABET[crypto.randomInt(0, VOUCHER_ALPHABET.length)]);
-  return chars.join('').match(/.{4}/g).join('-');
-}
-
-/** 凭证码容忍大小写、空格、少写/多写连字符 —— 手抄过的人都知道 */
-function normalizeVoucher(value) {
-  const raw = String(value || '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
-  if (!raw) throw new Error('先填凭证码');
-  if (raw.length !== 24) throw new Error('凭证码是 24 位，检查一下有没有抄漏');
-  return raw.match(/.{4}/g).join('-');
-}
-
-// ---------------------------------------------------------------------------
-//  图形校验码
-// ---------------------------------------------------------------------------
-
-function randomAnswer(length = 4) {
-  let out = '';
-  for (let i = 0; i < length; i += 1) out += CAPTCHA_CHARS[crypto.randomInt(0, CAPTCHA_CHARS.length)];
-  return out;
-}
-
-/**
- * 画一张 4 位字符的 SVG 校验码。
- * ⚠️ 用 SVG 而不是 canvas：主进程没有 canvas，而 SVG 拼字符串就够了；
- *    没有可见文字要求，字符集也限制在 A-Z2-9，插进属性里不会有转义问题。
- */
-function captchaSvg(answer) {
-  const width = 112;
-  const height = 40;
-  const parts = [];
-
-  // 底色 + 边框（内联属性，避免依赖外部样式）
-  parts.push(`<rect width="${width}" height="${height}" rx="4" fill="#1d2126"/>`);
-
-  // 背景噪点：细碎的点比噪线更耐看，也不会把字符压糊
-  for (let i = 0; i < 26; i += 1) {
-    const x = crypto.randomInt(2, width - 2);
-    const y = crypto.randomInt(2, height - 2);
-    parts.push(`<circle cx="${x}" cy="${y}" r="0.8" fill="#3b4249"/>`);
-  }
-
-  // 两条干扰曲线
-  for (let i = 0; i < 2; i += 1) {
-    const y1 = crypto.randomInt(6, height - 6);
-    const y2 = crypto.randomInt(6, height - 6);
-    const cy1 = crypto.randomInt(0, height);
-    const cy2 = crypto.randomInt(0, height);
-    parts.push(
-      `<path d="M0 ${y1} C ${width * 0.3} ${cy1}, ${width * 0.7} ${cy2}, ${width} ${y2}" ` +
-        'fill="none" stroke="#4a535c" stroke-width="1.2"/>'
-    );
-  }
-
-  // 字符：每个自己转一个角度、上下错开，别排成一条直线
-  const step = width / (answer.length + 1);
-  for (let i = 0; i < answer.length; i += 1) {
-    const x = Math.round(step * (i + 1));
-    const y = Math.round(height / 2 + crypto.randomInt(-3, 4));
-    const rotate = crypto.randomInt(-22, 23);
-    const size = crypto.randomInt(20, 25);
-    const color = ['#e8e4d8', '#cbb88f', '#a9c2b0'][crypto.randomInt(0, 3)];
-    parts.push(
-      `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" ` +
-        `font-family="Consolas, monospace" font-size="${size}" font-weight="700" ` +
-        `fill="${color}" transform="rotate(${rotate} ${x} ${y})">${answer[i]}</text>`
-    );
-  }
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-/** 发一张新的图形校验码（旧的留着自然过期） */
-function createCaptcha() {
-  // 顺手清掉过期项，别让 Map 无限长
-  const now = Date.now();
-  for (const [id, item] of captchas) if (item.expiresAt < now) captchas.delete(id);
-
-  const id = crypto.randomUUID();
-  const answer = randomAnswer();
-  captchas.set(id, { answer, expiresAt: now + CAPTCHA_TTL_MS });
-  const result = { id, image: captchaSvg(answer), expiresIn: Math.round(CAPTCHA_TTL_MS / 1000) };
-  // ⚠️ 只有自动测试（tools/smoke-test.js 设了 MIMITALE_ACCOUNT_TEST=1）能看到答案，
-  //    否则一张图没人认得出来、整条注册 / 登录链路就没法自动跑。
-  //    真后端：答案只留服务端，**任何情况下都不回给前端**。
-  if (process.env.MIMITALE_ACCOUNT_TEST === '1') result.answer = answer;
-  return result;
-}
-
-/** 验图形码：**一次性**，不管对错都作废（对的那次也作废，防重放） */
-function checkCaptcha(captchaId, answer) {
-  const id = String(captchaId || '');
-  const item = captchas.get(id);
-  if (!item) throw new Error('校验码已失效，点图片换一张');
-  captchas.delete(id);
-  if (item.expiresAt < Date.now()) throw new Error('校验码过期了，点图片换一张');
-  if (String(answer || '').trim().toUpperCase() !== item.answer) {
-    throw new Error('校验码不对，换一张再试');
-  }
-}
-
-// ---------------------------------------------------------------------------
-//  对外能力
-// ---------------------------------------------------------------------------
-
-/** 当前登录的账号（没登录返回 null） */
-async function getSession() {
-  return { user: publicUser(currentAccount()) };
-}
-
-/**
- * 发邮箱验证码。
- * ⚠️ 星宝的口径：**图形校验码先过，才给邮箱发码** —— 所以这里是先验图形码。
- * 真后端：验完码调 SMTP / 邮件 API，绝不把 code 回给前端。
- */
-async function sendEmailCode(payload) {
-  const request = payload || {};
-  const email = normalizeEmail(request.email);
-
-  checkCaptcha(request.captchaId, request.captchaAnswer);
-
-  const state = loadState();
-  if (state.accounts.some((a) => a.email === email)) {
-    // 真后端也不该在这里暴露「邮箱是否注册」，但注册流程里报清楚更省事；
-    // 等有风控要求时改成「无论是否注册都返回成功」。
-    throw new Error('这个邮箱已经注册过了，直接登录');
-  }
-
-  const now = Date.now();
-  const prev = emailCodes.get(email);
-  if (prev && now - prev.sentAt < CODE_RESEND_MS) {
-    const wait = Math.ceil((CODE_RESEND_MS - (now - prev.sentAt)) / 1000);
-    throw new Error(`刚发过一封，${wait} 秒后再试`);
-  }
-
-  const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
-  emailCodes.set(email, { code, expiresAt: now + CODE_TTL_MS, sentAt: now, tries: 0 });
-
-  // 真后端：这里只返回 { ok: true, expiresIn }，绝不带 devCode
-  return {
-    email,
-    expiresIn: Math.round(CODE_TTL_MS / 1000),
-    deliver: 'dev',
-    devCode: code
-  };
-}
-
-/** 注册第一步：邮箱 + 验证码 → 先建一个「还没设资料」的空账号 */
+/** 注册第一步：邮箱 + 验证码 → { accountId, email, needsProfile } */
 async function register(payload) {
-  const request = payload || {};
-  const email = normalizeEmail(request.email);
-  const code = String(request.code || '').trim();
+  const input = payload || {};
+  const data = await request('POST', '/client/auth/register', {
+    body: { email: input.email, code: input.code }
+  });
 
-  const entry = emailCodes.get(email);
-  if (!entry || entry.expiresAt < Date.now()) throw new Error('验证码过期了，重新获取');
-  if (entry.tries >= CODE_MAX_TRIES) throw new Error('试错次数太多，重新获取验证码');
-  if (code !== entry.code) {
-    entry.tries += 1;
-    throw new Error('验证码不对，再看看邮件');
-  }
-  emailCodes.delete(email);
+  // 第二步要用这张临时令牌，但**别给界面** —— 界面不需要，也就不会顺手塞进日志
+  patchState({ pendingToken: data.pendingToken || '', pendingEmail: data.email || '' });
 
-  const state = loadState();
-  if (state.accounts.some((a) => a.email === email)) throw new Error('这个邮箱注册过了，直接登录');
-
-  const account = {
-    id: crypto.randomUUID(),
-    email,
-    username: '',
-    avatar: '',
-    salt: '',
-    passwordHash: '',
-    voucher: '',
-    profileReady: false,
-    createdAt: new Date().toISOString()
-  };
-  state.accounts.push(account);
-  await saveState(state);
-
-  // 真后端会回一个「临时注册令牌」，第二步带着它走；这里直接用 accountId
-  return { accountId: account.id, email, needsProfile: true };
+  return { accountId: data.accountId, email: data.email, needsProfile: data.needsProfile !== false };
 }
 
-/** 注册第二步：头像 + 用户名 + 密码 → 账号正式可用，并直接登进去 */
+/** 注册第二步：用户名 + 密码 + 头像 → 账号可用并直接登进去 */
 async function completeProfile(payload) {
-  const request = payload || {};
-  const username = normalizeUsername(request.username);
-  const password = normalizePassword(request.password);
-  const avatar = normalizeAvatar(request.avatar);
-
+  const input = payload || {};
   const state = loadState();
-  const account = state.accounts.find((a) => a.id === String(request.accountId || ''));
-  if (!account) throw new Error('注册信息过期了，重新来一遍');
-  if (account.profileReady) throw new Error('这个账号已经设置过了');
+  if (!state.pendingToken) throw new Error('注册信息过期了，重新来一遍');
 
-  const salt = crypto.randomBytes(16).toString('hex');
-  account.username = username;
-  account.salt = salt;
-  account.passwordHash = hashPassword(password, salt);
-  account.avatar = avatar;
-  account.voucher = makeVoucher();
-  account.profileReady = true;
+  const data = await request('POST', '/client/auth/complete-profile', {
+    body: { username: input.username, password: input.password, avatar: input.avatar },
+    token: state.pendingToken
+  });
 
-  state.session = {
-    accountId: account.id,
-    token: crypto.randomUUID(),
-    at: new Date().toISOString()
-  };
-  await saveState(state);
-  return { user: publicUser(account) };
+  return persistSession(data);
 }
 
-/** 邮箱 + 密码登录（图形码这道和「发验证码」一样，先验） */
+/** 邮箱 + 密码 + 图形码登录 */
 async function login(payload) {
-  const request = payload || {};
-  const email = normalizeEmail(request.email);
-
-  checkCaptcha(request.captchaId, request.captchaAnswer);
-
-  const state = loadState();
-  const account = state.accounts.find((a) => a.email === email);
-  // ⚠️ 「邮箱不存在」和「密码不对」给同一句 —— 别让人拿登录页探邮箱
-  const bad = new Error('邮箱或密码不对');
-  if (!account || !account.profileReady) throw bad;
-  if (hashPassword(String(request.password || ''), account.salt) !== account.passwordHash) throw bad;
-
-  state.session = {
-    accountId: account.id,
-    token: crypto.randomUUID(),
-    at: new Date().toISOString()
-  };
-  await saveState(state);
-  return { user: publicUser(account) };
+  const input = payload || {};
+  const data = await request('POST', '/client/auth/login', {
+    body: {
+      email: input.email,
+      password: input.password,
+      captchaId: input.captchaId,
+      captchaAnswer: input.captchaAnswer
+    }
+  });
+  return persistSession(data);
 }
 
-/** 用导出的凭证码登录（换机器 / 重装之后用） */
+/** 用 24 位凭证码登录（换机器 / 重装） */
 async function loginWithVoucher(payload) {
-  const voucher = normalizeVoucher((payload || {}).voucher);
-
-  const state = loadState();
-  const account = state.accounts.find((a) => a.voucher === voucher);
-  if (!account) throw new Error('凭证码不对，检查一下有没有抄漏');
-
-  state.session = {
-    accountId: account.id,
-    token: crypto.randomUUID(),
-    at: new Date().toISOString()
-  };
-  await saveState(state);
-  return { user: publicUser(account) };
+  const input = payload || {};
+  const data = await request('POST', '/client/auth/voucher-login', {
+    body: { voucher: input.voucher }
+  });
+  return persistSession(data);
 }
 
+/**
+ * 登出。
+ * ⚠️ 服务器调用失败也要把本地清掉 —— 「点了登出却还登着」比「服务器不知道你走了」严重得多。
+ */
 async function logout() {
   const state = loadState();
-  state.session = null;
-  await saveState(state);
+  if (state.token) {
+    try {
+      await request('POST', '/client/auth/logout', { auth: true });
+    } catch (err) {
+      console.warn('[account] 通知服务器登出失败（本地照样清）:', err.message);
+    }
+  }
+  clearSession();
   return { user: null };
 }
 
-/**
- * 取登录凭证（没有就现生成一个，之后固定不变）。
- * 返回画卡片要的全部字段 —— 渲染层拿它画 PNG，主进程不碰画图。
- */
+/** 取登录凭证 → { code, username, email, avatar, createdAt, version } */
 async function getVoucher() {
-  const state = loadState();
-  const account = currentAccount(state);
-  if (!account) throw new Error('先登录再导出凭证');
-
-  if (!account.voucher) {
-    account.voucher = makeVoucher();
-    await saveState(state);
-  }
-  return {
-    code: account.voucher,
-    username: account.username,
-    email: account.email,
-    avatar: account.avatar,
-    createdAt: account.createdAt,
-    version: ACCOUNT_VERSION
-  };
+  return request('GET', '/client/auth/voucher', { auth: true });
 }
 
-/** 改资料（用户名 / 头像）；邮箱和密码各有自己的流程，见下面两个 */
+/** 改资料（用户名 / 头像） */
 async function updateProfile(payload) {
-  const request = payload || {};
-  const state = loadState();
-  const account = currentAccount(state);
-  if (!account) throw new Error('先登录');
+  const input = payload || {};
+  const body = {};
+  if (input.username != null) body.username = input.username;
+  if (input.avatar != null) body.avatar = input.avatar;
 
-  if (request.username != null) account.username = normalizeUsername(request.username);
-  if (request.avatar != null) account.avatar = normalizeAvatar(request.avatar);
-
-  await saveState(state);
-  return { user: publicUser(account) };
+  const data = await request('PATCH', '/client/auth/profile', { body, auth: true });
+  patchState({ user: data.user });
+  return { user: data.user };
 }
 
-/**
- * 改密码：要**当前密码**（防「人走了没锁屏，回来密码被换了」）。
- * 改完会话不踢：自己改的密码，没必要让自己重新登一遍。
- */
+/** 改密码（要当前密码）。改完不踢会话 —— 自己改的密码没必要让自己重登 */
 async function changePassword(payload) {
-  const request = payload || {};
-  const state = loadState();
-  const account = currentAccount(state);
-  if (!account) throw new Error('先登录');
-
-  const current = String(request.currentPassword == null ? '' : request.currentPassword);
-  if (hashPassword(current, account.salt) !== account.passwordHash) throw new Error('当前密码不对');
-
-  const password = normalizePassword(request.password);
-  const salt = crypto.randomBytes(16).toString('hex');
-  account.salt = salt;
-  account.passwordHash = hashPassword(password, salt);
-  await saveState(state);
-  return { user: publicUser(account) };
+  const input = payload || {};
+  const data = await request('POST', '/client/auth/password', {
+    body: { currentPassword: input.currentPassword, password: input.password },
+    auth: true
+  });
+  return { user: data.user };
 }
 
-/**
- * 改邮箱：必须拿着**新邮箱**收到的验证码。
- * 码走的就是注册那条路（`sendEmailCode` 会先验图形码），所以这里只验码本身。
- * ⚠️ 真后端在这一步也该把旧邮箱发一封「邮箱已更换」的通知，不然号被盗了人都不知道。
- */
+/** 改邮箱（要新邮箱收到的验证码） */
 async function changeEmail(payload) {
-  const request = payload || {};
-  const email = normalizeEmail(request.email);
-  const code = String(request.code || '').trim();
-
-  const state = loadState();
-  const account = currentAccount(state);
-  if (!account) throw new Error('先登录');
-  if (account.email === email) throw new Error('这就是你现在用的邮箱');
-  if (state.accounts.some((a) => a.email === email)) throw new Error('这个邮箱已经被别的账号用了');
-
-  const entry = emailCodes.get(email);
-  if (!entry || entry.expiresAt < Date.now()) throw new Error('验证码过期了，重新获取');
-  if (entry.tries >= CODE_MAX_TRIES) throw new Error('试错次数太多，重新获取验证码');
-  if (code !== entry.code) {
-    entry.tries += 1;
-    throw new Error('验证码不对，再看看邮件');
-  }
-  emailCodes.delete(email);
-
-  account.email = email;
-  await saveState(state);
-  return { user: publicUser(account) };
+  const input = payload || {};
+  const data = await request('POST', '/client/auth/email', {
+    body: { email: input.email, code: input.code },
+    auth: true
+  });
+  patchState({ user: data.user });
+  return { user: data.user };
 }
 
 module.exports = {
@@ -507,5 +357,7 @@ module.exports = {
   getVoucher,
   updateProfile,
   changePassword,
-  changeEmail
+  changeEmail,
+  // 给测试/排查用：当前账号服务器地址
+  apiBase: API_BASE
 };

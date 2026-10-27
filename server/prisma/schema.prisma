@@ -1,0 +1,161 @@
+// Mimitale 账号中心 —— 只有 6 张表，全是「账号与运营」。
+//
+// ⛔ 这里**故意没有**角色卡 / 世界书 / 对话记录 / 本地设置的表。
+//    那些东西留在用户自己电脑上，服务器一份都不存。
+//
+// 三条来自决策记录的设计约束：
+//   ① 客户（customers）和管理员（admins）是两套账号，不共用表、不做外键
+//   ② 操作日志只增不改不删，admin_name / target_name 冗余存，改名不影响历史
+//   ③ 不建任何外键 —— 删掉一个管理员不该影响任何客户，关联只靠逻辑字段
+
+generator client {
+  // Prisma 7 的新 provider：源码直接生成到 src/generated/，
+  // 不再往 node_modules 里写东西，也不再下载数据库引擎（走 pg driver adapter）
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  // URL 不写在这里 —— Prisma 7 挪到了 prisma.config.ts，方便换环境变量来源
+  provider = "postgresql"
+}
+
+/// 管理员 = 你自己。部署时由 seed 预置，**没有注册接口**
+model Admin {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  /// scrypt 哈希，格式 scrypt$salt$hash —— 绝不存明文
+  passwordHash String    @map("password_hash")
+  nickname     String
+  /// super | normal。目前只是装饰，不参与任何判断
+  role         String    @default("normal")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@map("admins")
+}
+
+/// 客户 = 在 Mimitale 客户端里注册使用软件的人
+model Customer {
+  id            Int       @id @default(autoincrement())
+  /// 登录标识，统一小写存储
+  email         String    @unique
+  /// 显示名。
+  /// ⚠️ 客户端把它叫 `username`（注册第二步填「用户名」），后台列表叫「昵称」——
+  ///    **同一列**，别为名字差异再加一列。注册第一步先填邮箱前缀，第二步覆盖成用户自己填的。
+  nickname      String
+  /// 头像，`data:image/...;base64`。客户端上传前已经压到 256×256，单张几十 KB
+  avatar        String?
+  /// scrypt 哈希，格式 `scrypt$salt$hash`。null = 还没走完注册第二步
+  passwordHash  String?   @map("password_hash")
+  /// 24 位凭证码 `XXXX-XXXX-…`。换机器 / 重装后靠它登回来，是这个项目唯一的「迁移手段」
+  /// （云同步不做了，数据全在本机）。null = 老数据或还没生成
+  voucher       String?   @unique
+  /// 有没有走完注册第二步（头像 + 用户名 + 密码）
+  profileReady  Boolean   @default(false) @map("profile_ready")
+  /// active | banned —— 代码枚举，不进字典
+  status        String    @default("active")
+  /// 字典 ban_reason 的 value；解封时清空
+  banReason     String?   @map("ban_reason")
+  /// 剩余额度（次）。-1 = 不限量
+  quota         Int       @default(0)
+  /// 字典 membership_level 的 value；none = 非会员（哨兵，不进字典）
+  membershipLevel    String    @default("none") @map("membership_level")
+  /// 会员到期时间。「是否过期」由它和当前时间推导，**不存 expired 布尔**
+  membershipExpireAt DateTime? @map("membership_expire_at")
+  /// 注册时用的卡密；直接邮箱注册为 null
+  inviteCode    String?   @map("invite_code")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  lastLoginAt   DateTime? @map("last_login_at")
+
+  // 「今天注册了多少」每次打开后台都要查
+  @@index([createdAt])
+  @@index([status])
+  @@map("customers")
+}
+
+/// 操作日志 —— 只由后端写，没有写入接口
+model OperationLog {
+  id         Int      @id @default(autoincrement())
+  adminId    Int      @map("admin_id")
+  /// 冗余存一份：管理员改了昵称，历史日志不该跟着变
+  adminName  String   @map("admin_name")
+  /// customer.ban / customer.unban / customer.quota / customer.membership
+  /// card.create / card.void / dict.create / dict.update / dict.delete
+  action     String
+  /// customer | card | dict
+  targetType String   @map("target_type")
+  targetId   Int?     @map("target_id")
+  /// 同样冗余：客户改了昵称，老日志还是当时的名字
+  targetName String   @map("target_name")
+  /// 一句话说清改了什么，例：「额度 100 → 500」
+  detail     String
+  ip         String   @default("")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([targetType, targetId])
+  @@map("operation_logs")
+}
+
+/// 卡密 —— 会员续费换钱之前唯一的「发号」手段
+model InviteCard {
+  id               Int       @id @default(autoincrement())
+  /// MIMI-7K2M-9QXA
+  code             String    @unique
+  /// 字典 card_note 的显示名，例：种子用户
+  note             String    @default("")
+  /// unused | used | void —— 代码枚举，不进字典
+  status           String    @default("unused")
+  usedByCustomerId Int?      @map("used_by_customer_id")
+  usedAt           DateTime? @map("used_at")
+  /// null = 永久有效
+  expireAt         DateTime? @map("expire_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([status])
+  @@index([usedByCustomerId])
+  @@map("invite_cards")
+}
+
+/// 字典类型 —— 只放「加一个值不需要改代码」的枚举
+model DictType {
+  code      String   @id
+  name      String
+  remark    String   @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("dict_types")
+}
+
+model DictItem {
+  id       Int     @id @default(autoincrement())
+  typeCode String  @map("type_code")
+  /// 给人看的，例：刷屏广告
+  label    String
+  /// 存进数据库的，例：spam
+  value    String
+  /// 小的排前面
+  sort     Int     @default(100)
+  /// 停用后新地方选不到，历史数据照旧显示
+  enabled  Boolean @default(true)
+  remark   String  @default("")
+
+  @@unique([typeCode, value])
+  @@index([typeCode])
+  @@map("dict_items")
+}
+
+/// 邮箱验证码。放数据库而不是内存 —— 后端重启不该把正在登录的人踢出去
+model LoginCode {
+  id         Int       @id @default(autoincrement())
+  email      String
+  code       String
+  expiresAt  DateTime  @map("expires_at")
+  /// 用过一次就作废，防止同一条验证码被重复提交
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  @@map("login_codes")
+}

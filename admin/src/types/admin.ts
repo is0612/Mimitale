@@ -325,3 +325,39 @@ export interface UpdateDictItemReq {
 }
 
 /* 16. DELETE /api/admin/dicts/items/{id} → ApiResult<null> */
+
+/* ------------------------------------------------------------------ */
+/* 17. 概览统计 —— 原 16 个契约之外新增的（2026-10-27）                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * GET /api/admin/overview
+ *
+ * 起因是星宝一句「今天有多少个账号注册」。原来的 16 个接口里没有统计，
+ * 后台首页也只有客户列表，回答不了这个问题。
+ *
+ * ⚠️ 所有「今天」都是**北京时间**的今天，不看服务器时区。
+ *    Docker 容器默认 UTC，直接按本地时间算会把早上 8 点前的注册算到昨天。
+ */
+export interface OverviewRes {
+  /** 今天（北京时间）注册的客户数 */
+  todayRegistered: number
+  /** 昨天注册的，用来算「比昨天多/少」 */
+  yesterdayRegistered: number
+  totalCustomers: number
+  bannedCustomers: number
+  /** 会员：等级不是 none **且** 还没到期 */
+  activeMembers: number
+  /** 发过会员的总数（含已过期）—— activeMembers 和它的差就是「过期待续」 */
+  memberTotal: number
+  /** 7 天内到期的人数，该催续费的那批 */
+  expiringIn7Days: number
+  /** 今天登录过的客户数（不是注册，是登录） */
+  todayActive: number
+  /** 还没被用掉的卡密 */
+  unusedCards: number
+  /** 近 7 天每天的注册数。中间没人注册的那天补 0，不连成一条假曲线 */
+  trend: Array<{ day: string; count: number }>
+  /** 最近 5 个注册的客户 */
+  recent: Customer[]
+}

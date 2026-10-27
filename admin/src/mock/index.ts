@@ -1054,6 +1054,53 @@ function handleDeleteDictItem({ params, headers }: MockCtx): MockOutcome {
 }
 
 /* ------------------------------------------------------------------ */
+/* 概览统计（第 17 个接口，原契约之外新增）                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * GET /api/admin/overview
+ *
+ * ⚠️ mock 里的「今天」钉在种子的 NOW（2026-10-08），不是真实的今天 ——
+ *    种子客户的注册时间就是围着 NOW 生成的。所以你在 mock 模式下看到的
+ *    「今日新增」是那一天的数字，切到真后端才会跟着真实日期走。
+ */
+function handleOverview({ headers }: MockCtx): MockOutcome {
+  const admin = requireAdmin(headers)
+  if (!admin) return expired()
+
+  const dayOf = (iso: string): string => localDay(iso)
+  const todayKey = dayOf(new Date(NOW).toISOString())
+  const yesterdayKey = dayOf(new Date(NOW - DAY).toISOString())
+
+  const countOn = (day: string): number => customers.filter((c) => dayOf(c.createdAt) === day).length
+
+  const members = customers.filter((c) => c.membershipLevel !== 'none')
+  const stillValid = members.filter((c) => c.membershipExpireAt && Date.parse(c.membershipExpireAt) > NOW)
+  const expiring = stillValid.filter(
+    (c) => c.membershipExpireAt && Date.parse(c.membershipExpireAt) <= NOW + 7 * DAY
+  )
+
+  const trend = Array.from({ length: 7 }, (_, i) => {
+    const day = dayOf(new Date(NOW - (6 - i) * DAY).toISOString())
+    return { day, count: countOn(day) }
+  })
+
+  return ok({
+    todayRegistered: countOn(todayKey),
+    yesterdayRegistered: countOn(yesterdayKey),
+    totalCustomers: customers.length,
+    bannedCustomers: customers.filter((c) => c.status === 'banned').length,
+    activeMembers: stillValid.length,
+    memberTotal: members.length,
+    expiringIn7Days: expiring.length,
+    todayActive: customers.filter((c) => c.lastLoginAt && dayOf(c.lastLoginAt) === todayKey).length,
+    unusedCards: cards.filter((c) => c.status === 'unused').length,
+    trend,
+    recent: [...customers].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 5)
+  })
+}
+
+/* ------------------------------------------------------------------ */
 /* 路由表                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -1062,6 +1109,8 @@ const routes: Array<{ method: string; pattern: string; handler: MockHandler }> =
   { method: 'POST', pattern: '/admin/auth/refresh', handler: handleAdminRefresh },
   { method: 'GET', pattern: '/admin/auth/me', handler: handleAdminMe },
   { method: 'POST', pattern: '/admin/auth/logout', handler: handleAdminLogout },
+
+  { method: 'GET', pattern: '/admin/overview', handler: handleOverview },
 
   { method: 'GET', pattern: '/admin/customers', handler: handleListCustomers },
   { method: 'GET', pattern: '/admin/customers/:id', handler: handleGetCustomer },

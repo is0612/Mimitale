@@ -1,0 +1,73 @@
+# Mimitale 后端本地环境
+#
+#   docker compose up -d          → 只起 db + mail（开发时后端在本机用 tsx watch 跑）
+#   docker compose --profile full up -d --build
+#                                 → 连 api 一起起（模拟部署，验证镜像）
+#
+# 端口刻意挑了不常用的：
+#   db   5433（5432 是本机另一个项目的 postgres）
+#   api  8080（admin 的 vite 代理就指着这个）
+#   mail 1025 SMTP / 8025 网页收件箱
+
+name: mimitale
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mimitale-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mimitale
+      POSTGRES_PASSWORD: mimitale
+      POSTGRES_DB: mimitale
+      # 中文昵称要能正常排序
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8'
+    ports:
+      - '127.0.0.1:5433:5432'
+    volumes:
+      - mimitale-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mimitale -d mimitale']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # 本地收信服务器 —— 验证码邮件发到这里，不真发出去
+  mail:
+    image: axllent/mailpit:latest
+    container_name: mimitale-mail
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:1025:1025'
+      - '127.0.0.1:8025:8025'
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+      MP_MAX_MESSAGES: 200
+
+  api:
+    profiles: ['full']
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mimitale-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://mimitale:mimitale@db:5432/mimitale?schema=public
+      PORT: 8080
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-in-production}
+      SMTP_HOST: mail
+      SMTP_PORT: 1025
+      SMTP_SECURE: 'false'
+      MAIL_FROM: 'Mimitale <no-reply@mimitale.local>'
+      DEV_ECHO_CODE: 'false'
+    ports:
+      - '127.0.0.1:8080:8080'
+
+volumes:
+  mimitale-db:

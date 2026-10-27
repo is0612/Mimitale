@@ -11,7 +11,7 @@
  */
 
 import type { Component } from 'vue'
-import { Collection, Document, Ticket, UserFilled } from '@element-plus/icons-vue'
+import { Collection, DataLine, Document, Ticket, UserFilled } from '@element-plus/icons-vue'
 
 export interface MenuNode {
   /** 对应 router 里的 path */
@@ -29,6 +29,7 @@ export const MENU: MenuGroup[] = [
   {
     title: '客户运营',
     items: [
+      { path: '/overview', title: '经营概览', icon: DataLine },
       { path: '/customers', title: '客户管理', icon: UserFilled },
       { path: '/cards', title: '卡密 / 激活码', icon: Ticket }
     ]

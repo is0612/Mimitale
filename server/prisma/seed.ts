@@ -1,0 +1,336 @@
+/**
+ * 播种。**幂等** —— 每次启动都跑一遍也不会重复插入、不会覆盖已有数据。
+ *
+ * 做三件事：
+ *   ① 建初始管理员（已存在就跳过，绝不重置密码）
+ *   ② 建 5 个字典类型和数据项（缺哪条补哪条）
+ *   ③ 可选：造一批示范客户/卡密/日志，让后台第一次打开不是空表
+ *
+ * ③ 用 SEED_DEMO=false 关掉 —— 生产环境必须关，不然会凭空多出 12 个假客户。
+ */
+import 'dotenv/config'
+import { PrismaPg } from '@prisma/adapter-pg'
+import { PrismaClient } from '../src/generated/prisma/client.js'
+
+const connectionString = process.env.DATABASE_URL
+if (!connectionString) throw new Error('缺少 DATABASE_URL —— 先把 .env.example 复制成 .env')
+
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
+
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME ?? 'admin'
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'admin123'
+const ADMIN_NICKNAME = process.env.ADMIN_NICKNAME ?? '星宝'
+
+const DAY = 86_400_000
+
+/* ------------------------------------------------------------------ */
+/* ① 管理员                                                            */
+/* ------------------------------------------------------------------ */
+
+async function seedAdmin(): Promise<void> {
+  const exists = await prisma.admin.findUnique({ where: { username: ADMIN_USERNAME } })
+  if (exists) {
+    console.log(`[seed] 管理员 ${ADMIN_USERNAME} 已存在，跳过`)
+    return
+  }
+
+  // 动态 import：避免 password 模块在极早期就被加载
+  const { hashPassword } = await import('../src/lib/password.js')
+
+  await prisma.admin.create({
+    data: {
+      username: ADMIN_USERNAME,
+      passwordHash: await hashPassword(ADMIN_PASSWORD),
+      nickname: ADMIN_NICKNAME,
+      role: 'super'
+    }
+  })
+  console.log(`[seed] 已创建管理员 ${ADMIN_USERNAME} / ${ADMIN_PASSWORD}`)
+}
+
+/* ------------------------------------------------------------------ */
+/* ② 字典                                                              */
+/* ------------------------------------------------------------------ */
+
+interface SeedDict {
+  code: string
+  name: string
+  remark: string
+  items: Array<[label: string, value: string, remark: string]>
+}
+
+const DICTS: SeedDict[] = [
+  {
+    code: 'ban_reason',
+    name: '封禁原因',
+    remark: '封禁客户时选的原因，用于事后追溯',
+    items: [
+      ['刷屏广告', 'spam', '在角色卡/世界书里夹带广告'],
+      ['盗卖卡密', 'card_resale', '把卡密拿到外面倒卖'],
+      ['违规调用接口', 'api_abuse', '用脚本高频刷接口'],
+      ['冒充他人', 'impersonation', ''],
+      ['其他', 'other', '']
+    ]
+  },
+  {
+    code: 'customer_source',
+    name: '客户来源',
+    remark: '由「有没有邀请码」推导出来，字典只负责它的显示名',
+    items: [
+      ['邮箱直注', 'email', '没填邀请码，直接邮箱注册'],
+      ['邀请码', 'invite', '注册时填了卡密'],
+      ['后台导入', 'import', '预留给批量导入，目前没有产生途径']
+    ]
+  },
+  {
+    code: 'quota_preset',
+    name: '额度预设',
+    remark: '改额度时的快捷选项，省得每次手打数字',
+    items: [
+      ['不限量', '-1', '永久不限次数'],
+      ['500 次', '500', ''],
+      ['200 次', '200', ''],
+      ['100 次', '100', '试用装常用'],
+      ['50 次', '50', ''],
+      ['停用', '0', '能登录但用不了']
+    ]
+  },
+  {
+    code: 'card_note',
+    name: '卡密备注分类',
+    remark: '生成卡密时选，方便日后按来源统计',
+    items: [
+      ['种子用户', 'seed', '早期免费发的'],
+      ['活动赠送', 'promo', ''],
+      ['付费购买', 'paid', '第三方平台卖出去的'],
+      ['内部测试', 'test', '']
+    ]
+  },
+  {
+    code: 'membership_level',
+    name: '会员等级',
+    remark: '客户所属的会员档位；none 是「非会员」哨兵，不进字典',
+    items: [
+      ['初级会员', 'basic', '新用户免费试用 30 天'],
+      ['中级会员', 'medium', ''],
+      ['高级会员', 'premium', '']
+    ]
+  }
+]
+
+async function seedDicts(): Promise<void> {
+  for (const d of DICTS) {
+    const type = await prisma.dictType.findUnique({ where: { code: d.code } })
+    if (!type) {
+      await prisma.dictType.create({ data: { code: d.code, name: d.name, remark: d.remark } })
+      console.log(`[seed] 字典类型 ${d.code} 已创建`)
+    }
+
+    for (const [index, [label, value, remark]] of d.items.entries()) {
+      const item = await prisma.dictItem.findFirst({ where: { typeCode: d.code, value } })
+      if (item) continue
+      await prisma.dictItem.create({
+        data: { typeCode: d.code, label, value, remark, sort: (index + 1) * 10 }
+      })
+    }
+  }
+  console.log('[seed] 字典已就绪')
+}
+
+/* ------------------------------------------------------------------ */
+/* ③ 示范数据                                                          */
+/* ------------------------------------------------------------------ */
+
+const DEMO_NAMES = [
+  '夜航船',
+  '灰羽',
+  '半糖去冰',
+  '雾岛听风',
+  '拾光',
+  '南风',
+  '三月初九',
+  '过路人',
+  '纸飞机',
+  '旧巷',
+  '星野',
+  '沉舟'
+]
+
+const DEMO_EMAILS = [
+  'yehangchuan@example.com',
+  'huiyu@example.com',
+  'bantang@example.com',
+  'wudao@example.com',
+  'shiguang@example.com',
+  'nanfeng@example.com',
+  'sanyue@example.com',
+  'guoluren@example.com',
+  'zhifeiji@example.com',
+  'jiuxiang@example.com',
+  'xingye@example.com',
+  'chenzhou@example.com'
+]
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+/** 北京时间某一天的某个时刻 */
+function at(offsetDays: number, hour: number, minute = 0): Date {
+  const d = new Date(Date.now() - offsetDays * DAY)
+  const day = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(d)
+  return new Date(`${day}T${pad(hour)}:${pad(minute)}:00.000+08:00`)
+}
+
+async function seedDemo(): Promise<void> {
+  const existing = await prisma.customer.count()
+  if (existing > 0) {
+    console.log(`[seed] 已有 ${existing} 个客户，跳过示范数据`)
+    return
+  }
+
+  const admin = await prisma.admin.findUnique({ where: { username: ADMIN_USERNAME } })
+  if (!admin) throw new Error('管理员还没建出来')
+
+  // 前 3 个排在今天/昨天，这样概览页的「今日注册」不是 0
+  const offsets = [0, 0, 1, 3, 5, 8, 11, 14, 18, 21, 24, 28]
+
+  const { newInviteCode } = await import('../src/lib/cardCode.js')
+  const { makeVoucher } = await import('../src/lib/voucher.js')
+  const { hashPassword } = await import('../src/lib/password.js')
+
+  // 示范客户都是「走完注册第二步」的正式账号，统一用这个密码 ——
+  // 只用于本地开发，生产 SEED_DEMO=false 时根本不会跑
+  const demoPasswordHash = await hashPassword('demo1234')
+
+  // 先造一批卡密，前 5 张给前 5 个客户用掉
+  const cards: Array<{ id: number; code: string }> = []
+  for (let i = 0; i < 13; i++) {
+    const card = await prisma.inviteCard.create({
+      data: {
+        code: newInviteCode(),
+        note: i < 5 ? '种子用户' : i < 11 ? '活动赠送' : '内部测试',
+        status: 'unused',
+        expireAt: i >= 11 ? null : new Date(Date.now() + 180 * DAY)
+      }
+    })
+    cards.push({ id: card.id, code: card.code })
+  }
+
+  const customers: Array<{ id: number; nickname: string }> = []
+
+  for (let i = 0; i < DEMO_EMAILS.length; i++) {
+    const offset = offsets[i] ?? 30
+    const createdAt = at(offset, 9 + (i % 9), (i * 7) % 60)
+    const usingCard = i < 5 ? cards[i] : null
+
+    // 会员：前 3 个生效中（第 3 个 7 天内到期）、接着 2 个已过期、其余非会员
+    let membershipLevel = 'none'
+    let membershipExpireAt: Date | null = null
+    if (i === 0) {
+      membershipLevel = 'basic'
+      membershipExpireAt = new Date(at(0, 9).getTime() + 30 * DAY)
+    } else if (i === 1) {
+      membershipLevel = 'medium'
+      membershipExpireAt = new Date(Date.now() + 4 * DAY)
+    } else if (i === 2) {
+      membershipLevel = 'premium'
+      membershipExpireAt = new Date(Date.now() + 20 * DAY)
+    } else if (i === 3 || i === 4) {
+      membershipLevel = 'basic'
+      membershipExpireAt = new Date(Date.now() - (10 + i) * DAY)
+    }
+
+    const customer = await prisma.customer.create({
+      data: {
+        email: DEMO_EMAILS[i]!,
+        nickname: DEMO_NAMES[i]!,
+        // 走完了注册第二步 —— 后台的「今日注册」只算这些人
+        profileReady: true,
+        voucher: makeVoucher(),
+        passwordHash: demoPasswordHash,
+        // 第 2 个封禁，其余正常
+        status: i === 2 ? 'banned' : 'active',
+        banReason: i === 2 ? 'spam' : null,
+        quota: [-1, 500, 200, 100, 50, 0][i % 6]!,
+        membershipLevel,
+        membershipExpireAt,
+        inviteCode: usingCard ? usingCard.code : null,
+        createdAt,
+        lastLoginAt: new Date(createdAt.getTime() + 3600_000)
+      }
+    })
+    customers.push({ id: customer.id, nickname: customer.nickname })
+
+    if (usingCard) {
+      await prisma.inviteCard.update({
+        where: { id: usingCard.id },
+        data: { status: 'used', usedByCustomerId: customer.id, usedAt: createdAt }
+      })
+    }
+  }
+
+  // 一张作废的
+  const voidCard = cards[12]
+  if (voidCard) {
+    await prisma.inviteCard.update({ where: { id: voidCard.id }, data: { status: 'void' } })
+  }
+
+  // 几条历史日志 —— 打开日志页就有东西看
+  const log = (
+    action: string,
+    targetType: string,
+    targetId: number | null,
+    targetName: string,
+    detail: string,
+    createdAt: Date
+  ) => ({
+    adminId: admin.id,
+    adminName: admin.nickname,
+    action,
+    targetType,
+    targetId,
+    targetName,
+    detail,
+    ip: '127.0.0.1',
+    createdAt
+  })
+
+  const demo = customers[0]
+  const banned = customers[2]
+
+  await prisma.operationLog.createMany({
+    data: [
+      ...(banned
+        ? [log('customer.ban', 'customer', banned.id, banned.nickname, '封禁（刷屏广告）', at(2, 11, 20))]
+        : []),
+      ...(demo
+        ? [
+            log('customer.membership', 'customer', demo.id, demo.nickname, '发会员：初级会员 +30 天（新开通）', at(0, 9, 5)),
+            log('customer.quota', 'customer', demo.id, demo.nickname, '额度 50 → 500', at(0, 9, 40))
+          ]
+        : []),
+      log('card.create', 'card', cards[0]?.id ?? null, cards[0]?.code ?? '', '生成 13 张卡密（种子用户），180 天后过期', at(6, 15))
+    ]
+  })
+
+  console.log(`[seed] 示范数据：${DEMO_EMAILS.length} 个客户、${cards.length} 张卡密、若干日志`)
+}
+
+/* ------------------------------------------------------------------ */
+
+await seedAdmin()
+await seedDicts()
+
+if (process.env.SEED_DEMO === 'false') {
+  console.log('[seed] SEED_DEMO=false，不造示范数据')
+} else {
+  await seedDemo()
+}
+
+await prisma.$disconnect()

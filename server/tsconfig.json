@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    // 只做类型检查，运行交给 tsx —— 没有构建步骤，也就没有 dist/ 和
+    // 「改完忘了重新编译」这类问题
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      // 接口契约只有一份，就在 admin/src/types 里。
+      // 改字段时这边会当场报错，不用等运行时才 500。
+      "@contract": ["../admin/src/types/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "prisma/**/*.ts"]
+}

@@ -20,8 +20,15 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     component: () => import('@/layouts/DefaultLayout.vue'),
-    redirect: '/customers',
+    // 打开后台先看概览 —— 「今天注册了几个」比客户列表更该是第一眼
+    redirect: '/overview',
     children: [
+      {
+        path: 'overview',
+        name: 'overview',
+        component: () => import('@/views/OverviewView.vue'),
+        meta: { title: '经营概览' }
+      },
       {
         path: 'customers',
         name: 'customers',
@@ -55,7 +62,7 @@ const routes: RouteRecordRaw[] = [
       }
     ]
   },
-  { path: '/:pathMatch(.*)*', redirect: '/customers' }
+  { path: '/:pathMatch(.*)*', redirect: '/overview' }
 ]
 
 const router = createRouter({
@@ -66,7 +73,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   const hasToken = Boolean(localStorage.getItem(TOKEN_KEY))
   if (to.meta.public !== true && !hasToken) return { name: 'login' }
-  if (to.name === 'login' && hasToken) return { name: 'customers' }
+  if (to.name === 'login' && hasToken) return { name: 'overview' }
   return true
 })
 

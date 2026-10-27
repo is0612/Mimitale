@@ -1,6 +1,11 @@
 # Mimitale 客户管理后台
 
-给自己用的客户管理后台前端。**当前只有 Mock 数据，没有真实后端；客户端注册、登录和云同步尚未实现。** 下文的客户账号与接口描述是待实现的契约，不代表生产能力已上线。
+给自己用的客户管理后台前端。**真实后端在 [`../server/`](../server/README.md)**（Node + Fastify + Prisma + PostgreSQL），后台侧 16 个接口 + 概览统计已实现，`npm run smoke` 那套断言可以直接对着它验。客户端那侧的登录界面已完成，但还没接这套接口。
+
+默认仍走内置 Mock（不需要后端也能开发界面）；把 `.env` 里的 `VITE_USE_MOCK` 改成 `false` 就连真后端。
+
+> 范围提醒：**这个后端只管账号与会员**。角色卡、世界书、聊天记录、本地设置全部留在用户自己电脑上，
+> 服务器一份都不存 —— 见 `登录体系决策记录.md` 的决策 8（2026-10-27 修订）。
 
 **前端独立项目**，跟根目录的 Electron 应用没有任何构建上的关系（两套 `node_modules`，互不干扰）。
 
@@ -31,9 +36,11 @@ npm install
 npm run dev          # 打开 http://localhost:5173/admin/
 ```
 
-**默认是 Mock 模式**，不需要后端：
+**默认是 Mock 模式**，不需要后端（`.env` 里 `VITE_USE_MOCK=true` 或不设）：
 
 > 试玩账号 **admin** ／ 密码 **admin123**
+
+想把界面连到真后端，见下面「连真实后端」。
 
 其他命令：
 
@@ -41,7 +48,8 @@ npm run dev          # 打开 http://localhost:5173/admin/
 npm run build        # 产出 dist/
 npm run preview      # 预览构建结果
 npm run typecheck    # 类型检查
-npm run smoke        # Mock 接口自测（2026-10-22 实测 125 条断言（含 Axios 401 集成），不需要后端和浏览器）
+npm run smoke        # Mock 接口自测（125 条断言，不需要后端和浏览器）
+node scripts/shot.mjs overview   # 带登录态截一张图到 shots/，需要 server + dev 都在跑
 ```
 
 改完 `src/mock` 或 `src/types` 之后跑一下 `npm run smoke`，能立刻知道你刚才有没有把接口改坏。
@@ -60,9 +68,8 @@ npm install --no-save --ignore-scripts @esbuild/win32-x64
 
 ## 连真实后端
 
-以下仅适用于后端实现并部署之后；当前仓库没有对应服务，关闭 Mock 不会自动获得真实账号能力。
-
-复制 `.env.example` 成 `.env`，把开关关掉：
+后端已经在 `../server/`。先把那边跑起来（`npm run db:up` → `db:migrate` → `db:seed` → `dev`），
+然后复制 `.env.example` 成 `.env`，把开关关掉：
 
 ```
 VITE_USE_MOCK=false
@@ -70,6 +77,7 @@ VITE_API_BASE=/api
 ```
 
 开发时 `/api` 会由 vite 代理到 `http://127.0.0.1:8080`（在 `vite.config.ts` 里改 `target`）。
+后端默认就是 8080，所以什么都不用改。
 
 ## 目录
 
@@ -77,13 +85,13 @@ VITE_API_BASE=/api
 src/
 ├── types/
 │   ├── index.ts      公共：ApiResult、全部错误码
-│   ├── admin.ts      ⭐ 后台侧契约（本后台用，16 个接口）
+│   ├── admin.ts      ⭐ 后台侧契约（本后台用，17 个接口）
 │   └── client.ts     客户侧契约（客户端用，本后台不调，给后端参考）
 ├── mock/index.ts     ⭐ Mock 后端 —— 同时也是各接口的行为说明
 ├── config/
 │   ├── menu.ts       侧边菜单配置（数组驱动，加页面改这里）
 │   └── labels.ts     ⚠️ 写死在代码里的那些枚举（**故意不放字典**，见下）
-├── api/              axios 封装 + admin / customer / log / card / dict
+├── api/              axios 封装 + admin / customer / log / card / dict / overview
 ├── stores/
 │   ├── auth.ts       管理员登录态
 │   └── dict.ts       字典缓存（界面上所有下拉都从它取值）
@@ -91,11 +99,13 @@ src/
 ├── layouts/          侧边栏 + 顶栏骨架
 ├── components/
 │   └── CustomerDialogs.vue  改额度 / 封禁 / 发会员弹层（列表页与详情页共用）
-├── views/            登录、客户列表、客户详情、卡密、操作日志、字典
-└── scripts/smoke.mjs 接口自测
+├── views/            概览、登录、客户列表、客户详情、卡密、操作日志、字典
+└── scripts/
+    ├── smoke.mjs     接口自测（打 mock）
+    └── shot.mjs      带登录态截图（打真后端 + Chrome headless）
 ```
 
-## 接口一览（本后台实际调用的 16 个）
+## 接口一览（本后台实际调用的 17 个）
 
 响应统一是 `{ code, message, data }`，`code === 0` 为成功。
 认证走 `Authorization: Bearer <token>`；认证失败返回 HTTP 401。
@@ -140,6 +150,16 @@ src/
 | POST | `/api/admin/dicts/{code}/items` | 新增数据项 |
 | PATCH | `/api/admin/dicts/items/{id}` | 改标签 / 值 / 排序 / 启用停用 |
 | DELETE | `/api/admin/dicts/items/{id}` | 删除数据项 |
+
+### 概览（17）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/admin/overview` | 今日/昨日注册、近 7 天曲线、生效会员、7 天内到期、今日活跃、可用卡密、最近 5 个注册 |
+
+这个是原契约之外新增的（`types/admin.ts` 的 `OverviewRes`）。起因是「今天有多少个账号注册」——
+客户列表回答不了这个问题，而后台首页原来只有客户列表。
+⚠️ 所有「今天」都是**北京时间**的今天，由后端算好；前端别自己拿 `new Date()` 算日期去比。
 
 **客户侧那 5 个接口**（发验证码 / 登录即注册 / 刷新 / me / 登出）在 `src/types/client.ts`，
 那是 Mimitale 客户端调的，后端也要实现，但本后台不碰。
