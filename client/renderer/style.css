@@ -5769,9 +5769,8 @@ m-button.btn-new > .mi-btn__control:hover {
   overflow: hidden;
 }
 
-#view-char-editor #char-form.char-editor-layout[data-editor-section='writing'] {
-  grid-template-columns: 260px minmax(0, 1fr) 260px;
-}
+/* 三栏那条（writing 加 260px 字段目录）2026-10-27 删了：开场白独立成区后设定只剩两栏，
+   目录撤掉，所有分区统一两栏。 */
 
 #view-char-editor #char-form.hidden,
 #view-char-editor .char-editor-panel[hidden],
@@ -5900,12 +5899,18 @@ m-button.btn-new > .mi-btn__control:hover {
   width: 100%;
   height: auto;
   aspect-ratio: 2 / 3;
-  /* ⚠️ 限高 316 不是随手写的：左栏 260 时按 2:3 会到 336px，把左栏撑出 5px 滚动条
-     （冒烟实测 scrollHeight 849 vs clientHeight 844）—— 也就是「切到任何分区左栏都可能滚」。
-     图本身是 object-fit: cover（见上面的 img 规则），限高只会纵向裁掉共 20px（每边 10px），
-     对 1024×1536 的立绘等于裁 3%，看不出来，也不会变形。
-     配合 .char-identity-pane 的 gap 10→8，最终余量 5px。改左栏宽度 / 图片比例时重新量这两条。 */
-  max-height: 316px;
+  /* ⚠️ 限高 292：开场白独立成区之后左栏多了一个导航项（约 40px），
+     1440×900 下原来 316 的封面会把左栏撑出 34px（冒烟 scrollHeight 878 vs 844）。
+     这里让封面让 24px、导航项让 20px（见 .char-section-button 的 padding）。
+     图是 object-fit: cover，限高只纵向裁共 44px（每边 22px，约 13%），不变形。
+     改左栏宽度 / 分区数量 / 封面比例时，这三处要一起重量。 */
+  max-height: 292px;
+}
+
+/* 限高之后图会被 cover 裁掉一截，让裁切偏向底部（center top）。
+   角色立绘的头在上、脚在下，裁脚比裁头能接受 —— 默认的居中裁会把头顶和脚一起切。 */
+#view-char-editor .char-portrait img {
+  object-position: center top;
 }
 
 /* 清除：右上角一个小圆 ×（原来是图下面一行「清除」文字按钮）。
@@ -5927,8 +5932,9 @@ m-button.btn-new > .mi-btn__control:hover {
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
-  font-size: 15px;
-  line-height: 1;
+  /* 走字号 token（原来写死 15px）；× 的垂直居中交给上面的 flex，
+     不要再用 line-height —— 项目规矩是「不许写 line-height」。 */
+  font-size: var(--fs-md);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -5987,7 +5993,9 @@ m-button.btn-new > .mi-btn__control:hover {
   font: inherit;
   font-size: var(--fs-sm);
   cursor: pointer;
-  padding: 8px 12px;
+  /* 8 → 6：开场白独立成区后左栏多一项，5 项各让 4px 换回 20px 高度
+     （配合封面限高 292，见上面 .char-portrait 那条说明）。 */
+  padding: 6px 12px;
   text-align: left;
   border-radius: var(--radius-sm);
   display: flex;
@@ -6118,153 +6126,6 @@ m-button.btn-new > .mi-btn__control:hover {
 #view-book-char-editor .attr-name {
     text-align: left;
   }
-}
-
-/* ------------------------------ 编辑角色 · 字段目录（V2 新增的第三列） ------------------------------
-   五栏连成一张长稿之后，「现在看的是哪一栏 / 哪一栏还空着」需要有个地方交代 ——
-   这一列的全部职责就是这个。 */
-
-#view-char-editor .char-field-index {
-  display: none;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-  padding: 18px 14px;
-  border-left: 1px solid var(--ce-line);
-  background: var(--ce-sidebar);
-  overflow-y: auto;
-}
-
-/* 只在「角色设定」露头：其余分区没有"栏"可列，留着只会是一列空的 */
-#view-char-editor #char-form[data-editor-section='writing'] .char-field-index {
-  display: flex;
-}
-
-#view-char-editor .field-index-title {
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  letter-spacing: 0.06em;
-  padding: 0 8px 8px;
-}
-
-#view-char-editor .field-index-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  background: transparent;
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  font: inherit;
-  font-size: var(--fs-sm);
-  text-align: left;
-  cursor: pointer;
-}
-
-#view-char-editor .field-index-item:hover {
-  background: var(--accent-wash);
-  color: var(--text);
-}
-
-#view-char-editor .field-index-item[aria-current='true'] {
-  background: var(--accent-soft-strong);
-  color: var(--text);
-  font-weight: 600;
-}
-
-/* 「还差几栏」要能一眼扫出来 —— 这是这个目录存在的唯一理由。
-   原来已写/未写只靠一个 6px 圆点和一个「—」区分，四行扫下去抓不住。
-   未写的那几行整行退到 --text-faint，已写的留在 --text-dim。
-   ⚠️ 必须 `:not([aria-current='true'])`：`:has()` 的特异性取里面最重的那个，
-      这条算下来是 (1,3,0)，比上面那条 (1,2,0) 高 —— 不加 :not 会把当前栏也一起压淡。 */
-#view-char-editor .field-index-item:not([aria-current='true']):has(.field-index-dot[data-filled='false']) {
-  color: var(--text-faint);
-}
-
-#view-char-editor .field-index-item:not([aria-current='true']):has(.field-index-dot[data-filled='false']) .field-index-name,
-#view-char-editor .field-index-item:not([aria-current='true']):has(.field-index-dot[data-filled='false']) .field-index-no {
-  color: var(--text-faint);
-}
-
-#view-char-editor .field-index-item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-#view-char-editor .field-index-no {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-#view-char-editor .field-index-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#view-char-editor .field-index-len {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-/* 已写 / 未写：一个点说完，不另起一列文字 */
-#view-char-editor .field-index-dot {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--border-hover);
-}
-
-#view-char-editor .field-index-dot[data-filled='true'] {
-  background: var(--accent);
-}
-
-#view-char-editor .field-index-block {
-  margin-top: 14px;
-  padding: 12px 12px 10px;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  background: var(--bg-elev);
-}
-
-#view-char-editor .field-index-block h3 {
-  margin: 0 0 8px;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--text-dim);
-}
-
-#view-char-editor .field-index-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-#view-char-editor .field-index-list li {
-  display: flex;
-  gap: 8px;
-  margin: 4px 0;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-}
-
-#view-char-editor .field-index-list li::before {
-  content: '';
-  flex: 0 0 auto;
-  width: 4px;
-  height: 4px;
-  margin-top: 8px;
-  border-radius: 50%;
-  background: var(--border-hover);
 }
 
 
@@ -9866,21 +9727,9 @@ m-button.btn-new > .mi-btn__control:hover {
   background: var(--bg-elev);
 }
 
-/* 序号：和右栏字段目录里的序号一一对应 —— 两张表靠它对上号 */
-#view-char-editor .char-sheet .field-no,
-#view-book-char-editor .char-sheet .field-no {
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
+/* 稿纸卡头部的序号圆点（.field-no）2026-10-27 删了：
+   它唯一的作用是和右栏字段目录的序号对上号，目录在开场白独立成区时已经撤掉，
+   留着一个圆圈数字只是装饰，还占掉标题前面的位置。 */
 
 /* ⚠️ 这条选择器是 (1,1,2)，压得过全局的 `textarea:focus`（(0,1,1)）——
    所以框自己的描边在这里必须归零，**聚焦反馈交给卡片**（见上面的 .char-sheet:focus-within）。
@@ -9895,11 +9744,14 @@ m-button.btn-new > .mi-btn__control:hover {
   background: transparent;
 }
 
-/* 写法说明：折叠条。默认收起是刻意的 —— 五栏同屏，说明留给"想查的时候" */
+/* 写法说明：折叠条。默认收起是刻意的 —— 说明留给"想查的时候"。
+   ⚠️ 底色从 --bg-input 改成透明（2026-10-27）：开场白那张卡底盘上同时有
+   「模板条 + 折叠条」两层，两个灰底叠在白色正文下面 = 两道横纹，整块发灰；
+   备选开场白那张卡更是灰-白-灰三层。改成只有一道上分隔线之后，卡内部
+   统一是「白底 + 细线 + 次要文字」，和「角色卡设定」那两张卡的观感一致。 */
 #view-char-editor .char-fold,
 #view-book-char-editor .char-fold {
   border-top: 1px solid var(--border-soft);
-  background: var(--bg-input);
 }
 
 #view-char-editor .char-fold > summary,
@@ -9937,19 +9789,27 @@ m-button.btn-new > .mi-btn__control:hover {
   padding: 0 16px 12px;
 }
 
-/* 模板条（只有开场白那一栏有）：夹在正文和折叠条之间 */
+/* 模板条（只有开场白那一栏有）：夹在正文和折叠条之间。
+   底色同样改透明（理由见下面 .char-fold 那条）—— 它是「一行次要操作」，
+   不该是一块灰底。 */
 #view-char-editor .char-sheet > .field-template-bar,
 #view-book-char-editor .char-sheet > .field-template-bar {
   margin-top: 0;
   padding: 8px 16px 10px;
   border-top: 1px solid var(--border-soft);
-  background: var(--bg-input);
 }
 
 /* 备选开场白的条目列表：现在也长在稿纸卡里，补上左右内边距 */
 #view-char-editor .char-sheet > .alt-greet-list,
 #view-book-char-editor .char-sheet > .alt-greet-list {
   padding: 12px 16px;
+}
+
+/* 一条都没有时别留一块空白的 padding —— 那时这张卡只剩「标题 + 添加一条 + 说明」，
+   中间空一段会让人以为加载失败（2026-10-27）。 */
+#view-char-editor .char-sheet > .alt-greet-list:empty,
+#view-book-char-editor .char-sheet > .alt-greet-list:empty {
+  padding: 0;
 }
 
 #view-char-editor .char-sheet > .alt-greet-list:empty,

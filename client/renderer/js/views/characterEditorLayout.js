@@ -2,36 +2,43 @@
 
 import { iconHtml } from '../ui/icons.js';
 
-//  角色编辑页的骨架：左栏（资料 + 分区导航）／内容列／右栏字段目录。
+//  角色编辑页的骨架：左栏（资料 + 分区导航）／内容列。
 //  ⚠️ 只搬运已有控件，绝不克隆 —— id / 值 / 监听器都得原样留着。
-//  第三列（字段目录）只在「角色卡设定」展开。
+//  2026-10-27：开场白从「角色卡设定」里独立成一个分区，右栏字段目录随之撤掉
+//  （设定只剩两栏，目录没有意义了）。
 
 let layout = null;
 
 // 分区导航的图标：只留名字，形状在 ui/icons.js 的注册表里。
 const SECTION_ICONS = {
   writing: 'file-text',
+  opening: 'message-circle',
   roles: 'users',
   worldbook: 'book-open',
   advanced: 'settings'
 };
 
-/** ⚠️ 顺序三处一致：这里 = index.html 里 .field-no 写的序号 = 右栏目录的序号。 */
+/** 顺序 = 字段在每个分区里的排列顺序。第三个元素是「归哪个分区」——
+    搬运时按它往不同 panel 里放。
+    ⚠️ 示例对话归 writing 不是 opening（2026-10-27 改）：它在 messages.js 里是**每轮**
+       作为 user/assistant 样例塞在历史前面的，和「描述」同类（常驻设定）；
+       开场白只在绑定时当第一条消息用，两者不是一回事。 */
 const FIELD_SPECS = [
-  ['desc', '角色卡描述'],
-  ['scenario', '场景'],
-  ['first', '开场白'],
-  ['example', '示例对话']
+  ['desc', '角色卡描述', 'writing'],
+  ['scenario', '场景', 'writing'],
+  ['example', '示例对话', 'writing'],
+  ['first', '开场白', 'opening']
 ];
 
 /** 高级设置那三栏的 id。只用来数「填了几栏」，不搬运 */
 const ADVANCED_FIELDS = ['c-system', 'c-post', 'c-notes'];
 
-/** 四个分区：[key, 标题, 说明]。⚠️ 说明只喂给内容列的标题，不喂给左栏导航。 */
+/** 五个分区：[key, 标题, 说明]。⚠️ 说明只喂给内容列的标题，不喂给左栏导航。 */
 const SECTIONS = [
   // writing 原来的说明是「几栏连成一页，上下滚着就能对照」—— 在解释布局。
   // 界面不该解释自己的摆法（用户看一眼就知道能滚），换成这个分区真正有用的信息。
-  ['writing', '角色卡设定', '这五栏的文字都会原样发给 AI'],
+  ['writing', '角色卡设定', '描述和示例对话每轮都带给 AI，场景只在开场用一次'],
+  ['opening', '开场白', '绑定角色时插进对话当第一条；可以多写几条备选让人挑'],
   ['roles', '人物列表', '这本书里的人物副本，和角色卡相互独立'],
   ['worldbook', '世界书', '这张卡自带的世界设定'],
   ['advanced', '高级设置', '角色卡专属指令与作者备注']
@@ -142,15 +149,14 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   const railFoot = document.getElementById('char-rail-foot');
   if (railFoot) identity.append(railFoot);
 
-  // ------------------------------------------------- 写作字段：全部常显
-  const writing = sections.get('writing');
+  // ------------------------------------------------- 写作字段：按分区分组
   const fieldItems = [];
-  for (const [key, title] of FIELD_SPECS) {
+  for (const [key, title, section] of FIELD_SPECS) {
     const control = document.getElementById(`c-${key}`);
     const field = control ? control.closest('.char-sheet') : null;
     if (!field) continue;
-    writing.append(field);
-    fieldItems.push({ key, title, field, control });
+    sections.get(section).append(field);
+    fieldItems.push({ key, title, section, field, control });
   }
   // 备选开场白跟着「开场白」走（它是那一栏的一部分，不单独占序号）
   const alt = document.getElementById('c-alt-field');
@@ -164,43 +170,10 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   sections.get('worldbook').append(worldbook);
   sections.get('advanced').append(advanced);
 
-  // --------------------------------------------------- 右栏：字段目录
-  const index = node('aside', 'char-field-index');
-  index.id = 'char-field-index';
-  index.setAttribute('aria-label', '角色卡设定字段目录');
-  index.append(node('div', 'field-index-title', '字段目录'));
-  const indexItems = [];
-  for (let i = 0; i < fieldItems.length; i += 1) {
-    const item = fieldItems[i];
-    const button = node('button', 'field-index-item');
-    button.type = 'button';
-    button.dataset.key = item.key;
-    const len = node('span', 'field-index-len', '—');
-    const dot = node('span', 'field-index-dot');
-    dot.dataset.filled = 'false';
-    button.append(
-      node('span', 'field-index-no', String(i + 1)),
-      node('span', 'field-index-name', item.title),
-      len,
-      dot
-    );
-    button.addEventListener('click', () => {
-      item.field.scrollIntoView({ block: 'start' });
-      setCurrentIndex(item.key);
-    });
-    index.append(button);
-    indexItems.push({ key: item.key, title: item.title, field: item.field, control: item.control, button, len, dot });
-  }
-  const inject = node('div', 'field-index-block');
-  inject.innerHTML = '<h3>这一页会进到哪里</h3><ul class="field-index-list">'
-    + '<li>角色卡描述：每轮都注入</li>'
-    + '<li>场景：只在开场注入一次</li>'
-    + '<li>开场白：绑定时作为第一条消息</li>'
-    + '<li>示例对话：作为语气样例注入</li>'
-    + '</ul>';
-  index.append(inject);
-
-  form.append(identity, main, index);
+  // 右栏字段目录 2026-10-27 撤掉：开场白独立成区之后，「角色卡设定」只剩两栏，
+  // 给两栏配一份目录不如直接把两栏摆开。原来这里还有一块「这一页会进到哪里」的说明，
+  // 跟着目录一起没了 —— 那只在栏数多、需要导航时才有价值。
+  form.append(identity, main);
   form.classList.add('char-editor-layout');
 
   // ---------------------------------------------------------------- 交互
@@ -212,57 +185,38 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
       button.setAttribute('aria-selected', String(active));
       button.tabIndex = active ? 0 : -1;
     }
-    // 三栏只在「角色卡设定」展开（CSS 按这个属性挑栅格）
+    // 记一下当前分区（原来 CSS 靠它挑三栏栅格、露出字段目录，两样都没了；
+    // 留着当 DOM 状态标记，调试时能一眼看出在哪一屏）
     form.dataset.editorSection = key;
     onReveal();
-    if (key === 'writing') syncCurrentIndex();
     return true;
   }
-
-  /** 高亮「当前在看的那一栏」 */
-  function setCurrentIndex(key) {
-    for (const item of indexItems) item.button.setAttribute('aria-current', String(item.key === key));
-  }
-
-  /** 用 scroll 而非 IntersectionObserver 算当前栏：五栏比 rect 更简单，也不会僵在上一次。 */
-  function syncCurrentIndex() {
-    if (!indexItems.length || form.dataset.editorSection !== 'writing') return;
-    const line = main.getBoundingClientRect().top + 12;
-    let current = indexItems[0];
-    for (const item of indexItems) {
-      if (item.field.getBoundingClientRect().top <= line) current = item;
-    }
-    setCurrentIndex(current.key);
-  }
-
-  main.addEventListener('scroll', syncCurrentIndex, { passive: true });
 
   for (const button of sectionButtons) button.addEventListener('click', () => selectSection(button.dataset.key));
   wireTabs(nav, sectionButtons, selectSection);
 
-  layout = { form, main, sections, indexItems, selectSection, onReveal, sectionCounts };
+  layout = { form, main, sections, fieldItems, selectSection, onReveal, sectionCounts };
 
   selectSection('writing');
   refreshCharSectionCounts();
 }
 
-/** 刷新徽章与字数 / 圆点。⚠️ 徽章只表示「已有多少条内容」：只有「角色卡设定」用分数；0 也要显示。 */
+/** 刷新徽章。⚠️ 徽章只表示「已有多少条内容」：两个写作分区各报「已写 / 共」，高级设置报条数，0 也显示。 */
 export function refreshCharSectionCounts() {
   if (!layout) return;
-  const filled = layout.indexItems.filter((item) => (item.control.value || '').trim()).length;
-  setCharSectionCount('writing', `${filled}/${layout.indexItems.length}`);
+  // 原来靠字段目录的 indexItems 数一份总账（4 栏合一），目录撤掉后没有单一列表了 ——
+  // 改成按分区筛：FIELD_SPECS 第三个元素就是它归属的分区。
+  for (const key of ['writing', 'opening']) {
+    const items = layout.fieldItems.filter((item) => item.section === key);
+    if (!items.length) continue;
+    const filled = items.filter((item) => (item.control.value || '').trim()).length;
+    setCharSectionCount(key, `${filled}/${items.length}`);
+  }
 
   const advanced = ADVANCED_FIELDS
     .map((id) => document.getElementById(id))
     .filter((el) => el && (el.value || '').trim()).length;
   setCharSectionCount('advanced', String(advanced));
-
-  for (const item of layout.indexItems) {
-    const value = item.control.value || '';
-    // 字数口径与字段角标一致：value.length（不 trim）
-    item.len.textContent = value.length ? String(value.length) : '—';
-    item.dot.dataset.filled = String(!!value.trim());
-  }
 }
 
 /** 分区导航右侧的计数徽章：空串就整条藏起来（视图层按草稿实时喂） */

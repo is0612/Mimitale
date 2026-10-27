@@ -5400,6 +5400,21 @@ app.whenReady().then(async () => {
           if (btn) btn.click();
           await nap(600);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 角色编辑页 · 开场白分区：这一区比「角色卡设定」多了模板条和备选列表，
+        // 三张卡各带一条折叠说明 —— 调这一区块的视觉时专门看它。
+        charOpening: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          $('#btn-chars')?.click();
+          await nap(400);
+          const card = $$('#char-page-grid .char-card')[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await nap(700);
+          $('#char-section-tab-opening')?.click();
+          await nap(300);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 世界书编辑页（视图八）：左条目列表 / 右条目编辑，两栏各自铺满这一屏的高度。
         // 同样不再有「放大」那一步 —— 它自己就占满主区域。
         wbEditorPage: `

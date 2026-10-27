@@ -1204,24 +1204,37 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
 
   // 2026-10-16（V2 重组版）：字段不再靠胶囊切换，几栏同时在场。
   // 断言方向跟着反过来了 —— 原来测「只显示当前字段」，现在测「全都在」。
-  // 2026-10-25：性格从角色卡删掉，四栏（描述 / 场景 / 开场白 / 示例对话）同时在场。
+  // 2026-10-25：性格从角色卡删掉。
+  // 2026-10-27：开场白独立成区（设定 = 描述 / 场景，开场白 = 开场白 + 备选），
+  //    右栏字段目录随之撤掉；随后**示例对话挪回设定区** ——
+  //    它在 messages.js 里是每轮注入的 user/assistant 样例，和「描述」同类，
+  //    不属于「绑定时用一次」的开场白。所以现在是 设定 3 栏 / 开场白 1 栏。
   // ⚠️ 这里不能用 shown()：它只看 .hidden 类，而分区面板用的是 hidden **属性**，
   //    面板藏起来时它的子元素照样会通过 shown()。用 getClientRects() 才作数。
-  const WRITING_IDS = ['c-desc', 'c-scenario', 'c-first', 'c-example'];
+  const WRITING_IDS = ['c-desc', 'c-scenario', 'c-example'];
+  const OPENING_IDS = ['c-first'];
   const visible = (id) => (byId(id)?.getClientRects().length || 0) > 0;
-  check('四个写作字段同时可见', WRITING_IDS.every(visible),
+  check('角色卡设定分区三栏同时可见', WRITING_IDS.every(visible),
     WRITING_IDS.filter((id) => !visible(id)).join(','));
+  check('开场白已经不在角色卡设定分区里', OPENING_IDS.every((id) => !visible(id)),
+    OPENING_IDS.filter(visible).join(','));
   check('写作区不再有字段切换胶囊', !$('#char-writing-tabs') && !$('.char-writing-tab'));
-  check('右栏字段目录列出四栏', $$('#char-field-index .field-index-item').length === 4);
-  check('字段目录高亮当前栏', !!$('#char-field-index .field-index-item[aria-current="true"]'));
-  check('字段目录的已写圆点跟着内容走',
-    $('#char-field-index .field-index-item[data-key="desc"] .field-index-dot')?.dataset.filled === 'true');
+  check('右栏字段目录已撤掉', !$('#char-field-index'));
   const writingBadge = byId('char-section-tab-writing')?.querySelector('.char-section-count');
-  check('角色卡设定徽章是「已写 / 共」，不再是恒定值',
-    /^\d+\/4$/.test(writingBadge?.textContent || ''), writingBadge?.textContent);
-  check('四个写作框高度各不相同（按字段分别给定）',
+  check('角色卡设定徽章是「已写 / 共 3 栏」',
+    /^\d+\/3$/.test(writingBadge?.textContent || ''), writingBadge?.textContent);
+  check('角色卡设定三栏高度不同（按字段分别给定）',
     new Set(WRITING_IDS.map((id) => hOf(byId(id)))).size > 1,
     WRITING_IDS.map((id) => hOf(byId(id))).join('/'));
+
+  // 开场白分区：只剩开场白本身（备选那张卡不在 WRITING/OPENING 表里，另测）
+  click('#char-section-tab-opening');
+  await sleep(80);
+  check('开场白分区里开场白可见', visible('c-first'));
+  check('示例对话没跟着跑到开场白分区', !visible('c-example'));
+  check('备选开场白那张卡也在开场白分区', visible('c-alt-field'));
+  click('#char-section-tab-writing');
+  await sleep(80);
 
   click('#char-section-tab-advanced');
   check('高级设置分区不影响写作草稿', shown('#char-section-advanced') && desc.value === '一行字');
@@ -1261,6 +1274,8 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
   // 手动拖过之后就锁定：再输入内容也不该被自动改回去。
   // 模拟「用户拖拽结束」——直接改高度再派发 mouseup（这是唯一能观察到的信号）。
   // ⚙ 高度写在里层那颗上（auto-grow 也量里层），mouseup 派在宿主上（监听器挂宿主）。
+  // （示例对话一度挪到「开场白」分区、这里得先切过去；2026-10-27 又挪回设定区了，
+  //  所以现在和原来一样，直接拖。）
   asControl(example).style.height = '420px';
   example.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   await sleep(50);

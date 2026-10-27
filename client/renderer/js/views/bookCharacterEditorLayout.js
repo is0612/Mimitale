@@ -18,7 +18,7 @@ const SECTION_ICONS = {
   advanced: 'settings'
 };
 
-/** ⚠️ 顺序两处一致：这里 = index.html 里 .field-no 写的序号。 */
+/** 顺序 = 字段在页面里的排列顺序（序号圆点 2026-10-27 删了，不再跟 index.html 对号）。 */
 const FIELD_SPECS = [
   ['desc', '角色描述']
 ];

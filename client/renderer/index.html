@@ -338,18 +338,14 @@
                  文字里即可（描述里本就该交代清楚「十八岁」「魅魔混血」这类信息）。
                  单独字段反而会和描述重复，还要两处一起维护。 -->
 
-            <!-- 四个长文本字段共用一套结构（V2 重组版）：
-                 head = 序号 + 字段名 + 字数角标，主体 = textarea，
-                 写法说明收进 <details> 折叠条 —— 四栏同屏放着，说明全铺开会把正文淹掉。
+            <!-- 长文本字段共用一套结构（V2 重组版）：
+                 head = 字段名 + 字数角标，主体 = textarea，写法说明收进 <details> 折叠条。
 
-                 ⚠️ 两件事别改回去：
-                 ① label 只包住 head。for 关联还在，点「角色卡描述」四个字照样聚焦输入框；
-                    但**不能**把 details 包进 label —— 那样点「这一栏怎么写」会连带聚焦输入框。
-                 ② 序号要和 characterEditorLayout.js 的 FIELD_SPECS 顺序一致。 -->
+                 ⚠️ label 只包住 head。for 关联还在，点「角色卡描述」四个字照样聚焦输入框；
+                    但**不能**把 details 包进 label —— 那样点「这一栏怎么写」会连带聚焦输入框。 -->
             <div class="field field-stack char-sheet">
               <label class="char-sheet-label" for="c-desc">
                 <span class="field-head">
-                  <span class="field-no">1</span>
                   <span class="field-label" data-icon="user">角色卡描述</span>
                   <span class="field-count" id="c-desc-count">0 字</span>
                 </span>
@@ -375,7 +371,6 @@
             <div class="field field-stack char-sheet">
               <label class="char-sheet-label" for="c-scenario">
                 <span class="field-head">
-                  <span class="field-no">2</span>
                   <span class="field-label" data-icon="map-pin">场景</span>
                   <span class="field-count" id="c-scenario-count">0 字</span>
                 </span>
@@ -394,7 +389,6 @@
             <div class="field field-stack char-sheet">
               <label class="char-sheet-label" for="c-first">
                 <span class="field-head">
-                  <span class="field-no">3</span>
                   <span class="field-label" data-icon="message-circle">开场白</span>
                   <span class="field-count" id="c-first-count">0 字</span>
                 </span>
@@ -430,6 +424,13 @@
                 <span class="field-label" data-icon="layers">备选开场白</span>
                 <span class="field-count" id="c-alt-count"></span>
               </span>
+              <div id="c-alt-list" class="alt-greet-list"></div>
+              <div class="field-template-bar">
+                <m-button id="btn-alt-add" variant="ghost" size="sm"
+                        title="加一条备选开场白">＋ 添加一条</m-button>
+              </div>
+              <!-- 说明收在卡的**最底部**，和另外两栏一个位置（2026-10-27）。
+                   原来它夹在标题和列表中间，三张卡连着看时这一条会跳出来。 -->
               <details class="char-fold">
                 <summary>这一栏怎么写</summary>
                 <div class="char-fold-body">
@@ -439,17 +440,11 @@
                   </span>
                 </div>
               </details>
-              <div id="c-alt-list" class="alt-greet-list"></div>
-              <div class="field-template-bar">
-                <m-button id="btn-alt-add" variant="ghost" size="sm"
-                        title="加一条备选开场白">＋ 添加一条</m-button>
-              </div>
             </div>
 
             <div class="field field-stack char-sheet">
               <label class="char-sheet-label" for="c-example">
                 <span class="field-head">
-                  <span class="field-no">4</span>
                   <span class="field-label" data-icon="messages-square">示例对话</span>
                   <span class="field-count" id="c-example-count">0 字</span>
                 </span>
@@ -599,17 +594,14 @@
                  单独字段反而会和描述重复，还要两处一起维护。 -->
 
             <!-- 一个长文本字段：角色描述。
-                 head = 序号 + 字段名 + 字数角标，主体 = textarea，
+                 head = 字段名 + 字数角标，主体 = textarea，
                  写法说明收进 <details> 折叠条。
 
-                 ⚠️ 两件事别改回去：
-                 ① label 只包住 head。for 关联还在，点「角色描述」四个字照样聚焦输入框；
-                    但**不能**把 details 包进 label —— 那样点「这一栏怎么写」会连带聚焦输入框。
-                 ② 序号要和 characterEditorLayout.js 的 FIELD_SPECS 顺序一致。 -->
+                 ⚠️ label 只包住 head。for 关联还在，点「角色描述」四个字照样聚焦输入框；
+                    但**不能**把 details 包进 label —— 那样点「这一栏怎么写」会连带聚焦输入框。 -->
             <div class="field field-stack char-sheet">
               <label class="char-sheet-label" for="bc-c-desc">
                 <span class="field-head">
-                  <span class="field-no">1</span>
                   <span class="field-label" data-icon="user">角色描述</span>
                   <span class="field-count" id="bc-c-desc-count">0 字</span>
                 </span>
