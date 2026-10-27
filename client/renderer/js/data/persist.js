@@ -192,7 +192,7 @@ export function persistPresets(immediate) {
  * 也别写出一条悬空绑定。
  */
 export function persistCharacters(immediate) {
-  if (!worldbooksLoaded && worldbooks().length) {
+  if (!worldbooksLoaded) {
     showToast('世界书上次没能读出来，这次先别保存角色卡 —— 重启应用再试，免得卡上的世界书丢掉', 'error');
     return Promise.resolve(false);
   }
