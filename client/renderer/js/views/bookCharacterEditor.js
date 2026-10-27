@@ -452,13 +452,8 @@ function stashCharForm() {
     .filter(Boolean)
     .slice(0, 20);
   character.description = el.c.desc.value;
-  // 本书角色只负责介绍角色内容：性格 / 场景 / 开场白 / 示例对话（含备选）一律清掉，
-  // 别让旧数据里残留的字段在界面看不到的情况下还挂在副本上。
-  delete character.personality;
-  delete character.scenario;
-  delete character.firstMes;
-  delete character.alternateGreetings;
-  delete character.mesExample;
+  // 本书角色编辑器不暴露性格 / 场景 / 开场白 / 示例对话输入框；
+  // 但导入副本可能带这些兼容字段，未在界面编辑的字段必须原样保留。
   character.systemPrompt = el.c.system.value;
   character.postHistoryInstructions = el.c.post.value;
   character.creatorNotes = el.c.notes.value;
