@@ -59,7 +59,8 @@ export function scanPersons(book) {
   const out = [];
   if (!book) return out;
 
-  const entries = worldbookEntries(book);
+  // 已迁移的停用条目不应再次进入识别清单，避免重复迁移属性。
+  const entries = worldbookEntries(book).filter((entry) => entry && entry.enabled !== false);
   if (!entries.length) return out;
 
   const cardName = boundCardName(book);
