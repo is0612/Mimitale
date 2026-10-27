@@ -30,7 +30,7 @@ import { initCharAiFill, resetCharAiFill } from './charAiFill.js';
 import { attachAutoGrow, syncAutoGrowAll } from '../ui/auto-grow.js';
 import { mTextarea, hostOf } from '../components/index.js';
 import { pickAndCrop } from '../ui/imageCrop.js';
-import { initCharacterEditorLayout, showCharacterField, setCharSectionCount, setCharSourceChip, refreshCharSectionCounts } from './characterEditorLayout.js';
+import { initCharacterEditorLayout, showCharacterField, setCharSectionCount, refreshCharSectionCounts } from './characterEditorLayout.js';
 export { showCharacterField } from './characterEditorLayout.js';
 
 // 长文本框（描述/场景/开场白/示例对话）：自动增高与拖拽记忆在 ui/auto-grow.js；
@@ -243,15 +243,6 @@ export async function leaveCharacterEditor({ force = false } = {}) {
   showView(editorReturnView === 'charEditor' ? 'chars' : editorReturnView);
 }
 
-/** 左栏来源胶囊的短文案 */
-function charSourceChipText(character) {
-  if (isCharDraft()) return '还没保存的新角色';
-  if (charEditorScope === 'worldbook') return '本书角色副本';
-  if (character.source === 'png') return '酒馆 PNG 卡';
-  if (character.source === 'json') return 'JSON 角色卡';
-  return '手写角色';
-}
-
 /** 有角色时显示右边的编辑表单，没有就显示空状态 */
 function showCharForm(show) {
   el.charForm.classList.toggle('hidden', !show);
@@ -367,8 +358,7 @@ function fillCharForm(character) {
   // 属性 / 表情 / 头像本页不再编辑，保持角色对象原样（聊天、面板、导出仍会读）。
   charAttrs = characterAttrs(character);
 
-  // 左栏来源胶囊 + 页头保存状态（刚填好的表 = 已保存）
-  setCharSourceChip(charSourceChipText(character));
+  // 页头保存状态（刚填好的表 = 已保存）
   setCharSaveState('saved');
 
   showCharForm(true);
@@ -1263,7 +1253,16 @@ export function initCharacterEditor(injected) {
   el.btnSaveChar.addEventListener('click', saveCharacter);
   el.btnDelChar.addEventListener('click', deleteCharacter);
 
-  if (el.charPortrait) el.charPortrait.addEventListener('click', pickPortrait);
+  if (el.charPortrait) {
+    el.charPortrait.addEventListener('click', pickPortrait);
+    // 封面从 <button> 换成了 <div>（要铺满左栏、不要按钮默认观感），
+    // Enter / Space 的原生激活就得自己补 —— 否则键盘用户点不开文件框。
+    el.charPortrait.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      pickPortrait();
+    });
+  }
   if (el.btnClearPortrait) el.btnClearPortrait.addEventListener('click', clearPortrait);
 
   el.c.wbNewBtn.addEventListener('click', createWorldbookForCharacter);

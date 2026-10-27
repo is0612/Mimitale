@@ -1097,9 +1097,19 @@ await scenario('按钮组件化：角色编辑器的静态按钮', async () => {
   //    2026-10-20：那颗「导出」撤了（改到角色卡卡片上），左栏底部换成「返回」+「AI 补充」。
   //    2026-10-25：角色卡编辑页裁剪 —— 头像 / 属性（模板 / 添加 / 粘贴文本）按钮一起没了，
   //    只留封面「清除」和写作区、世界书、左栏那一排。
-  const CHAR_BTN_IDS = ['btn-save-char','btn-clear-portrait','btn-first-template','btn-alt-add','c-wb-new-btn','btn-back-char','btn-ai-fill-char','btn-del-char'];
+  //    2026-10-27：封面铺满左栏，「清除」从图下面一行文字按钮改成右上角一个圆 × ——
+  //    按约定图标按钮不套 m-button（同下面的返回键），所以从这张表里去掉、单独断言。
+  const CHAR_BTN_IDS = ['btn-save-char','btn-first-template','btn-alt-add','c-wb-new-btn','btn-back-char','btn-ai-fill-char','btn-del-char'];
   const bad = CHAR_BTN_IDS.filter((id) => byId(id)?.tagName !== 'M-BUTTON');
-  check('角色编辑器 8 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
+  check('角色编辑器 7 颗按钮都是 m-button 宿主', bad.length === 0, bad.join(', ') || '全部是');
+
+  // 封面清除是个圆 ×（图标按钮）：原生 button、带无障碍名、有图才显示。
+  const clearBtn = byId('btn-clear-portrait');
+  check(
+    '封面清除是原生图标按钮（不套 m-button）且带无障碍名',
+    clearBtn?.tagName === 'BUTTON' && !!clearBtn.getAttribute('aria-label'),
+    clearBtn ? `${clearBtn.tagName} / ${clearBtn.getAttribute('aria-label') || '(无 aria-label)'}` : '(没有这颗按钮)'
+  );
 
   // 返回按钮应当在**标题那一块**里（左上），而不是右侧的操作簇里 ——
   // 只要有人把它挪回 .page-actions，这条就红。

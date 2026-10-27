@@ -35,7 +35,7 @@ import { initCharAiFill, resetCharAiFill } from './bookCharAiFill.js';
 import { attachAutoGrow, syncAutoGrowAll } from '../ui/auto-grow.js';
 import { hostOf } from '../components/index.js';
 import { pickAndCrop } from '../ui/imageCrop.js';
-import { initCharacterEditorLayout, showCharacterField, setCharSectionCount, setCharSourceChip, refreshCharSectionCounts } from './bookCharacterEditorLayout.js';
+import { initCharacterEditorLayout, showCharacterField, setCharSectionCount, refreshCharSectionCounts } from './bookCharacterEditorLayout.js';
 export { showCharacterField } from './bookCharacterEditorLayout.js';
 
 // 长文本框（描述）：自动增高与拖拽记忆在 ui/auto-grow.js；
@@ -235,15 +235,6 @@ export async function leaveCharacterEditor({ force = false } = {}) {
   showView(editorReturnView === 'bookCharEditor' ? 'wbEditor' : editorReturnView);
 }
 
-/** 左栏来源胶囊的短文案 */
-function charSourceChipText(character) {
-  if (isCharDraft()) return '还没保存的新角色';
-  if (charEditorScope === 'worldbook') return '本书角色副本';
-  if (character.source === 'png') return '酒馆 PNG 卡';
-  if (character.source === 'json') return 'JSON 角色卡';
-  return '手写角色';
-}
-
 /** 有角色时显示右边的编辑表单，没有就显示空状态 */
 function showCharForm(show) {
   el.charForm.classList.toggle('hidden', !show);
@@ -399,8 +390,7 @@ function fillCharForm(character) {
   el.c.showInPanel.checked = character.showInPanel === true;
   renderShowInPanelBox();
 
-  // 左栏来源胶囊 + 页头保存状态（刚填好的表 = 已保存）
-  setCharSourceChip(charSourceChipText(character));
+  // 页头保存状态（刚填好的表 = 已保存）
   setCharSaveState('saved');
 
   showCharForm(true);

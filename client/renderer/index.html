@@ -304,15 +304,17 @@
 
           <div id="char-form" class="char-form hidden">
             <!-- 封面：角色卡列表上那张图，放在表单最顶上。 -->
+            <!-- 封面铺满左栏（2026-10-27）：
+                 ① 用 div 而不是 button —— 铺满整栏的大块图不需要按钮的默认观感；
+                 ② 去掉「角色卡封面」那行小字（图自己说明自己）；
+                 ③ 清除从图下面一行文字按钮，挪成右上角一个 ×。
+                 role / tabindex / keydown 是补 div 丢掉的键盘可达性，别删。 -->
             <div class="char-media-top">
-              <div class="char-avatar-col">
-                <div class="char-media-item">
-                  <button id="char-portrait" class="char-portrait art-edge" type="button" title="点击上传角色卡封面（显示在角色卡列表上）" aria-label="上传角色卡封面">
-                    <span class="char-avatar-empty">点击上传</span>
-                  </button>
-                  <span class="char-media-label">角色卡封面</span>
-                  <m-button id="btn-clear-portrait" variant="ghost" size="sm" class="hidden">清除</m-button>
+              <div class="char-portrait-box">
+                <div id="char-portrait" class="char-portrait art-edge" role="button" tabindex="0" title="点击上传角色卡封面（显示在角色卡列表上）" aria-label="上传角色卡封面">
+                  <span class="char-avatar-empty">点击上传</span>
                 </div>
+                <button id="btn-clear-portrait" class="char-portrait-clear hidden" type="button" title="清除封面" aria-label="清除封面">×</button>
               </div>
             </div>
 

@@ -73,8 +73,10 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   // ---------------------------------------------------------------- 左栏
   const identity = node('aside', 'char-identity-pane');
   identity.setAttribute('aria-label', '角色资料与编辑导航');
-  const sourceChip = node('span', 'chip char-source-chip');
-  identity.append(media, sourceChip, identityFields);
+  // ⚠️ 这里原来还塞了一条来源胶囊（`<span class="chip char-source-chip">酒馆 PNG 卡</span>`），
+  //    2026-10-27 星宝要求去掉 —— 它说的是「这个角色从哪儿来的」，写卡时没用，
+  //    而且「本书角色副本 / 还没保存的新角色」这两个状态页头标题已经说清楚了。
+  identity.append(media, identityFields);
 
   const nav = node('div', 'char-section-nav');
   nav.id = 'char-section-nav';
@@ -238,7 +240,7 @@ export function initCharacterEditorLayout({ onReveal = () => {} } = {}) {
   for (const button of sectionButtons) button.addEventListener('click', () => selectSection(button.dataset.key));
   wireTabs(nav, sectionButtons, selectSection);
 
-  layout = { form, main, sections, indexItems, selectSection, onReveal, sourceChip, sectionCounts };
+  layout = { form, main, sections, indexItems, selectSection, onReveal, sectionCounts };
 
   selectSection('writing');
   refreshCharSectionCounts();
@@ -269,13 +271,6 @@ export function setCharSectionCount(key, text) {
   if (!badge) return;
   badge.textContent = text;
   badge.hidden = !text;
-}
-
-/** 左栏的来源胶囊（酒馆 PNG 卡 / JSON 角色卡 / 手写）：空串就整条藏起来 */
-export function setCharSourceChip(text) {
-  if (!layout) return;
-  layout.sourceChip.textContent = text;
-  layout.sourceChip.hidden = !text;
 }
 
 /** 把控件带到眼前：先切到它所在的分区，再滚进视野（折叠条收着就先展开）。 */

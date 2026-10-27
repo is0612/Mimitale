@@ -4723,7 +4723,7 @@ m-button.btn-new > .mi-btn__control:hover {
 .page-body {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 20px 24px 28px;
+  padding: 18px 24px;
   min-height: 0;
 }
 
@@ -5468,12 +5468,6 @@ m-button.btn-new > .mi-btn__control:hover {
   opacity: 1;
 }
 
-/* 形象还在“沿用头像那张图”时压淡一点，提示它不是单独设的 */
-.char-portrait.is-inherited {
-  opacity: 0.7;
-}
-
-
 /* 立绘容器的描边——透明底素材压在底色上，轮廓得勾出来（见 .art-edge 那段）。
    ⚠️ 必须在下面 .char-portrait 的 width/height 之后写：.art-edge 和 .char-portrait
    同为单类选择器（优先级一样），位置靠后的胜出。 */
@@ -5761,20 +5755,22 @@ m-button.btn-new > .mi-btn__control:hover {
   --ce-muted: var(--text-faint);
 }
 
-/* 两栏是默认：属性 / 表情图 / 世界书 / 高级设置的内容本来就是结构化的，不需要目录。
+/* 两栏是默认：人物列表 / 世界书 / 高级设置的内容本来就是结构化的，不需要目录。
    「角色设定」才展开第三列 —— 五个字段连成一页长稿，右侧挂一份字段目录。
-   ⚠️ 真实侧栏是 224px（不是设计稿里估的 196），所以三栏的余量要按 1440−224 算。 */
+   ⚠️ 真实侧栏是 224px（不是设计稿里估的 196），所以三栏的余量要按 1440−224 算。
+   ⚠️ 左栏 260px 是星宝 2026-10-27 定的（原来 220）。**这里的默认两栏和下面 writing
+      的三栏必须同宽**，否则切分区时左栏会跳一下；本书角色页没有第三列，靠这条吃 260。 */
 #view-char-editor #char-form.char-editor-layout,
 #view-book-char-editor #bc-char-form.char-editor-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
 }
 
 #view-char-editor #char-form.char-editor-layout[data-editor-section='writing'] {
-  grid-template-columns: 220px minmax(0, 1fr) 272px;
+  grid-template-columns: 260px minmax(0, 1fr) 260px;
 }
 
 #view-char-editor #char-form.hidden,
@@ -5789,8 +5785,11 @@ m-button.btn-new > .mi-btn__control:hover {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 16px 12px;
+  /* 10 → 8：左栏 220→260 之后封面跟着涨了 38px，10px 的块间距把余量吃光，
+     1440×900 下左栏正好超出 5px（冒烟 849 vs 844）。收 6px 补回来 ——
+     比再往下压封面高度划算：2:3 的竖版立绘再裁就要裁到头发和脚了。 */
+  gap: 8px;
+  padding: 12px 18px;
   overflow-y: auto;
   border-right: 1px solid var(--ce-line);
   background: var(--ce-sidebar);
@@ -5884,6 +5883,63 @@ m-button.btn-new > .mi-btn__control:hover {
 #view-book-char-editor .char-avatar {
   width: 56px; /* 42px 的圈装不下「点击上传」四个字，编辑页放大一档当好点击目标 */
   height: 56px;
+}
+
+/* 角色卡封面铺满左栏（2026-10-27 星宝要求）。
+   左栏 260px、减两侧 18px 内边距 = 内容宽 224px，按出图比例 2:3 铺满 → 高约 336px。
+   ⚠️ 左栏从 220 涨到 260 之后这里跟着高了 54px，装不下就会长出栏内滚动条
+      （冒烟里有「角色编辑页左栏没有长出栏内滚动条」那条盯着），改左栏宽度或图片比例先量再改。
+   ⚠️ 只限定 #view-char-editor：本书角色页那套是「形象 120px + 头像 56px」两列并排，
+      铺满会把头像挤掉。 */
+#view-char-editor .char-portrait-box {
+  position: relative;
+  width: 100%;
+}
+
+#view-char-editor .char-portrait {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 3;
+  /* ⚠️ 限高 316 不是随手写的：左栏 260 时按 2:3 会到 336px，把左栏撑出 5px 滚动条
+     （冒烟实测 scrollHeight 849 vs clientHeight 844）—— 也就是「切到任何分区左栏都可能滚」。
+     图本身是 object-fit: cover（见上面的 img 规则），限高只会纵向裁掉共 20px（每边 10px），
+     对 1024×1536 的立绘等于裁 3%，看不出来，也不会变形。
+     配合 .char-identity-pane 的 gap 10→8，最终余量 5px。改左栏宽度 / 图片比例时重新量这两条。 */
+  max-height: 316px;
+}
+
+/* 清除：右上角一个小圆 ×（原来是图下面一行「清除」文字按钮）。
+   常驻但低调，hover 才变红 —— 它比「点图换封面」低一级，不该抢眼。 */
+#view-char-editor .char-portrait-clear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  /* 压过 .char-portrait::after 那层「换形象」黑遮罩：::after 是定位元素、z-index 自动，
+     这里给 1 就浮到它上面，否则鼠标一进来 × 就被盖住点不到 */
+  z-index: 1;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#view-char-editor .char-portrait-clear:hover {
+  background: var(--danger);
+}
+
+#view-char-editor .char-portrait-clear:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* 还是空槽时改虚线、收掉 art-edge 的白边 —— 白边是给透明底素材勾轮廓的，
@@ -9465,7 +9521,7 @@ m-button.btn-new > .mi-btn__control:hover {
 #view-book-char-editor .page-head {
   height: auto;
   min-height: 56px;
-  padding: 12px 24px;
+  padding: 12px 18px;
 }
 
 /* 两个编辑页共用：面包屑 + 标题（+ 角色页那句说明）一行排开 */
@@ -9590,17 +9646,6 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* ------------------------------ 编辑角色 · 左栏 ------------------------------ */
-
-/* 来源胶囊：贴着头像 / 形象下面，一句话交代这张卡是哪来的 */
-.char-source-chip {
-  align-self: flex-start;
-  font-size: var(--fs-xs);
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--text-dim);
-  border: 1px solid var(--border-soft);
-}
 
 /* 头像 / 形象：一排两格（120 + 12 + 56 = 188，正好是栏内净宽）。
    ⚠️ 两格必须等高：形象钉死 2:3，头像那格把图压到行底 —— 标签和「清除」才会落在
