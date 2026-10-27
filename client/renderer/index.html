@@ -1227,30 +1227,36 @@
           </div>
           <div id="provider-presets" class="provider-presets hidden"></div>
 
-          <label class="field">
-            <span class="field-label">名称</span>
-            <m-input id="p-name" placeholder="例如 DeepSeek" aria-label="模型提供商名称"></m-input>
-          </label>
+          <!-- 这四栏是「同一个提供商的一套配置」，换个提供商就整组重填 ——
+               所以它们**共用一张卡**、内部用分隔线分开，而不是四张各自描边的白卡。
+               四张卡铺在浅灰底上会变成四道横条纹，分不出「这是一组」。
+               容器样式见 style.css 的 .field-group。 -->
+          <div class="field-group">
+            <label class="field">
+              <span class="field-label">名称</span>
+              <m-input id="p-name" placeholder="例如 DeepSeek" aria-label="模型提供商名称"></m-input>
+            </label>
 
-          <label class="field">
-            <span class="field-label">接口地址</span>
-            <m-input id="p-baseurl" placeholder="https://api.deepseek.com" aria-label="接口地址"></m-input>
-            <span class="field-help">如 DeepSeek 填 https://api.deepseek.com —— 从上面的「第三方模型提供商」里选一个会自动填好。</span>
-          </label>
+            <label class="field">
+              <span class="field-label">接口地址</span>
+              <m-input id="p-baseurl" placeholder="https://api.deepseek.com" aria-label="接口地址"></m-input>
+              <span class="field-help">如 DeepSeek 填 https://api.deepseek.com —— 从上面的「第三方模型提供商」里选一个会自动填好。</span>
+            </label>
 
-          <label class="field">
-            <span class="field-label">API Key</span>
-            <m-input id="p-apikey" type="password" placeholder="sk-..." aria-label="API Key"></m-input>
-            <span class="field-help">只保存在你自己电脑上，保存时会加密。</span>
-          </label>
+            <label class="field">
+              <span class="field-label">API Key</span>
+              <m-input id="p-apikey" type="password" placeholder="sk-..." aria-label="API Key"></m-input>
+              <span class="field-help">只保存在你自己电脑上，保存时会加密。</span>
+            </label>
 
-          <div class="field field-stack">
-            <div class="field-row">
-              <span class="field-label">可用模型</span>
-              <m-button id="btn-fetch-models" variant="ghost" size="sm" aria-label="从接口拉取模型列表">拉取可用模型</m-button>
+            <div class="field field-stack">
+              <div class="field-row">
+                <span class="field-label">可用模型</span>
+                <m-button id="btn-fetch-models" variant="ghost" size="sm" aria-label="从接口拉取模型列表">拉取可用模型</m-button>
+              </div>
+              <m-textarea id="p-models" rows="4" spellcheck="false" aria-label="模型列表" placeholder="一行一个模型名，例如：&#10;deepseek-chat&#10;deepseek-reasoner"></m-textarea>
+              <span class="field-help">一行一个模型。聊天窗口右上角的下拉框里可以随时切换。</span>
             </div>
-            <m-textarea id="p-models" rows="4" spellcheck="false" aria-label="模型列表" placeholder="一行一个模型名，例如：&#10;deepseek-chat&#10;deepseek-reasoner"></m-textarea>
-            <span class="field-help">一行一个模型。聊天窗口右上角的下拉框里可以随时切换。</span>
           </div>
 
           <div class="provider-actions">

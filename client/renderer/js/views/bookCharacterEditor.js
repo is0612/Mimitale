@@ -53,6 +53,8 @@ function setCharSaveState(state) {
   if (!el.charSaveState) return;
   el.charSaveState.dataset.state = state;
   el.charSaveState.textContent = state === 'dirty' ? '有未保存的改动' : '所有更改已保存';
+  // 同步给表单根（data-save-state）：左栏那颗「保存」跟着亮/熄，理由同 characterEditor.js
+  if (el.charForm) el.charForm.dataset.saveState = state;
 }
 
 /** 给这一个框接上自动增高。接线只需一次（重复调用会被 ignore） */

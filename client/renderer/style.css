@@ -44,7 +44,6 @@
   --fs-md: max(var(--fs-min), calc(16px * var(--ui-size)));
   --fs-lg: max(var(--fs-min), calc(18px * var(--ui-size)));
   --fs-xl: max(var(--fs-min), calc(22px * var(--ui-size)));
-
   --font-ui: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
   --font-story: "Source Han Serif SC", "Noto Serif SC", "SimSun", serif;
 }
@@ -52,7 +51,15 @@
 
 
 
-[data-accent='amber'] {
+/* ⚠️ 主题变量段一律写成 `:root[data-…]`，不要只写 `[data-…]`。
+   原因（2026-10-27 星宝报「外观里主题配色的字是黑的」查出来的）：
+   外观页那个配色按钮本身就是 `<button data-accent="amber">` —— 它自己带了 data-accent，
+   于是**匹配到了这段基线**，把整套主题变量在自己的作用域里重置成金色基线。
+   结果那个胶囊：描边金 #8a6314、底 rgba(138,99,20,.10)、文字也是它，
+   而外面的界面早就换成苔绿了，一眼就看出不搭。
+   加 :root 之后这些段只作用于根元素，五段的相对顺序不变，层叠结果不变，
+   特异性只是齐刷刷 +1。别的地方（`[data-theme='dark'] .foo` 那种祖先匹配）不受影响。 */
+:root[data-accent='amber'] {
   --bg: #f4f5f7;
   --bg-side: #edeff2;
   --bg-elev: #ffffff;
@@ -71,13 +78,20 @@
   --accent-hover: #a1751a;
   --accent-pressed: #6e4f10;
   --on-accent: #ffffff;
-  --accent-soft: rgba(138, 99, 20, 0.10);
-  --accent-soft-strong: rgba(138, 99, 20, 0.16);
-  --accent-wash: rgba(138, 99, 20, 0.06);
-  --accent-border: rgba(138, 99, 20, 0.35);
-  --accent-border-strong: rgba(138, 99, 20, 0.5);
-  --accent-border-soft: rgba(138, 99, 20, 0.28);
-  --accent-border-faint: rgba(138, 99, 20, 0.25);
+  /* ⚠️ 派生色一律从 var(--accent) 算，**不要再写死 rgba**。
+     原来这 7 个是 `rgba(138, 99, 20, α)`（金色），而白天主题在下面
+     `[data-accent='amber'][data-theme='light']` 把 `--accent` 换成了墨绿 #5d7451 ——
+     于是同一个界面里「绿主色 + 金描边/金底纹」并存：高亮块发黄、焦点环是暗金、
+     按下态变棕。换肤只改了 7 个 token，另外 8 个没跟上。
+     改成 color-mix 之后，只要改 `--accent` 一处，整族自动跟随（2026-10-27）。
+     写法与「酒馆叙事布局」那段的 color-mix 一致，Chromium 直接支持。 */
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-soft-strong: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-wash: color-mix(in srgb, var(--accent) 6%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 35%, transparent);
+  --accent-border-strong: color-mix(in srgb, var(--accent) 50%, transparent);
+  --accent-border-soft: color-mix(in srgb, var(--accent) 28%, transparent);
+  --accent-border-faint: color-mix(in srgb, var(--accent) 25%, transparent);
   /* danger / ok / art-edge 这几组原本写在 :root（2026-10-16 随那一整套粉色一起挪到这儿）。
      它们**只被夜间段覆盖**，白天本来用的就是这个值 —— 挪过来语义才对得上：
      白天主题的全部颜色现在都在这一个段里。 */
@@ -91,14 +105,15 @@
   --ok-border: #cbe9d9;
   --overlay: rgba(27, 30, 34, 0.28);
   --pre-bg: #f2f4f6;
-  --code-bg: rgba(138, 99, 20, 0.07);
-  --code-text: #5c4715;
-  --th-bg: rgba(138, 99, 20, 0.05);
+  /* 同 --accent-soft 一族：从 --accent 派生，别写死金色（见上面那段说明） */
+  --code-bg: color-mix(in srgb, var(--accent) 7%, transparent);
+  --code-text: color-mix(in srgb, var(--accent) 80%, var(--text));
+  --th-bg: color-mix(in srgb, var(--accent) 5%, transparent);
   --foot-bg: #f7f8fa;
   --toggle-track: #dfe3e8;
   --scrollbar: #d5dae0;
   --scrollbar-hover: #bfc6ce;
-  --focus-ring: 0 0 0 3px rgba(138, 99, 20, 0.18);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
   --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --shadow-sm: 0 1px 2px rgba(27, 30, 34, 0.05);
   --shadow-lg: 0 14px 36px rgba(27, 30, 34, 0.16);
@@ -110,12 +125,12 @@
    特异性一样、靠后的赢）**完全覆盖**，属死定义，2026-10-16 已删。
    留下的这两个没被覆盖、确实生效：`--accent-wash` 有 4 处引用、`--focus-ring` 有 10 处。
    ⚠️ 它们和 main 段的 `--accent` 一样是**金色系**，而夜间主色是苔绿 —— 主题色后面要改，这里先不动。 */
-[data-accent='amber'][data-theme='dark'] {
+:root[data-accent='amber'][data-theme='dark'] {
   --accent-wash: rgba(232, 184, 75, 0.07);
   --focus-ring: 0 0 0 3px rgba(232, 184, 75, 0.28);
 }
 
-[data-theme='dark'] {
+:root[data-theme='dark'] {
   color-scheme: dark;
   --bg-item: #23262b;
   --accent: #fb4d74;
@@ -182,7 +197,6 @@ body {
   color: var(--text);
   font-family: var(--font-ui);
   font-size: var(--fs-sm);
-  -webkit-font-smoothing: antialiased;
 }
 
 .hidden {
@@ -3484,8 +3498,9 @@ m-button.btn-send > .mi-btn__control {
 }
 
 /* 酒馆叙事布局。保留现有 DOM / 数据契约；所有色彩继续服从外观主题。
-   聊天左右内缩仍只由 --chat-pad-left/right 控制，不增加 max-width。 */
-[data-theme='dark'][data-accent='amber'] {
+   聊天左右内缩仍只由 --chat-pad-left/right 控制，不增加 max-width。
+   ⚠️ `:root` 前缀的来由见文件顶部 `:root[data-accent='amber']` 那段说明。 */
+:root[data-theme='dark'][data-accent='amber'] {
   --accent: #a8b997;
   --accent-hover: #c1ceaf;
   --accent-pressed: #8c9e79;
@@ -3966,9 +3981,13 @@ m-button.btn-new > .mi-btn__control:hover {
   height: 17px;
 }
 
-[data-accent='amber'][data-theme='light'] {
+/* 白天档的苔影酒馆。`:root` 前缀的来由见文件顶部 `:root[data-accent='amber']` 那段说明。 */
+:root[data-accent='amber'][data-theme='light'] {
   --accent: #5d7451;
   --accent-hover: #4a613f;
+  /* 按下态必须比 hover 再深一档，否则「按下去像没反应」。
+     原来漏了这一个 —— 白天按下走的是基线的棕金 #6e4f10，墨绿按钮按一下变棕（2026-10-27 补）。 */
+  --accent-pressed: #3f5236;
   --accent-soft: #edf1e8;
   --accent-soft-strong: #dce5d4;
   --accent-border: #a6b89a;
@@ -5823,6 +5842,15 @@ m-button.btn-new > .mi-btn__control:hover {
   font-weight: 600;
 }
 
+/* 有未保存的改动时让保存键自己「亮一下」：状态胶囊在页头右上角，
+   写作时视线在中间稿纸上够不着它。data-save-state 由 setCharSaveState 同步到表单根，
+   保存成功自动熄掉。光环用 accent-soft-strong（和目录当前项同底色），不用 focus-ring
+   —— 那是「键盘焦点」的语义，别混。 */
+#view-char-editor #char-form[data-save-state='dirty'] .char-rail-foot #btn-save-char > .mi-btn__control,
+#view-book-char-editor #bc-char-form[data-save-state='dirty'] .char-rail-foot #bc-btn-save-char > .mi-btn__control {
+  box-shadow: 0 0 0 3px var(--accent-soft-strong);
+}
+
 /* 删除：去掉 danger 的整块实底，平时只是一条淡字，悬停才染红。
    确认识别靠悬停 / 聚焦时的红，不靠一整块红底在栏底常驻。 */
 #view-char-editor .char-rail-foot #btn-del-char,
@@ -6088,6 +6116,20 @@ m-button.btn-new > .mi-btn__control:hover {
   background: var(--accent-soft-strong);
   color: var(--text);
   font-weight: 600;
+}
+
+/* 「还差几栏」要能一眼扫出来 —— 这是这个目录存在的唯一理由。
+   原来已写/未写只靠一个 6px 圆点和一个「—」区分，四行扫下去抓不住。
+   未写的那几行整行退到 --text-faint，已写的留在 --text-dim。
+   ⚠️ 必须 `:not([aria-current='true'])`：`:has()` 的特异性取里面最重的那个，
+      这条算下来是 (1,3,0)，比上面那条 (1,2,0) 高 —— 不加 :not 会把当前栏也一起压淡。 */
+#view-char-editor .field-index-item:not([aria-current='true']):has(.field-index-dot[data-filled='false']) {
+  color: var(--text-faint);
+}
+
+#view-char-editor .field-index-item:not([aria-current='true']):has(.field-index-dot[data-filled='false']) .field-index-name,
+#view-char-editor .field-index-item:not([aria-current='true']):has(.field-index-dot[data-filled='false']) .field-index-no {
+  color: var(--text-faint);
 }
 
 #view-char-editor .field-index-item:focus-visible {
@@ -6843,14 +6885,21 @@ m-button.btn-new > .mi-btn__control:hover {
   border-radius: 0;
   background: transparent;
   display: grid;
-  gap:16px
+  /* 16 → 12：卡与卡是「同一组里的成员」，收紧它们、拉开它们和标题的距离，
+     分组才看得出来（组内 < 组外）。原来 16 和标题到内容一样大，
+     四张卡糊成一片横条纹，看不出这段归哪个标题管。 */
+  gap:12px
 }
 
 /* 没有卡片壳之后，分组头部就代表「右边这一页」——把它做成一条页内标题：
    稍大一档的字 + 底下一道通栏分隔线，和下面内容拉开。
-   （只在设置这一屏生效，基础 .section-head 不动。） */
+   （只在设置这一屏生效，基础 .section-head 不动。）
+   ⚠️ 下面这条 margin-bottom 加上 grid 的 12px = **20px**，
+      比卡与卡之间的 12px 大 —— 这就是「这个标题管到哪儿」的视觉答案。
+      2026-10-27 之前没有这条，标题和卡片等距，等于没有分组。 */
 .settings-content > .panel-section > .section-head {
   padding-bottom: 14px;
+  margin-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -6860,6 +6909,48 @@ m-button.btn-new > .mi-btn__control:hover {
 
 .settings-content > .panel-section > .section-head .section-desc {
   font-size: var(--fs-xs);
+}
+
+/* 模型服务屏里的「配置」四栏（名称 / 接口地址 / API Key / 可用模型）合成**一张卡**。
+   它们是一套配置：换个提供商，四栏全部重填。
+   ⚠️ 原来是四张各自描边的白卡，铺在浅灰底上就是四道横条纹 —— 卡片本身是「分组」信号，
+      每样东西都装进卡片之后这个信号就没了，只剩噪音。（星宝 2026-10-27 点名的「横条纹」）
+   ⚠️ 这里**不用 `:first-of-type` / `+` 去找边界**：`.provider-add` 和第一栏之间夹着
+      一个隐藏的 #provider-presets，相邻兄弟跨不过去；改成包一层容器（index.html），
+      组边界由 DOM 决定，选择器不用再猜。 */
+.field-group {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  /* 第一栏的底和最后一栏的底都通栏，不裁会把圆角顶成直角 */
+  overflow: hidden;
+}
+
+/* 组里的每一栏共享外壳，自己不再画边框/底色 —— 只留内部间距。
+   这几行是原来 `.settings-content > .panel-section > .field` 里负责布局的一半，
+   包了一层之后那条规则不再命中（它用的是直接子选择器），必须在这里补一份。 */
+.field-group > .field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.field-group > .field + .field {
+  border-top: 1px solid var(--border-soft);
+}
+
+.field-group > .field > .field-label {
+  padding-top: 0;
+  font-weight: 600;
+}
+
+/* 配置整组和上面「选提供商」那一摞不是一回事：给它比组内更大的顶部间距，
+   靠距离画分界（组外 > 组内）。 */
+#sec-models > .field-group {
+  margin-top: 8px;
 }
 
 /* 一次只显示当前那一组（切换逻辑在 views/settings.js 的 showSettingsSection） */
@@ -6993,7 +7084,7 @@ m-button.btn-new > .mi-btn__control:hover {
 .provider-card-body {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -7316,12 +7407,15 @@ m-button.btn-new > .mi-btn__control:hover {
 .char-card-name,
 .wb-card-name {
   max-width: 100%;
-  padding: 10px 10px 0;
+  /* 名字升一档（14 → 16）：卡片是五列网格，14 和下面 meta 的 12 只差 17%，
+     在一排卡里根本分不出主次。16 仍在现有字号档位内，不新增档。
+     上边距同时 10 → 12，让它和封面断开、和 meta 抱成一组（组内紧、组外松）。 */
+  padding: 12px 10px 0;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
@@ -7329,7 +7423,8 @@ m-button.btn-new > .mi-btn__control:hover {
 .char-card-sub,
 .wb-card-meta {
   max-width: 100%;
-  padding: 6px 10px 0;
+  /* 6 → 4：往名字靠，两者是一对；再往下的按钮行自带 8px，不会挤。 */
+  padding: 4px 10px 0;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
@@ -8058,7 +8153,7 @@ m-button.btn-new > .mi-btn__control:hover {
 
 .wp-row input[type='checkbox'] {
   flex: 0 0 auto;
-  margin-top: 3px;
+  margin-top: 4px;
   accent-color: var(--accent);
 }
 
@@ -8232,7 +8327,10 @@ m-button.btn-new > .mi-btn__control:hover {
 .accent-swatch[aria-checked='true'] {
   border-color: var(--accent);
   background: var(--accent-soft);
-  color: var(--text);
+  /* ⚠️ 这里原来是 var(--text)（白天 #1b1e22，几乎是纯黑）。
+     胶囊的底是浅绿、边和色点都是苔绿，中间一个字是纯黑 —— 星宝看出来的那个「字体是黑色的」。
+     选中态用主色本身，和描边/色点连成一套；两个主题下 --accent 对 --accent-soft 都在 6:1 以上。 */
+  color: var(--accent);
 }
 
 .accent-dot {
@@ -9470,12 +9568,17 @@ m-button.btn-new > .mi-btn__control:hover {
   white-space: nowrap;
 }
 
+/* ⚠️ 「已保存」这个点原来是 var(--ok-text)（成功绿 #1a7d52）。
+   问题是它和主色墨绿 #5d7451 同色相、都很暗，同屏并排时分不清哪个是「有未保存的改动」
+   （那个用 --accent）、哪个是「没事」。
+   按「正常状态应该安静」：已保存 = 中性灰点；有改动才亮主色（下面那条）。
+   这样一屏里只有一个绿，而且它不是靠颜色单独表意 —— 文字颜色同时在变。 */
 .save-pill::before {
   content: '';
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--ok-text);
+  background: var(--border-strong);
 }
 
 .save-pill[data-state='dirty'] {
@@ -9587,7 +9690,7 @@ m-button.btn-new > .mi-btn__control:hover {
 
 /* 「识别世界书人物」比旁边两颗长，这一颗用 accent 弱高亮区分「AI 生成 / ＋ 新建」两个建草稿的动作 */
 #view-char-editor .char-book-roles-btn {
-  padding: 5px 10px;
+  padding: 4px 10px;
   font-family: inherit;
   font-size: var(--fs-xs);
   color: var(--text-dim);
@@ -9710,7 +9813,10 @@ m-button.btn-new > .mi-btn__control:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  /* ⚠️ 左右必须是 16px，和下面 `> m-textarea > textarea` 的 12px 16px 对齐。
+     原来这里是 14px —— 卡里标题比正文往左偏 2px，一栏一栏看下来就是「没对齐」。
+     卡内所有部件（头栏 / 折叠条 / 模板条 / 备选列表）左右一律 16px。 */
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border-soft);
   background: var(--bg-elev);
 }
@@ -9756,7 +9862,8 @@ m-button.btn-new > .mi-btn__control:hover {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
+  /* 左右 16px 与头栏/正文对齐（见上面 field-head 那条说明） */
+  padding: 8px 16px;
   cursor: pointer;
   list-style: none;
   font-size: var(--fs-xs);
@@ -9782,14 +9889,14 @@ m-button.btn-new > .mi-btn__control:hover {
 
 #view-char-editor .char-fold-body,
 #view-book-char-editor .char-fold-body {
-  padding: 0 14px 12px;
+  padding: 0 16px 12px;
 }
 
 /* 模板条（只有开场白那一栏有）：夹在正文和折叠条之间 */
 #view-char-editor .char-sheet > .field-template-bar,
 #view-book-char-editor .char-sheet > .field-template-bar {
   margin-top: 0;
-  padding: 8px 14px 10px;
+  padding: 8px 16px 10px;
   border-top: 1px solid var(--border-soft);
   background: var(--bg-input);
 }
@@ -9797,7 +9904,7 @@ m-button.btn-new > .mi-btn__control:hover {
 /* 备选开场白的条目列表：现在也长在稿纸卡里，补上左右内边距 */
 #view-char-editor .char-sheet > .alt-greet-list,
 #view-book-char-editor .char-sheet > .alt-greet-list {
-  padding: 12px 14px;
+  padding: 12px 16px;
 }
 
 #view-char-editor .char-sheet > .alt-greet-list:empty,

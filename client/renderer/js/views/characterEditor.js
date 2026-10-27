@@ -51,6 +51,10 @@ function setCharSaveState(state) {
   if (!el.charSaveState) return;
   el.charSaveState.dataset.state = state;
   el.charSaveState.textContent = state === 'dirty' ? '有未保存的改动' : '所有更改已保存';
+  // 同步给表单根（data-save-state）：左栏底部那颗「保存」靠它跟着亮/熄。
+  // 状态胶囊在页头右上角，写作时视线在中间稿纸上，光靠它提示「有未保存的改动」够不着；
+  // 状态要出现在动作旁边，而不是只在一个角落（2026-10-27）。
+  if (el.charForm) el.charForm.dataset.saveState = state;
 }
 
 /** 给五个框接上自动增高。接线只需一次（重复调用会被 ignore） */
@@ -195,10 +199,12 @@ function updateCharEditorScopeUi() {
         ? `填好内容点「保存」才会加进这本书${book ? ` · ${book.name}` : ''}`
         : '填好内容点「保存」，保存后才会出现在角色卡里';
     } else {
-      // 保存状态胶囊（.save-pill）已提示未保存，这里说明这几栏写下去会去哪儿
+      // 保存状态胶囊（.save-pill）已提示未保存，这里只讲这些字段的去向。
+      // ⚠️ 原来还挂着「改完点左栏底部的『保存』」——用文字解释按钮在哪，
+      //    是在给布局打补丁；现在未保存时保存键自己会亮（见 setCharSaveState）。
       el.charsSub.textContent = inBook
         ? `这本书里的独立副本，改它不影响角色卡${book ? ` · ${book.name}` : ''}`
-        : '描述每轮都会注入给 AI，改完点左栏底部的「保存」';
+        : '描述每轮都会注入给 AI';
     }
   }
 }
