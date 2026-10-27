@@ -29,7 +29,7 @@
     "test:conversation-close": "electron --no-sandbox tools/test-conversation-close.js",
     "test:delete-persist": "electron --no-sandbox tools/test-delete-persist.js",
     "test:library-recovery": "node --test tools/test-library-transaction.js tools/test-library-recovery.js",
-    "test:roleplay": "node --test tools/test-chat-state.js tools/test-panel-authority.js tools/test-roleplay-rag.js tools/test-roleplay-preparation.js tools/test-worldbook-match.js",
+    "test:roleplay": "node --test tools/test-chat-state.js tools/test-cast.js tools/test-panel-authority.js tools/test-roleplay-rag.js tools/test-roleplay-preparation.js tools/test-worldbook-match.js",
     "shot:components": "electron --no-sandbox tools/shot-components.js",
     "check:integrity": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/clear-low-integrity.ps1",
     "fix:integrity": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/clear-low-integrity.ps1 -Fix"

@@ -334,6 +334,9 @@ export function worldbookCast(convo) {
   const cast = books.flatMap((b) => worldbookCharacters(b));
   if (!cast.length) return '';
 
+  // ⚠️ 下面的 header 要拿它点明「谁才是玩家本人」；标成「未使用」删掉会让
+  //    这个世界书有副本的会话在组装提示词时直接抛 ReferenceError（发不出消息）。
+  const playerName = convoUserName(convo);
   const heroName = String((characterForConvo(convo) || {}).name || '').trim();
   const npcCopies = cast.filter((c) =>
     !isPlayerCharacterCopy(convo, c) &&

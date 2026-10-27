@@ -2014,8 +2014,9 @@ await scenario('属性：从本书角色种到状态面板', async () => {
 
   check('卡里的值是副本上的初始值', cardValue('金币') === '100', String(cardValue('金币')));
 
-  // 卡的书里有同名副本（都叫「属性测试角色」）：GM 局不再给卡单写一份主要角色段，
-  // 让位给「这个世界的人」名单里那份副本 —— 否则同一个人两份设定。
+  // 卡的书里有同名副本（都叫「属性测试角色」）：2026-10-27 起改成**并入**主要角色段，
+  // 而不是让位不再注入 —— 卡自己的设定（场景 / 系统提示词 / 性格）只有在这一段里才给到模型，
+  // 整段让位等于把卡的上半身丢掉。同名副本同时会被排除出「这个世界的人」，所以不会两份。
   {
     const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
     const msgMod = await import(new URL('js/data/messages.js', document.baseURI).href);
@@ -2025,8 +2026,15 @@ await scenario('属性：从本书角色种到状态面板', async () => {
       .filter((m) => m && m.role === 'system')
       .map((m) => String(m.content || ''))
       .join('\n');
-    check('书里有同名副本时不再重复注入主要角色段', !sys.includes('【本局主要角色】'), sys.slice(0, 120));
-    check('书里的副本仍然列在「这个世界的人」名单里', sys.includes('【这个世界的人】'), sys.slice(0, 120));
+    check('书里有同名副本时仍注入主要角色段', sys.includes('【本局主要角色】'), sys.slice(0, 160));
+    check(
+      '同名副本的设定并进了主要角色段（卡没写描述时尤其要带上）',
+      sys.includes('属性测试角色的设定文本'),
+      sys.slice(0, 400)
+    );
+    check('书里的副本仍然列在「这个世界的人」名单里', sys.includes('【这个世界的人】'), sys.slice(0, 160));
+    // 同名的人只能有一处：进了主要角色段就不再作为 NPC 出现
+    check('同名副本不会被同时列成 NPC', !/^- 属性测试角色：/m.test(sys), sys.slice(0, 400));
   }
 
   // --- 4) 发一条：注入给模型的消息里必须真的带上面板 ---
@@ -4646,11 +4654,21 @@ await scenario('编辑弹窗的放大按钮', async () => {
   // ⚠️ 别改成量「余量」——栏底那三样是 margin-top:auto 钉住的，装得下时它会把余量
   //    全吃成外边距；overflow 发生的那一刻 auto 外边距归零，scrollHeight 才会超过
   //    clientHeight。所以 scrollHeight <= clientHeight 正好就是「装得下」。
+  //
+  // ⚠️ 这个「刚好装得下」是照 1440×900 的设计高度算出来的（CSS 注释里也写明了）。
+  //    窗口更矮时（主窗口 minHeight 是 680）内容本来就放不下，左栏按设计改成
+  //    overflow-y:auto 自己滚 —— 那时只要求「滚得到」，不能拿设计高度的余量去卡小窗。
   const rail = $('.char-identity-pane');
+  const compactRail = window.innerHeight < 900;
   check(
-    '角色编辑页左栏没有长出栏内滚动条',
-    !!rail && rail.scrollHeight <= rail.clientHeight + 1,
-    rail ? `scrollHeight ${rail.scrollHeight} vs clientHeight ${rail.clientHeight}` : '(没有左栏)'
+    compactRail ? '矮窗下角色编辑页左栏可以自己滚（内容不会被裁掉）' : '角色编辑页左栏没有长出栏内滚动条',
+    !!rail &&
+      (compactRail
+        ? ['auto', 'scroll'].includes(getComputedStyle(rail).overflowY)
+        : rail.scrollHeight <= rail.clientHeight + 1),
+    rail
+      ? `scrollHeight ${rail.scrollHeight} vs clientHeight ${rail.clientHeight} @ ${window.innerHeight}px`
+      : '(没有左栏)'
   );
   click('#btn-close-chars');
   await waitFor('回到角色卡', () => shown('#view-chars'));
@@ -4831,10 +4849,21 @@ await scenario('世界书：新建条目', async () => {
   // --- 布局：条目屏是三栏（列表 / 正文 / 本条属性） ---
   // 2026-10-18 按设计稿 A「条目工作台」重排：一天里九成时间在写条目，
   // 所以三个开关和两个数字搬进右栏（改完立刻看见），正文收进舒适阅读宽度。
+  //
+  // ⚠️ 宽度 ≤1366 时是**设计内的紧凑布局**：style.css 的 @media (max-width:1366px)
+  //    把它改成「列表 | 正文」两列 + 属性栏铺到下面一行。所以这里按窗口宽度分档断言，
+  //    否则换台小屏机器跑就假红（1024×768 的冒烟机就是这种）。
   const wbRect = (sel) => $(sel).getBoundingClientRect();
-  check('条目屏是三栏（列表 / 正文 / 属性）',
-    getComputedStyle($('#wb-panel-entries')).gridTemplateColumns.split(/\s+/).length === 3,
-    getComputedStyle($('#wb-panel-entries')).gridTemplateColumns);
+  const wbCols = getComputedStyle($('#wb-panel-entries')).gridTemplateColumns.split(/\s+/);
+  const compactWb = window.innerWidth <= 1366;
+  check(
+    compactWb ? '窄窗下条目屏收成两栏（列表 / 正文）+ 属性栏在下' : '条目屏是三栏（列表 / 正文 / 属性）',
+    compactWb
+      ? wbCols.length === 2 &&
+          getComputedStyle($('#wb-panel-entries')).gridTemplateAreas.includes('aside')
+      : wbCols.length === 3,
+    `${wbCols.join(' ')} @ ${window.innerWidth}px`
+  );
   check('正文列比条目列表宽（它才是主工作区）',
     wbRect('.wb-doc').width > wbRect('.wb-list').width,
     `正文 ${Math.round(wbRect('.wb-doc').width)} vs 列表 ${Math.round(wbRect('.wb-list').width)}`);
