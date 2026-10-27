@@ -150,8 +150,19 @@ export function flushLibrariesNow() {
   const calls = [];
   if (charactersLoaded && worldbooksLoaded) calls.push(() => flushCharacterWorldbooks(true));
   else {
-    if (charactersLoaded) calls.push(() => characterChanges.flushNow());
-    if (worldbooksLoaded) calls.push(() => worldbookChanges.flushNow());
+    // 角色绑定了世界书时，世界书未成功加载不能只提交角色库的新快照。
+    if (charactersLoaded && !worldbooksLoaded) {
+      try {
+        if (characterChanges.hasPendingChanges()) {
+          throw new Error('世界书尚未成功加载，角色库存在未保存改动；本次关闭未提交这些改动。');
+        }
+      } catch (err) {
+        errors.push(err.message || String(err));
+      }
+    } else {
+      if (charactersLoaded) calls.push(() => characterChanges.flushNow());
+      if (worldbooksLoaded) calls.push(() => worldbookChanges.flushNow());
+    }
   }
   if (presetsLoaded) calls.push(() => presetChanges.flushNow());
   for (const call of calls) {
