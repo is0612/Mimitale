@@ -29,6 +29,28 @@ function mergePromptText(preferred, fallback) {
   return `${a}\n\n${b}`;
 }
 
+function applyCastMacros(text, character, convo) {
+  const charName = String(character && character.name || '').trim() || '角色';
+  const userName = convoUserName(convo) || '你';
+  const macros = [
+    [String.fromCharCode(123, 123, 99, 104, 97, 114, 125, 125), charName],
+    [String.fromCharCode(123, 123, 117, 115, 101, 114, 125, 125), userName],
+    [String.fromCharCode(60, 66, 79, 84, 62), charName],
+    [String.fromCharCode(60, 85, 83, 69, 82, 62), userName]
+  ];
+  let result = String(text == null ? '' : text);
+  for (const [macro, value] of macros) result = result.replace(new RegExp(macro.replace(/[.*+?^${}()|[\]\\]/g, '\\function mergePromptText(preferred, fallback) {
+  const a = String(preferred || '').trim();
+  const b = String(fallback || '').trim();
+  if (!a) return b;
+  if (!b || a === b || a.includes(b)) return a;
+  if (b.includes(a)) return b;
+  return `${a}\n\n${b}`;
+}
+'), 'gi'), () => value);
+  return result;
+}
+
 // 定义搬到了 data/library.js（panel.js / convoState.js 也要用，而它们不能反向 import 这里 —— 会成环）。
 // 这里保留再导出：调用方一直是从 cast.js 拿的，别为了「整齐」把它们全改一遍。
 // ⚠️ 必须是「import 进来 + 再 export」，写成 `export {} from` 的话本模块自己就拿不到这个名字了。
@@ -333,7 +355,7 @@ export function worldbookCast(convo) {
     npcCount += 1;
 
     const bits = [c.description, c.personality]
-      .map((s) => String(s || '').trim().replace(/\s+/g, ' '))
+      .map((s) => applyCastMacros(String(s || '').trim(), c, convo).replace(/\s+/g, ' '))
       .filter(Boolean)
       .join(' ');
     const line = `- ${c.name}：${bits.slice(0, MAX_CAST_PER_NPC) || '（没写设定）'}`;
