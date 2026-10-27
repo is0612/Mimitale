@@ -167,7 +167,7 @@ function worldbookFromCharacterBook(raw, characterName, makeId, opts) {
     o.normalizeCharacters,
     o.maxCharacters
   );
-  if (!book.entries.length) return null;
+  if (!book.entries.length && !book.characters.length) return null;
   return book;
 }
 
