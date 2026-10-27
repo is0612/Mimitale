@@ -25,7 +25,6 @@ import {
 } from '../data/library.js';
 // 「能扫的历史」只有一份：发送 / 右栏计数 / 这里的预览共用（见 data/cast.js）
 import { worldbookScanHistory } from '../data/cast.js';
-import { removePanelOwnerFields } from '../data/panel.js';
 import { renderAll } from './redraw.js';
 import { initWorldbookLayout, syncWorldbookLayout, resetWorldbookLayout, revealWorldbookEntry, setWorldbookPanel, worldbookEntryVisible } from './worldbookLayout.js';
 
