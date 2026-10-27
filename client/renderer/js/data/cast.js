@@ -19,6 +19,16 @@ import {
 import { convoPanelFields, panelFieldOwner } from './panel.js';
 import { isGmMode } from './narration.js';
 
+
+function mergePromptText(preferred, fallback) {
+  const a = String(preferred || '').trim();
+  const b = String(fallback || '').trim();
+  if (!a) return b;
+  if (!b || a === b || a.includes(b)) return a;
+  if (b.includes(a)) return b;
+  return `${a}\n\n${b}`;
+}
+
 // 定义搬到了 data/library.js（panel.js / convoState.js 也要用，而它们不能反向 import 这里 —— 会成环）。
 // 这里保留再导出：调用方一直是从 cast.js 拿的，别为了「整齐」把它们全改一遍。
 // ⚠️ 必须是「import 进来 + 再 export」，写成 `export {} from` 的话本模块自己就拿不到这个名字了。
@@ -308,15 +318,18 @@ export function worldbookCast(convo) {
   if (!cast.length) return '';
 
   const playerName = convoUserName(convo);
-  // 先扣掉玩家本人的同名副本，否则「还有 N 人」会把玩家自己算进去。
-  const npcTotal = cast.filter((c) => !isPlayerCharacterCopy(convo, c)).length;
+  const heroName = String((characterForConvo(convo) || {}).name || '').trim();
+  const npcCopies = cast.filter((c) =>
+    !isPlayerCharacterCopy(convo, c) &&
+    !(heroName && String(c && c.name || '').trim() === heroName)
+  );
+  const npcTotal = npcCopies.length;
 
   const lines = [];
   let total = 0;
   let npcCount = 0;
 
-  for (const c of cast) {
-    if (isPlayerCharacterCopy(convo, c)) continue;
+  for (const c of npcCopies) {
     npcCount += 1;
 
     const bits = [c.description, c.personality]
@@ -358,13 +371,11 @@ export function focusCharacterSection(convo) {
   const cardName = String(character.name || '').trim();
   if (!cardName) return '';
 
-  const asCopy = effectiveWorldbookIds(convo)
+  const matchingCopies = effectiveWorldbookIds(convo)
     .map((id) => worldbookById(id))
     .filter(Boolean)
-    .some((book) =>
-      worldbookCharacters(book).some((c) => c && String(c.name || '').trim() === cardName)
-    );
-  if (asCopy) return '';
+    .flatMap((book) => worldbookCharacters(book))
+    .filter((copy) => copy && String(copy.name || '').trim() === cardName);
 
   const me = convoUserName(convo);
   // 卡正文里的宏：{{char}} 指这张卡，{{user}} 指玩家（和单角色扮演同一套口径）
@@ -377,9 +388,12 @@ export function focusCharacterSection(convo) {
       .replace(/<USER>/gi, () => me);
 
   const bits = [];
-  const desc = fix(character.description);
-  const personality = fix(character.personality);
-  const scenario = fix(character.scenario);
+  const copyField = (field) => matchingCopies
+    .map((copy) => String(copy[field] || '').trim())
+    .reduce((merged, value) => mergePromptText(merged, value), '');
+  const desc = fix(mergePromptText(copyField('description'), character.description));
+  const personality = fix(mergePromptText(copyField('personality'), character.personality));
+  const scenario = fix(mergePromptText(copyField('scenario'), character.scenario));
   if (desc) bits.push(desc.slice(0, MAX_FOCUS_CHARS));
   if (personality) bits.push(`【性格】${personality}`);
   if (scenario) bits.push(`【当前场景】${scenario}`);
