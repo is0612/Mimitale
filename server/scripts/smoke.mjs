@@ -775,6 +775,80 @@ section('客户端：图形码 → 发码 → 注册两步')
   const crossClient = await api('GET', '/api/client/auth/me', { token: T })
   check('⭐ 管理员 token 也进不了客户接口（401）', crossClient.status === 401, `status=${crossClient.status}`)
 
+  /* ---------------- 卡密兑换（客户端） ---------------- */
+
+  /** 造一张卡：走后台接口，最接近运营的真实动作 */
+  async function makeCard(payload) {
+    const res = await api('POST', '/api/admin/cards', {
+      token: T,
+      body: { count: 1, note: '兑换冒烟', expireDays: null, ...payload }
+    })
+    return res.data?.created?.[0] ?? null
+  }
+
+  const card90 = await makeCard({ days: 90, level: 'basic' })
+  check('造出一张 90 天会员卡', !!card90?.code && card90.days === 90, JSON.stringify(card90 && { days: card90.days, level: card90.level }))
+
+  // 故意用小写 + 不带横杠：抄码的人不止一种写法
+  const sloppy = String(card90.code).toLowerCase().replace(/-/g, '')
+  const redeemed = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: sloppy } })
+  check('小写不带横杠也能兑', redeemed.code === 0, `code=${redeemed.code} ${redeemed.message ?? ''}`)
+  check('回的是新会员状态（等级已生效）', redeemed.data?.user?.membership?.level === 'basic', String(redeemed.data?.user?.membership?.level))
+  check(
+    '会员剩约 90 天',
+    Math.abs((redeemed.data?.user?.membership?.memberDaysLeft ?? 0) - 90) <= 1,
+    String(redeemed.data?.user?.membership?.memberDaysLeft)
+  )
+  check(
+    '带回了本次兑换摘要（客户端拿它说 +N 天）',
+    redeemed.data?.grant?.days === 90 && !!redeemed.data?.grant?.expiresAt && !!redeemed.data?.grant?.levelLabel
+  )
+  check(
+    '免费那 30 天没被动（两个钱包是分开的）',
+    redeemed.data?.user?.membership?.freeDaysLeft === 30,
+    String(redeemed.data?.user?.membership?.freeDaysLeft)
+  )
+
+  const usedRow = await db.query('SELECT status, used_by_customer_id FROM invite_cards WHERE code = $1', [card90.code])
+  check(
+    '卡标成已使用，并记下兑给谁了',
+    usedRow.rows[0]?.status === 'used' && Number(usedRow.rows[0]?.used_by_customer_id) === customerId
+  )
+
+  const twice = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: card90.code } })
+  check('同一张卡兑第二次 → 「你已经兑过了」', String(twice.message).includes('已经兑过'), twice.message)
+
+  const card30 = await makeCard({ days: 30 })
+  const stacked = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: card30.code } })
+  check(
+    '再兑一张 30 天 → 在 90 天后面顺延（不从今天重算）',
+    Math.abs((stacked.data?.user?.membership?.memberDaysLeft ?? 0) - 120) <= 1,
+    String(stacked.data?.user?.membership?.memberDaysLeft)
+  )
+
+  const voidCard = await makeCard({ days: 30 })
+  await api('PATCH', `/api/admin/cards/${voidCard.id}`, { token: T, body: { status: 'void' } })
+  const voided = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: voidCard.code } })
+  check('作废的卡不能兑', String(voided.message).includes('作废'), voided.message)
+
+  const expireCard = await makeCard({ days: 30 })
+  await db.query("UPDATE invite_cards SET expire_at = now() - interval '1 day' WHERE id = $1", [expireCard.id])
+  const expired = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: expireCard.code } })
+  check('过期的卡不能兑', String(expired.message).includes('过期'), expired.message)
+
+  const ghost = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: 'MIMI-AAAA-BBBB' } })
+  check('不存在的码 → 「卡密不对」', String(ghost.message).includes('卡密不对'), ghost.message)
+
+  const selfCode = (await api('GET', '/api/client/auth/me', { token: clientToken })).data?.user?.inviteCode ?? ''
+  const selfAsCard = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: selfCode } })
+  check('拿自己的邀请码当卡密 → 明确指出这不是卡密', String(selfAsCard.message).includes('邀请码'), selfAsCard.message)
+
+  const noAuth = await api('POST', '/api/client/redeem', { body: { code: card30.code } })
+  check('不登录不能兑（401）', noAuth.status === 401, `status=${noAuth.status}`)
+
+  const badShape = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: 'abc' } })
+  check('码太短 → 提示检查有没有抄全', String(badShape.message).includes('抄全') || String(badShape.message).includes('卡密是'), badShape.message)
+
   /* ---------------- 清理这次冒烟造的号 ---------------- */
 
   // 客户列表章节造的那批夹具（固定邮箱，不会误伤真实用户）
@@ -855,6 +929,43 @@ section('邀请码：自己发码 / 别人填码 / 归因')
     '⭐ 注册送的 30 天是免费天数，不算会员',
     aMe.data?.user?.membership?.level === 'none' && aMe.data?.user?.membership?.freeDaysLeft >= 29,
     `level=${aMe.data?.user?.membership?.level} 免费剩 ${aMe.data?.user?.membership?.freeDaysLeft} 天`
+  )
+
+  /* ---------------- 注册时直接填卡密：按卡上的权益发 ---------------- */
+
+  const regCardRes = await api('POST', '/api/admin/cards', {
+    token: T,
+    body: { count: 1, days: 90, level: 'basic', note: '兑换冒烟', expireDays: null }
+  })
+  const regCardCode = regCardRes.data?.created?.[0]?.code
+
+  const cardUser = await registerOne('冒烟丙', regCardCode)
+  check('注册第二步填卡密也能过', cardUser.done.code === 0, `code=${cardUser.done.code} ${cardUser.done.message ?? ''}`)
+
+  const cardUserId = Number(cardUser.done.data?.user?.id)
+  const cardUserMe = await api('GET', '/api/client/auth/me', { token: cardUser.done.data.token })
+  check(
+    '⭐ 填了卡 → 注册完直接是会员（等级按卡上写的）',
+    cardUserMe.data?.user?.membership?.level === 'basic' && (cardUserMe.data?.user?.membership?.memberDaysLeft ?? 0) >= 89,
+    `level=${cardUserMe.data?.user?.membership?.level} 会员剩 ${cardUserMe.data?.user?.membership?.memberDaysLeft} 天`
+  )
+  check(
+    '⭐ 填了卡就不再送 30 天试用（试用是给没买的人的）',
+    cardUserMe.data?.user?.membership?.freeDaysLeft === null,
+    String(cardUserMe.data?.user?.membership?.freeDaysLeft)
+  )
+
+  const usedCardRow = await db.query('SELECT status, used_by_customer_id FROM invite_cards WHERE code = $1', [regCardCode])
+  check(
+    '这张卡被消耗掉、并记下是谁用的',
+    usedCardRow.rows[0]?.status === 'used' && Number(usedCardRow.rows[0]?.used_by_customer_id) === cardUserId
+  )
+
+  const cardUserGrants = await db.query("SELECT source, days FROM membership_grants WHERE customer_id = $1 ORDER BY id", [cardUserId])
+  check(
+    '会员流水记成 card（后台天数流水里能看出是卡密兑的）',
+    cardUserGrants.rows.length === 1 && cardUserGrants.rows[0].source === 'card' && cardUserGrants.rows[0].days === 90,
+    JSON.stringify(cardUserGrants.rows)
   )
 
   /* ---------------- 邀请奖励：每邀 1 人 +7 天免费 ---------------- */

@@ -994,6 +994,7 @@ function registerIpc() {
    *    连登录都进不去的人，恰恰最需要报错和看公告。
    *    版本号在这里补上 —— account.js 是纯 HTTP 模块，不碰 electron。
    */
+  ipcMain.handle('account:redeem', accountCall((payload) => accountApi.redeemCard(payload)));
   ipcMain.handle('account:submit-feedback', accountCall((payload) => accountApi.submitFeedback(payload, { appVersion: app.getVersion() })));
   ipcMain.handle('account:announcements', accountCall(() => accountApi.listAnnouncements()));
   ipcMain.handle('account:announcement-read', accountCall((id) => accountApi.markAnnouncementRead(id)));

@@ -25,6 +25,7 @@ import {
   normalizeAvatar
 } from '../../lib/customerRules.js'
 import { makeUniqueVoucher, makeUniqueReferralCode } from '../../lib/customerCodes.js'
+import { toClientUser, INVITE_BONUS_DAYS } from '../../lib/clientUser.js'
 
 /**
  * 客户侧账号 —— 前缀 /api/client/auth
@@ -51,9 +52,6 @@ const CODE_TTL = 600
 const CODE_COOLDOWN_MS = 60_000
 const CODE_DAILY_LIMIT = 30
 const CODE_MAX_TRIES = 5
-
-/** 每邀 1 人邀请人得几天。无上限，想刷就刷（收费本来也不贵） */
-const INVITE_BONUS_DAYS = 7
 
 function textOf(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -82,7 +80,7 @@ function normalizeInviteInput(value: unknown): string {
  */
 type Invite =
   | { kind: 'none' }
-  | { kind: 'card'; code: string; cardId: number }
+  | { kind: 'card'; code: string; cardId: number; days: number; level: string }
   | { kind: 'customer'; code: string; inviterId: number }
 
 async function resolveInvite(code: string, selfId: number): Promise<Invite> {
@@ -93,7 +91,7 @@ async function resolveInvite(code: string, selfId: number): Promise<Invite> {
     if (card.status === 'void') throw biz('这张卡已经作废了')
     if (card.status === 'used') throw biz('这张卡已经被用过了')
     if (card.expireAt && card.expireAt.getTime() <= Date.now()) throw biz('这张卡过期了')
-    return { kind: 'card', code, cardId: card.id }
+    return { kind: 'card', code, cardId: card.id, days: card.days, level: card.level }
   }
 
   const inviter = await prisma.customer.findUnique({ where: { referralCode: code }, select: { id: true } })
@@ -104,58 +102,6 @@ async function resolveInvite(code: string, selfId: number): Promise<Invite> {
   }
 
   throw biz('邀请码不对，检查一下有没有抄错')
-}
-
-/**
- * 会员状态 —— 两个钱包分开报，客户端自己决定怎么说。
- *
- * ⚠️ 跟后台 `admin/src/config/labels.ts` 同一口径：过期由到期时间推导，库里不存 expired。
- * ⚠️ **免费天数不是会员**：`level` 只反映后台发的会员，免费用户恒为 none。
- *    想在界面上说「试用会员」的，改成「免费还剩 N 天」。
- */
-async function clientMembership(c: Customer) {
-  const e = entitlementOf(c)
-  const level = c.membershipLevel || 'none'
-  const isMember = level !== 'none' && e.memberDaysLeft !== null
-
-  return {
-    level: isMember ? level : 'none',
-    // 等级名走字典，运营改了名字客户端跟着变；非会员是哨兵值，字典里没有
-    name: isMember ? await dictLabel('membership_level', level) : '非会员',
-    active: e.active,
-    // 免费天数（注册送 + 邀请奖励），剩余为 null 就是已用完
-    freeDaysLeft: e.freeDaysLeft,
-    freeExpireAt: e.freeExpireAt?.toISOString() ?? null,
-    // 会员（后台发的）
-    memberDaysLeft: e.memberDaysLeft,
-    memberExpireAt: e.memberExpireAt?.toISOString() ?? null,
-    // 权益真正到哪天（两个钱包里更晚的那个）
-    until: e.until?.toISOString() ?? null
-  }
-}
-
-/**
- * 给客户端的账号形状 —— 跟客户端 `publicUser()` 完全一致。
- * ⚠️ id 转成字符串：客户端原来用 UUID，渲染层可能拿它做字符串比较。
- *    服务端内部是自增 int，但**别把它当凭据**（认证一律走 token）。
- * ⚠️ 等级名要查字典，所以这里是 async —— 加字段时别写成同步的。
- */
-async function toClientUser(c: Customer): Promise<ClientUser> {
-  const invitedCount = await prisma.customer.count({ where: { referredById: c.id } })
-
-  return {
-    id: String(c.id),
-    email: c.email,
-    username: c.nickname,
-    avatar: c.avatar ?? '',
-    createdAt: c.createdAt.toISOString(),
-    profileReady: c.profileReady,
-    membership: await clientMembership(c),
-    inviteCode: c.referralCode ?? '',
-    invitedCount,
-    // 「每邀 1 人 +7 天」只在这里定义一次，客户端拿来算「多得了几天」
-    freeDaysFromInvite: invitedCount * INVITE_BONUS_DAYS
-  }
 }
 
 /**
@@ -446,13 +392,28 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
 
       // 注册送的 30 天是**免费天数**，不是会员（等级留在 none）。
       // 只有走完第二步的号才算「真的注册了」，后台的「今日注册」也跟着只算这些人
-      const result = await grantDaysIn(tx, {
-        customerId: registered.id,
-        days: TRIAL_DAYS,
-        source: 'trial',
-        wallet: 'free',
-        note: `注册赠送 ${TRIAL_DAYS} 天免费`
-      })
+      //
+      // ⚠️ 2026-10-28 起卡密本身就是商品：填了卡就按**卡上写的**等级和天数开会员，
+      //    不再另送 30 天免费 —— 试用是给还没买的人的，买了还白送等于自己给自己打折。
+      //    没填卡、或填的是别人的邀请码，照旧送试用。
+      const result =
+        invite.kind === 'card'
+          ? await grantDaysIn(tx, {
+              customerId: registered.id,
+              days: invite.days,
+              source: 'card',
+              wallet: 'member',
+              level: invite.level,
+              refId: invite.cardId,
+              note: `卡密兑换 ${invite.code}（注册时）`
+            })
+          : await grantDaysIn(tx, {
+              customerId: registered.id,
+              days: TRIAL_DAYS,
+              source: 'trial',
+              wallet: 'free',
+              note: `注册赠送 ${TRIAL_DAYS} 天免费`
+            })
 
       // 受邀注册时给邀请人加天数。
       // ⚠️ 别用它的返回值 —— 那返回的是**邀请人**那一行，拿它当注册结果会把

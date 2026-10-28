@@ -161,12 +161,14 @@ export function freeState(c: { freeExpireAt: string | null }): 'none' | 'active'
  */
 export const GRANT_SOURCE_LABEL: Record<GrantSource, string> = {
   trial: '注册赠送',
+  card: '卡密兑换',
   invite: '邀请奖励',
   admin: '后台发会员'
 }
 
 export const GRANT_SOURCE_TAG: Record<GrantSource, TagType> = {
   trial: 'info',
+  card: 'success',
   invite: 'warning',
   admin: 'success'
 }

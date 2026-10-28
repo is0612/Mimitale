@@ -4759,6 +4759,31 @@ await scenario('账号：注册 → 左下角菜单 → 个人中心 → 凭证�
     $('#user-member-badge')?.textContent.trim() === '免费中',
     $('#user-member-badge')?.textContent);
 
+  // 兑换卡密：拿一个**不存在的码**走一遍完整链路（渲染层 → IPC → 主进程 → 服务端），
+  // 断言看的是服务端回来的那句话 —— 能对上就说明五层都是通的。
+  {
+    check(
+      '会员组里有「兑换卡密」的输入框和按钮',
+      !!byId('user-redeem-code') && !!byId('btn-user-redeem'),
+      byId('user-redeem-code') ? '' : '输入框不在'
+    );
+    fill('#user-redeem-code', 'MIMI-AAAA-BBBB');
+    click('#btn-user-redeem');
+    const came = await waitFor(
+      '兑换的报错回来',
+      () => /卡密不对/.test(errText('#user-redeem-error')),
+      8000
+    );
+    check('假码 → 服务端回「卡密不对」（说明整条链通了）', came, errText('#user-redeem-error'));
+    check(
+      '兑换失败时输入框里的内容还留着（不用重抄一遍）',
+      byId('user-redeem-code')?.value === 'MIMI-AAAA-BBBB',
+      byId('user-redeem-code')?.value
+    );
+    // 清掉，别把错误文案带进后面的断言
+    fill('#user-redeem-code', '');
+  }
+
   // 凭证卡在「账号安全」那组
   click('#view-profile .settings-nav-item[data-target="sec-security"]');
   await waitFor('「账号安全」那组可见', () => shown('#sec-security'));

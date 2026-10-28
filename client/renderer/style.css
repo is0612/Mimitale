@@ -3096,11 +3096,12 @@ body.pad-dragging {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  /* 圆钮（2026-10-28）：工具条里它是最右那一格，圆的比方角更像「发送」而不是「一个块」 */
+  height: 34px;
   width: 34px;
   min-width: 34px;
-  padding: 6px;
-  border-radius: var(--radius-sm);
+  padding: 0;
+  border-radius: 50%;
 }
 
 /* ---------------------- 输入框：快捷短语面板 ---------------------- */
@@ -3954,19 +3955,68 @@ m-button.btn-new > .mi-btn__control:hover {
   height: 30px;
 }
 
+/* 工具条（2026-10-28 重排）：左边「往输入里插东西」（快捷短语 + 书写模式），
+   右边「这一条按什么发」（模型 + 发送）。原来快捷短语是 .composer-box 的兄弟、
+   靠 align-self: flex-end 蹭在左下角，模型选择还挂在页头顶栏 —— 两处离输入框都远。 */
 .compose-tools {
   order: 2;
-  flex: 1;
+  flex: 1 0 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-left: 10px;
+  margin-left: 0;
+}
+
+.tools-left,
+.tools-right {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.tools-left {
+  gap: 4px;
+}
+
+.tools-right {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+/* 模型选择搬进输入区之后，顶栏那颗 32 高的胶囊在这里太占地方 ——
+   缩成「一行文字 + 箭头」，底色只留给 hover 和展开态。 */
+.compose-tools .model-switch {
+  height: 28px;
+  max-width: 170px;
+  padding: 0 6px 0 8px;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.compose-tools .model-switch:enabled:hover {
+  color: var(--text);
+  background-color: var(--accent-soft);
+}
+
+.compose-tools .model-switch[aria-expanded='true'] {
+  color: var(--accent);
+  background-color: var(--accent-soft);
+}
+
+/* ⚠️ 输入区在窗口最底部，模型弹层必须**往上**开；沿用 .menu-pop 的「往下弹」
+   会让整块落到窗口外（或者被 .composer 裁掉）。 */
+.compose-tools .model-menu {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 6px);
+  left: auto;
 }
 
 
 .btn-send .field-icon {
-  width: 19px;
+  width: 16px;
   height: 19px;
 }
 
@@ -7872,6 +7922,47 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* 邀请：码在左、复制在右。码要能选中复制，所以不能只做成文本 */
+/* 兑换卡密的一行：输入框吃掉剩余宽度，按钮跟着它 */
+.user-redeem-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.user-redeem-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  /* 卡密是要一个字一个字核对的，用等宽 —— 和后台卡密列表一个道理 */
+  font-family: Consolas, "Courier New", monospace;
+  font-size: var(--fs-sm);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.user-redeem-input::placeholder {
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-dim);
+}
+
+.user-redeem-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 兑换成功的那一句：绿字，和错误框同一位置，别让布局跳 */
+.user-redeem-msg {
+  margin: 6px 0 0;
+  font-size: var(--fs-sm);
+  color: var(--ok-text);
+}
+
 .user-invite-row {
   display: flex;
   align-items: center;

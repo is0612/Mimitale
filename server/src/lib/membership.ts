@@ -16,8 +16,8 @@ import type { Customer, Prisma } from '../generated/prisma/client'
  *    「这 30 天是谁给的」就永久丢了，事后补不回来。
  */
 
-/** trial 注册赠送 / invite 邀请奖励 / admin 后台发 */
-export type GrantSource = 'trial' | 'invite' | 'admin'
+/** trial 注册赠送 / invite 邀请奖励 / admin 后台发 / card 卡密兑换 */
+export type GrantSource = 'trial' | 'invite' | 'admin' | 'card'
 
 export type Wallet = 'free' | 'member'
 

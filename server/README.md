@@ -41,7 +41,7 @@ npm run dev             # 之后每天都用这一条
 | `npm run db:down` | 停容器。数据在 docker volume 里，**不会丢** |
 | `npm run db:reset` | 清库重建 —— ⚠️ 会丢数据，只在本地开发用 |
 | `npm run db:studio` | 浏览器里直接看表 |
-| `node scripts/smoke.mjs` | 126 条断言打一遍真接口 |
+| `node scripts/smoke.mjs` | 267 条断言打一遍真接口 |
 
 验证：
 
@@ -171,6 +171,7 @@ server/
 | PATCH | `/api/client/auth/profile` | 改用户名 / 头像 |
 | POST | `/api/client/auth/password` | 改密码（要当前密码，改完不踢会话） |
 | POST | `/api/client/auth/email` | 改邮箱（要新邮箱收到的验证码） |
+| POST | `/api/client/redeem` | **卡密兑换**：码换会员天数（要登录，一张卡只能兑一次） |
 
 ⚠️ **注册是两步**，`complete-profile` 靠 `register` 发的**临时令牌**认身份，**不靠 `accountId`** ——
 自增 id 能被枚举，否则谁都能给别人的号设资料。临时令牌 10 分钟、只能调这一个接口，

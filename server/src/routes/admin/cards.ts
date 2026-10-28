@@ -8,6 +8,7 @@ import { toCard } from '../../lib/dto.js'
 import { currentAdmin } from '../../lib/whoami.js'
 import { newInviteCode } from '../../lib/cardCode.js'
 import { DAY_MS } from '../../lib/time.js'
+import { dictLabel } from '../../lib/dict.js'
 
 function textOf(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -83,6 +84,20 @@ export const adminCardRoutes: FastifyPluginAsync = async (app) => {
     const admin = await currentAdmin(request)
     const note = textOf(body.note) || '未分类'
 
+    // 卡密从 2026-10-28 起本身就是商品：兑换给几天会员、哪一档，都写在卡上。
+    // 老数据（migration 前）默认 30 天 / basic，和当时「注册送 30 天」的实际效果一致
+    const days = body.days === undefined || body.days === null ? 30 : Math.floor(Number(body.days))
+    if (!Number.isFinite(days) || days < 1 || days > 3650) {
+      return fail(ApiCode.INVALID_PARAM, '会员天数要在 1 ~ 3650 之间')
+    }
+
+    const level = textOf(body.level) || 'basic'
+    const levelLabel = await dictLabel('membership_level', level)
+    // 字典里查不到 → 原值原样返回，据此判断这档不存在（含误传 'none'）
+    if (!level || level === 'none' || levelLabel === level) {
+      return fail(ApiCode.INVALID_PARAM, '这个会员等级不存在')
+    }
+
     const expireDays =
       body.expireDays === null || body.expireDays === undefined ? null : Math.floor(Number(body.expireDays))
     if (expireDays !== null && (!Number.isFinite(expireDays) || expireDays <= 0)) {
@@ -101,7 +116,7 @@ export const adminCardRoutes: FastifyPluginAsync = async (app) => {
         for (let attempt = 0; attempt < 5 && !row; attempt++) {
           try {
             row = await tx.inviteCard.create({
-              data: { code: newInviteCode(), note, status: 'unused', expireAt }
+              data: { code: newInviteCode(), note, days, level, status: 'unused', expireAt }
             })
           } catch (err) {
             // P2002 = 唯一约束冲突，换一个码再来
@@ -120,7 +135,7 @@ export const adminCardRoutes: FastifyPluginAsync = async (app) => {
           targetType: 'card',
           targetId: rows[0]?.id ?? null,
           targetName: rows.length === 1 ? rows[0]!.code : `${rows.length} 张`,
-          detail: `生成 ${rows.length} 张卡密（${note}）${expireDays ? `，${expireDays} 天后过期` : '，永久有效'}`,
+          detail: `生成 ${rows.length} 张卡密（${note}）：${levelLabel} ${days} 天${expireDays ? `，${expireDays} 天后过期` : '，永久有效'}`,
           ip: request.ip
         },
         tx

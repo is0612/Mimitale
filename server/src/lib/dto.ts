@@ -64,6 +64,8 @@ export function toCard(card: InviteCard, usedByEmail: string | null = null): Inv
     id: card.id,
     code: card.code,
     note: card.note,
+    days: card.days,
+    level: card.level,
     status: card.status === 'used' ? 'used' : card.status === 'void' ? 'void' : 'unused',
     usedByCustomerId: card.usedByCustomerId,
     usedByEmail,

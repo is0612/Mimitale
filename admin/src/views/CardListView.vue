@@ -62,10 +62,17 @@ const genVisible = ref(false)
 const generating = ref(false)
 const genForm = reactive({
   count: 10,
-  /** null = 永久有效 */
-  expireDays: null as number | null,
+  /** 兑换给多少天会员 —— 这是「用了给什么」，不是卡自己的保质期 */
+  days: 30,
+  /** 会员等级（字典 membership_level） */
+  level: 'basic',
+  /** 0 = 卡永久有效（不会作废）。和上面的 days 完全是两件事 */
+  expireDays: 0,
   note: ''
 })
+
+/** 字典 membership_level —— 加一档这里自动多一项 */
+const levelOptions = computed(() => dict.optionsOf('membership_level'))
 
 /** 字典 card_note —— 备注分类的快捷选项 */
 const noteOptions = computed(() => dict.optionsOf('card_note'))
@@ -74,14 +81,18 @@ const genHint = computed(() => {
   const n = Number(genForm.count)
   if (!Number.isFinite(n) || n < 1) return '至少 1 张'
   if (n > 100) return '一次最多 100 张'
-  return `将生成 ${n} 张${
-    genForm.expireDays === null ? '永久有效的' : `${genForm.expireDays} 天有效的`
-  }卡密`
+  const days = Number(genForm.days)
+  if (!Number.isFinite(days) || days < 1 || days > 3650) return '会员天数要在 1 ~ 3650 之间'
+  const level = levelOptions.value.find((o) => o.value === genForm.level)?.label ?? genForm.level
+  const shelf = !genForm.expireDays ? '永久有效' : `${genForm.expireDays} 天后作废`
+  return `将生成 ${n} 张：兑换得「${level} ${days} 天」，卡本身 ${shelf}`
 })
 
 function openGenerate(): void {
   genForm.count = 10
-  genForm.expireDays = null
+  genForm.days = 30
+  genForm.level = levelOptions.value[0]?.value ?? 'basic'
+  genForm.expireDays = 0
   genForm.note = noteOptions.value[0]?.value ?? ''
   genVisible.value = true
 }
@@ -100,7 +111,9 @@ async function submitGenerate(): Promise<void> {
   try {
     const res = await createCards({
       count: Math.floor(count),
-      expireDays: genForm.expireDays === null ? null : Number(genForm.expireDays),
+      days: Math.floor(Number(genForm.days)),
+      level: genForm.level,
+      expireDays: genForm.expireDays ? Number(genForm.expireDays) : null,
       note: genForm.note
     })
     createdCodes.value = res.created.map((c) => c.code)
@@ -267,10 +280,14 @@ onMounted(load)
 
     <el-card shadow="never" class="panel">
       <el-table v-loading="loading" :data="rows" stripe>
-        <el-table-column prop="id" label="ID" width="64" />
         <el-table-column label="卡密" width="176">
           <template #default="{ row }">
             <span class="code">{{ row.code }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="兑换得" width="140">
+          <template #default="{ row }">
+            <span class="grant">{{ dict.labelOf('membership_level', row.level) }} · {{ row.days }} 天</span>
           </template>
         </el-table-column>
         <el-table-column label="备注" width="110">
@@ -332,9 +349,22 @@ onMounted(load)
       <div class="dlg-body">
         <div class="dlg-label">生成数量</div>
         <el-input v-model.number="genForm.count" placeholder="1 ~ 100" />
-        <div class="dlg-label">有效期</div>
+
+        <!-- 这一组是「用了给什么」。⚠️ 和下面的「卡密有效期」是两件事，
+             原来的标签只写「有效期」，看着像「这张卡值多久」，容易误会 -->
+        <div class="dlg-label">兑换得什么</div>
+        <div class="pair">
+          <el-select v-model="genForm.level" placeholder="会员等级" class="pair-level">
+            <el-option v-for="o in levelOptions" :key="o.value" :label="o.label" :value="o.value" />
+          </el-select>
+          <el-input v-model.number="genForm.days" class="pair-days">
+            <template #append>天</template>
+          </el-input>
+        </div>
+
+        <div class="dlg-label">卡密有效期（没被用掉的话，多久后作废）</div>
         <el-select v-model="genForm.expireDays" style="width: 100%">
-          <el-option label="永久有效" :value="null" />
+          <el-option label="永久有效" :value="0" />
           <el-option label="30 天" :value="30" />
           <el-option label="90 天" :value="90" />
           <el-option label="180 天" :value="180" />
@@ -422,6 +452,11 @@ onMounted(load)
   color: var(--text-main);
 }
 
+.grant {
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
 .muted {
   /* 占位符也要能看清：原来的 #b4b2a9 在白色上只有 1.9:1，是「看不清」不是「低调」 */
   color: var(--text-sub);
@@ -442,6 +477,19 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.pair {
+  display: flex;
+  gap: 8px;
+}
+
+.pair-level {
+  flex: 1;
+}
+
+.pair-days {
+  width: 132px;
 }
 
 .dlg-label {

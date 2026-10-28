@@ -104,19 +104,6 @@
           <p id="convo-meta" class="meta">未配置</p>
         </div>
         <div class="topbar-actions">
-          <!-- 切换模型。刻意不用原生 <select>：它的下拉列表由系统画（直角、系统蓝
-               高亮、系统字体），跟这套「大圆角 + 柔和阴影」根本不是一路，样式管不着。
-               改成和「⋯」共用一套弹层（.menu-pop），列表才能跟着配色走。
-               列表由 views/chatList.js 的 renderModelSwitch 铺，开合在 ui/modelMenu.js。 -->
-          <div class="model-pick">
-            <button id="model-switch" class="model-switch" type="button"
-                    title="切换当前会话使用的模型" aria-label="切换模型"
-                    aria-haspopup="menu" aria-expanded="false">
-              <span id="model-switch-label" class="model-switch-label">未配置模型</span>
-              <span class="model-switch-caret" aria-hidden="true"></span>
-            </button>
-            <div id="model-menu" class="menu-pop model-menu hidden" role="menu" aria-label="选择模型"></div>
-          </div>
           <!-- 顶栏这三颗改成**图标按钮**（设计稿：26×26、方角、深底细描边）——
                标题下面多出一行元信息之后，三个文字按钮会把顶栏挤成两行。
                可发现性交给 title，鼠标停一下就知道是什么。 -->
@@ -172,17 +159,39 @@
                「点一下就发出去」那条路归剧情选项（.msg-options）。
                面板贴在 .composer-box 上（它是 position: relative），所以输入框
                自己长高时面板跟着往上走。行由 views/quickPhrases.js 铺。 -->
-          <button id="btn-quick" class="btn-quick" type="button"
-                  title="快捷短语：插进输入框" aria-label="快捷短语"
-                  aria-haspopup="menu" aria-expanded="false"></button>
           <div id="quick-menu" class="menu-pop quick-menu hidden" role="menu" aria-label="快捷短语"></div>
           <!-- ⚙ 输入框也是组件（2026-10-16）。注意它的「描边/底色归零、内边距」
                那几条样式现在挂在**里面那颗原生框**上（选择器多一层），
                见 style.css 的 `#input > textarea` / `.composer-box #input > textarea`。 -->
           <m-textarea id="input" rows="2" placeholder="写下你的回应，让故事继续……" aria-label="输入消息"></m-textarea>
+          <!-- 工具条（2026-10-28）：左「往输入里插东西」、右「这一条按什么发」。
+               快捷短语和模型选择原来是两处 —— 一个在框里飘着、一个在页头顶栏；
+               现在都收到框内这一行，输入的时候手不用往上跑。
+               ⚠️ 语音输入这一格还空着（没有 ASR 方案前不放假按钮）。 -->
           <div class="compose-tools">
-            <span class="writing-mode">故事，由你续写</span>
-            <m-button id="btn-send" variant="primary" class="btn-send" data-mode="send" data-icon="arrow-up" title="发送回应" aria-label="发送消息"></m-button>
+            <div class="tools-left">
+              <button id="btn-quick" class="btn-quick" type="button"
+                      title="快捷短语：插进输入框" aria-label="快捷短语"
+                      aria-haspopup="menu" aria-expanded="false"></button>
+              <span class="writing-mode">故事，由你续写</span>
+            </div>
+            <div class="tools-right">
+              <!-- 切换模型。刻意不用原生 <select>：它的下拉列表由系统画（直角、系统蓝
+                   高亮、系统字体），跟这套「大圆角 + 柔和阴影」根本不是一路，样式管不着。
+                   改成和「⋯」共用一套弹层（.menu-pop），列表才能跟着配色走。
+                   列表由 views/chatList.js 的 renderModelSwitch 铺，开合在 ui/modelMenu.js。
+                   ⚠️ 搬到输入区之后弹层要**往上**弹（见 .compose-tools .model-menu）。 -->
+              <div class="model-pick">
+                <button id="model-switch" class="model-switch" type="button"
+                        title="切换当前会话使用的模型" aria-label="切换模型"
+                        aria-haspopup="menu" aria-expanded="false">
+                  <span id="model-switch-label" class="model-switch-label">未配置模型</span>
+                  <span class="model-switch-caret" aria-hidden="true"></span>
+                </button>
+                <div id="model-menu" class="menu-pop model-menu hidden" role="menu" aria-label="选择模型"></div>
+              </div>
+              <m-button id="btn-send" variant="primary" class="btn-send" data-mode="send" data-icon="arrow-up" title="发送回应" aria-label="发送消息"></m-button>
+            </div>
           </div>
         </div>
         <div class="composer-hint">
@@ -1258,6 +1267,26 @@
                   <m-button id="btn-user-refresh-member" variant="ghost" size="sm">刷新</m-button>
                 </div>
                 <p id="user-member-error" class="account-error" role="alert"></p>
+              </div>
+
+              <div class="user-block">
+                <p class="user-block-title">兑换卡密</p>
+                <p class="field-help">买到卡之后，把卡上那串码填进来（MIMI-XXXX-XXXX，大小写和横杠都不挑），
+                  直接换成会员天数。一张卡只能兑一次、只兑给当前登录的这个号。</p>
+                <div class="user-redeem-row">
+                  <input
+                    id="user-redeem-code"
+                    class="user-redeem-input"
+                    type="text"
+                    placeholder="MIMI-XXXX-XXXX"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="卡密"
+                  />
+                  <m-button id="btn-user-redeem" variant="primary" size="sm">兑换</m-button>
+                </div>
+                <p id="user-redeem-msg" class="user-redeem-msg hidden" role="status"></p>
+                <p id="user-redeem-error" class="account-error" role="alert"></p>
               </div>
 
               <div class="user-block">

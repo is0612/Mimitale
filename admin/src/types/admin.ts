@@ -78,7 +78,7 @@ export type CustomerStatus = 'active' | 'banned'
 export type MembershipLevel = string
 
 /** 一段天数的来源：注册赠送 / 邀请奖励 / 后台发 */
-export type GrantSource = 'trial' | 'invite' | 'admin'
+export type GrantSource = 'trial' | 'invite' | 'admin' | 'card'
 
 export interface Customer {
   id: number
@@ -229,7 +229,7 @@ export interface ClientSession {
 export interface MembershipGrant {
   id: number
   days: number
-  /** trial 注册赠送 | invite 邀请奖励 | admin 后台发 */
+  /** trial 注册赠送 | invite 邀请奖励 | admin 后台发 | card 卡密兑换 */
   source: GrantSource
   /** 一句话说明，例：「邀请了 小明 +7 天」 */
   note: string
@@ -335,6 +335,10 @@ export interface InviteCard {
   code: string
   /** 备注，值来自字典 card_note（例：种子用户 / 活动赠送） */
   note: string
+  /** 兑换给多少天会员 —— 卡本身就是商品，天数写在卡上 */
+  days: number
+  /** 兑换给的会员等级，值来自字典 membership_level */
+  level: string
   status: CardStatus
   /** 被哪个客户用了。unused / void 时为 null */
   usedByCustomerId: number | null
@@ -365,7 +369,11 @@ export interface CardListRes {
  */
 export interface CreateCardsReq {
   count: number
-  /** 有效天数；null = 永久有效 */
+  /** 兑换给几天会员（1~3650）。不传 = 30 */
+  days?: number
+  /** 兑换给的会员等级（字典 membership_level）。不传 = basic */
+  level?: string
+  /** **卡本身**的有效天数（没被用掉就作废）；null = 永久有效。注意和 days 不是一回事 */
   expireDays: number | null
   note?: string
 }

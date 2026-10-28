@@ -424,6 +424,22 @@ async function submitFeedback(payload, meta = {}) {
   });
 }
 
+/**
+ * 兑换卡密 → { user, grant }
+ *
+ * ⚠️ **要登录**（auth: true）：卡兑给谁得先确定是谁。
+ * ⚠️ 会员天数按卡上写的发，不是固定 30 天 —— 天数在服务端那张卡上，
+ *    客户端不参与计算，只管把码递过去。
+ * @param {{code?: string}} payload
+ */
+async function redeemCard(payload) {
+  const input = payload || {};
+  return request('POST', '/client/redeem', {
+    body: { code: input.code || '' },
+    auth: true
+  });
+}
+
 /** 拉「此刻该显示」的公告 → { list, unread } */
 async function listAnnouncements() {
   return request('GET', '/client/announcements', { softAuth: true });
@@ -540,6 +556,7 @@ module.exports = {
   updateProfile,
   changePassword,
   changeEmail,
+  redeemCard,
   submitFeedback,
   listAnnouncements,
   markAnnouncementRead,

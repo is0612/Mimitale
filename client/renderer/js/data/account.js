@@ -141,3 +141,17 @@ export async function changeEmail(payload) {
   cachedUser = result.user || null;
   return cachedUser;
 }
+
+/**
+ * 兑换卡密 → { user, grant }
+ *
+ * ⚠️ 服务端回的 `user` 已经带上了新的会员状态，所以这里顺手更新 cachedUser ——
+ *    不更新的话，兑换成功之后侧栏和会员那一行还是旧的。
+ * ⚠️ 错误直接抛中文（「这张卡已经被用掉了」这种），调用方原样显示就行，
+ *    别在这里翻译成「兑换失败」—— 用户需要知道为什么。
+ */
+export async function redeemCard(code) {
+  const result = unwrap(await api.accountRedeem({ code }), '兑换失败');
+  cachedUser = result.user || null;
+  return { user: cachedUser, grant: result.grant || null };
+}

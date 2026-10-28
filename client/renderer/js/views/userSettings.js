@@ -34,7 +34,8 @@ import {
   changePassword,
   changeEmail,
   getVoucher,
-  refreshVoucher
+  refreshVoucher,
+  redeemCard
 } from '../data/account.js';
 
 const nodes = {};
@@ -83,6 +84,11 @@ function cacheNodes() {
   nodes.memberLine = $('user-member-line');
   nodes.memberError = $('user-member-error');
   nodes.btnRefreshMember = $('btn-user-refresh-member');
+
+  nodes.redeemCode = $('user-redeem-code');
+  nodes.btnRedeem = $('btn-user-redeem');
+  nodes.redeemMsg = $('user-redeem-msg');
+  nodes.redeemError = $('user-redeem-error');
 
   nodes.inviteCode = $('user-invite-code');
   nodes.inviteCount = $('user-invite-count');
@@ -146,6 +152,14 @@ export function initUserSettings(opts = {}) {
   nodes.btnCopyVoucher?.addEventListener('click', copyVoucher);
   nodes.btnRefreshVoucher?.addEventListener('click', renewVoucher);
   nodes.btnRefreshMember?.addEventListener('click', refreshMembership);
+  nodes.btnRedeem?.addEventListener('click', () => void submitRedeem());
+  // 回车直接兑 —— 这一格唯一的动作就是它，不该让人再点一下
+  nodes.redeemCode?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void submitRedeem();
+    }
+  });
   nodes.btnCopyInvite?.addEventListener('click', copyInvite);
 }
 
@@ -159,6 +173,7 @@ function setError(which, message) {
     email: nodes.emailError,
     pass: nodes.passError,
     member: nodes.memberError,
+    redeem: nodes.redeemError,
     invite: nodes.inviteError,
     voucher: nodes.voucherError
   }[which];
@@ -435,6 +450,51 @@ async function copyInvite() {
     showToast('邀请链接已复制，粘给朋友就行', 'ok');
   } catch (err) {
     setError('invite', ipcErrorText(err, '复制失败'));
+  }
+}
+
+/** 兑换卡密 —— 一张卡只兑一次，兑换成功服务端会回带新会员状态的 user */
+let redeeming = false;
+
+async function submitRedeem() {
+  if (redeeming) return;
+
+  const raw = nodes.redeemCode ? nodes.redeemCode.value.trim() : '';
+  if (!raw) {
+    setError('redeem', '先把卡密填上');
+    nodes.redeemCode?.focus?.();
+    return;
+  }
+
+  redeeming = true;
+  setError('redeem', '');
+  if (nodes.redeemMsg) nodes.redeemMsg.classList.add('hidden');
+  setBusy(nodes.btnRedeem, true);
+
+  try {
+    const { user, grant } = await redeemCard(raw);
+    // 码已经用掉了，清空但**保留焦点**：万一还有第二张，接着输就行
+    if (nodes.redeemCode) {
+      nodes.redeemCode.value = '';
+      nodes.redeemCode.focus?.();
+    }
+    renderMembership(user);
+    renderInvite(user);
+    onUserChange(user);
+
+    if (nodes.redeemMsg) {
+      const label = (grant && grant.levelLabel) || '会员';
+      const days = grant && grant.days ? grant.days : 0;
+      const until = grant && grant.expiresAt ? `，${formatDay(grant.expiresAt)} 到期` : '';
+      nodes.redeemMsg.textContent = `兑换成功：${label} +${days} 天${until}`;
+      nodes.redeemMsg.classList.remove('hidden');
+    }
+  } catch (err) {
+    // 服务端给的原文（「这张卡已经被用掉了」这种）比「兑换失败」有用得多
+    setError('redeem', (err && err.message) || '兑换失败');
+  } finally {
+    redeeming = false;
+    setBusy(nodes.btnRedeem, false);
   }
 }
 

@@ -151,6 +151,8 @@ contextBridge.exposeInMainWorld('mimitale', {
   // --- 消息（意见反馈 / 通知公告）---
   // ⚠️ 这三个**不需要登录**：发反馈是「连登录都进不去」时的唯一出口，
   //    公告也要能发给登录不进去的人（比如「你被停机了」）。
+  // 卡密兑换（要登录）—— 卡上的天数由服务端决定，界面只负责把码递上去
+  accountRedeem: (payload) => ipcRenderer.invoke('account:redeem', payload),
   accountSubmitFeedback: (payload) => ipcRenderer.invoke('account:submit-feedback', payload),
   accountAnnouncements: () => ipcRenderer.invoke('account:announcements'),
   accountAnnouncementRead: (id) => ipcRenderer.invoke('account:announcement-read', id),

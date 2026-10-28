@@ -1064,8 +1064,9 @@ function registerStubs() {
   ipcMain.handle('account:change-email', accountCall((payload) => accountApi.changeEmail(payload)));
   // ⚠️ 这份是 main/ipc.js 的**桩副本**，不是自动同步的：
   //    主进程加了通道，这里忘了加，冒烟里就会看到「No handler registered」+ 控制台警告。
-  //    2026-10-28 补上 refresh-voucher 和消息那三条。
+  //    2026-10-28 补上 refresh-voucher、消息那三条、卡密兑换。
   ipcMain.handle('account:refresh-voucher', accountCall(() => accountApi.refreshVoucher()));
+  ipcMain.handle('account:redeem', accountCall((payload) => accountApi.redeemCard(payload)));
   ipcMain.handle('account:submit-feedback', accountCall((payload) => accountApi.submitFeedback(payload, { appVersion: app.getVersion() })));
   ipcMain.handle('account:announcements', accountCall(() => accountApi.listAnnouncements()));
   ipcMain.handle('account:announcement-read', accountCall((id) => accountApi.markAnnouncementRead(id)));
@@ -5209,6 +5210,44 @@ app.whenReady().then(async () => {
           await nap(400);
           $('#btn-account-open-profile')?.click();
           await nap(1600);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 个人中心 · 会员与邀请：看「兑换卡密」那一行的间距，以及会员/邀请两块挤不挤。
+        // 注册流程同 accountMe，末尾多切一组。
+        profileMember: `
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          const fill = (sel, v) => { const n = $(sel); if (n) n.value = v; };
+          const loggedIn = () => /@/.test(($('#account-sub') || {}).textContent || '');
+
+          if (loggedIn()) {
+            $('#btn-account')?.click();
+            await nap(400);
+            $('#btn-account-menu-logout')?.click();
+            await nap(700);
+          }
+          $('#btn-account')?.click();
+          await nap(700);
+          $('#btn-goto-register')?.click();
+          await nap(800);
+          fill('#acc-reg-email', 'shot' + Date.now() + '@example.com');
+          fill('#acc-reg-captcha', $('#acc-reg-captcha')?.dataset.answer || '');
+          $('#btn-account-send-code')?.click();
+          await nap(1000);
+          const hint = $('#acc-reg-hint')?.textContent || '';
+          fill('#acc-reg-code', (hint.match(/(\\d{6})/) || [])[1] || '');
+          $('#btn-account-register-next')?.click();
+          await nap(800);
+          fill('#acc-setup-name', '星宝');
+          fill('#acc-setup-password', 'mimitale2026');
+          fill('#acc-setup-password2', 'mimitale2026');
+          $('#btn-account-finish')?.click();
+          await nap(1400);
+          $('#btn-account')?.click();
+          await nap(400);
+          $('#btn-account-open-profile')?.click();
+          await nap(1200);
+          $('.settings-nav-item[data-target=\"sec-member\"]')?.click();
+          await nap(600);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 左下角账号菜单本身（登录后点账号格弹出来的那层）
         accountMenu: `

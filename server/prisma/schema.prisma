@@ -203,6 +203,11 @@ model InviteCard {
   code             String    @unique
   /// 字典 card_note 的显示名，例：种子用户
   note             String    @default("")
+  /// 兑换给多少天会员。2026-10-28 之前卡密只是个「注册凭证」，不携带价值，
+  /// 一律按注册试用 30 天发；现在卡本身就是商品，天数写在卡上
+  days             Int       @default(30)
+  /// 兑换给的会员等级（字典 membership_level 的 value）。老卡默认 basic
+  level            String    @default("basic")
   /// unused | used | void —— 代码枚举，不进字典
   status           String    @default("unused")
   usedByCustomerId Int?      @map("used_by_customer_id")
