@@ -370,3 +370,25 @@ model AnnouncementRead {
   @@index([customerId])
   @@map("announcement_reads")
 }
+
+/// 免费额度 —— 没有权益的人每天能发几条。
+///
+/// ⚠️ 只有**没有权益**的人才落行：会员 / 免费天数未到期的人不限量、也不记账
+///    （他们要算的话得另开一张统计表，别把限流表和用量统计混成一张）。
+/// ⚠️ day 存服务器时区的 YYYY-MM-DD：换一天就是一条新行，不需要任何定时任务清零。
+/// ⚠️ 扣数必须用一条带 `WHERE used < N` 的 upsert（见 lib/quota.ts）：先查后写
+///    在并发下会多给条数。
+model ClientMessageUsage {
+  id         Int      @id @default(autoincrement())
+  customerId Int      @map("customer_id")
+  /// 服务器时区的自然日，YYYY-MM-DD
+  day        String   @db.Char(10)
+  used       Int      @default(0)
+  /// 今天退过几次。失败退款有上限，不然「每条都退」等于无限额度
+  refunds    Int      @default(0)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  /// 一人一天一行
+  @@unique([customerId, day])
+  @@map("client_message_usage")
+}

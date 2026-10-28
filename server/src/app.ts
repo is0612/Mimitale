@@ -18,6 +18,7 @@ import { adminAnnouncementRoutes } from './routes/admin/announcements.js'
 import { clientAuthPublicRoutes, clientAuthProtectedRoutes } from './routes/client/auth.js'
 import { clientMessageRoutes } from './routes/client/messages.js'
 import { clientRedeemRoutes } from './routes/client/redeem.js'
+import { clientUsageRoutes } from './routes/client/usage.js'
 
 const ADMIN = '/api/admin'
 const CLIENT = '/api/client'
@@ -123,6 +124,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     await scope.register(clientAuthProtectedRoutes, { prefix: `${CLIENT}/auth` })
     // 卡密兑换 —— 必须登录：卡兑给谁得先确定是谁
     await scope.register(clientRedeemRoutes, { prefix: CLIENT })
+    // 免费额度计数 —— 必须登录：没账号就没地方记「今天发了几条」
+    await scope.register(clientUsageRoutes, { prefix: `${CLIENT}/usage` })
   })
 
   return app

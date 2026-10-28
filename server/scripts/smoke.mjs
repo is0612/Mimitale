@@ -881,6 +881,96 @@ section('客户端：图形码 → 发码 → 注册两步')
   await db.query('DELETE FROM login_codes WHERE email = ANY($1)', [[email, newEmail]])
 }
 
+section('免费额度：没权益每天 20 条')
+{
+  /** 造一个完整注册的号，返回 { token, id } */
+  async function registerCustomer(tag) {
+    const email = `smoke-quota-${tag}-${Date.now()}@example.com`
+    const cap = await api('POST', '/api/client/auth/captcha')
+    const sent = await api('POST', '/api/client/auth/code', {
+      body: { email, captchaId: cap.data?.id, captchaAnswer: cap.data?.answer }
+    })
+    if (sent.code !== 0) throw new Error('发码失败：' + (sent.message ?? ''))
+    const codeRow = await db.query(
+      'SELECT code FROM login_codes WHERE email = $1 ORDER BY created_at DESC LIMIT 1',
+      [email]
+    )
+    const reg = await api('POST', '/api/client/auth/register', {
+      body: { email, code: codeRow.rows[0]?.code }
+    })
+    if (reg.code !== 0) throw new Error('注册失败：' + (reg.message ?? ''))
+    const done = await api('POST', '/api/client/auth/complete-profile', {
+      token: reg.data.pendingToken,
+      body: { username: '额度冒烟', password: 'smoke1234', avatar: '' }
+    })
+    if (done.code !== 0) throw new Error('资料失败：' + (done.message ?? ''))
+    return { token: done.data.token, id: done.data.user.id, email }
+  }
+
+  /** 把两个钱包都掐掉 = 变成「没权益」的免费用户 */
+  async function expireAll(customerId) {
+    await db.query(
+      "UPDATE customers SET free_expire_at = now() - interval '1 hour', membership_expire_at = NULL WHERE id = $1",
+      [customerId]
+    )
+  }
+
+  const A = await registerCustomer('a')
+
+  /* ---------------- 新注册：30 天免费天数 = 有权益 ---------------- */
+  const fresh = await api('GET', '/api/client/usage/message', { token: A.token })
+  check('新号有 30 天免费天数 → 额度接口说「不限量」', fresh.data?.unlimited === true, JSON.stringify(fresh.data))
+  const freshRow = await db.query('SELECT 1 FROM client_message_usage WHERE customer_id = $1', [A.id])
+  check('有权益的人不落计费行（别给免费用户白占表）', freshRow.rowCount === 0, `rows=${freshRow.rowCount}`)
+
+  /* ---------------- 权益到期：每天 20 条 ---------------- */
+  await expireAll(A.id)
+  const capped = await api('GET', '/api/client/usage/message', { token: A.token })
+  check('权益到期 → 每天 20 条', capped.data?.unlimited === false && capped.data?.limit === 20, JSON.stringify(capped.data))
+  check('刚到期时还剩 20 条', capped.data?.remaining === 20, `remaining=${capped.data?.remaining}`)
+
+  const charged = await api('POST', '/api/client/usage/message', { token: A.token })
+  check('发一条扣一条：放行', charged.data?.allowed === true && charged.data?.remaining === 19, JSON.stringify(charged.data))
+
+  /* ---------------- 退款：上限 5 条/天 ---------------- */
+  await db.query('UPDATE client_message_usage SET used = 18, refunds = 0 WHERE customer_id = $1', [A.id])
+  let lastRefund = null
+  for (let i = 0; i < 5; i += 1) lastRefund = await api('POST', '/api/client/usage/message/refund', { token: A.token })
+  // 从 used=18 退 5 次 → 13；到 0 会停手（guard used > 0）
+  check('退款真生效（18 → 13）', lastRefund.data?.used === 13, JSON.stringify(lastRefund.data))
+  const overRefund = await api('POST', '/api/client/usage/message/refund', { token: A.token })
+  check(
+    '一天最多退 5 条（第 6 次不退）',
+    overRefund.data?.refunded === false && overRefund.data?.used === 13,
+    JSON.stringify(overRefund.data)
+  )
+
+  /* ---------------- 用完就拦 ---------------- */
+  await db.query('UPDATE client_message_usage SET used = 20, refunds = 0 WHERE customer_id = $1', [A.id])
+  const blocked = await api('POST', '/api/client/usage/message', { token: A.token })
+  check('20 条用完 → 不再放行', blocked.data?.allowed === false && blocked.data?.remaining === 0, JSON.stringify(blocked.data))
+
+  /* ---------------- 并发：先查后写会多给 ---------------- */
+  const B = await registerCustomer('b')
+  await expireAll(B.id)
+  const burst = await Promise.all(
+    Array.from({ length: 30 }, () => api('POST', '/api/client/usage/message', { token: B.token }))
+  )
+  const allowed = burst.filter((r) => r.data?.allowed === true).length
+  check('⭐ 30 条并发只放行 20 条（扣数是一条 SQL，不是先查后写）', allowed === 20, `放行 ${allowed}`)
+  const bRow = await db.query('SELECT used FROM client_message_usage WHERE customer_id = $1', [B.id])
+  check('并发之后 used 正好 20，不会超卖', bRow.rows[0]?.used === 20, `used=${bRow.rows[0]?.used}`)
+
+  /* ---------------- 时间窗按服务器自然日切 ---------------- */
+  await db.query('UPDATE client_message_usage SET day = $2 WHERE customer_id = $1', [B.id, '1970-01-01'])
+  const nextDay = await api('GET', '/api/client/usage/message', { token: B.token })
+  check('跨天（换了 day 行）→ 重新满 20 条', nextDay.data?.remaining === 20, `remaining=${nextDay.data?.remaining}`)
+
+  /* ---------------- 没登录不许问 ---------------- */
+  const anon = await api('GET', '/api/client/usage/message')
+  check('不带 token → 401', anon.status === 401, `status=${anon.status}`)
+}
+
 section('邀请码：自己发码 / 别人填码 / 归因')
 {
   /** 造一个完整注册的号，返回它的 user 和 id */
@@ -1393,6 +1483,7 @@ section('消息：通知公告（后台发 / 客户端拉）')
   const mineIds = smokeAccounts.rows.map((r) => r.id)
   if (mineIds.length) {
     await db.query('DELETE FROM login_logs WHERE customer_id = ANY($1)', [mineIds])
+    await db.query('DELETE FROM client_message_usage WHERE customer_id = ANY($1)', [mineIds])
     await db.query('DELETE FROM client_sessions WHERE customer_id = ANY($1)', [mineIds])
     await db.query('DELETE FROM membership_grants WHERE customer_id = ANY($1)', [mineIds])
     await db.query('DELETE FROM announcement_reads WHERE customer_id = ANY($1)', [mineIds])
