@@ -9,6 +9,15 @@ import { toCard, toCustomer, toLog } from '../../lib/dto.js'
 import { currentAdmin } from '../../lib/whoami.js'
 import { dayOf } from '../../lib/time.js'
 import { grantDaysIn } from '../../lib/membership.js'
+import { hashPassword } from '../../lib/password.js'
+import {
+  TRIAL_DAYS,
+  normalizeEmail,
+  normalizeUsername,
+  normalizePassword,
+  normalizeAvatar
+} from '../../lib/customerRules.js'
+import { makeUniqueVoucher, makeUniqueReferralCode } from '../../lib/customerCodes.js'
 
 /** 和 mock 保持一致的翻页收口：pageSize 最大 100，最小 1 */
 function paging(query: Record<string, unknown>): { page: number; pageSize: number; skip: number; take: number } {
@@ -255,5 +264,149 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
     })
 
     return ok(toCustomer(updated))
+  })
+
+  /**
+   * POST /api/admin/customers —— 后台代建一个客户
+   *
+   * **「相当于注册」**（星宝 2026-10-28 定的）：字段、默认值、发的两个码全按注册那套来。
+   * 所以它建出来的号和客户端自己注册的**长得一模一样** —— 有凭证码、有邀请码、
+   * profileReady = true、送 30 天试用，因此在后台「今日注册」里也算一个。
+   *
+   * ⚠️ 和真注册唯一的区别：**不发邮件、不验验证码**。人就在旁边，让他去收封信
+   *    没意义；密码由运营填，交给本人之后应该在「个人中心」改掉。
+   * ⚠️ 不写 login_logs —— 这个人还没登录过。硬写一条 register 会让「登录记录」
+   *    和 IP 统计里出现一个不存在的人。
+   */
+  app.post('/customers', async (request) => {
+    const body = (request.body ?? {}) as Record<string, unknown>
+
+    // 这几个 normalize 和客户端注册**共用一份**（lib/customerRules.ts）——
+    // 两份校验迟早会跑偏成「注册不让过的邮箱，后台能建」
+    const email = normalizeEmail(body.email)
+    const nickname = normalizeUsername(body.nickname)
+    const password = normalizePassword(body.password)
+    const avatar = normalizeAvatar(body.avatar)
+
+    const rawDays = body.trialDays === undefined || body.trialDays === null ? TRIAL_DAYS : Number(body.trialDays)
+    const trialDays = Math.floor(rawDays)
+    if (!Number.isFinite(trialDays) || trialDays < 0 || trialDays > 3650) {
+      return fail(ApiCode.INVALID_PARAM, '赠送天数要在 0 ~ 3650 之间')
+    }
+
+    const exists = await prisma.customer.findUnique({ where: { email }, select: { id: true } })
+    if (exists) return fail(ApiCode.INVALID_PARAM, '这个邮箱已经有账号了')
+
+    const admin = await currentAdmin(request)
+    const passwordHash = await hashPassword(password)
+
+    const created = await prisma.$transaction(async (tx) => {
+      const voucher = await makeUniqueVoucher(tx)
+      const referralCode = await makeUniqueReferralCode(tx)
+
+      let row = await tx.customer.create({
+        data: {
+          email,
+          nickname,
+          avatar: avatar || null,
+          passwordHash,
+          voucher,
+          referralCode,
+          status: 'active',
+          // 建出来就是「资料齐全」的号 —— 后台的「今日注册」只数这种人
+          profileReady: true
+        }
+      })
+
+      if (trialDays > 0) {
+        const granted = await grantDaysIn(tx, {
+          customerId: row.id,
+          days: trialDays,
+          source: 'trial',
+          wallet: 'free',
+          note: `后台代建账号，按注册赠送 ${trialDays} 天`
+        })
+        row = granted.customer
+      }
+
+      await pushLog(
+        {
+          adminId: admin.id,
+          adminName: admin.nickname,
+          action: 'customer.create',
+          targetType: 'customer',
+          targetId: row.id,
+          targetName: nickname,
+          detail: `代建账号 ${email}${trialDays > 0 ? `，送 ${trialDays} 天试用` : '，不送试用'}`,
+          ip: request.ip
+        },
+        tx
+      )
+
+      return row
+    })
+
+    return ok(toCustomer(created))
+  })
+
+  /**
+   * DELETE /api/admin/customers/{id} —— 真删，**不可恢复**
+   *
+   * ⚠️ 本库不建外键，没有 cascade 可用：关联表得一张张手动清。
+   *    漏一张就留下指向不存在客户的孤儿行，之后「今日活跃」「会员人数」这些
+   *    统计算出来的数字会跟客户列表对不上，而且很难查。
+   * ⚠️ 反馈**不删，只断开身份**：那是用户亲口说过的话，删号不该顺手销毁内容；
+   *    但联系方式必须一起清掉，否则删号等于没删（人走了还留着邮箱）。
+   * ⚠️ 用过的卡密不回收：只把 usedByCustomerId 置空。卡已经花掉了，
+   *    不能因为人走了就变回「未使用」再卖一次。
+   */
+  app.delete('/customers/:id', async (request) => {
+    const id = Number((request.params as { id: string }).id)
+    if (!Number.isInteger(id)) return fail(ApiCode.INVALID_PARAM, '客户 id 不对')
+
+    const target = await prisma.customer.findUnique({ where: { id } })
+    if (!target) return fail(ApiCode.NOT_FOUND, '客户不存在')
+
+    const admin = await currentAdmin(request)
+
+    await prisma.$transaction(async (tx) => {
+      // ① 他发过的反馈：保留正文，抹掉身份
+      const anonymized = await tx.feedback.updateMany({
+        where: { customerId: id },
+        data: { customerId: null, contactEmail: '', contactName: '' }
+      })
+
+      // ② 纯属这个人的运行数据：一起带走，否则统计会飘
+      await tx.announcementRead.deleteMany({ where: { customerId: id } })
+      await tx.loginLog.deleteMany({ where: { customerId: id } })
+      await tx.clientSession.deleteMany({ where: { customerId: id } })
+      await tx.membershipGrant.deleteMany({ where: { customerId: id } })
+
+      // ③ 别人的数据里提到他的地方：断开引用，别顺手改别人的
+      await tx.customer.updateMany({ where: { referredById: id }, data: { referredById: null } })
+      await tx.inviteCard.updateMany({ where: { usedByCustomerId: id }, data: { usedByCustomerId: null } })
+
+      // ④ 本人
+      await tx.customer.delete({ where: { id } })
+
+      await pushLog(
+        {
+          adminId: admin.id,
+          adminName: admin.nickname,
+          action: 'customer.delete',
+          targetType: 'customer',
+          targetId: id,
+          // ⚠️ 这行日志是删除后**唯一**还记得这个人叫什么的记录，别省
+          targetName: `${target.nickname}（${target.email}）`,
+          detail:
+            `删除账号：登录记录 / 会员流水 / 已读记录一并清掉` +
+            (anonymized.count > 0 ? `，他的 ${anonymized.count} 条反馈保留但已匿名` : ''),
+          ip: request.ip
+        },
+        tx
+      )
+    })
+
+    return ok(null)
   })
 }

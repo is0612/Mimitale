@@ -34,6 +34,7 @@ import {
   type CardStatus,
   type CreateAnnouncementReq,
   type CreateCardsReq,
+  type CreateCustomerReq,
   type CreateDictItemReq,
   type CreateDictTypeReq,
   type Customer,
@@ -1583,6 +1584,127 @@ function handleDeleteAnnouncement({ params, headers }: MockCtx): MockOutcome {
   return ok(null)
 }
 
+/* ------------------------------------------------------------------ */
+/* 客户：新增（代建）/ 删除（2026-10-28）                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 真后端发的凭证码是 24 位、4 位一组带连字符（`ABCD-EFGH-...`，全长 29）。
+ * mock 照着长一样，免得界面上一眼看出是假的。
+ */
+function mockVoucher(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const part = (n: number): string => {
+    let out = ''
+    for (let i = 0; i < n; i += 1) out += chars[Math.floor(Math.random() * chars.length)]
+    return out
+  }
+  return Array.from({ length: 6 }, () => part(4)).join('-')
+}
+
+function mockReferralCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const part = (n: number): string => {
+    let out = ''
+    for (let i = 0; i < n; i += 1) out += chars[Math.floor(Math.random() * chars.length)]
+    return out
+  }
+  return `MIMI-${part(4)}-${part(4)}`
+}
+
+/** POST /api/admin/customers —— 代建客户，等价于注册 */
+function handleCreateCustomer({ body, headers }: MockCtx): MockOutcome {
+  const admin = requireAdmin(headers)
+  if (!admin) return expired()
+
+  const req = body as unknown as CreateCustomerReq
+  const email = String(req.email ?? '').trim().toLowerCase()
+  const nickname = String(req.nickname ?? '').trim()
+  const password = String(req.password ?? '')
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return fail(ApiCode.INVALID_PARAM, '邮箱格式不对，检查一下')
+  if (nickname.length < 2) return fail(ApiCode.INVALID_PARAM, '用户名至少 2 个字')
+  if (nickname.length > 20) return fail(ApiCode.INVALID_PARAM, '用户名最多 20 个字')
+  if (password.length < 8) return fail(ApiCode.INVALID_PARAM, '密码至少 8 位')
+  if (customers.some((c) => c.email.toLowerCase() === email)) {
+    return fail(ApiCode.INVALID_PARAM, '这个邮箱已经有账号了')
+  }
+
+  const days = req.trialDays === undefined || req.trialDays === null ? 30 : Math.floor(Number(req.trialDays))
+  if (!Number.isFinite(days) || days < 0 || days > 3650) {
+    return fail(ApiCode.INVALID_PARAM, '赠送天数要在 0 ~ 3650 之间')
+  }
+
+  const now = new Date()
+  const row: Customer = {
+    id: Math.max(0, ...customers.map((c) => c.id)) + 1,
+    email,
+    nickname,
+    avatar: '',
+    status: 'active',
+    banReason: null,
+    membershipLevel: 'none',
+    membershipExpireAt: null,
+    freeExpireAt: days > 0 ? new Date(now.getTime() + days * DAY).toISOString() : null,
+    inviteCode: null,
+    referralCode: mockReferralCode(),
+    referredById: null,
+    voucher: mockVoucher(),
+    createdAt: now.toISOString(),
+    lastLoginAt: null
+  }
+  customers.unshift(row)
+
+  pushLog({
+    adminId: admin.id,
+    adminName: admin.nickname,
+    action: 'customer.create',
+    targetType: 'customer',
+    targetId: row.id,
+    targetName: row.nickname,
+    detail: `代建账号 ${email}${days > 0 ? `，送 ${days} 天试用` : '，不送试用'}`
+  })
+
+  return ok({ ...row })
+}
+
+/** DELETE /api/admin/customers/:id —— 真删 */
+function handleDeleteCustomer({ params, headers }: MockCtx): MockOutcome {
+  const admin = requireAdmin(headers)
+  if (!admin) return expired()
+
+  const id = Number(params.id)
+  const index = customers.findIndex((c) => c.id === id)
+  if (index < 0) return fail(ApiCode.NOT_FOUND, '客户不存在')
+
+  const target = customers[index]
+  customers.splice(index, 1)
+  // 别人的「谁邀请的」指向他要断开 —— 和真后端一个口径
+  for (const c of customers) {
+    if (c.referredById === id) c.referredById = null
+  }
+  // 他发过的反馈保留、抹掉身份（mock 里反馈是按 customerId 关联的）
+  for (const f of feedbacks) {
+    if (f.customerId === id) {
+      f.customerId = null
+      f.contactEmail = ''
+      f.contactName = ''
+    }
+  }
+
+  pushLog({
+    adminId: admin.id,
+    adminName: admin.nickname,
+    action: 'customer.delete',
+    targetType: 'customer',
+    targetId: id,
+    targetName: `${target.nickname}（${target.email}）`,
+    detail: '删除账号：登录记录 / 会员流水 / 已读记录一并清掉'
+  })
+
+  return ok(null)
+}
+
 const routes: Array<{ method: string; pattern: string; handler: MockHandler }> = [
   { method: 'POST', pattern: '/admin/auth/login', handler: handleAdminLogin },
   { method: 'POST', pattern: '/admin/auth/refresh', handler: handleAdminRefresh },
@@ -1592,6 +1714,8 @@ const routes: Array<{ method: string; pattern: string; handler: MockHandler }> =
   { method: 'GET', pattern: '/admin/overview', handler: handleOverview },
 
   { method: 'GET', pattern: '/admin/customers', handler: handleListCustomers },
+  { method: 'POST', pattern: '/admin/customers', handler: handleCreateCustomer },
+  { method: 'DELETE', pattern: '/admin/customers/:id', handler: handleDeleteCustomer },
   { method: 'GET', pattern: '/admin/customers/:id', handler: handleGetCustomer },
   { method: 'PATCH', pattern: '/admin/customers/:id', handler: handleUpdateCustomer },
 

@@ -37,6 +37,8 @@ export const LOG_ACTION_LABEL: Record<LogAction, string> = {
   'customer.ban': '封禁客户',
   'customer.unban': '解封客户',
   'customer.membership': '发会员',
+  'customer.create': '代建账号',
+  'customer.delete': '删除账号',
   'card.create': '生成卡密',
   'card.void': '作废卡密',
   'dict.create': '新建字典',
@@ -53,6 +55,8 @@ export const LOG_ACTION_TAG: Record<LogAction, TagType> = {
   'customer.ban': 'danger',
   'customer.unban': 'success',
   'customer.membership': 'success',
+  'customer.create': 'success',
+  'customer.delete': 'danger',
   'card.create': 'info',
   'card.void': 'danger',
   'dict.create': 'info',
@@ -66,6 +70,8 @@ export const LOG_ACTION_TAG: Record<LogAction, TagType> = {
 
 /** 日志筛选项（顺序即下拉里的顺序） */
 export const LOG_ACTION_OPTIONS: LogAction[] = [
+  'customer.create',
+  'customer.delete',
   'customer.ban',
   'customer.unban',
   'customer.membership',

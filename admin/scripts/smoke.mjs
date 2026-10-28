@@ -537,6 +537,52 @@ try {
     check('再删一次 → 40400', gone.data.code === 40400, `code=${gone.data.code}`)
   }
 
+  console.log('\n[客户：代建 / 删除]')
+  {
+    const login = await call({ url: '/admin/auth/login', method: 'post', body: { username: 'admin', password: 'admin123' } })
+    const t = login.data.data?.token ?? ''
+    const email = `mock-created-${Date.now()}@example.com`
+
+    const badMail = await call({ url: '/admin/customers', method: 'post', headers: auth(t), body: { email: '不是邮箱', nickname: '小明', password: '12345678' } })
+    check('邮箱格式不对 → 1001', badMail.data.code === 1001, `code=${badMail.data.code}`)
+
+    const badPwd = await call({ url: '/admin/customers', method: 'post', headers: auth(t), body: { email, nickname: '小明', password: '1234567' } })
+    check('密码 7 位 → 1001', badPwd.data.code === 1001, `code=${badPwd.data.code}`)
+
+    const created = await call({
+      url: '/admin/customers',
+      method: 'post',
+      headers: auth(t),
+      body: { email, nickname: '代建的人', password: 'abcd1234' }
+    })
+    check('代建成功', created.data.code === 0 && created.data.data.email === email, `code=${created.data.code}`)
+    check('凭证码 4 位一组，共 29 字符', /^([A-Z0-9]{4}-){5}[A-Z0-9]{4}$/.test(String(created.data.data?.voucher ?? '')))
+    check('有邀请码', /^MIMI-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(String(created.data.data?.referralCode ?? '')))
+    check('默认送 30 天试用', !!created.data.data?.freeExpireAt)
+    check('会员等级仍是 none', created.data.data?.membershipLevel === 'none')
+
+    const dup = await call({ url: '/admin/customers', method: 'post', headers: auth(t), body: { email, nickname: '重名', password: 'abcd1234' } })
+    check('邮箱已存在 → 1001', dup.data.code === 1001, `code=${dup.data.code}`)
+
+    const listed = await call({ url: '/admin/customers', method: 'get', headers: auth(t), params: { keyword: email } })
+    check('列表能搜到它', listed.data.data.list.length === 1 && listed.data.data.list[0].email === email)
+
+    const id = created.data.data?.id
+    const removed = await call({ url: `/admin/customers/${id}`, method: 'delete', headers: auth(t) })
+    check('删除成功', removed.data.code === 0, `code=${removed.data.code}`)
+
+    const after = await call({ url: '/admin/customers', method: 'get', headers: auth(t), params: { keyword: email } })
+    check('删完搜不到了', after.data.data.list.length === 0)
+
+    const ghost = await call({ url: '/admin/customers/99999', method: 'delete', headers: auth(t) })
+    check('删不存在的 → 40400', ghost.data.code === 40400, `code=${ghost.data.code}`)
+
+    const logs = await call({ url: '/admin/logs', method: 'get', headers: auth(t), params: { keyword: email } })
+    const actions = logs.data.data.list.map((l) => l.action)
+    check('日志里记了「代建账号」', actions.includes('customer.create'))
+    check('日志里记了「删除账号」', actions.includes('customer.delete'))
+  }
+
   console.log('\n[未实现的路径]')
   {
     const r = await call({ url: '/nope/whatever', method: 'get' })

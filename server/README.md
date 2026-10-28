@@ -131,6 +131,8 @@ server/
 | GET | `/api/admin/auth/me` | 拿当前管理员 |
 | POST | `/api/admin/auth/logout` | 登出 |
 | GET | `/api/admin/customers` | 分页 / 关键词 / 状态 |
+| POST | `/api/admin/customers` | 后台代建客户 —— **等价于注册**（同一个校验、同样的码、同样送 30 天试用） |
+| DELETE | `/api/admin/customers/{id}` | 真删（本库无外键，关联表在事务里手动清） |
 | GET | `/api/admin/customers/{id}` | 详情 + 用的卡 + 他的日志 |
 | PATCH | `/api/admin/customers/{id}` | 封禁 / 解封 / 改额度 / 发会员 |
 | GET | `/api/admin/logs` | 只读，**没有写接口** |

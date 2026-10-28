@@ -11,9 +11,9 @@
  * 封禁原因和会员等级都来自**字典**，所以运营在字典页加一条，
  * 这里的下拉立刻多一个选项。
  */
-import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { updateCustomer } from '@/api/customer'
+import { computed, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { createCustomer, deleteCustomer, updateCustomer } from '@/api/customer'
 import { useDictStore } from '@/stores/dict'
 import { formatTime, membershipState } from '@/config/labels'
 import type { Customer } from '@/types'
@@ -145,7 +145,114 @@ async function submitMembership(): Promise<void> {
   }
 }
 
-defineExpose({ openBan, submitUnban, openMembership })
+/* ---------------- 新增客户（等价于注册） ---------------- */
+
+const createVisible = ref(false)
+const creating = ref(false)
+const createForm = reactive({
+  email: '',
+  nickname: '',
+  password: '',
+  trialDays: 30
+})
+
+/** 随机密码：去掉 0/O/1/l/I，免得口头报给对方时念错 */
+function randomPassword(length = 12): string {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = new Uint32Array(length)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (n) => chars[n % chars.length]).join('')
+}
+
+/** 邮箱随便填的时候，昵称给个能改的默认值（邮箱前缀） */
+function suggestNickname(): void {
+  if (createForm.nickname.trim()) return
+  const prefix = createForm.email.split('@')[0]?.trim() ?? ''
+  if (prefix) createForm.nickname = prefix.slice(0, 20)
+}
+
+function openCreate(): void {
+  createForm.email = ''
+  createForm.nickname = ''
+  createForm.password = randomPassword()
+  createForm.trialDays = 30
+  createVisible.value = true
+}
+
+async function submitCreate(): Promise<void> {
+  const email = createForm.email.trim()
+  const nickname = createForm.nickname.trim()
+  const password = createForm.password
+
+  if (!email || !email.includes('@')) {
+    ElMessage.warning('填一个能收信的邮箱')
+    return
+  }
+  if (nickname.length < 2 || nickname.length > 20) {
+    ElMessage.warning('用户名 2~20 字')
+    return
+  }
+  if (password.length < 8) {
+    ElMessage.warning('密码至少 8 位')
+    return
+  }
+
+  creating.value = true
+  try {
+    const row = await createCustomer({ email, nickname, password, trialDays: createForm.trialDays })
+    // ⚠️ 密码只有这里能看到一次 —— 提示里带上，运营好照着发给本人
+    ElMessageBox.alert(
+      `账号已建好：${email}\n初始密码：${password}\n\n把这组信息发给本人，让他登录后到「个人中心 → 账号安全」改掉。`,
+      `已创建「${row.nickname}」`,
+      { confirmButtonText: '知道了', customClass: 'create-done-box' }
+    ).catch(() => {})
+    createVisible.value = false
+    emit('done')
+  } catch {
+    // 错误提示已在 request 层统一处理
+  } finally {
+    creating.value = false
+  }
+}
+
+/* ---------------- 删除客户 ---------------- */
+
+const deleteVisible = ref(false)
+const deleting = ref(false)
+const deleteTarget = ref<Customer | null>(null)
+/** 必须手打一遍完整邮箱才能删 —— 防手滑，也防「点错了行」 */
+const deleteConfirmText = ref('')
+
+const deleteConfirmOk = computed(() => {
+  const t = deleteTarget.value
+  if (!t) return false
+  return deleteConfirmText.value.trim().toLowerCase() === t.email.toLowerCase()
+})
+
+function openDelete(row: Customer): void {
+  deleteTarget.value = row
+  deleteConfirmText.value = ''
+  deleteVisible.value = true
+}
+
+async function submitDelete(): Promise<void> {
+  const target = deleteTarget.value
+  if (!target || !deleteConfirmOk.value) return
+
+  deleting.value = true
+  try {
+    await deleteCustomer(target.id)
+    ElMessage.success(`已删除「${target.nickname}」`)
+    deleteVisible.value = false
+    emit('done')
+  } catch {
+    // 错误提示已在 request 层统一处理
+  } finally {
+    deleting.value = false
+  }
+}
+
+defineExpose({ openBan, submitUnban, openMembership, openCreate, openDelete })
 </script>
 
 <template>
@@ -210,6 +317,68 @@ defineExpose({ openBan, submitUnban, openMembership })
       <el-button type="primary" @click="submitMembership">发会员</el-button>
     </template>
   </el-dialog>
+
+  <!-- 新增客户：等价于注册 -->
+  <el-dialog v-model="createVisible" title="新增客户" width="480px">
+    <div class="dlg-body">
+      <div class="hint">
+        建出来的号和客户端自己注册的<b>完全一样</b> —— 有凭证码、有邀请码、有试用天数，
+        也会算进「今日注册」。区别只有一条：不发邮件验验证码。
+      </div>
+
+      <div class="dlg-label">邮箱（就是登录账号）</div>
+      <el-input v-model="createForm.email" placeholder="someone@example.com" @blur="suggestNickname" />
+
+      <div class="dlg-label">用户名</div>
+      <el-input v-model="createForm.nickname" maxlength="20" placeholder="2~20 字，客户端里显示的名字" />
+
+      <div class="dlg-label">初始密码</div>
+      <div class="pw-row">
+        <el-input v-model="createForm.password" placeholder="至少 8 位" />
+        <el-button @click="createForm.password = randomPassword()">随机生成</el-button>
+      </div>
+
+      <div class="dlg-label">赠送免费天数</div>
+      <el-input-number v-model="createForm.trialDays" :min="0" :max="3650" :step="5" controls-position="right" />
+      <div class="hint">默认 30 天，和真注册送的一样。填 0 = 不送。这是<b>免费天数</b>，不是会员。</div>
+
+      <div class="hint warn">
+        建完只会显示一次密码 —— 记得复制下来发给本人，让他登录后自己改。
+      </div>
+    </div>
+    <template #footer>
+      <el-button @click="createVisible = false">取消</el-button>
+      <el-button type="primary" :loading="creating" @click="submitCreate">创建</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 删除客户：真删，要求手打邮箱 -->
+  <el-dialog v-model="deleteVisible" title="删除客户" width="500px">
+    <div class="dlg-body">
+      <div class="dlg-target" v-if="deleteTarget">
+        {{ deleteTarget.nickname }} · {{ deleteTarget.email }}
+      </div>
+      <div class="hint warn">
+        <b>这个操作不可恢复。</b> 会一起删掉：他的登录记录、使用会话、会员流水、公告已读。
+        他发过的意见反馈会<b>保留正文但抹掉身份和联系方式</b>。用过的卡密不回收。
+      </div>
+      <div class="dlg-label">确认删除，请手打一遍这个邮箱</div>
+      <el-input
+        v-model="deleteConfirmText"
+        :placeholder="deleteTarget?.email ?? ''"
+        @paste.prevent
+      />
+      <div class="hint">
+        粘贴被禁用了 —— 这一下要你亲手打字，就是为了别把不相干的人删掉。
+      </div>
+    </div>
+    <template #footer>
+      <el-button @click="deleteVisible = false">取消</el-button>
+      <el-button type="danger" :disabled="!deleteConfirmOk" :loading="deleting" @click="submitDelete">
+        删除
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -256,6 +425,16 @@ defineExpose({ openBan, submitUnban, openMembership })
 
 .presets :deep(.el-button + .el-button) {
   margin-left: 0;
+}
+
+/* 密码框 + 「随机生成」并排 */
+.pw-row {
+  display: flex;
+  gap: 8px;
+}
+
+.pw-row :deep(.el-button) {
+  flex: none;
 }
 
 .hint {

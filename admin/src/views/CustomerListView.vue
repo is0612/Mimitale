@@ -5,7 +5,7 @@
  */
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Refresh, Search } from '@element-plus/icons-vue'
+import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { fetchCustomers } from '@/api/customer'
 import { useDictStore } from '@/stores/dict'
 import CustomerDialogs from '@/components/CustomerDialogs.vue'
@@ -110,6 +110,7 @@ onMounted(load)
         <el-button @click="reset">重置</el-button>
         <div class="spacer" />
         <el-button :icon="Refresh" @click="load">刷新</el-button>
+        <el-button type="primary" :icon="Plus" @click="dialogs?.openCreate()">新增客户</el-button>
       </div>
     </el-card>
 
@@ -164,7 +165,7 @@ onMounted(load)
             <span v-else class="muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="168" fixed="right">
+        <el-table-column label="操作" width="216" fixed="right" class-name="op-col">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDetail(row)">详情</el-button>
             <el-button link type="primary" @click="dialogs?.openMembership(row)">发会员</el-button>
@@ -177,6 +178,7 @@ onMounted(load)
               封禁
             </el-button>
             <el-button v-else link type="success" @click="dialogs?.submitUnban(row)">解封</el-button>
+            <el-button link type="danger" @click="dialogs?.openDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -199,6 +201,22 @@ onMounted(load)
 </template>
 
 <style scoped>
+/**
+ * 操作列塞了四颗链接按钮（详情 / 发会员 / 封禁 / 删除）。
+ * 默认间距是 12px，四颗下来会把这列撑到 220px 以上，把「最后登录」挤到固定列底下 ——
+ * 收紧到 6px、左右内边距各留 8px 就够了。
+ */
+.op-col :deep(.cell) {
+  /* 四颗按钮必须在一行里 —— 让它换行会把整张表撑高，看上去像行高出了 bug */
+  white-space: nowrap;
+  padding-left: 8px;
+  padding-right: 4px;
+}
+
+.op-col :deep(.el-button + .el-button) {
+  margin-left: 6px;
+}
+
 .page {
   display: flex;
   flex-direction: column;

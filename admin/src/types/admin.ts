@@ -140,6 +140,37 @@ export interface CustomerListRes {
 }
 
 /**
+ * 24. POST /api/admin/customers
+ *     后台代建一个客户 —— **等价于注册**
+ *
+ * 建出来的号和客户端自己注册的完全一样：会生成凭证码和邀请码、
+ * profileReady = true、默认送 30 天试用，所以也算进「今日注册」。
+ * ⚠️ 唯一区别：不发邮件、不验验证码。密码由运营填，交给本人后让他自己改。
+ */
+export interface CreateCustomerReq {
+  email: string
+  /** 2~20 字 */
+  nickname: string
+  /** 8~128 位。不给强度规则，长度比「必须含大写」有用 */
+  password: string
+  /** 头像（data URL，选填） */
+  avatar?: string
+  /** 送几天试用，默认 30；填 0 = 不送。上限 3650 */
+  trialDays?: number
+}
+
+/* 返回创建出来的客户（Customer），**不含密码** */
+
+/**
+ * 25. DELETE /api/admin/customers/{id}
+ *     真删，**不可恢复**。返回 ApiResult<null>
+ *
+ * 会一并清掉：登录记录、使用会话、会员流水、公告已读。
+ * 他发过的意见反馈**保留正文但抹掉身份**（删号不该顺手销毁用户说过的话，
+ * 但联系方式必须清）。用过的卡密不回收，只把「谁用的」置空。
+ */
+
+/**
  * 6. PATCH /api/admin/customers/{id}
  *    只传要改的字段
  */
@@ -241,6 +272,9 @@ export type LogAction =
   | 'customer.ban'
   | 'customer.unban'
   | 'customer.membership'
+  // 后台代建 / 删除账号（2026-10-28）—— 删除是唯一一条「对象已经不存在」的日志
+  | 'customer.create'
+  | 'customer.delete'
   | 'card.create'
   | 'card.void'
   | 'dict.create'

@@ -20,9 +20,31 @@ import { mkdtempSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { createServer } from 'node:net'
 
 const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe'
 const SITE = process.env.SHOT_SITE ?? 'http://localhost:5173/admin/'
+
+/**
+ * 每次问系统要一个空闲端口。
+ *
+ * ⚠️ 这里原来写死 9333，踩过一个很阴的坑：上一轮的 Chrome 没退干净时，
+ *    新起的 Chrome 绑不上调试端口，**脚本就会连到那个旧实例上** ——
+ *    于是截出来的是旧页面、甚至是别的项目，而脚本一路绿灯说「已保存」。
+ *    每次换端口，最坏情况是新 Chrome 起不来（报错），不会静默接错人。
+ */
+function freePort() {
+  return new Promise((ok, fail) => {
+    const srv = createServer()
+    srv.unref()
+    srv.on('error', fail)
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address()
+      srv.close(() => ok(port))
+    })
+  })
+}
+
 const ROUTE = process.argv[2] ?? 'customers'
 const OUT = resolve(process.argv[3] ?? `shots/admin-${ROUTE.replace(/\//g, '-')}.png`)
 /**
@@ -31,7 +53,7 @@ const OUT = resolve(process.argv[3] ?? `shots/admin-${ROUTE.replace(/\//g, '-')}
  * 例：node scripts/shot.mjs announcements shots/x.png "document.querySelector('.btn-new').click()"
  */
 const EXEC = process.argv[4] ?? ''
-const PORT = 9333
+const PORT = await freePort()
 const ORIGIN = new URL(SITE).origin
 
 /* ---------------- ① 拿 token ---------------- */
@@ -155,6 +177,14 @@ if (EXEC) {
     throw new Error('页面里那段 JS 抛错了：' + JSON.stringify(r.result.exceptionDetails).slice(0, 300))
   }
   await wait(1200)
+}
+
+// 拍之前对一眼地址：接错浏览器 / 服务被别的项目顶掉时，宁可报错也别交一张错图
+const where = await send('Runtime.evaluate', { expression: 'location.href', returnByValue: true })
+const href = String(where.result?.result?.value ?? '')
+if (!href.startsWith(SITE)) {
+  chrome.kill()
+  throw new Error(`页面地址不对，截不了：期望以 ${SITE} 开头，实际是 ${href}`)
 }
 
 const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })

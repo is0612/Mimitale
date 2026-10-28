@@ -1,6 +1,6 @@
 # Mimitale 客户管理后台
 
-给自己用的客户管理后台前端。**真实后端在 [`../server/`](../server/README.md)**（Node + Fastify + Prisma + PostgreSQL），后台侧 23 个接口已实现，`npm run smoke` 那套断言可以直接对着它验。客户端那侧的登录界面已完成，但还没接这套接口。
+给自己用的客户管理后台前端。**真实后端在 [`../server/`](../server/README.md)**（Node + Fastify + Prisma + PostgreSQL），后台侧 25 个接口已实现，`npm run smoke` 那套断言可以直接对着它验。客户端那侧的登录界面已完成，但还没接这套接口。
 
 默认仍走内置 Mock（不需要后端也能开发界面）；把 `.env` 里的 `VITE_USE_MOCK` 改成 `false` 就连真后端。
 
@@ -85,7 +85,7 @@ VITE_API_BASE=/api
 src/
 ├── types/
 │   ├── index.ts      公共：ApiResult、全部错误码
-│   ├── admin.ts      ⭐ 后台侧契约（本后台用，23 个接口）
+│   ├── admin.ts      ⭐ 后台侧契约（本后台用，25 个接口）
 │   └── client.ts     客户侧契约（客户端用，本后台不调，给后端参考）
 ├── mock/index.ts     ⭐ Mock 后端 —— 同时也是各接口的行为说明
 ├── config/
@@ -105,7 +105,7 @@ src/
     └── shot.mjs      带登录态截图（打真后端 + Chrome headless）
 ```
 
-## 接口一览（本后台实际调用的 23 个）
+## 接口一览（本后台实际调用的 25 个）
 
 响应统一是 `{ code, message, data }`，`code === 0` 为成功。
 认证走 `Authorization: Bearer <token>`；认证失败返回 HTTP 401。
@@ -124,6 +124,8 @@ src/
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/admin/customers` | 客户列表（分页 / 关键词 / 状态） |
+| POST | `/api/admin/customers` | 后台代建客户 —— **等价于注册**（发凭证码 / 邀请码 / 送 30 天试用） |
+| DELETE | `/api/admin/customers/{id}` | 真删，**不可恢复**（关联表手动清，反馈保留但匿名） |
 | GET | `/api/admin/customers/{id}` | 客户详情（+ 来源卡密 + 操作记录） |
 | PATCH | `/api/admin/customers/{id}` | 封禁 / 解封 / 改额度 / 发会员（**每个动作落一条日志**） |
 

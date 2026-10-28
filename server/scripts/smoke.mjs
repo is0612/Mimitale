@@ -920,6 +920,128 @@ section('邀请码：自己发码 / 别人填码 / 归因')
   await db.query(`DELETE FROM login_codes WHERE email LIKE 'smoke-inv-%@example.com'`)
 }
 
+section('客户：后台代建（等价于注册）')
+{
+  const email = `smoke-created-${Date.now()}@example.com`
+
+  const badMail = await api('POST', '/api/admin/customers', {
+    token: T,
+    body: { email: '不是邮箱', nickname: '小明', password: '12345678' }
+  })
+  check('邮箱格式不对 → 1001', badMail.code === 1001, `code=${badMail.code}`)
+
+  const badName = await api('POST', '/api/admin/customers', {
+    token: T,
+    body: { email, nickname: '一', password: '12345678' }
+  })
+  check('用户名 1 个字 → 1001（和注册同一套规则）', badName.code === 1001, `code=${badName.code}`)
+
+  const badPwd = await api('POST', '/api/admin/customers', {
+    token: T,
+    body: { email, nickname: '小明', password: '1234567' }
+  })
+  check('密码 7 位 → 1001', badPwd.code === 1001, `code=${badPwd.code}`)
+
+  const badDays = await api('POST', '/api/admin/customers', {
+    token: T,
+    body: { email, nickname: '小明', password: '12345678', trialDays: 99999 }
+  })
+  check('赠送天数超上限 → 1001', badDays.code === 1001, `code=${badDays.code}`)
+
+  const overviewBefore = await api('GET', '/api/admin/overview', { token: T })
+
+  const created = await api('POST', '/api/admin/customers', {
+    token: T,
+    body: { email, nickname: '后台代建的人', password: 'abcd1234' }
+  })
+  check('代建成功', created.code === 0 && created.data?.email === email, `code=${created.code}`)
+  // 24 位码是 4 位一组带连字符的，所以字符串长度是 29
+  check('发了 24 位凭证码（4 位一组）', /^([A-Z0-9]{4}-){5}[A-Z0-9]{4}$/.test(String(created.data?.voucher ?? '')))
+  check(
+    '发了邀请码 MIMI-XXXX-XXXX',
+    /^MIMI-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(String(created.data?.referralCode ?? ''))
+  )
+  check(
+    '默认送 30 天试用',
+    !!created.data?.freeExpireAt && Date.parse(created.data.freeExpireAt) - Date.now() > 29 * 86400_000
+  )
+  check('会员等级还是 none（试用不等于会员）', created.data?.membershipLevel === 'none')
+
+  const dup = await api('POST', '/api/admin/customers', {
+    token: T,
+    body: { email, nickname: '重名的人', password: 'abcd1234' }
+  })
+  check('邮箱已存在 → 1001', dup.code === 1001, `code=${dup.code}`)
+
+  // 「等价于注册」的硬证据：库里和真注册出来的行长得一样
+  const row = await db.query(
+    `SELECT id, profile_ready, password_hash, voucher, referral_code, free_expire_at FROM customers WHERE email = $1`,
+    [email]
+  )
+  const me = row.rows[0]
+  check('profileReady = true（所以算「今日注册」）', me?.profile_ready === true)
+  check('存的是 scrypt 哈希，不是明文', String(me?.password_hash ?? '').startsWith('scrypt$'))
+  check('免费到期时间已落库', !!me?.free_expire_at)
+
+  const overviewAfter = await api('GET', '/api/admin/overview', { token: T })
+  check(
+    '今日注册 +1',
+    overviewAfter.data?.todayRegistered === overviewBefore.data?.todayRegistered + 1,
+    `${overviewBefore.data?.todayRegistered} → ${overviewAfter.data?.todayRegistered}`
+  )
+
+  globalThis.smokeCreatedCustomerId = me?.id
+
+  /* ---------------- 删除 ---------------- */
+
+  // 给他造一条反馈和一条登录记录，用来验证「删号之后关联数据怎么办」
+  // ⚠️ 上面建号失败时 me 是 undefined，这里先兜住：空 id 硬插会触发 not-null 报错，
+  //    脚本直接崩在半路，后面的断言一条都跑不到 —— 看到的错误还跟真正的原因无关
+  // ⚠️ 反馈正文带上邮箱：固定文案会撞上「上次跑崩了没清掉」的旧行，
+  //    按正文查就会查出两条，断言跟着假失败
+  const fbContent = `删号前发的反馈 ${email}`
+  if (!me?.id) {
+    check('（建号失败，删除段跳过）', false, '没有 customerId')
+  } else {
+    await db.query(
+      `INSERT INTO feedbacks (customer_id, contact_email, contact_name, kind, content, app_version, platform, device_id, status, note, handled_by, ip, created_at, updated_at)
+       VALUES ($1, $2, $3, 'bug', $4, '9.9.9', 'win32', 'smoke-del', 'pending', '', '', '127.0.0.1', now(), now())`,
+      [me.id, email, '后台代建的人', fbContent]
+    )
+    await db.query(
+      `INSERT INTO login_logs (customer_id, method, ip, user_agent, created_at) VALUES ($1, 'password', '127.0.0.1', 'smoke', now())`,
+      [me.id]
+    )
+  }
+
+  const ghostDelete = await api('DELETE', '/api/admin/customers/99999999', { token: T })
+  check('删不存在的客户 → 40400', ghostDelete.code === 40400, `code=${ghostDelete.code}`)
+
+  const removed = await api('DELETE', `/api/admin/customers/${me?.id}`, { token: T })
+  check('删除成功', removed.code === 0, `code=${removed.code}`)
+
+  const gone = await db.query(`SELECT id FROM customers WHERE id = $1`, [me?.id])
+  check('客户真没了', gone.rowCount === 0)
+
+  const logs = await db.query(`SELECT count(*)::int n FROM login_logs WHERE customer_id = $1`, [me?.id])
+  check('登录记录一起清掉（不留孤儿行）', logs.rows[0].n === 0, `剩 ${logs.rows[0].n} 条`)
+
+  const fb = await db.query(
+    `SELECT customer_id, contact_email, contact_name FROM feedbacks WHERE content = $1`,
+    [fbContent]
+  )
+  check('反馈保留下来了', fb.rowCount === 1, `查到 ${fb.rowCount} 条`)
+  check('但 customerId 已置空', fb.rows[0]?.customer_id === null)
+  check('联系方式也抹掉了', fb.rows[0]?.contact_email === '' && fb.rows[0]?.contact_name === '')
+
+  const audit = await db.query(
+    `SELECT target_name, detail FROM operation_logs WHERE action = 'customer.delete' AND target_id = $1`,
+    [me?.id]
+  )
+  check('操作日志留了名字和邮箱（删完只剩这一处还认得出他）', String(audit.rows[0]?.target_name ?? '').includes(email))
+  check('日志里写明了反馈已匿名', String(audit.rows[0]?.detail ?? '').includes('匿名'))
+}
+
 section('消息：意见反馈（客户端发 / 后台处理）')
 {
   const device = `smoke-dev-${Date.now()}`
@@ -1108,6 +1230,10 @@ section('消息：通知公告（后台发 / 客户端拉）')
 
   // 最后兜一刀：这场写出来的操作日志全清掉（卡密 / 字典 / 公告那几条没有 id 可循，只能按时间切）
   await db.query(`DELETE FROM operation_logs WHERE created_at >= $1`, [RUN_START_UTC])
+
+  // 验证码：这场发出去的都删掉。不删的话每跑一次留十来条，虽然会过期，
+  // 但表会一直变大，「最近的验证码」这种排查会看到一堆烟雾测试的邮箱
+  await db.query(`DELETE FROM login_codes WHERE email LIKE 'smoke%@example.com'`)
 }
 
 section('参数校验兜底')

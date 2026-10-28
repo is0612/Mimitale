@@ -17,6 +17,14 @@ import { DAY_MS } from '../../lib/time.js'
 import { dictLabel } from '../../lib/dict.js'
 import { entitlementOf, grantDaysIn } from '../../lib/membership.js'
 import { openSession, touchSession, closeSession } from '../../lib/session.js'
+import {
+  TRIAL_DAYS,
+  normalizeEmail,
+  normalizeUsername,
+  normalizePassword,
+  normalizeAvatar
+} from '../../lib/customerRules.js'
+import { makeUniqueVoucher, makeUniqueReferralCode } from '../../lib/customerCodes.js'
 
 /**
  * 客户侧账号 —— 前缀 /api/client/auth
@@ -35,16 +43,8 @@ import { openSession, touchSession, closeSession } from '../../lib/session.js'
  *   ⑥ POST /voucher-login     24 位凭证码（换机器用）
  */
 
-/**
- * 头像上限（base64 字符数）。
- *
- * 客户端压到 256×256 JPEG 后正常是 14KB 图 / 19K 字符，这里留三倍余量就够 ——
- * 原来写的 40 万（约 300KB 原图）等于没设：客户端真压漏了、或者有人直接打接口，
- * 也照样能塞进去。客户端那边有 50K 的预算自适应降质量，别让两边差太远。
- */
-const MAX_AVATAR_CHARS = 60 * 1000
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+// 邮箱 / 用户名 / 密码 / 头像的校验和 TRIAL_DAYS 都搬到了 lib/customerRules.ts ——
+// 后台「新增客户」也要用同一套规则（那是等价于注册的），两份校验迟早会跑偏。
 
 /** 验证码：10 分钟有效，60 秒内不许重发，最多试 5 次 */
 const CODE_TTL = 600
@@ -52,46 +52,11 @@ const CODE_COOLDOWN_MS = 60_000
 const CODE_DAILY_LIMIT = 30
 const CODE_MAX_TRIES = 5
 
-/** 注册送的免费天数 —— 注意这不是「送会员」，等级仍然是 none */
-const TRIAL_DAYS = 30
-
 /** 每邀 1 人邀请人得几天。无上限，想刷就刷（收费本来也不贵） */
 const INVITE_BONUS_DAYS = 7
 
 function textOf(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
-}
-
-function normalizeEmail(value: unknown): string {
-  const email = textOf(value).toLowerCase()
-  if (!EMAIL_RE.test(email)) throw biz('邮箱格式不对，检查一下')
-  if (email.length > 120) throw biz('邮箱太长了')
-  return email
-}
-
-function normalizeUsername(value: unknown): string {
-  const name = textOf(value)
-  if (name.length < 2) throw biz('用户名至少 2 个字')
-  if (name.length > 20) throw biz('用户名最多 20 个字')
-  return name
-}
-
-function normalizePassword(value: unknown): string {
-  const password = String(value ?? '')
-  if (password.length < 8) throw biz('密码至少 8 位')
-  if (password.length > 128) throw biz('密码最多 128 位')
-  return password
-}
-
-/** 头像只收图片 data URL */
-function normalizeAvatar(value: unknown): string {
-  const avatar = textOf(value)
-  if (!avatar) return ''
-  if (!/^data:image\/(png|jpeg|webp);base64,/i.test(avatar)) {
-    throw biz('头像格式不认识（只收 PNG / JPEG / WebP）')
-  }
-  if (avatar.length > MAX_AVATAR_CHARS) throw biz('头像太大了，换一张小一点的')
-  return avatar
 }
 
 /**
@@ -448,26 +413,11 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
 
     const updated = await prisma.$transaction(async (tx) => {
       // 凭证码要唯一：撞了就换一个再来（31^24 的空间，实际几乎不会撞）
-      let voucher: string | null = null
-      for (let attempt = 0; attempt < 5 && !voucher; attempt += 1) {
-        const candidate = makeVoucher()
-        const clash = await tx.customer.findUnique({ where: { voucher: candidate }, select: { id: true } })
-        if (!clash) voucher = candidate
-      }
-      if (!voucher) throw biz('凭证码生成失败，稍后再试')
+      const voucher = await makeUniqueVoucher(tx)
 
       // 自己的邀请码也在这里发 —— 别等第一次进「个人信息」才补，那样刚注册的人
       // 找不到码可以发出去
-      let referralCode: string | null = null
-      for (let attempt = 0; attempt < 5 && !referralCode; attempt += 1) {
-        const candidate = newInviteCode()
-        const clash = await tx.customer.findFirst({
-          where: { OR: [{ referralCode: candidate }, { voucher: candidate }] },
-          select: { id: true }
-        })
-        if (!clash) referralCode = candidate
-      }
-      if (!referralCode) throw biz('邀请码生成失败，稍后再试')
+      const referralCode = await makeUniqueReferralCode(tx)
 
       // 卡密是花钱买的，必须真的消耗掉；条件更新挡住两个人同时用同一张卡
       if (invite.kind === 'card') {
