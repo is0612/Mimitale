@@ -460,6 +460,83 @@ try {
     check('登出后 token 失效', after.status === 401, `got ${after.status}`)
   }
 
+  console.log('\n[消息：意见反馈]')
+  {
+    const login = await call({ url: '/admin/auth/login', method: 'post', body: { username: 'admin', password: 'admin123' } })
+    const t = login.data.data?.token ?? ''
+
+    const list = await call({ url: '/admin/feedbacks', method: 'get', headers: auth(t) })
+    const counts = list.data.data?.counts
+    check('列表返回 4 条假数据', list.data.code === 0 && list.data.data.total === 4, `total=${list.data.data?.total}`)
+    check('counts 五个状态齐全', !!counts && ['total', 'pending', 'read', 'resolved', 'ignored', 'today'].every((k) => typeof counts[k] === 'number'))
+    check('counts 之和 = total', counts && counts.pending + counts.read + counts.resolved + counts.ignored === counts.total)
+
+    const pending = await call({ url: '/admin/feedbacks', method: 'get', headers: auth(t), params: { status: 'pending' } })
+    check('按状态筛只剩待处理', pending.data.data.list.every((f) => f.status === 'pending'))
+
+    const first = list.data.data.list[0]
+    const handled = await call({
+      url: `/admin/feedbacks/${first.id}`,
+      method: 'patch',
+      headers: auth(t),
+      body: { status: 'resolved', note: '冒烟写的备注' }
+    })
+    check('改状态成功', handled.data.code === 0 && handled.data.data.status === 'resolved')
+    check('记下处理人', handled.data.data.handledBy === '星宝')
+
+    const again = await call({ url: `/admin/feedbacks/${first.id}`, method: 'patch', headers: auth(t), body: { status: 'resolved' } })
+    check('没改动 → 1001', again.data.code === 1001, `code=${again.data.code}`)
+
+    const ghost = await call({ url: '/admin/feedbacks/99999', method: 'patch', headers: auth(t), body: { status: 'read' } })
+    check('改不存在的反馈 → 40400', ghost.data.code === 40400, `code=${ghost.data.code}`)
+  }
+
+  console.log('\n[消息：通知公告]')
+  {
+    const login = await call({ url: '/admin/auth/login', method: 'post', body: { username: 'admin', password: 'admin123' } })
+    const t = login.data.data?.token ?? ''
+
+    const list = await call({ url: '/admin/announcements', method: 'get', headers: auth(t) })
+    check('列表返回 2 条假数据', list.data.code === 0 && list.data.data.total === 2, `total=${list.data.data?.total}`)
+    check('liveCount = 2', list.data.data.liveCount === 2, `liveCount=${list.data.data.liveCount}`)
+    check('置顶的排第一', list.data.data.list[0].pinned === true)
+
+    const created = await call({
+      url: '/admin/announcements',
+      method: 'post',
+      headers: auth(t),
+      body: { title: '冒烟公告', content: '跑完就删', level: 'important', pinned: true }
+    })
+    check('发公告成功', created.data.code === 0 && typeof created.data.data.id === 'number')
+    const id = created.data.data?.id
+
+    const afterCreate = await call({ url: '/admin/announcements', method: 'get', headers: auth(t) })
+    check('发完 liveCount 变 3', afterCreate.data.data.liveCount === 3, `liveCount=${afterCreate.data.data.liveCount}`)
+
+    const emptyTitle = await call({ url: '/admin/announcements', method: 'post', headers: auth(t), body: { title: ' ', content: 'x' } })
+    check('空标题 → 1001', emptyTitle.data.code === 1001, `code=${emptyTitle.data.code}`)
+
+    const badRange = await call({
+      url: '/admin/announcements',
+      method: 'post',
+      headers: auth(t),
+      body: { title: 'x', content: 'y', startsAt: '2026-12-02T00:00:00.000Z', endsAt: '2026-12-01T00:00:00.000Z' }
+    })
+    check('时间反了 → 1001', badRange.data.code === 1001, `code=${badRange.data.code}`)
+
+    const off = await call({ url: `/admin/announcements/${id}`, method: 'patch', headers: auth(t), body: { enabled: false } })
+    check('下架成功', off.data.code === 0 && off.data.data.enabled === false)
+
+    const afterOff = await call({ url: '/admin/announcements', method: 'get', headers: auth(t) })
+    check('下架后 liveCount 回到 2', afterOff.data.data.liveCount === 2, `liveCount=${afterOff.data.data.liveCount}`)
+
+    const removed = await call({ url: `/admin/announcements/${id}`, method: 'delete', headers: auth(t) })
+    check('删除成功', removed.data.code === 0)
+
+    const gone = await call({ url: `/admin/announcements/${id}`, method: 'delete', headers: auth(t) })
+    check('再删一次 → 40400', gone.data.code === 40400, `code=${gone.data.code}`)
+  }
+
   console.log('\n[未实现的路径]')
   {
     const r = await call({ url: '/nope/whatever', method: 'get' })

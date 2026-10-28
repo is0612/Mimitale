@@ -56,6 +56,16 @@ async function api(method, path, { token, body, headers: extra } = {}) {
   return { status: res.status, code: json?.code, data: json?.data, message: json?.message }
 }
 
+/**
+ * 本次冒烟的开始时刻，写成 UTC 的 `YYYY-MM-DD HH:mm:ss`。
+ *
+ * ⚠️ 收尾时用它把「这次跑出来」的操作日志整段删掉。不这么做的话，卡密和字典那几段
+ *    每次都会往库里留 6 条日志，跑十次就有 60 条假的「管理员操作」—— 日志页会越来越脏。
+ * ⚠️ 要写成字符串而不是传 Date：`created_at` 是 `timestamp(3)`（无时区），
+ *    传 Date 会被 pg 当 timestamptz 发过去，靠会话时区转换，容易差 8 小时。
+ */
+const RUN_START_UTC = new Date().toISOString().slice(0, 19).replace('T', ' ')
+
 const db = new pg.Client({ connectionString: process.env.DATABASE_URL })
 await db.connect()
 
@@ -908,6 +918,196 @@ section('邀请码：自己发码 / 别人填码 / 归因')
   }
   await db.query(`DELETE FROM invite_cards WHERE code = 'MIMI-SMOK-0001'`)
   await db.query(`DELETE FROM login_codes WHERE email LIKE 'smoke-inv-%@example.com'`)
+}
+
+section('消息：意见反馈（客户端发 / 后台处理）')
+{
+  const device = `smoke-dev-${Date.now()}`
+
+  const empty = await api('POST', '/api/client/feedback', { body: { kind: 'bug', content: '   ', deviceId: device } })
+  check('空内容 → 1001', empty.code === 1001, `code=${empty.code}`)
+
+  const tooLong = await api('POST', '/api/client/feedback', {
+    body: { kind: 'bug', content: '啊'.repeat(2001), deviceId: device }
+  })
+  check('正文超 2000 字 → 1001', tooLong.code === 1001, `code=${tooLong.code}`)
+
+  const badKind = await api('POST', '/api/client/feedback', {
+    body: { kind: '投诉', content: '随便写点', deviceId: device }
+  })
+  check('类型不在枚举里 → 1001', badKind.code === 1001, `code=${badKind.code}`)
+
+  const badMail = await api('POST', '/api/client/feedback', {
+    body: { kind: 'idea', content: '随便写点', deviceId: device, contactEmail: '不是邮箱' }
+  })
+  check('邮箱格式不对 → 1001', badMail.code === 1001, `code=${badMail.code}`)
+
+  // 不登录也要能发 —— 这是这个功能的设计前提（连登录都进不去时才最需要报错）
+  const sent = await api('POST', '/api/client/feedback', {
+    body: {
+      kind: 'bug',
+      content: '冒烟测试：世界书条目多了以后滚动会卡。',
+      appVersion: '9.9.9',
+      platform: 'win32',
+      deviceId: device
+    }
+  })
+  check('未登录也能发反馈', sent.code === 0 && typeof sent.data?.id === 'number', `code=${sent.code}`)
+  globalThis.smokeFeedbackId = sent.data?.id
+
+  const again = await api('POST', '/api/client/feedback', {
+    body: { kind: 'bug', content: '紧接着又来一条', deviceId: device }
+  })
+  check('同一设备 60 秒内再发 → 1003', again.code === 1003, `code=${again.code}`)
+
+  const list = await api('GET', '/api/admin/feedbacks?page=1&pageSize=50', { token: T })
+  const row = list.data?.list?.find((f) => f.id === globalThis.smokeFeedbackId)
+  check('后台列表里能看到这条反馈', !!row)
+  check('未登录发的反馈 customerId 是 null', row?.customerId === null)
+  check('版本号存下来了', row?.appVersion === '9.9.9')
+  check('默认状态是 pending', row?.status === 'pending')
+
+  const c = list.data?.counts
+  check('counts 里五个状态 + 今日都有', !!c && typeof c.pending === 'number' && typeof c.today === 'number')
+  check('counts.total ≥ 各状态之和', c && c.total >= c.pending + c.read + c.resolved + c.ignored)
+
+  const handled = await api('PATCH', `/api/admin/feedbacks/${globalThis.smokeFeedbackId}`, {
+    token: T,
+    body: { status: 'resolved', note: '冒烟测试写的备注' }
+  })
+  check('改状态成功', handled.code === 0 && handled.data?.status === 'resolved')
+  check('记下了处理人', handled.data?.handledBy === '星宝')
+  check('备注存下来了', handled.data?.note === '冒烟测试写的备注')
+
+  const noChange = await api('PATCH', `/api/admin/feedbacks/${globalThis.smokeFeedbackId}`, {
+    token: T,
+    body: { status: 'resolved' }
+  })
+  check('状态没变时不写日志，直接 1001', noChange.code === 1001, `code=${noChange.code}`)
+
+  const badStatus = await api('PATCH', `/api/admin/feedbacks/${globalThis.smokeFeedbackId}`, {
+    token: T,
+    body: { status: '已处理' }
+  })
+  check('状态不在枚举里 → 1001', badStatus.code === 1001, `code=${badStatus.code}`)
+
+  const ghost = await api('PATCH', '/api/admin/feedbacks/99999999', { token: T, body: { status: 'read' } })
+  check('改不存在的反馈 → 40400', ghost.code === 40400, `code=${ghost.code}`)
+
+  const noAuth = await api('GET', '/api/admin/feedbacks')
+  check('未登录看不到反馈列表 → 401', noAuth.status === 401)
+}
+
+section('消息：通知公告（后台发 / 客户端拉）')
+{
+  const emptyTitle = await api('POST', '/api/admin/announcements', {
+    token: T,
+    body: { title: '  ', content: '正文' }
+  })
+  check('空标题 → 1001', emptyTitle.code === 1001, `code=${emptyTitle.code}`)
+
+  const emptyBody = await api('POST', '/api/admin/announcements', {
+    token: T,
+    body: { title: '标题', content: '' }
+  })
+  check('空正文 → 1001', emptyBody.code === 1001, `code=${emptyBody.code}`)
+
+  const badRange = await api('POST', '/api/admin/announcements', {
+    token: T,
+    body: {
+      title: '时间反了',
+      content: '正文',
+      startsAt: '2026-12-02T00:00:00.000Z',
+      endsAt: '2026-12-01T00:00:00.000Z'
+    }
+  })
+  check('失效时间早于生效时间 → 1001', badRange.code === 1001, `code=${badRange.code}`)
+
+  const badLevel = await api('POST', '/api/admin/announcements', {
+    token: T,
+    body: { title: '级别不对', content: '正文', level: '紧急' }
+  })
+  check('级别不在枚举里 → 1001', badLevel.code === 1001, `code=${badLevel.code}`)
+
+  const created = await api('POST', '/api/admin/announcements', {
+    token: T,
+    body: { title: '冒烟测试公告', content: '这条是冒烟测试发的，跑完会删掉。', level: 'important', pinned: true }
+  })
+  check('发公告成功', created.code === 0 && typeof created.data?.id === 'number', `code=${created.code}`)
+  globalThis.smokeAnnouncementId = created.data?.id
+  check('作者记成了当前管理员', created.data?.authorName === '星宝')
+  check('置顶存下来了', created.data?.pinned === true)
+
+  // 客户端一侧：不带 token 也要能拉
+  const clientList = await api('GET', '/api/client/announcements')
+  const mine = clientList.data?.list?.find((a) => a.id === globalThis.smokeAnnouncementId)
+  check('客户端（未登录）能拉到这条公告', !!mine)
+  check('未登录时 isRead 是 false', mine?.isRead === false)
+
+  const adminList = await api('GET', '/api/admin/announcements?page=1&pageSize=50', { token: T })
+  check('后台 liveCount ≥ 1', (adminList.data?.liveCount ?? 0) >= 1, `liveCount=${adminList.data?.liveCount}`)
+
+  const off = await api('PATCH', `/api/admin/announcements/${globalThis.smokeAnnouncementId}`, {
+    token: T,
+    body: { enabled: false }
+  })
+  check('下架成功', off.code === 0 && off.data?.enabled === false)
+
+  const afterOff = await api('GET', '/api/client/announcements')
+  check(
+    '下架后客户端拉不到',
+    !afterOff.data?.list?.some((a) => a.id === globalThis.smokeAnnouncementId)
+  )
+
+  const backOn = await api('PATCH', `/api/admin/announcements/${globalThis.smokeAnnouncementId}`, {
+    token: T,
+    body: { enabled: true, title: '冒烟测试公告（改过）' }
+  })
+  check('重新上架并改标题', backOn.code === 0 && backOn.data?.title === '冒烟测试公告（改过）')
+
+  const badPatch = await api('PATCH', `/api/admin/announcements/${globalThis.smokeAnnouncementId}`, {
+    token: T,
+    body: { enabled: 'yes' }
+  })
+  check('enabled 传字符串 → 1001', badPatch.code === 1001, `code=${badPatch.code}`)
+
+  const removed = await api('DELETE', `/api/admin/announcements/${globalThis.smokeAnnouncementId}`, { token: T })
+  check('删除成功', removed.code === 0)
+
+  const afterDelete = await api('GET', '/api/client/announcements')
+  check(
+    '删掉之后客户端也拉不到',
+    !afterDelete.data?.list?.some((a) => a.id === globalThis.smokeAnnouncementId)
+  )
+
+  const ghost = await api('DELETE', '/api/admin/announcements/99999999', { token: T })
+  check('删不存在的公告 → 40400', ghost.code === 40400, `code=${ghost.code}`)
+
+  /* ---------------- 清理：这一场跑出来的全部收干净 ---------------- */
+  // ⚠️ 必须放在**最后一个**用库的段落里。之前这段清理写在「邀请码」段（文件中间），
+  //    后面的消息段又写了几条日志，于是每次跑完库里都留着 4 条假的「管理员发公告」。
+  await db.query(`DELETE FROM feedbacks WHERE app_version = '9.9.9'`)
+  await db.query(`DELETE FROM announcements WHERE title LIKE '冒烟测试公告%'`)
+
+  // 这一场注册的账号（smoke<时间戳>b / smoke-inv-*）—— 不删的话「今日注册」天天被撑大。
+  // 本库不建外键，所以关联表得自己一个个清，不然会留一堆指向不存在客户的孤儿行
+  const smokeAccounts = await db.query(`SELECT id FROM customers WHERE email LIKE 'smoke%@example.com'`)
+  const mineIds = smokeAccounts.rows.map((r) => r.id)
+  if (mineIds.length) {
+    await db.query('DELETE FROM login_logs WHERE customer_id = ANY($1)', [mineIds])
+    await db.query('DELETE FROM client_sessions WHERE customer_id = ANY($1)', [mineIds])
+    await db.query('DELETE FROM membership_grants WHERE customer_id = ANY($1)', [mineIds])
+    await db.query('DELETE FROM announcement_reads WHERE customer_id = ANY($1)', [mineIds])
+    await db.query('DELETE FROM feedbacks WHERE customer_id = ANY($1)', [mineIds])
+    await db.query('UPDATE customers SET referred_by_id = NULL WHERE referred_by_id = ANY($1)', [mineIds])
+    await db.query('DELETE FROM customers WHERE id = ANY($1)', [mineIds])
+  }
+
+  // 卡密按「这场跑出来的时间窗」删：不按备注删，否则会误伤星宝自己建的「内部测试」卡
+  await db.query(`DELETE FROM invite_cards WHERE created_at >= $1`, [RUN_START_UTC])
+
+  // 最后兜一刀：这场写出来的操作日志全清掉（卡密 / 字典 / 公告那几条没有 id 可循，只能按时间切）
+  await db.query(`DELETE FROM operation_logs WHERE created_at >= $1`, [RUN_START_UTC])
 }
 
 section('参数校验兜底')

@@ -94,8 +94,7 @@ export async function clientGuard(request: FastifyRequest, reply: FastifyReply):
   await verify(request, reply, 'client')
 }
 
-/** 从 refreshToken 里解出身份；解不出或类型不对就返回 null */
-export function readRefreshToken(
+/** 从 refreshToken 里解出身份；解不出或类型不对就返回 null */export function readRefreshToken(
   app: FastifyInstance,
   raw: unknown,
   kind: TokenPayload['kind']
@@ -106,6 +105,29 @@ export function readRefreshToken(
     const payload = app.jwt.verify<TokenPayload>(rt)
     if (!payload.ref || payload.kind !== kind || typeof payload.sub !== 'number') return null
     return { sub: payload.sub }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 可选登录 —— 带了有效客户 token 就返回 customer id，否则一律 null。
+ *
+ * ⚠️ 和上面两个 guard 的根本区别：**它不拒绝请求**。用在「不登录也能用」的接口上
+ *    （发意见反馈、拉公告）：没登录照样能用，登录了就能顺带知道是谁。
+ * ⚠️ 过期 token 也当没登录处理，不报 401 —— 否则客户端启动时拉公告会因为
+ *    「登录态过期」整块失败，而公告本来就不该要求登录。
+ */
+export function optionalCustomerId(request: FastifyRequest): number | null {
+  const header = request.headers.authorization
+  const raw = typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7).trim() : ''
+  if (!raw) return null
+
+  try {
+    const payload = request.server.jwt.verify<TokenPayload>(raw)
+    // refreshToken / 注册中的临时令牌都不算登录态
+    if (payload.kind !== 'client' || payload.ref || payload.pending) return null
+    return typeof payload.sub === 'number' ? payload.sub : null
   } catch {
     return null
   }

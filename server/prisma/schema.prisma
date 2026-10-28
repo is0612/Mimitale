@@ -1,7 +1,10 @@
-// Mimitale 账号中心 —— 只有 6 张表，全是「账号与运营」。
+// Mimitale 账号中心 —— 全是「账号与运营」相关的表。
 //
 // ⛔ 这里**故意没有**角色卡 / 世界书 / 对话记录 / 本地设置的表。
 //    那些东西留在用户自己电脑上，服务器一份都不存。
+//    ⚠️ 2026-10-28 加的 feedbacks / announcements **不算破例**：
+//    反馈是「人主动发给运营的一段话」，公告是「运营主动发出去的一段话」，
+//    两者都是消息，不是用户的创作内容。别顺着这两张表往下把对话也搬上来。
 //
 // 三条来自决策记录的设计约束：
 //   ① 客户（customers）和管理员（admins）是两套账号，不共用表、不做外键
@@ -37,26 +40,26 @@ model Admin {
 
 /// 客户 = 在 Mimitale 客户端里注册使用软件的人
 model Customer {
-  id            Int       @id @default(autoincrement())
+  id                 Int       @id @default(autoincrement())
   /// 登录标识，统一小写存储
-  email         String    @unique
+  email              String    @unique
   /// 显示名。
   /// ⚠️ 客户端把它叫 `username`（注册第二步填「用户名」），后台列表叫「昵称」——
   ///    **同一列**，别为名字差异再加一列。注册第一步先填邮箱前缀，第二步覆盖成用户自己填的。
-  nickname      String
+  nickname           String
   /// 头像，`data:image/...;base64`。客户端上传前已经压到 256×256，单张几十 KB
-  avatar        String?
+  avatar             String?
   /// scrypt 哈希，格式 `scrypt$salt$hash`。null = 还没走完注册第二步
-  passwordHash  String?   @map("password_hash")
+  passwordHash       String?   @map("password_hash")
   /// 24 位凭证码 `XXXX-XXXX-…`。换机器 / 重装后靠它登回来，是这个项目唯一的「迁移手段」
   /// （云同步不做了，数据全在本机）。null = 老数据或还没生成
-  voucher       String?   @unique
+  voucher            String?   @unique
   /// 有没有走完注册第二步（头像 + 用户名 + 密码）
-  profileReady  Boolean   @default(false) @map("profile_ready")
+  profileReady       Boolean   @default(false) @map("profile_ready")
   /// active | banned —— 代码枚举，不进字典
-  status        String    @default("active")
+  status             String    @default("active")
   /// 字典 ban_reason 的 value；解封时清空
-  banReason     String?   @map("ban_reason")
+  banReason          String?   @map("ban_reason")
   /// 字典 membership_level 的 value；none = 非会员（哨兵，不进字典）。
   /// ⚠️ **免费天数不是会员**：注册送的那 30 天不写等级，只写 free_expire_at
   membershipLevel    String    @default("none") @map("membership_level")
@@ -68,15 +71,15 @@ model Customer {
   freeExpireAt       DateTime? @map("free_expire_at")
   /// 注册时填的码 —— **别人给我的**。来源可能是后台发的卡密，也可能是另一个客户的邀请码。
   /// 卡密是一码一次，邀请码能邀多人，两者长一个形状（`MIMI-XXXX-XXXX`）。
-  inviteCode    String?   @map("invite_code")
+  inviteCode         String?   @map("invite_code")
   /// **我自己的**邀请码，别人注册时填它我就多一个被邀请者。一人一个、可邀多人。
   /// null = 还没生成（老数据），第一次取「个人信息」时补上
-  referralCode  String?   @unique @map("referral_code")
+  referralCode       String?   @unique @map("referral_code")
   /// 邀请我的人是谁（客户 id）。来源是后台卡密时为 null。
   /// ⚠️ 只存 id 不建关系 —— 本库「不建任何外键」是定死的，删号不留残骸靠逻辑处理
-  referredById  Int?      @map("referred_by_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  lastLoginAt   DateTime? @map("last_login_at")
+  referredById       Int?      @map("referred_by_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  lastLoginAt        DateTime? @map("last_login_at")
 
   // 「今天注册了多少」每次打开后台都要查
   @@index([createdAt])
@@ -253,4 +256,112 @@ model LoginCode {
 
   @@index([email, createdAt])
   @@map("login_codes")
+}
+
+/**
+ * ==================================================================
+ */
+/**
+ * 消息：用户发给运营（反馈） / 运营发给用户（公告）
+ */
+/**
+ * ==================================================================
+ */
+
+/// 意见反馈 —— 客户端「意见反馈」弹窗提交上来的那段话。
+///
+/// ⚠️ **不登录也能发**（星宝 2026-10-28 定的）：新用户「连登录都进不去」的时候
+///    恰恰最需要报错，要是先要求登录就废了。所以 customer_id 可以为 null，
+///    同时冗余存一份 contact_email / contact_name —— 客户后来注销了，
+///    这条反馈里的联系人也还在，不会变成一条查不到是谁的孤魂。
+/// ⚠️ 不建外键（本库定死的规矩），customer_id 只是个逻辑字段。
+model Feedback {
+  id           Int       @id @default(autoincrement())
+  /// 登录状态下提交时才有；未登录为 null
+  customerId   Int?      @map("customer_id")
+  /// 提交时客户填/带上的联系方式。未登录又没填就是空串
+  contactEmail String    @default("") @map("contact_email")
+  /// 冗余昵称：客户改了名字，历史反馈还是当时的署名
+  contactName  String    @default("") @map("contact_name")
+  /// bug | idea | other —— 代码枚举，不进字典。
+  /// 和客户端弹窗里那三颗按钮一一对应（问题 / 建议 / 其它）
+  kind         String    @default("bug")
+  /// 正文。长度上限在接口层卡（2000 字），这里不设 varchar 长度
+  content      String
+  /// 客户端版本号，例：1.4.2 —— 「只有老版本会崩」是常见结论，没这个就查不动
+  appVersion   String    @default("") @map("app_version")
+  /// win32 / darwin / linux，取自 process.platform
+  platform     String    @default("")
+  /// 设备指纹（客户端持久化的一个随机串）。两个用途：
+  /// ① 未登录时按它限频，不然一个人能刷一万条
+  /// ② 判断「这是同一个人在反复报同一个问题」
+  deviceId     String    @default("") @map("device_id")
+  /// pending | read | resolved | ignored —— 代码枚举，不进字典。
+  /// pending = 还没人看（列表默认按它筛），read = 看过了，resolved = 已处理，ignored = 不打算处理
+  status       String    @default("pending")
+  /// 管理员写的**内部备注**，只给自己看，不回传给客户端。
+  /// ⚠️ 别把它当「回复」用 —— 客户端没有收回复的地方，写了也送不到人手上
+  note         String    @default("")
+  /// 最近一次改状态的人（管理员昵称，冗余）
+  handledBy    String    @default("") @map("handled_by")
+  handledAt    DateTime? @map("handled_at")
+  /// 提交时的出口 IP。上了 nginx 要开 trustProxy，否则全是 127.0.0.1
+  ip           String    @default("")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  /// 后台默认视图 = 「待处理的按时间倒序」，这条索引正好盖住它
+  @@index([status, createdAt])
+  @@index([customerId])
+  @@index([createdAt])
+  @@map("feedbacks")
+}
+
+/// 通知公告 —— 管理端写一条，客户端启动时拉下来显示。
+///
+/// ⚠️ 和 feedbacks 方向相反，别合并成一张「消息表」：一个是外部进来的，
+///    一个是内部发出去的，权限、状态机、生命周期全都不一样。
+/// ⚠️ 「现在要不要显示」由 enabled + startsAt + endsAt **三个一起推导**，
+///    不存 visible 布尔 —— 存了就得有人定时去翻它，翻漏了就永远不消失。
+model Announcement {
+  id         Int       @id @default(autoincrement())
+  title      String
+  /// 正文。客户端横条只显示首行，点开看全文
+  content    String
+  /// normal | important | maintenance —— 代码枚举，决定客户端横条的颜色和图标
+  level      String    @default("normal")
+  /// 下架开关。false = 客户端拉不到（历史已读记录保留，重新上架后照旧算已读）
+  enabled    Boolean   @default(true)
+  /// 置顶。客户端横条按 pinned 优先，最多同时显示 2 条
+  pinned     Boolean   @default(false)
+  /// 生效时间；null = 立刻生效
+  startsAt   DateTime? @map("starts_at")
+  /// 失效时间；null = 永不失效
+  endsAt     DateTime? @map("ends_at")
+  /// 谁发的（管理员 id / 昵称冗余，管理员改名不影响历史）
+  authorId   Int       @default(0) @map("author_id")
+  authorName String    @default("") @map("author_name")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@index([enabled, createdAt])
+  @@map("announcements")
+}
+
+/// 公告已读 —— 谁看过哪一条。
+///
+/// ⚠️ 只给**登录用户**记。未登录的人客户端只在本地 localStorage 记一份，
+///    不然得给每个匿名设备造一个假客户 id，那是自找麻烦。
+/// ⚠️ 没有 customer_id 的外键，也没有 announcement_id 的外键（本库不建外键）：
+///    公告被删了，这张表里的行就是垃圾数据，靠「读的时候 join 一下过滤掉」处理。
+model AnnouncementRead {
+  id             Int      @id @default(autoincrement())
+  announcementId Int      @map("announcement_id")
+  customerId     Int      @map("customer_id")
+  readAt         DateTime @default(now()) @map("read_at")
+
+  /// 一个人一条公告只有一行，重复标记已读走 upsert
+  @@unique([announcementId, customerId])
+  @@index([customerId])
+  @@map("announcement_reads")
 }

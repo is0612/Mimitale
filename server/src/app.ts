@@ -13,7 +13,10 @@ import { adminLogRoutes } from './routes/admin/logs.js'
 import { adminCardRoutes } from './routes/admin/cards.js'
 import { adminDictRoutes } from './routes/admin/dicts.js'
 import { adminOverviewRoutes } from './routes/admin/overview.js'
+import { adminFeedbackRoutes } from './routes/admin/feedbacks.js'
+import { adminAnnouncementRoutes } from './routes/admin/announcements.js'
 import { clientAuthPublicRoutes, clientAuthProtectedRoutes } from './routes/client/auth.js'
+import { clientMessageRoutes } from './routes/client/messages.js'
 
 const ADMIN = '/api/admin'
 const CLIENT = '/api/client'
@@ -93,6 +96,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(adminAuthPublicRoutes, { prefix: `${ADMIN}/auth` })
   // 客户的图形码 / 发码 / 注册两步 / 密码登录 / 凭证登录 / 刷新
   await app.register(clientAuthPublicRoutes, { prefix: `${CLIENT}/auth` })
+  // 发反馈 / 拉公告 —— **故意不挂 clientGuard**：登录不进去的人才最需要报错和看公告。
+  // 带了有效 token 就顺带认出是谁（optionalCustomerId），没带照样能用
+  await app.register(clientMessageRoutes, { prefix: CLIENT })
 
   /* ---------------- 要管理员 token 的 ---------------- */
 
@@ -105,6 +111,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     await scope.register(adminCardRoutes, { prefix: ADMIN })
     await scope.register(adminDictRoutes, { prefix: ADMIN })
     await scope.register(adminOverviewRoutes, { prefix: ADMIN })
+    await scope.register(adminFeedbackRoutes, { prefix: ADMIN })
+    await scope.register(adminAnnouncementRoutes, { prefix: ADMIN })
   })
 
   /* ---------------- 要客户 token 的 ---------------- */

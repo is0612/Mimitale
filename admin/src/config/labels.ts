@@ -18,7 +18,16 @@
  * 这条边界是有意的，别为了「统一」把这些也搬进字典。
  */
 
-import type { CardStatus, CustomerStatus, GrantSource, LogAction, MembershipLevel } from '@/types'
+import type {
+  AnnouncementLevel,
+  CardStatus,
+  CustomerStatus,
+  FeedbackKind,
+  FeedbackStatus,
+  GrantSource,
+  LogAction,
+  MembershipLevel
+} from '@/types'
 
 /** el-tag 支持的类型 */
 export type TagType = 'success' | 'info' | 'warning' | 'danger'
@@ -32,7 +41,11 @@ export const LOG_ACTION_LABEL: Record<LogAction, string> = {
   'card.void': '作废卡密',
   'dict.create': '新建字典',
   'dict.update': '改字典项',
-  'dict.delete': '删字典项'
+  'dict.delete': '删字典项',
+  'feedback.update': '处理反馈',
+  'announcement.create': '发公告',
+  'announcement.update': '改公告',
+  'announcement.delete': '删公告'
 }
 
 /** 动作 → 标签色。破坏性的红、恢复性的绿、其它中性 */
@@ -44,7 +57,11 @@ export const LOG_ACTION_TAG: Record<LogAction, TagType> = {
   'card.void': 'danger',
   'dict.create': 'info',
   'dict.update': 'warning',
-  'dict.delete': 'danger'
+  'dict.delete': 'danger',
+  'feedback.update': 'warning',
+  'announcement.create': 'success',
+  'announcement.update': 'warning',
+  'announcement.delete': 'danger'
 }
 
 /** 日志筛选项（顺序即下拉里的顺序） */
@@ -56,7 +73,11 @@ export const LOG_ACTION_OPTIONS: LogAction[] = [
   'card.void',
   'dict.create',
   'dict.update',
-  'dict.delete'
+  'dict.delete',
+  'feedback.update',
+  'announcement.create',
+  'announcement.update',
+  'announcement.delete'
 ]
 
 /** 活动类型 —— 代码枚举（服务端 record 的入参），不进字典 */
@@ -177,4 +198,74 @@ export function formatTime(value: string | null): string {
 export function formatDay(value: string | null): string {
   if (!value) return '—'
   return formatTime(value).slice(0, 10)
+}
+
+/* ------------------------------------------------------------------ */
+/* 消息：意见反馈 / 通知公告                                            */
+/* ------------------------------------------------------------------ */
+
+/** 反馈类型 —— 客户端弹窗那三颗按钮的同一套叫法 */
+export const FEEDBACK_KIND_LABEL: Record<FeedbackKind, string> = {
+  bug: '问题',
+  idea: '建议',
+  other: '其它'
+}
+
+export const FEEDBACK_KIND_TAG: Record<FeedbackKind, TagType> = {
+  bug: 'danger',
+  idea: 'warning',
+  other: 'info'
+}
+
+/** 反馈类型筛选项（顺序即下拉里的顺序） */
+export const FEEDBACK_KIND_OPTIONS: FeedbackKind[] = ['bug', 'idea', 'other']
+
+/**
+ * 反馈状态。
+ * pending 还没人看 → read 看过了 → resolved 处理完了 / ignored 不打算处理。
+ * ⚠️ 没有「已回复」这一档：客户端没有收回复的地方，加了就是个假的。
+ */
+export const FEEDBACK_STATUS_LABEL: Record<FeedbackStatus, string> = {
+  pending: '待处理',
+  read: '已查看',
+  resolved: '已处理',
+  ignored: '已忽略'
+}
+
+export const FEEDBACK_STATUS_TAG: Record<FeedbackStatus, TagType> = {
+  pending: 'danger',
+  read: 'info',
+  resolved: 'success',
+  ignored: 'warning'
+}
+
+export const FEEDBACK_STATUS_OPTIONS: FeedbackStatus[] = ['pending', 'read', 'resolved', 'ignored']
+
+/**
+ * 公告级别 —— 决定客户端横条的颜色和左边那颗图标。
+ * 加一档要同时改客户端样式，所以是代码枚举、不进字典。
+ */
+export const ANNOUNCEMENT_LEVEL_LABEL: Record<AnnouncementLevel, string> = {
+  normal: '普通',
+  important: '重要',
+  maintenance: '维护'
+}
+
+export const ANNOUNCEMENT_LEVEL_TAG: Record<AnnouncementLevel, TagType> = {
+  normal: 'info',
+  important: 'danger',
+  maintenance: 'warning'
+}
+
+/** 公告此刻能不能显示在客户端上 —— 前端只用来标「已过期」，判断真源在服务端 */
+export function announcementLive(a: {
+  enabled: boolean
+  startsAt: string | null
+  endsAt: string | null
+}): boolean {
+  if (!a.enabled) return false
+  const now = Date.now()
+  if (a.startsAt && Date.parse(a.startsAt) > now) return false
+  if (a.endsAt && Date.parse(a.endsAt) < now) return false
+  return true
 }

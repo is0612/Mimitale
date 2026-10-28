@@ -4,7 +4,9 @@ import type {
   InviteCard as InviteCardDTO,
   OperationLog as OperationLogDTO,
   DictType as DictTypeDTO,
-  DictItem as DictItemDTO
+  DictItem as DictItemDTO,
+  Feedback as FeedbackDTO,
+  Announcement as AnnouncementDTO
 } from '@contract'
 import type {
   Admin,
@@ -12,7 +14,9 @@ import type {
   InviteCard,
   OperationLog,
   DictType,
-  DictItem
+  DictItem,
+  Feedback as FeedbackRow,
+  Announcement as AnnouncementRow
 } from '../generated/prisma/client'
 
 /**
@@ -102,5 +106,54 @@ export function toDictItem(i: DictItem): DictItemDTO {
     sort: i.sort,
     enabled: i.enabled,
     remark: i.remark
+  }
+}
+
+/** 反馈类型 / 状态都收窄成联合类型 —— 库里是自由字符串，契约是枚举 */
+export function toFeedback(f: FeedbackRow): FeedbackDTO {
+  const kind: FeedbackDTO['kind'] = f.kind === 'idea' ? 'idea' : f.kind === 'other' ? 'other' : 'bug'
+  const status: FeedbackDTO['status'] =
+    f.status === 'read'
+      ? 'read'
+      : f.status === 'resolved'
+        ? 'resolved'
+        : f.status === 'ignored'
+          ? 'ignored'
+          : 'pending'
+
+  return {
+    id: f.id,
+    customerId: f.customerId,
+    contactEmail: f.contactEmail,
+    contactName: f.contactName,
+    kind,
+    content: f.content,
+    appVersion: f.appVersion,
+    platform: f.platform,
+    status,
+    note: f.note,
+    handledBy: f.handledBy,
+    handledAt: f.handledAt?.toISOString() ?? null,
+    createdAt: f.createdAt.toISOString(),
+    updatedAt: f.updatedAt.toISOString()
+  }
+}
+
+export function toAnnouncement(a: AnnouncementRow): AnnouncementDTO {
+  const level: AnnouncementDTO['level'] =
+    a.level === 'important' ? 'important' : a.level === 'maintenance' ? 'maintenance' : 'normal'
+
+  return {
+    id: a.id,
+    title: a.title,
+    content: a.content,
+    level,
+    enabled: a.enabled,
+    pinned: a.pinned,
+    startsAt: a.startsAt?.toISOString() ?? null,
+    endsAt: a.endsAt?.toISOString() ?? null,
+    authorName: a.authorName,
+    createdAt: a.createdAt.toISOString(),
+    updatedAt: a.updatedAt.toISOString()
   }
 }

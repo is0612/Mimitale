@@ -246,6 +246,11 @@ export type LogAction =
   | 'dict.create'
   | 'dict.update'
   | 'dict.delete'
+  // 消息（2026-10-28）：反馈只记「改了状态/备注」，公告记增删改
+  | 'feedback.update'
+  | 'announcement.create'
+  | 'announcement.update'
+  | 'announcement.delete'
 
 export interface OperationLog {
   id: number
@@ -454,3 +459,136 @@ export interface OverviewRes {
   /** 最近 5 个注册的客户 */
   recent: Customer[]
 }
+
+/* ------------------------------------------------------------------ */
+/* 消息                                                            */
+/*                                                                   */
+/* 侧边栏「消息」组下两个页面，方向恰好相反：                            */
+/*   意见反馈 = 客户端用户发给运营（外部进来的）                        */
+/*   通知公告 = 运营发给客户端用户（内部发出去的）                      */
+/* 别因为「都是消息」就合并成一张表：状态机、权限、生命周期完全不一样。   */
+/* ------------------------------------------------------------------ */
+
+/** 18. GET /api/admin/feedbacks —— 意见反馈列表（分页 + 状态 + 类型 + 关键词） */
+
+/** 反馈类型 —— 和客户端弹窗的三颗按钮一一对应 */
+export type FeedbackKind = 'bug' | 'idea' | 'other'
+
+/** 反馈状态 —— 代码枚举（值参与逻辑），不进字典 */
+export type FeedbackStatus = 'pending' | 'read' | 'resolved' | 'ignored'
+
+export interface Feedback {
+  id: number
+  /** 登录状态下提交才有；未登录为 null（不登录也能发，见 schema 注释） */
+  customerId: number | null
+  /** 提交时带上的联系方式，未登录又没填就是空串 */
+  contactEmail: string
+  contactName: string
+  kind: FeedbackKind
+  content: string
+  /** 客户端版本号，例 1.4.2 —— 「只有老版本会崩」靠它判断 */
+  appVersion: string
+  /** win32 / darwin / linux */
+  platform: string
+  status: FeedbackStatus
+  /** 管理员内部备注，**不回传给客户端**（客户端没有收回复的地方） */
+  note: string
+  handledBy: string
+  handledAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FeedbackListQuery {
+  page?: number
+  pageSize?: number
+  status?: FeedbackStatus | ''
+  kind?: FeedbackKind | ''
+  /** 模糊匹配正文 / 邮箱 / 昵称 */
+  keyword?: string
+}
+
+/** 各状态有多少条 —— 给顶部那几个「待处理 3」的数字用 */
+export interface FeedbackCounts {
+  total: number
+  pending: number
+  read: number
+  resolved: number
+  ignored: number
+  /** 今天（北京时间）收到的，和概览页「今日注册」同一套时区口径 */
+  today: number
+}
+
+export interface FeedbackListRes {
+  total: number
+  list: Feedback[]
+  /** 各状态的总数。**全表口径** —— 不跟着当前筛选和分页变，
+   *  否则「待处理 3」会变成「当前筛选下待处理 3」，数字就没意义了 */
+  counts: FeedbackCounts
+}
+
+/** 19. PATCH /api/admin/feedbacks/{id} —— 改状态 / 写内部备注 */
+export interface UpdateFeedbackReq {
+  status?: FeedbackStatus
+  note?: string
+}
+
+/** 20. GET /api/admin/announcements —— 公告列表 */
+export type AnnouncementLevel = 'normal' | 'important' | 'maintenance'
+
+export interface Announcement {
+  id: number
+  title: string
+  content: string
+  level: AnnouncementLevel
+  /** 下架开关，false = 客户端拉不到 */
+  enabled: boolean
+  /** 置顶：客户端横条优先显示置顶的 */
+  pinned: boolean
+  /** 生效时间，null = 立刻生效 */
+  startsAt: string | null
+  /** 失效时间，null = 永不失效 */
+  endsAt: string | null
+  authorName: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AnnouncementListQuery {
+  page?: number
+  pageSize?: number
+  /** 不传 = 全部；'1' 只在架、'0' 只看下架的 */
+  enabled?: '' | '1' | '0'
+  keyword?: string
+}
+
+export interface AnnouncementListRes {
+  total: number
+  list: Announcement[]
+  /** 此刻真正能显示在客户端上的条数（在架 + 在有效期内） */
+  liveCount: number
+}
+
+/** 21. POST /api/admin/announcements —— 发一条新公告 */
+export interface CreateAnnouncementReq {
+  title: string
+  content: string
+  level?: AnnouncementLevel
+  pinned?: boolean
+  startsAt?: string | null
+  endsAt?: string | null
+}
+
+/** 22. PATCH /api/admin/announcements/{id} —— 改内容 / 上下架 / 置顶 */
+export interface UpdateAnnouncementReq {
+  title?: string
+  content?: string
+  level?: AnnouncementLevel
+  enabled?: boolean
+  pinned?: boolean
+  startsAt?: string | null
+  endsAt?: string | null
+}
+
+/* 23. DELETE /api/admin/announcements/{id} → ApiResult<null>
+ *     真删。公告没有审计价值（操作日志里已经留了「谁在什么时候发了什么」） */

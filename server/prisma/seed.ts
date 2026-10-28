@@ -209,7 +209,7 @@ async function seedDemo(): Promise<void> {
     cards.push({ id: card.id, code: card.code })
   }
 
-  const customers: Array<{ id: number; nickname: string }> = []
+  const customers: Array<{ id: number; nickname: string; email: string }> = []
 
   for (let i = 0; i < DEMO_EMAILS.length; i++) {
     const offset = offsets[i] ?? 30
@@ -255,7 +255,7 @@ async function seedDemo(): Promise<void> {
         lastLoginAt: new Date(createdAt.getTime() + 3600_000)
       }
     })
-    customers.push({ id: customer.id, nickname: customer.nickname })
+    customers.push({ id: customer.id, nickname: customer.nickname, email: customer.email })
 
     // 天数流水：每个人都有一条注册赠送；发过会员的再补一条
     await prisma.membershipGrant.create({
@@ -334,7 +334,119 @@ async function seedDemo(): Promise<void> {
     ]
   })
 
-  console.log(`[seed] 示范数据：${DEMO_EMAILS.length} 个客户、${cards.length} 张卡密、若干日志`)
+  /* ---------------- 消息：几条反馈 + 两条公告 ---------------- */
+
+  // 反馈三种类型各来一条，第一条是登录状态发的（带 customerId 和联系方式），
+  // 其余是匿名的 —— 和真实情况一致：很多人是在登不进去的时候才来报错的
+  const fb1 = customers[1]
+  const fb2 = customers[3]
+  const fb3 = customers[5]
+
+  await prisma.feedback.createMany({
+    data: [
+      {
+        customerId: fb1?.id ?? null,
+        contactEmail: fb1?.email ?? '',
+        contactName: fb1?.nickname ?? '',
+        kind: 'bug',
+        content: '世界书条目超过 50 条之后，编辑页滚动会卡一秒左右才跟手，改成虚拟滚动会好些吗？',
+        appVersion: '1.4.2',
+        platform: 'win32',
+        deviceId: 'demo-dev-1',
+        status: 'pending',
+        ip: '127.0.0.1',
+        createdAt: at(0, 8, 40)
+      },
+      {
+        customerId: null,
+        contactEmail: '',
+        contactName: '',
+        kind: 'idea',
+        content: '希望剧情选项能记住上次选的那批，换一批的时候别整个刷新，思路会断。',
+        appVersion: '1.4.2',
+        platform: 'win32',
+        deviceId: 'demo-dev-2',
+        status: 'read',
+        handledBy: admin.nickname,
+        handledAt: at(1, 10, 12),
+        ip: '127.0.0.1',
+        createdAt: at(1, 9, 30)
+      },
+      {
+        customerId: fb2?.id ?? null,
+        contactEmail: fb2?.email ?? '',
+        contactName: fb2?.nickname ?? '',
+        kind: 'other',
+        content: '凭证码那张图丢了还能找回账号吗？换过一次电脑，现在只能靠它登回来。',
+        appVersion: '1.4.1',
+        platform: 'darwin',
+        deviceId: 'demo-dev-3',
+        status: 'resolved',
+        note: '已经私信教他用手抄码登录了',
+        handledBy: admin.nickname,
+        handledAt: at(2, 16, 5),
+        ip: '127.0.0.1',
+        createdAt: at(2, 15, 48)
+      },
+      {
+        customerId: fb3?.id ?? null,
+        contactEmail: fb3?.email ?? '',
+        contactName: fb3?.nickname ?? '',
+        kind: 'bug',
+        content: '托盘图标在双屏拔掉一个之后就不见了，要重启才回来。',
+        appVersion: '1.4.0',
+        platform: 'win32',
+        deviceId: 'demo-dev-4',
+        status: 'ignored',
+        note: '等托盘那块整体重做再看',
+        handledBy: admin.nickname,
+        handledAt: at(3, 11, 2),
+        ip: '127.0.0.1',
+        createdAt: at(3, 10, 20)
+      }
+    ]
+  })
+
+  const notice1 = await prisma.announcement.create({
+    data: {
+      title: '欢迎使用 Mimitale',
+      content:
+        '这是第一条公告。有意见或者遇到 bug，点左下角头像里的「意见反馈」，我们会看。\n换电脑前记得把凭证码那张图存好 —— 它是唯一的迁移手段。',
+      level: 'normal',
+      pinned: true,
+      authorId: admin.id,
+      authorName: admin.nickname,
+      createdAt: at(5, 10)
+    }
+  })
+
+  await prisma.announcement.create({
+    data: {
+      title: 'v1.5 计划：世界书支持按段排序',
+      content:
+        '下个版本会给世界书条目加排序和分组。已经建好的书不受影响，排序可以一键恢复默认。',
+      level: 'important',
+      authorId: admin.id,
+      authorName: admin.nickname,
+      createdAt: at(1, 14, 20)
+    }
+  })
+
+  // 一部分客户已经看过第一条 —— 不然「未读」永远是全红，看不出差别
+  const readers = customers.slice(0, 5)
+  if (readers.length > 0) {
+    await prisma.announcementRead.createMany({
+      data: readers.map((c) => ({
+        announcementId: notice1.id,
+        customerId: c.id,
+        readAt: at(4, 9)
+      }))
+    })
+  }
+
+  console.log(
+    `[seed] 示范数据：${DEMO_EMAILS.length} 个客户、${cards.length} 张卡密、4 条反馈、2 条公告、若干日志`
+  )
 }
 
 /* ------------------------------------------------------------------ */

@@ -25,6 +25,12 @@ const CHROME = process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Applic
 const SITE = process.env.SHOT_SITE ?? 'http://localhost:5173/admin/'
 const ROUTE = process.argv[2] ?? 'customers'
 const OUT = resolve(process.argv[3] ?? `shots/admin-${ROUTE.replace(/\//g, '-')}.png`)
+/**
+ * 可选：截图前在页面里跑一段 JS。
+ * 用来截「点开某个弹窗之后」的样子 —— 不然只能截到列表页。
+ * 例：node scripts/shot.mjs announcements shots/x.png "document.querySelector('.btn-new').click()"
+ */
+const EXEC = process.argv[4] ?? ''
 const PORT = 9333
 const ORIGIN = new URL(SITE).origin
 
@@ -124,7 +130,6 @@ await send('Emulation.setDeviceMetricsOverride', {
 // 先落在同源页面上，localStorage 才有地方写
 await send('Page.navigate', { url: SITE })
 await wait(2500)
-
 await send('Runtime.evaluate', {
   expression: `
     localStorage.setItem('mimitale_admin_token', ${JSON.stringify(token)});
@@ -141,6 +146,16 @@ await send('Page.navigate', { url: `${SITE}#/${ROUTE}` })
 await wait(600)
 await send('Page.reload')
 await wait(3500)
+
+// 可选动作（截弹窗用）—— 跑完多等一会儿让过渡动画走完
+if (EXEC) {
+  const r = await send('Runtime.evaluate', { expression: EXEC, awaitPromise: true })
+  if (r.result?.exceptionDetails) {
+    chrome.kill()
+    throw new Error('页面里那段 JS 抛错了：' + JSON.stringify(r.result.exceptionDetails).slice(0, 300))
+  }
+  await wait(1200)
+}
 
 const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
 if (!shot.result?.data) {

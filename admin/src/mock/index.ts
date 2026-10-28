@@ -28,8 +28,11 @@ import {
   type AdminAccount,
   type AdminLoginReq,
   type AdminRefreshReq,
+  type Announcement,
+  type AnnouncementListQuery,
   type CardListQuery,
   type CardStatus,
+  type CreateAnnouncementReq,
   type CreateCardsReq,
   type CreateDictItemReq,
   type CreateDictTypeReq,
@@ -40,6 +43,10 @@ import {
   type DictBundle,
   type DictItem,
   type DictType,
+  type Feedback,
+  type FeedbackKind,
+  type FeedbackListQuery,
+  type FeedbackStatus,
   type InviteCard,
   type LogAction,
   type LogListQuery,
@@ -47,9 +54,11 @@ import {
   type MembershipLevel,
   type MembershipGrant,
   type OperationLog,
+  type UpdateAnnouncementReq,
   type UpdateCardReq,
   type UpdateCustomerReq,
-  type UpdateDictItemReq
+  type UpdateDictItemReq,
+  type UpdateFeedbackReq
 } from '@/types'
 
 /* ------------------------------------------------------------------ */
@@ -1193,6 +1202,387 @@ function handleOverview({ headers }: MockCtx): MockOutcome {
 /* 路由表                                                              */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* 消息：意见反馈 / 通知公告（2026-10-28）                              */
+/* ------------------------------------------------------------------ */
+
+const HOUR = 3600_000
+
+/** 相对现在的 ISO 时间，让 mock 数据看起来是「刚发生」的 */
+function hoursAgo(h: number): string {
+  return new Date(Date.now() - h * HOUR).toISOString()
+}
+
+/**
+ * 假反馈数据。
+ * ⚠️ mock 只实现**后台侧**接口：这里有「看反馈 / 改状态」，没有「发反馈」——
+ *    发反馈是客户端调 /api/client/feedback，后台自带这份假后端管不着。
+ */
+const feedbacks: Feedback[] = [
+  {
+    id: 4,
+    customerId: customers[2]?.id ?? null,
+    contactEmail: customers[2]?.email ?? '',
+    contactName: customers[2]?.nickname ?? '',
+    kind: 'bug',
+    content: '托盘图标在双屏拔掉一个之后就不见了，要重启才回来。',
+    appVersion: '1.4.0',
+    platform: 'win32',
+    status: 'pending',
+    note: '',
+    handledBy: '',
+    handledAt: null,
+    createdAt: hoursAgo(2),
+    updatedAt: hoursAgo(2)
+  },
+  {
+    id: 3,
+    customerId: null,
+    contactEmail: '',
+    contactName: '',
+    kind: 'idea',
+    content: '希望剧情选项能记住上次选的那批，换一批的时候别整个刷新，思路会断。',
+    appVersion: '1.4.2',
+    platform: 'win32',
+    status: 'pending',
+    note: '',
+    handledBy: '',
+    handledAt: null,
+    createdAt: hoursAgo(9),
+    updatedAt: hoursAgo(9)
+  },
+  {
+    id: 2,
+    customerId: customers[1]?.id ?? null,
+    contactEmail: customers[1]?.email ?? '',
+    contactName: customers[1]?.nickname ?? '',
+    kind: 'other',
+    content: '凭证码那张图丢了还能找回账号吗？换过一次电脑，现在只能靠它登回来。',
+    appVersion: '1.4.1',
+    platform: 'darwin',
+    status: 'resolved',
+    note: '已经私信教他用手抄码登录了',
+    handledBy: '星宝',
+    handledAt: hoursAgo(26),
+    createdAt: hoursAgo(28),
+    updatedAt: hoursAgo(26)
+  },
+  {
+    id: 1,
+    customerId: customers[4]?.id ?? null,
+    contactEmail: customers[4]?.email ?? '',
+    contactName: customers[4]?.nickname ?? '',
+    kind: 'bug',
+    content: '世界书条目超过 50 条之后，编辑页滚动会卡一秒左右才跟手。',
+    appVersion: '1.4.2',
+    platform: 'win32',
+    status: 'ignored',
+    note: '等世界书那块整体重做再看',
+    handledBy: '星宝',
+    handledAt: hoursAgo(50),
+    createdAt: hoursAgo(52),
+    updatedAt: hoursAgo(50)
+  }
+]
+
+const announcements: Announcement[] = [
+  {
+    id: 2,
+    title: 'v1.5 计划：世界书支持按段排序',
+    content: '下个版本会给世界书条目加排序和分组。已经建好的书不受影响，排序可以一键恢复默认。',
+    level: 'important',
+    enabled: true,
+    pinned: false,
+    startsAt: null,
+    endsAt: null,
+    authorName: '星宝',
+    createdAt: hoursAgo(20),
+    updatedAt: hoursAgo(20)
+  },
+  {
+    id: 1,
+    title: '欢迎使用 Mimitale',
+    content:
+      '这是第一条公告。有意见或者遇到 bug，点左下角头像里的「意见反馈」，我们会看。\n换电脑前记得把凭证码那张图存好 —— 它是唯一的迁移手段。',
+    level: 'normal',
+    enabled: true,
+    pinned: true,
+    startsAt: null,
+    endsAt: null,
+    authorName: '星宝',
+    createdAt: hoursAgo(96),
+    updatedAt: hoursAgo(96)
+  }
+]
+
+let announcementSeq = 3
+
+/** 和服务端 lib/announcement.ts 的 isLive 同一套判断 */
+function announcementLive(a: Announcement): boolean {
+  if (!a.enabled) return false
+  const now = Date.now()
+  if (a.startsAt && Date.parse(a.startsAt) > now) return false
+  if (a.endsAt && Date.parse(a.endsAt) < now) return false
+  return true
+}
+
+/** GET /api/admin/feedbacks */
+function handleListFeedbacks({ query, headers }: MockCtx): MockOutcome {
+  const admin = requireAdmin(headers)
+  if (!admin) return expired()
+
+  const q = query as unknown as FeedbackListQuery
+  const keyword = String(q.keyword ?? '').trim().toLowerCase()
+  const status = (q.status ?? '') as FeedbackStatus | ''
+  const kind = (q.kind ?? '') as FeedbackKind | ''
+
+  let filtered = feedbacks
+  if (status) filtered = filtered.filter((f) => f.status === status)
+  if (kind) filtered = filtered.filter((f) => f.kind === kind)
+  if (keyword) {
+    filtered = filtered.filter(
+      (f) =>
+        f.content.toLowerCase().includes(keyword) ||
+        f.contactEmail.toLowerCase().includes(keyword) ||
+        f.contactName.toLowerCase().includes(keyword)
+    )
+  }
+
+  filtered = [...filtered].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+
+  // 状态计数是全表口径，不跟筛选走 —— 和真后端一致
+  const counts = {
+    total: feedbacks.length,
+    pending: feedbacks.filter((f) => f.status === 'pending').length,
+    read: feedbacks.filter((f) => f.status === 'read').length,
+    resolved: feedbacks.filter((f) => f.status === 'resolved').length,
+    ignored: feedbacks.filter((f) => f.status === 'ignored').length,
+    today: feedbacks.filter((f) => localDay(f.createdAt) === localDay(new Date().toISOString())).length
+  }
+
+  return ok({ ...paginate(filtered, query), counts })
+}
+
+/** PATCH /api/admin/feedbacks/:id */
+function handleUpdateFeedback({ params, body, headers }: MockCtx): MockOutcome {
+  const admin = requireAdmin(headers)
+  if (!admin) return expired()
+
+  const id = Number(params.id)
+  const row = feedbacks.find((f) => f.id === id)
+  if (!row) return fail(ApiCode.NOT_FOUND, '这条反馈不存在')
+
+  const req = body as unknown as UpdateFeedbackReq
+  const changes: string[] = []
+
+  if (req.status !== undefined) {
+    if (!['pending', 'read', 'resolved', 'ignored'].includes(req.status)) {
+      return fail(ApiCode.INVALID_PARAM, '状态只能是 pending / read / resolved / ignored')
+    }
+    if (req.status !== row.status) {
+      changes.push(`状态：${row.status} → ${req.status}`)
+      row.status = req.status
+    }
+  }
+
+  if (req.note !== undefined) {
+    const note = String(req.note).trim()
+    if (note.length > 500) return fail(ApiCode.INVALID_PARAM, '备注最多 500 字')
+    if (note !== row.note) {
+      row.note = note
+      changes.push(note ? '改了备注' : '清了备注')
+    }
+  }
+
+  if (changes.length === 0) return fail(ApiCode.INVALID_PARAM, '没有要改的内容')
+
+  row.handledBy = admin.nickname
+  row.handledAt = new Date().toISOString()
+  row.updatedAt = row.handledAt
+
+  pushLog({
+    adminId: admin.id,
+    adminName: admin.nickname,
+    action: 'feedback.update',
+    targetType: 'feedback',
+    targetId: row.id,
+    targetName: `#${row.id} ${row.content.slice(0, 12)}`,
+    detail: changes.join('；'),
+    createdAt: row.handledAt
+  })
+
+  return ok({ ...row })
+}
+
+/** GET /api/admin/announcements */
+function handleListAnnouncements({ query, headers }: MockCtx): MockOutcome {
+  const admin = requireAdmin(headers)
+  if (!admin) return expired()
+
+  const q = query as unknown as AnnouncementListQuery
+  const keyword = String(q.keyword ?? '').trim().toLowerCase()
+  const enabled = String(q.enabled ?? '')
+
+  let filtered = announcements
+  if (enabled === '1') filtered = filtered.filter((a) => a.enabled)
+  if (enabled === '0') filtered = filtered.filter((a) => !a.enabled)
+  if (keyword) {
+    filtered = filtered.filter(
+      (a) => a.title.toLowerCase().includes(keyword) || a.content.toLowerCase().includes(keyword)
+    )
+  }
+
+  // 置顶优先，同组内新的在前
+  filtered = [...filtered].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+    return Date.parse(b.createdAt) - Date.parse(a.createdAt)
+  })
+
+  return ok({ ...paginate(filtered, query), liveCount: announcements.filter(announcementLive).length })
+}
+
+/** POST /api/admin/announcements */
+function handleCreateAnnouncement({ body, headers }: MockCtx): MockOutcome {
+  const admin = requireAdmin(headers)
+  if (!admin) return expired()
+
+  const req = body as unknown as CreateAnnouncementReq
+  const title = String(req.title ?? '').trim()
+  const content = String(req.content ?? '').trim()
+  if (!title) return fail(ApiCode.INVALID_PARAM, '标题不能空')
+  if (title.length > 60) return fail(ApiCode.INVALID_PARAM, '标题最多 60 字')
+  if (!content) return fail(ApiCode.INVALID_PARAM, '正文不能空')
+
+  const startsAt = req.startsAt ?? null
+  const endsAt = req.endsAt ?? null
+  if (startsAt && endsAt && Date.parse(startsAt) >= Date.parse(endsAt)) {
+    return fail(ApiCode.INVALID_PARAM, '失效时间要晚于生效时间')
+  }
+
+  const now = new Date().toISOString()
+  const row: Announcement = {
+    id: announcementSeq++,
+    title,
+    content,
+    level: req.level ?? 'normal',
+    enabled: true,
+    pinned: req.pinned === true,
+    startsAt,
+    endsAt,
+    authorName: admin.nickname,
+    createdAt: now,
+    updatedAt: now
+  }
+  announcements.unshift(row)
+
+  pushLog({
+    adminId: admin.id,
+    adminName: admin.nickname,
+    action: 'announcement.create',
+    targetType: 'announcement',
+    targetId: row.id,
+    targetName: row.title,
+    detail: `发公告（${row.level}${row.pinned ? '，置顶' : ''}）`,
+    createdAt: now
+  })
+
+  return ok({ ...row })
+}
+
+/** PATCH /api/admin/announcements/:id */
+function handleUpdateAnnouncement({ params, body, headers }: MockCtx): MockOutcome {
+  const admin = requireAdmin(headers)
+  if (!admin) return expired()
+
+  const id = Number(params.id)
+  const row = announcements.find((a) => a.id === id)
+  if (!row) return fail(ApiCode.NOT_FOUND, '这条公告不存在')
+
+  const req = body as unknown as UpdateAnnouncementReq
+  const changes: string[] = []
+
+  if (req.title !== undefined) {
+    const title = String(req.title).trim()
+    if (!title) return fail(ApiCode.INVALID_PARAM, '标题不能空')
+    if (title !== row.title) {
+      row.title = title
+      changes.push('改了标题')
+    }
+  }
+  if (req.content !== undefined) {
+    const content = String(req.content).trim()
+    if (!content) return fail(ApiCode.INVALID_PARAM, '正文不能空')
+    if (content !== row.content) {
+      row.content = content
+      changes.push('改了正文')
+    }
+  }
+  if (req.level !== undefined && req.level !== row.level) {
+    row.level = req.level
+    changes.push(`级别 → ${req.level}`)
+  }
+  if (req.enabled !== undefined && req.enabled !== row.enabled) {
+    row.enabled = req.enabled
+    changes.push(req.enabled ? '上架' : '下架')
+  }
+  if (req.pinned !== undefined && req.pinned !== row.pinned) {
+    row.pinned = req.pinned
+    changes.push(req.pinned ? '置顶' : '取消置顶')
+  }
+  if (req.startsAt !== undefined && req.startsAt !== row.startsAt) {
+    row.startsAt = req.startsAt
+    changes.push('改了生效时间')
+  }
+  if (req.endsAt !== undefined && req.endsAt !== row.endsAt) {
+    row.endsAt = req.endsAt
+    changes.push('改了失效时间')
+  }
+
+  if (row.startsAt && row.endsAt && Date.parse(row.startsAt) >= Date.parse(row.endsAt)) {
+    return fail(ApiCode.INVALID_PARAM, '失效时间要晚于生效时间')
+  }
+  if (changes.length === 0) return fail(ApiCode.INVALID_PARAM, '没有要改的内容')
+
+  row.updatedAt = new Date().toISOString()
+
+  pushLog({
+    adminId: admin.id,
+    adminName: admin.nickname,
+    action: 'announcement.update',
+    targetType: 'announcement',
+    targetId: row.id,
+    targetName: row.title,
+    detail: changes.join('；'),
+    createdAt: row.updatedAt
+  })
+
+  return ok({ ...row })
+}
+
+/** DELETE /api/admin/announcements/:id */
+function handleDeleteAnnouncement({ params, headers }: MockCtx): MockOutcome {
+  const admin = requireAdmin(headers)
+  if (!admin) return expired()
+
+  const id = Number(params.id)
+  const index = announcements.findIndex((a) => a.id === id)
+  if (index < 0) return fail(ApiCode.NOT_FOUND, '这条公告不存在')
+
+  const [row] = announcements.splice(index, 1)
+  pushLog({
+    adminId: admin.id,
+    adminName: admin.nickname,
+    action: 'announcement.delete',
+    targetType: 'announcement',
+    targetId: row.id,
+    targetName: row.title,
+    detail: '删掉这条公告',
+    createdAt: new Date().toISOString()
+  })
+
+  return ok(null)
+}
+
 const routes: Array<{ method: string; pattern: string; handler: MockHandler }> = [
   { method: 'POST', pattern: '/admin/auth/login', handler: handleAdminLogin },
   { method: 'POST', pattern: '/admin/auth/refresh', handler: handleAdminRefresh },
@@ -1206,6 +1596,14 @@ const routes: Array<{ method: string; pattern: string; handler: MockHandler }> =
   { method: 'PATCH', pattern: '/admin/customers/:id', handler: handleUpdateCustomer },
 
   { method: 'GET', pattern: '/admin/logs', handler: handleListLogs },
+
+  { method: 'GET', pattern: '/admin/feedbacks', handler: handleListFeedbacks },
+  { method: 'PATCH', pattern: '/admin/feedbacks/:id', handler: handleUpdateFeedback },
+
+  { method: 'GET', pattern: '/admin/announcements', handler: handleListAnnouncements },
+  { method: 'POST', pattern: '/admin/announcements', handler: handleCreateAnnouncement },
+  { method: 'PATCH', pattern: '/admin/announcements/:id', handler: handleUpdateAnnouncement },
+  { method: 'DELETE', pattern: '/admin/announcements/:id', handler: handleDeleteAnnouncement },
 
   { method: 'GET', pattern: '/admin/cards', handler: handleListCards },
   { method: 'POST', pattern: '/admin/cards', handler: handleCreateCards },

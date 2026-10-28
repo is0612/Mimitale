@@ -11,7 +11,7 @@
  */
 
 import type { Component } from 'vue'
-import { Collection, DataLine, Document, Ticket, UserFilled } from '@element-plus/icons-vue'
+import { Bell, ChatDotRound, Collection, DataLine, Document, Ticket, UserFilled } from '@element-plus/icons-vue'
 
 export interface MenuNode {
   /** 对应 router 里的 path */
@@ -32,6 +32,15 @@ export const MENU: MenuGroup[] = [
       { path: '/overview', title: '经营概览', icon: DataLine },
       { path: '/customers', title: '客户管理', icon: UserFilled },
       { path: '/cards', title: '卡密 / 激活码', icon: Ticket }
+    ]
+  },
+  {
+    // 「消息」是双向的：意见反馈是用户发进来的，通知公告是我们发出去的。
+    // 别改成「通知中心」之类只覆盖一个方向的词
+    title: '消息',
+    items: [
+      { path: '/feedbacks', title: '意见反馈', icon: ChatDotRound },
+      { path: '/announcements', title: '通知公告', icon: Bell }
     ]
   },
   {

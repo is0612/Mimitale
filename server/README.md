@@ -143,6 +143,12 @@ server/
 | PATCH | `/api/admin/dicts/items/{id}` | 改 / 启停 |
 | DELETE | `/api/admin/dicts/items/{id}` | 删 |
 | GET | `/api/admin/overview` | ⭐ 今天注册了几个、近 7 天曲线、会员数 |
+| GET | `/api/admin/feedbacks` | 意见反馈列表 + 五个状态的总数 |
+| PATCH | `/api/admin/feedbacks/{id}` | 改状态 / 写内部备注（**不能改正文**） |
+| GET | `/api/admin/announcements` | 公告列表（含已下架）+ 在架条数 |
+| POST | `/api/admin/announcements` | 发一条公告 |
+| PATCH | `/api/admin/announcements/{id}` | 改 / 上下架 / 置顶 |
+| DELETE | `/api/admin/announcements/{id}` | 真删（已读记录一起清） |
 
 ### 客户端侧（Bearer clientToken）
 
@@ -167,6 +173,19 @@ server/
 ⚠️ **注册是两步**，`complete-profile` 靠 `register` 发的**临时令牌**认身份，**不靠 `accountId`** ——
 自增 id 能被枚举，否则谁都能给别人的号设资料。临时令牌 10 分钟、只能调这一个接口，
 拿去调 `/me` 会被 401 打回。
+
+### 客户端侧：消息（**故意不要求登录**）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/client/feedback` | 发意见反馈。登录了就自动带上邮箱昵称 |
+| GET | `/api/client/announcements` | 拉此刻该显示的公告，带 `isRead` |
+| POST | `/api/client/announcements/{id}/read` | 标一条已读（未登录回 `unread: 0`） |
+
+这三个在 `clientGuard` **外面**，带不发 token 都能用 —— 理由写在 `routes/client/messages.ts` 文件头：
+「连登录都进不去」的人才最需要报错入口，「你被停机了」这种公告也恰恰要发给登录不进去的人。
+带了有效 token 就走 `optionalCustomerId` 认出是谁；token 过期也当没登录，**不报 401**（否则客户端启动时拉公告会整块失败）。
+限频按设备指纹查库（60 秒一条、一天 10 条），没带指纹就退回 IP。
 
 ⚠️ 新用户的 30 天试用会员在**第二步完成时**发，不在第一步。后台的「今日注册」也只算走完两步的人。
 

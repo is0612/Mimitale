@@ -255,3 +255,64 @@ export interface ChangeEmailReq {
 }
 
 /* 9. POST /api/client/auth/logout  → ApiResult<{ user: null }>        */
+
+/* ------------------------------------------------------------------ */
+/* 消息（2026-10-28）—— 客户端这一侧的收发两端                          */
+/*                                                                   */
+/* 和登录那 13 个接口不是一回事：那组要客户 token，这组里「发反馈」故意 */
+/* **不要求登录**（连登录都进不去的时候才最需要报错）。                 */
+/* ------------------------------------------------------------------ */
+
+/** 14. POST /api/client/feedback —— 发一条意见反馈 */
+export interface SubmitFeedbackReq {
+  /** 和客户端弹窗那三颗按钮一一对应 */
+  kind: 'bug' | 'idea' | 'other'
+  /** 正文，1 ~ 2000 字 */
+  content: string
+  /** 愿意留联系方式就带上；登录状态下后端会自己填 */
+  contactEmail?: string
+  /** 客户端版本号，例 1.4.2 */
+  appVersion?: string
+  /** win32 / darwin / linux */
+  platform?: string
+  /** 设备指纹。**未登录时靠它限频**，不然一个人能刷一万条 */
+  deviceId?: string
+}
+
+export interface SubmitFeedbackRes {
+  id: number
+  createdAt: string
+}
+
+/** 15. GET /api/client/announcements —— 拉「现在该显示」的公告 */
+export interface ClientAnnouncement {
+  id: number
+  title: string
+  /** 横条只显示首行，点开看全文 */
+  content: string
+  /** normal | important | maintenance，决定横条颜色和图标 */
+  level: 'normal' | 'important' | 'maintenance'
+  /** 置顶的排前面 */
+  pinned: boolean
+  startsAt: string | null
+  endsAt: string | null
+  /** 当前这个人看过没有。未登录永远 false（客户端自己在本地记一份） */
+  isRead: boolean
+  createdAt: string
+}
+
+export interface ClientAnnouncementListRes {
+  list: ClientAnnouncement[]
+  /** 未读数 = list 里 isRead 为 false 的条数，后端算好省得客户端再遍一次 */
+  unread: number
+}
+
+/**
+ * 16. POST /api/client/announcements/{id}/read —— 标一条已读
+ *
+ * ⚠️ 只对**登录用户**有效：未登录时后端没地方记（总不能给每个匿名设备造个假客户 id），
+ *    接口会返回 `{ unread: 0 }` 让客户端走本地记录。
+ */
+export interface MarkAnnouncementReadRes {
+  unread: number
+}

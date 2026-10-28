@@ -49,6 +49,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '卡密 / 激活码' }
       },
       {
+        path: 'feedbacks',
+        name: 'feedbacks',
+        component: () => import('@/views/FeedbackView.vue'),
+        meta: { title: '意见反馈' }
+      },
+      {
+        path: 'announcements',
+        name: 'announcements',
+        component: () => import('@/views/AnnouncementView.vue'),
+        meta: { title: '通知公告' }
+      },
+      {
         path: 'logs',
         name: 'logs',
         component: () => import('@/views/LogListView.vue'),

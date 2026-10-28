@@ -1,6 +1,6 @@
 # Mimitale 客户管理后台
 
-给自己用的客户管理后台前端。**真实后端在 [`../server/`](../server/README.md)**（Node + Fastify + Prisma + PostgreSQL），后台侧 16 个接口 + 概览统计已实现，`npm run smoke` 那套断言可以直接对着它验。客户端那侧的登录界面已完成，但还没接这套接口。
+给自己用的客户管理后台前端。**真实后端在 [`../server/`](../server/README.md)**（Node + Fastify + Prisma + PostgreSQL），后台侧 23 个接口已实现，`npm run smoke` 那套断言可以直接对着它验。客户端那侧的登录界面已完成，但还没接这套接口。
 
 默认仍走内置 Mock（不需要后端也能开发界面）；把 `.env` 里的 `VITE_USE_MOCK` 改成 `false` 就连真后端。
 
@@ -85,13 +85,13 @@ VITE_API_BASE=/api
 src/
 ├── types/
 │   ├── index.ts      公共：ApiResult、全部错误码
-│   ├── admin.ts      ⭐ 后台侧契约（本后台用，17 个接口）
+│   ├── admin.ts      ⭐ 后台侧契约（本后台用，23 个接口）
 │   └── client.ts     客户侧契约（客户端用，本后台不调，给后端参考）
 ├── mock/index.ts     ⭐ Mock 后端 —— 同时也是各接口的行为说明
 ├── config/
 │   ├── menu.ts       侧边菜单配置（数组驱动，加页面改这里）
 │   └── labels.ts     ⚠️ 写死在代码里的那些枚举（**故意不放字典**，见下）
-├── api/              axios 封装 + admin / customer / log / card / dict / overview
+├── api/              axios 封装 + admin / customer / log / card / dict / overview / feedback / announcement
 ├── stores/
 │   ├── auth.ts       管理员登录态
 │   └── dict.ts       字典缓存（界面上所有下拉都从它取值）
@@ -99,13 +99,13 @@ src/
 ├── layouts/          侧边栏 + 顶栏骨架
 ├── components/
 │   └── CustomerDialogs.vue  改额度 / 封禁 / 发会员弹层（列表页与详情页共用）
-├── views/            概览、登录、客户列表、客户详情、卡密、操作日志、字典
+├── views/            概览、登录、客户列表、客户详情、卡密、意见反馈、通知公告、操作日志、字典
 └── scripts/
     ├── smoke.mjs     接口自测（打 mock）
     └── shot.mjs      带登录态截图（打真后端 + Chrome headless）
 ```
 
-## 接口一览（本后台实际调用的 17 个）
+## 接口一览（本后台实际调用的 23 个）
 
 响应统一是 `{ code, message, data }`，`code === 0` 为成功。
 认证走 `Authorization: Bearer <token>`；认证失败返回 HTTP 401。
@@ -161,8 +161,38 @@ src/
 客户列表回答不了这个问题，而后台首页原来只有客户列表。
 ⚠️ 所有「今天」都是**北京时间**的今天，由后端算好；前端别自己拿 `new Date()` 算日期去比。
 
-**客户侧那 5 个接口**（发验证码 / 登录即注册 / 刷新 / me / 登出）在 `src/types/client.ts`，
+### 意见反馈（18~19）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/admin/feedbacks` | 列表（分页 / 状态 / 类型 / 关键词）+ 五个状态的总数 |
+| PATCH | `/api/admin/feedbacks/{id}` | 改状态 / 写内部备注（**没有改正文的接口**） |
+
+**为什么没有「改正文」**：反馈是用户说出来的原话，运营能做的是「看一眼 → 标状态 → 写句给自己看的备注」。
+改了正文就是伪造用户发言。同理状态机里也**没有「已回复」**——客户端没有收回复的地方，加了就是个假的。
+
+⚠️ 计数是**全表口径**，不跟当前筛选走；否则「待处理 3」会随筛选跳动，数字就没意义了。
+⚠️ 顶部点一下数字就按那个状态筛，再点取消；表格行点开详情会顺手把「待处理」标成「已查看」。
+
+### 通知公告（20~23）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/admin/announcements` | 列表（含已下架的）+ 此刻在架条数 `liveCount` |
+| POST | `/api/admin/announcements` | 发一条（标题 ≤60 字、正文 ≤4000 字） |
+| PATCH | `/api/admin/announcements/{id}` | 改内容 / 上下架 / 置顶 / 改有效期 |
+| DELETE | `/api/admin/announcements/{id}` | 真删（已读记录一起清） |
+
+**「此刻会不会显示」没有存字段**：由 `enabled` + `startsAt` + `endsAt` 现算。
+存一个 `visible` 布尔就得有人定时去翻它，翻漏了就永远不消失。判断只有一份，在 `server/src/lib/announcement.ts`。
+
+⚠️ `startsAt` / `endsAt` 在 PATCH 里是**三态**：不传 = 不改，`null` = 清空（立刻生效 / 永不失效），
+具体时刻 = 改掉。把「不传」和「null」混成一个值，就永远没法表达「这条公告不要失效时间了」。
+⚠️ 下架 ≠ 删除：重新上架后，看过的人**不会**又变成未读。
+
+**客户侧那 13 个登录接口 + 3 个消息接口**（发反馈 / 拉公告 / 标已读）在 `src/types/client.ts`，
 那是 Mimitale 客户端调的，后端也要实现，但本后台不碰。
+⚠️ 客户端那三个消息接口**故意不要求登录**：连登录都进不去的人才最需要报错和看公告。
 
 细节见 `src/types/`，那里有每个字段的说明和全部错误码。
 

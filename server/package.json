@@ -12,6 +12,7 @@
     "dev:app": "node --import tsx --watch src/index.ts",
     "start": "node --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
+    "smoke": "node scripts/smoke.mjs",
     "db:up": "docker compose up -d db mail",
     "db:down": "docker compose down",
     "db:generate": "prisma generate",
