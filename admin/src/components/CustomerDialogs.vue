@@ -13,7 +13,7 @@
  */
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { createCustomer, deleteCustomer, fetchCustomers, updateCustomer } from '@/api/customer'
+import { createCustomer, deleteCustomer, updateCustomer } from '@/api/customer'
 import { useDictStore } from '@/stores/dict'
 import { formatTime, membershipState } from '@/config/labels'
 import type { Customer } from '@/types'
@@ -171,52 +171,11 @@ function suggestNickname(): void {
   if (prefix) createForm.nickname = prefix.slice(0, 20)
 }
 
-/**
- * 邮箱查重 —— **边打边查**，不用等点「创建」才知道撞了。
- *
- * ⚠️ 以前只有服务端在提交时挡，前端一点提示都没有：运营填完点创建、弹一句报错、
- *    改一个字符再点……来回几次就会觉得「根本没做重复判断」。
- * ⚠️ 用的是列表接口的 keyword 搜索（LIKE 模糊匹配），所以**必须逐条精确比一次**，
- *    不能拿「搜到了」当「撞了」—— `a@x.com` 会搜出 `ab@x.com`。
- * ⚠️ 查失败（网络抖动之类）**不拦人**：这只影响提示，服务端那一道才是最终防线。
- * ⚠️ 停 400ms 再查，别每敲一个字母打一次接口。
- */
-const emailTaken = ref(false)
-const checkingEmail = ref(false)
-let emailTimer: ReturnType<typeof setTimeout> | undefined
-
-function onEmailInput(): void {
-  emailTaken.value = false
-  clearTimeout(emailTimer)
-  const email = createForm.email.trim().toLowerCase()
-  // 没构成完整邮箱就先不查，免得一路都是「撞了」的红字
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return
-  emailTimer = setTimeout(() => {
-    void checkEmailTaken(email)
-  }, 400)
-}
-
-async function checkEmailTaken(email: string): Promise<void> {
-  checkingEmail.value = true
-  try {
-    const res = await fetchCustomers({ page: 1, pageSize: 5, keyword: email })
-    // 输入框可能已经被改掉了，回来只认最新的那次
-    if (createForm.email.trim().toLowerCase() !== email) return
-    emailTaken.value = res.list.some((c) => c.email.toLowerCase() === email)
-  } catch {
-    // 查不了就不提示，别为这个把人挡在门外
-  } finally {
-    checkingEmail.value = false
-  }
-}
-
 function openCreate(): void {
   createForm.email = ''
   createForm.nickname = ''
   createForm.password = randomPassword()
   createForm.trialDays = 30
-  emailTaken.value = false
-  clearTimeout(emailTimer)
   createVisible.value = true
 }
 
@@ -235,10 +194,6 @@ async function submitCreate(): Promise<void> {
   }
   if (password.length < 8) {
     ElMessage.warning('密码至少 8 位')
-    return
-  }
-  if (emailTaken.value) {
-    ElMessage.warning('这个邮箱已经有账号了')
     return
   }
 
@@ -386,15 +341,7 @@ defineExpose({ openBan, submitUnban, openMembership, openCreate, openDelete })
       </div>
 
       <div class="dlg-label">邮箱（就是登录账号）</div>
-      <el-input
-        v-model="createForm.email"
-        placeholder="someone@example.com"
-        :class="{ 'confirm-bad': emailTaken }"
-        @input="onEmailInput"
-        @blur="suggestNickname"
-      />
-      <div class="hint err" v-if="emailTaken">这个邮箱已经有账号了 —— 换一个，或者去列表里找那个人。</div>
-      <div class="hint" v-else-if="checkingEmail">正在查这个邮箱…</div>
+      <el-input v-model="createForm.email" placeholder="someone@example.com" @blur="suggestNickname" />
 
       <div class="dlg-label">用户名</div>
       <el-input v-model="createForm.nickname" maxlength="20" placeholder="2~20 字，客户端里显示的名字" />
@@ -415,7 +362,7 @@ defineExpose({ openBan, submitUnban, openMembership, openCreate, openDelete })
     </div>
     <template #footer>
       <el-button @click="createVisible = false">取消</el-button>
-      <el-button type="primary" :loading="creating" :disabled="emailTaken" @click="submitCreate">创建</el-button>
+      <el-button type="primary" :loading="creating" @click="submitCreate">创建</el-button>
     </template>
   </el-dialog>
 
@@ -511,10 +458,6 @@ defineExpose({ openBan, submitUnban, openMembership, openCreate, openDelete })
   font-size: 12px;
   color: var(--text-sub);
   line-height: 1.6;
-}
-
-.hint.err {
-  color: #c45656;
 }
 
 /* 输入框的两种校验态：对上了（绿）/ 还没对上（红） */
