@@ -37,7 +37,7 @@ interface GrantInput {
 export interface GrantResult {
   customer: Customer
   /** 这一段天数落在哪个区间 —— 日志文案要用「到期哪天」 */
-  grant: { days: number; source: GrantSource; startsAt: Date; expiresAt: Date }
+  grant: { days: number; source: GrantSource; startsAt: Date; expiresAt: Date; absorbedFreeDays: number }
 }
 
 /**
@@ -59,13 +59,36 @@ export async function grantDaysIn(
 
   const now = Date.now()
   const current = input.wallet === 'free' ? locked.free_expire_at : locked.membership_expire_at
-  // 还在有效期内就往后接，已过期或从没有过就从今天起算
-  const startsAt = new Date(Math.max(now, current ? current.getTime() : 0))
+
+  /**
+   * 发会员时把**还剩的免费天数并进来**，而不是让它被会员盖住。
+   *
+   * ⚠️ 为什么要这样：两个钱包取「更晚的那个」算权益，所以一旦开通会员，
+   *    原来剩的 30 天免费就等于消失了 —— 用户会觉得「我买卡把试用吃掉了」。
+   *    星宝 2026-10-28 的原话：「用了卡密之后应该把之前的免费天数加上，现在直接替换掉了」。
+   * ⚠️ 并进来之后 free_expire_at 必须清空，否则同一段天数会在两个钱包里各算一次。
+   * ⚠️ 只在 wallet = member 时做。加免费天数（注册赠送 / 邀请奖励）不能反向吸收会员。
+   */
+  const freeLeftMs =
+    input.wallet === 'member' && locked.free_expire_at
+      ? Math.max(0, locked.free_expire_at.getTime() - now)
+      : 0
+
+  // 还在有效期内就往后接，已过期或从没有过就从今天起算；
+  // 会员还要排在「免费天数用到哪天」之后 —— 否则并进来的那段等于白并
+  const startsAt = new Date(
+    Math.max(now, current ? current.getTime() : 0, freeLeftMs > 0 ? locked.free_expire_at!.getTime() : 0)
+  )
   const expiresAt = new Date(startsAt.getTime() + input.days * DAY_MS)
 
   const data: Prisma.CustomerUpdateInput =
     input.wallet === 'free' ? { freeExpireAt: expiresAt } : { membershipExpireAt: expiresAt }
-  if (input.wallet === 'member' && input.level) data.membershipLevel = input.level
+  // ⚠️ 给会员时等级一定要有值：`clientMembership` 判断「是不是会员」看的是
+  //    `level !== 'none' && 会员天数还在`。不传 level 就留成 none 的话，
+  //    钱包里明明有 90 天，界面会显示成「非会员」。
+  //    2026-10-28 起产品上只有一档，所以默认写 basic。
+  if (input.wallet === 'member') data.membershipLevel = input.level || 'basic'
+  if (freeLeftMs > 0) data.freeExpireAt = null
 
   await tx.membershipGrant.create({
     data: {
@@ -83,7 +106,7 @@ export async function grantDaysIn(
 
   return {
     customer,
-    grant: { days: input.days, source: input.source, startsAt, expiresAt }
+    grant: { days: input.days, source: input.source, startsAt, expiresAt, absorbedFreeDays: Math.round(freeLeftMs / DAY_MS) }
   }
 }
 

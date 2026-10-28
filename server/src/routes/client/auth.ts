@@ -80,7 +80,7 @@ function normalizeInviteInput(value: unknown): string {
  */
 type Invite =
   | { kind: 'none' }
-  | { kind: 'card'; code: string; cardId: number; days: number; level: string }
+  | { kind: 'card'; code: string; cardId: number; days: number }
   | { kind: 'customer'; code: string; inviterId: number }
 
 async function resolveInvite(code: string, selfId: number): Promise<Invite> {
@@ -91,7 +91,7 @@ async function resolveInvite(code: string, selfId: number): Promise<Invite> {
     if (card.status === 'void') throw biz('这张卡已经作废了')
     if (card.status === 'used') throw biz('这张卡已经被用过了')
     if (card.expireAt && card.expireAt.getTime() <= Date.now()) throw biz('这张卡过期了')
-    return { kind: 'card', code, cardId: card.id, days: card.days, level: card.level }
+    return { kind: 'card', code, cardId: card.id, days: card.days }
   }
 
   const inviter = await prisma.customer.findUnique({ where: { referralCode: code }, select: { id: true } })
@@ -403,7 +403,6 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
               days: invite.days,
               source: 'card',
               wallet: 'member',
-              level: invite.level,
               refId: invite.cardId,
               note: `卡密兑换 ${invite.code}（注册时）`
             })

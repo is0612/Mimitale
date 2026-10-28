@@ -337,7 +337,7 @@ export interface InviteCard {
   note: string
   /** 兑换给多少天会员 —— 卡本身就是商品，天数写在卡上 */
   days: number
-  /** 兑换给的会员等级，值来自字典 membership_level */
+  /** 会员等级。2026-10-28 起产品上只有一档，恒为 basic（列留着，将来要分档再说） */
   level: string
   status: CardStatus
   /** 被哪个客户用了。unused / void 时为 null */
@@ -371,8 +371,6 @@ export interface CreateCardsReq {
   count: number
   /** 兑换给几天会员（1~3650）。不传 = 30 */
   days?: number
-  /** 兑换给的会员等级（字典 membership_level）。不传 = basic */
-  level?: string
   /** **卡本身**的有效天数（没被用掉就作废）；null = 永久有效。注意和 days 不是一回事 */
   expireDays: number | null
   note?: string

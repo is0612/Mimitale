@@ -793,19 +793,22 @@ section('客户端：图形码 → 发码 → 注册两步')
   const sloppy = String(card90.code).toLowerCase().replace(/-/g, '')
   const redeemed = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: sloppy } })
   check('小写不带横杠也能兑', redeemed.code === 0, `code=${redeemed.code} ${redeemed.message ?? ''}`)
-  check('回的是新会员状态（等级已生效）', redeemed.data?.user?.membership?.level === 'basic', String(redeemed.data?.user?.membership?.level))
+  check('回的是新会员状态', redeemed.data?.user?.membership?.level === 'basic', String(redeemed.data?.user?.membership?.level))
   check(
-    '会员剩约 90 天',
-    Math.abs((redeemed.data?.user?.membership?.memberDaysLeft ?? 0) - 90) <= 1,
+    '⭐ 会员剩 120 天（卡的 90 天 + 注册还剩的 30 天免费并进来了，不是被盖掉）',
+    Math.abs((redeemed.data?.user?.membership?.memberDaysLeft ?? 0) - 120) <= 1,
     String(redeemed.data?.user?.membership?.memberDaysLeft)
   )
   check(
-    '带回了本次兑换摘要（客户端拿它说 +N 天）',
-    redeemed.data?.grant?.days === 90 && !!redeemed.data?.grant?.expiresAt && !!redeemed.data?.grant?.levelLabel
+    '带回了本次兑换摘要（天数 / 到期 / 并进了几天免费）',
+    redeemed.data?.grant?.days === 90 &&
+      !!redeemed.data?.grant?.expiresAt &&
+      redeemed.data?.grant?.absorbedFreeDays === 30,
+    JSON.stringify(redeemed.data?.grant ?? {})
   )
   check(
-    '免费那 30 天没被动（两个钱包是分开的）',
-    redeemed.data?.user?.membership?.freeDaysLeft === 30,
+    '免费钱包被清空（并进会员了，不能两边各算一次）',
+    redeemed.data?.user?.membership?.freeDaysLeft === null,
     String(redeemed.data?.user?.membership?.freeDaysLeft)
   )
 
@@ -821,8 +824,8 @@ section('客户端：图形码 → 发码 → 注册两步')
   const card30 = await makeCard({ days: 30 })
   const stacked = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: card30.code } })
   check(
-    '再兑一张 30 天 → 在 90 天后面顺延（不从今天重算）',
-    Math.abs((stacked.data?.user?.membership?.memberDaysLeft ?? 0) - 120) <= 1,
+    '再兑一张 30 天 → 接在 120 天后面（不从今天重算）',
+    Math.abs((stacked.data?.user?.membership?.memberDaysLeft ?? 0) - 150) <= 1,
     String(stacked.data?.user?.membership?.memberDaysLeft)
   )
 

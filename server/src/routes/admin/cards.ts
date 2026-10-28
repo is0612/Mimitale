@@ -8,7 +8,6 @@ import { toCard } from '../../lib/dto.js'
 import { currentAdmin } from '../../lib/whoami.js'
 import { newInviteCode } from '../../lib/cardCode.js'
 import { DAY_MS } from '../../lib/time.js'
-import { dictLabel } from '../../lib/dict.js'
 
 function textOf(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -91,12 +90,9 @@ export const adminCardRoutes: FastifyPluginAsync = async (app) => {
       return fail(ApiCode.INVALID_PARAM, '会员天数要在 1 ~ 3650 之间')
     }
 
-    const level = textOf(body.level) || 'basic'
-    const levelLabel = await dictLabel('membership_level', level)
-    // 字典里查不到 → 原值原样返回，据此判断这档不存在（含误传 'none'）
-    if (!level || level === 'none' || levelLabel === level) {
-      return fail(ApiCode.INVALID_PARAM, '这个会员等级不存在')
-    }
+    // 会员等级：2026-10-28 起产品上只有「会员」一档（星宝：「会员等级好像用不上，
+    // 直接订阅会员就好了」），所以不再让运营选。库里那一列保留、默认 basic，
+    // 是为了不为了这件事跑一次删列迁移；将来真要分档再说。
 
     const expireDays =
       body.expireDays === null || body.expireDays === undefined ? null : Math.floor(Number(body.expireDays))
@@ -116,7 +112,7 @@ export const adminCardRoutes: FastifyPluginAsync = async (app) => {
         for (let attempt = 0; attempt < 5 && !row; attempt++) {
           try {
             row = await tx.inviteCard.create({
-              data: { code: newInviteCode(), note, days, level, status: 'unused', expireAt }
+              data: { code: newInviteCode(), note, days, status: 'unused', expireAt }
             })
           } catch (err) {
             // P2002 = 唯一约束冲突，换一个码再来
@@ -135,7 +131,7 @@ export const adminCardRoutes: FastifyPluginAsync = async (app) => {
           targetType: 'card',
           targetId: rows[0]?.id ?? null,
           targetName: rows.length === 1 ? rows[0]!.code : `${rows.length} 张`,
-          detail: `生成 ${rows.length} 张卡密（${note}）：${levelLabel} ${days} 天${expireDays ? `，${expireDays} 天后过期` : '，永久有效'}`,
+          detail: `生成 ${rows.length} 张卡密（${note}）：会员 ${days} 天${expireDays ? `，${expireDays} 天后过期` : '，永久有效'}`,
           ip: request.ip
         },
         tx

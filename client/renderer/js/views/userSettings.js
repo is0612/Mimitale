@@ -483,10 +483,12 @@ async function submitRedeem() {
     onUserChange(user);
 
     if (nodes.redeemMsg) {
-      const label = (grant && grant.levelLabel) || '会员';
       const days = grant && grant.days ? grant.days : 0;
       const until = grant && grant.expiresAt ? `，${formatDay(grant.expiresAt)} 到期` : '';
-      nodes.redeemMsg.textContent = `兑换成功：${label} +${days} 天${until}`;
+      // 兑换时会把还剩的免费天数并进会员，所以「买了 90 天却显示 120 天」要说清楚
+      const absorbed = grant && grant.absorbedFreeDays ? grant.absorbedFreeDays : 0;
+      const extra = absorbed > 0 ? `（含并入的 ${absorbed} 天免费）` : '';
+      nodes.redeemMsg.textContent = `兑换成功：会员 +${days} 天${until}${extra}`;
       nodes.redeemMsg.classList.remove('hidden');
     }
   } catch (err) {

@@ -6,7 +6,6 @@ import { biz } from '../../lib/bizError.js'
 import { currentCustomerId } from '../../lib/whoami.js'
 import { grantDaysIn } from '../../lib/membership.js'
 import { toClientUser } from '../../lib/clientUser.js'
-import { dictLabel } from '../../lib/dict.js'
 
 function textOf(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -90,7 +89,6 @@ export const clientRedeemRoutes: FastifyPluginAsync = async (app) => {
         days: card.days,
         source: 'card',
         wallet: 'member',
-        level: card.level,
         refId: card.id,
         note: `卡密兑换 ${card.code}`
       })
@@ -103,9 +101,10 @@ export const clientRedeemRoutes: FastifyPluginAsync = async (app) => {
       // 本次这一张卡的摘要 —— 客户端拿它说「+90 天，到 X 到期」，不用自己算
       grant: {
         days: result.card.days,
-        level: result.card.level,
-        levelLabel: await dictLabel('membership_level', result.card.level),
         expiresAt: result.grant.expiresAt.toISOString(),
+        // 这次把多少天「免费」并进了会员（没有就是 0）—— 界面要写清楚，
+        // 否则用户会以为卡买了 90 天却显示 120 天
+        absorbedFreeDays: result.grant.absorbedFreeDays,
         code: result.card.code
       }
     })

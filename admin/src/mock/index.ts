@@ -920,7 +920,8 @@ function handleCreateCards({ body, headers }: MockCtx): MockOutcome {
       code,
       note: String(req.note ?? '').trim() || '未分类',
       days: Number(req.days ?? 30),
-      level: String(req.level ?? 'basic'),
+      // 等级只有一档（2026-10-28），mock 也跟着固定
+      level: 'basic',
       status: 'unused',
       usedByCustomerId: null,
       usedByEmail: null,

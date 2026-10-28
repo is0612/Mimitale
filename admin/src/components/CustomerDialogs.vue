@@ -82,8 +82,6 @@ async function submitUnban(row: Customer): Promise<void> {
 
 const memberVisible = ref(false)
 const memberTarget = ref<Customer | null>(null)
-/** 目标等级 —— 字典 membership_level 的 value，默认初级会员 */
-const memberLevel = ref('basic')
 const memberDays = ref(30)
 
 /** 快捷时长 —— 按月续费是 30 天，其余给常用档位省得手打 */
@@ -94,8 +92,6 @@ const MEMBER_PRESETS = [
   { label: '1 年', days: 365 }
 ]
 
-/** 等级下拉 —— 字典里加一档这里立刻多一档 */
-const memberLevelOptions = computed(() => dict.optionsOf('membership_level'))
 
 const memberSummary = computed(() => {
   const t = memberTarget.value
@@ -116,7 +112,6 @@ const memberHint = computed(() => {
 
 function openMembership(row: Customer): void {
   memberTarget.value = row
-  memberLevel.value = 'basic'
   memberDays.value = 30
   memberVisible.value = true
 }
@@ -124,19 +119,15 @@ function openMembership(row: Customer): void {
 async function submitMembership(): Promise<void> {
   const target = memberTarget.value
   if (!target) return
-  if (!memberLevel.value) {
-    ElMessage.warning('选一个会员等级')
-    return
-  }
   const n = Number(memberDays.value)
   if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
     ElMessage.warning('天数要填正整数')
     return
   }
   try {
-    await updateCustomer(target.id, { membershipLevel: memberLevel.value, membershipDays: n })
+    await updateCustomer(target.id, { membershipLevel: 'basic', membershipDays: n })
     ElMessage.success(
-      `已给「${target.nickname}」发 ${n} 天${dict.labelOf('membership_level', memberLevel.value)}`
+      `已给「${target.nickname}」发 ${n} 天会员`
     )
     memberVisible.value = false
     emit('done')
@@ -303,11 +294,7 @@ defineExpose({ openBan, submitUnban, openMembership, openCreate, openDelete })
         <span class="dlg-mail">{{ memberTarget.email }}</span>
       </div>
       <div class="member-summary">{{ memberSummary }}</div>
-      <div class="dlg-label">等级</div>
-      <el-select v-model="memberLevel" style="width: 100%">
-        <el-option v-for="o in memberLevelOptions" :key="o.value" :label="o.label" :value="o.value" />
-      </el-select>
-      <div class="dlg-label">时长</div>
+      <div class="dlg-label">发多少天</div>
       <div class="presets">
         <el-button
           v-for="p in MEMBER_PRESETS"
