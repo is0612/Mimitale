@@ -176,6 +176,12 @@
               <span class="writing-mode">故事，由你续写</span>
             </div>
             <div class="tools-right">
+              <!-- 深度思考（2026-10-28）：原来在「设置 → 模型」里当全局复选框，
+                   可全应用只有 DeepSeek 那两款真收这个参数 —— 摆在那儿等于让人为
+                   一件事翻两个界面。挪到模型左边之后，换到支持的模型它自己就亮。
+                   ⚠️ 它写的是**会话**（convo.thinking），不写全局：上一局开不开不带到下一局。 -->
+              <button id="btn-thinking" class="btn-thinking" type="button"
+                      data-icon="sparkles" aria-pressed="false" title="深度思考">深度思考</button>
               <!-- 切换模型。刻意不用原生 <select>：它的下拉列表由系统画（直角、系统蓝
                    高亮、系统字体），跟这套「大圆角 + 柔和阴影」根本不是一路，样式管不着。
                    改成和「⋯」共用一套弹层（.menu-pop），列表才能跟着配色走。
@@ -1489,7 +1495,6 @@
               <m-input id="s-topp" type="number" min="0" max="1" step="0.01"></m-input>
               <span class="field-help">控制候选词范围，默认 0.95。部分模型会忽略此参数。</span>
             </label>
-            <label class="check"><input id="s-thinking" type="checkbox" /><span class="check-text"><b>深度思考</b><small>默认开启，适用于支持该参数的模型。</small></span></label>
             <label class="field">
               <span class="field-label">回复上限</span>
               <m-input id="s-maxtokens" type="number" min="64" max="32000" step="64"></m-input>

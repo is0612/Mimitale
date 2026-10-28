@@ -653,6 +653,17 @@ m-textarea > .mi-textarea__control {
   row-gap: 18px;
 }
 
+/* 生成参数只剩三项之后（「深度思考」2026-10-28 搬去了输入区），「回复上限」独占左列、
+   右下空一块，看着像少了东西。让它跨两列：那段说明本来就长，一行放下比挤在 380px 里
+   好读；输入框自己限宽，不跟着拉成 660。 */
+#sec-params .field-grid > .field:last-child {
+  grid-column: 1 / -1;
+}
+
+#sec-params .field-grid > .field:last-child m-input {
+  max-width: 220px;
+}
+
 .field-grid .field {
   grid-template-columns: minmax(0, 1fr);
   row-gap: 8px;
@@ -4013,6 +4024,48 @@ m-button.btn-new > .mi-btn__control:hover {
   right: 0;
   bottom: calc(100% + 6px);
   left: auto;
+}
+
+/* 「深度思考」（2026-10-28）：和模型键同高，放在它左边。
+   开着的状态要一眼看出来（accent 底 + 描边），因为它的代价是「更慢」。 */
+.btn-thinking {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn-thinking svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.btn-thinking:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+.btn-thinking.is-on {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-border-faint);
+}
+
+/* 当前模型不收这个参数时置灰（title 里写清原因）—— 不做「点了没反应」的假开关 */
+.btn-thinking:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 

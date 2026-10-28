@@ -834,29 +834,10 @@ await scenario('设置：左导航切组', async () => {
   check('点左栏就切组', byId('sec-params').classList.contains('active') || paramsNav.classList.contains('active'));
   check('切到的这一组内容显示', visible(byId('sec-params')) && visible(byId('s-temp')));
 
-  // 「深度思考」下面那句说明必须跟着当前模型走。冒烟环境里是 test-model（非 DeepSeek），
-  // 开关存了也不会发 —— 说明必须把这件事说出来，否则就是「看着能点、点了没用」的静默失效。
-  const thinkHint = String(
-    (byId('s-thinking').closest('.check')?.querySelector('small')?.textContent || '').trim()
-  );
-  check(
-    '深度思考的说明按当前模型重写过（不是那句静态默认文案）',
-    thinkHint.includes('不收这个参数') || thinkHint.includes('回复上限'),
-    thinkHint
-  );
-  check(
-    '当前模型不收这个参数时，说明里点了模型名',
-    thinkHint.includes('不收这个参数') ? thinkHint.includes('test-model') : true,
-    thinkHint
-  );
-  const thinkingBefore = byId('s-thinking').checked;
-  byId('s-thinking').checked = !thinkingBefore;
-  byId('s-thinking').dispatchEvent(new Event('change', { bubbles: true }));
-  await sleep(200);
-  check('设置页深度思考可以独立保存', (await window.mimitale.getSettings()).settings.thinking === !thinkingBefore);
-  byId('s-thinking').checked = thinkingBefore;
-  byId('s-thinking').dispatchEvent(new Event('change', { bubbles: true }));
-  await sleep(180);
+  // 「深度思考」的设置项 2026-10-28 撤了：它搬去了输入区（见「输入区：深度思考开关」场景）。
+  // 这里只做反向确认，免得哪天又被加回来变成第二个入口。
+  check('设置里不再有「深度思考」开关（搬去输入区了）', !byId('s-thinking'),
+    byId('s-thinking') ? '还在' : '已经没了');
   check('原来那一组（模型服务）收起来', !visible(byId('p-baseurl')));
 
   // 没显示的那一组里的值照样存得住（切组只是 display:none，不该让表单失效）
@@ -2775,6 +2756,37 @@ await scenario('设置：地址写错不会被误诊成「没有模型列表接�
 //  （待发的图片反而是校验之后才清的，所以图还在、字没了）。
 //  现在的口径：sendMessage 返回「到底发出去没有」，只有真发出去了才清空。
 // ---------------------------------------------------------------------------
+//  场景 3.5：输入区 —— 「深度思考」开关
+//
+//  2026-10-28：它原来是「设置 → 模型」里的全局复选框，只有 DeepSeek 那两款真收
+//  `thinking` 参数。搬到输入区、模型左边之后，这里守三件事：
+//    ① 位置和归属（在 .tools-right 里、排在模型键前面）
+//    ② 当前模型不支持时**不可点**，title 要说清原因 —— 不做点了没反应的假开关
+//    ③ 状态记在会话上（convo.thinking），不写全局
+//  规则和 main/http.js 的 isDeepSeekThinkingModel 是同一套，改要两边一起改。
+// ---------------------------------------------------------------------------
+await scenario('输入区：深度思考开关', async () => {
+  const btn = byId('btn-thinking');
+  const pick = $('.compose-tools .model-pick');
+  check('输入区有「深度思考」这颗', !!btn);
+  check('它和模型键同一行、排在它左边',
+    !!btn && !!pick && btn.parentElement === pick.parentElement
+      && (btn.compareDocumentPosition(pick) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+    btn && pick ? String(btn.compareDocumentPosition(pick)) : '（缺元素）');
+  // 当前会话跑的是 test-model，不在白名单里 → 置灰
+  check('模型不支持时不可点（不做点了没反应的假开关）',
+    !!btn && btn.disabled === true, btn ? String(btn.disabled) : '（没有按钮）');
+  check('置灰时 title 说清原因',
+    !!btn && btn.title.includes('不支持'), btn ? btn.title : '');
+
+  // 会话上没显式设过时，显示的是全局默认（不往会话上写）
+  const convo = (typeof activeConvo === 'function' ? activeConvo() : null);
+  if (convo) {
+    check('没切过时不在会话上留字段', convo.thinking === undefined, String(convo.thinking));
+  }
+});
+
+// ---------------------------------------------------------------------------
 await scenario('输入框：发不出去时字要留着', async () => {
   const FILLED = '这段字不能被吃掉';
 
@@ -4186,7 +4198,8 @@ await scenario('对话宽度：左右各管各的（拖动抓手）', async () =
 await scenario('简化右栏与设置参数', async () => {
   check('右栏只保留角色与场景', !byId('btn-tab-gen') && !byId('gen-body'));
   check('聊天区没有收放把手', !byId('rail-handle-left') && !byId('rail-handle-right'));
-  check('设置保留全部生成参数', ['s-temp','s-topp','s-maxtokens','s-thinking'].every(id => !!byId(id)));
+  // 「深度思考」2026-10-28 从设置搬去了输入区，不再算这条设置项
+  check('设置保留全部生成参数', ['s-temp','s-topp','s-maxtokens'].every(id => !!byId(id)));
   const panel=byId('cast-panel');
   const main=$('.app > main');
   check('根布局为sidebar main inspector', panel.parentElement === main.parentElement && panel.previousElementSibling === main && main.previousElementSibling === byId('sidebar'));
@@ -4874,6 +4887,30 @@ await scenario('账号：注册 → 左下角菜单 → 个人中心 → 凭证�
   check('改邮箱后侧栏副标题也是新邮箱', ($('#account-sub')?.textContent || '').includes(newEmail),
     $('#account-sub')?.textContent);
 
+  /**
+   * 点账号格，直到登录窗出来。
+   *
+   * ⚠️ 刚退出登录时账号格会重渲染（侧栏那一格内容整个换掉），
+   *    第一下点击有可能落在**刚要换掉的旧节点**上 —— 于是什么都没发生，
+   *    然后再等 5 秒超时。冒烟里这个超时偶发过好几次（单跑又过）。
+   *    与其调大超时，不如多点两次：它不是逻辑断言，只是把界面推到该有的状态。
+   */
+  const openLoginModal = async (label) => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      click('#btn-account');
+      try {
+        await waitFor(label, () => shown('#account-modal'), 2500);
+        return;
+      } catch (e) {
+        await sleep(200);
+      }
+    }
+    throw new Error(
+      `点了三次都没弹出登录窗 | name=${JSON.stringify($('#account-name')?.textContent)} | ` +
+        `menu=${shown('#account-menu')} | modal=${shown('#account-modal')}`
+    );
+  };
+
   // --- 退出 → 用凭证码登回来 ---
   click('#btn-account');
   await waitFor('菜单打开（准备退出）', () => shown('#account-menu'));
@@ -4883,12 +4920,7 @@ await scenario('账号：注册 → 左下角菜单 → 个人中心 → 凭证�
   // 退出时人还站在个人中心：那一屏未登录只剩一句「还没登录」，所以要把人送走
   check('退出登录后自动离开个人中心', !shown('#view-profile'));
 
-  click('#btn-account');
-  try {
-    await waitFor('未登录点开还是登录窗', () => shown('#account-modal'));
-  } catch (e) {
-    throw new Error(`${e.message} | name=${JSON.stringify($('#account-name')?.textContent)} | menu=${shown('#account-menu')} | modal=${shown('#account-modal')} | view=${document.querySelector('.view:not(.hidden)')?.id}`);
-  }
+  await openLoginModal('未登录点开还是登录窗');
   click('#btn-goto-voucher');
   await waitFor('切到凭证面板', () => shown('#account-pane-voucher'));
 
@@ -4906,12 +4938,7 @@ await scenario('账号：注册 → 左下角菜单 → 个人中心 → 凭证�
   click('#btn-account-menu-logout');
   await waitFor('退出后可再进凭证面板', () => $('#account-name')?.textContent.trim() === '未登录');
 
-  click('#btn-account');
-  try {
-    await waitFor('未登录点开还是登录窗', () => shown('#account-modal'));
-  } catch (e) {
-    throw new Error(`${e.message} | name=${JSON.stringify($('#account-name')?.textContent)} | menu=${shown('#account-menu')} | modal=${shown('#account-modal')} | view=${document.querySelector('.view:not(.hidden)')?.id}`);
-  }
+  await openLoginModal('未登录点开还是登录窗');
   click('#btn-goto-voucher');
   await waitFor('切到凭证面板', () => shown('#account-pane-voucher'));
   fill('#acc-voucher-code', codeOnCard.toLowerCase());

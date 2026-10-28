@@ -16,7 +16,7 @@ import { openPetSection } from './petSettings.js';
 import { renderAppearanceForm } from './appearance.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
-import { providers, providerById, isBridgeProvider, currentEndpoint, supportsThinking } from '../data/providers.js';
+import { providers, providerById, isBridgeProvider, currentEndpoint } from '../data/providers.js';
 import { renderHeader } from './header.js';
 // 视图切换（单向：它只登记显隐/高亮，不认识本模块）
 import { showView, currentViewName } from './viewSwitch.js';
@@ -62,19 +62,20 @@ export function initSettings(opts = {}) {
     el.s.temp.value = s.temperature ?? 0.7;
     el.s.maxTokens.value = s.maxTokens ?? 8192;
     el.s.topP.value = s.topP ?? 0.95;
-    el.s.thinking.checked = s.thinking !== false;
   });
-  for (const [key, input] of [['temperature', el.s.temp], ['maxTokens', el.s.maxTokens], ['topP', el.s.topP], ['thinking', el.s.thinking]]) {
+  // 「深度思考」原来也在这组里（一个复选框）。2026-10-28 它搬去了输入区 ——
+  // 见 views/thinkingToggle.js。这里的循环只剩三个数字项，全是 <input type=number>。
+  for (const [key, input] of [['temperature', el.s.temp], ['maxTokens', el.s.maxTokens], ['topP', el.s.topP]]) {
     input?.addEventListener('change', async () => {
-      const value = key === 'thinking' ? input.checked : Number(input.value);
-      if (key !== 'thinking' && (!input.value.trim() || !Number.isFinite(value))) return;
+      const value = Number(input.value);
+      if (!input.value.trim() || !Number.isFinite(value)) return;
       try {
         const saved = await api.saveSettings({ [key]: value });
         state.settings = saved;
         // 越界值由主进程归一化夹回合法范围（温度 0–2 / top_p 0–1 / 回复上限 64–32000）。
         // 不说一句的话，输入 99 会悄悄变成 2，用户只会觉得「我填的东西被吃了」。
         const stored = saved[key];
-        if (key !== 'thinking' && Number(stored) !== value) {
+        if (Number(stored) !== value) {
           showToast(`超出允许范围，已按 ${stored} 保存`, 'ok');
         }
         document.dispatchEvent(new CustomEvent('mimitale:generation-settings-changed'));
@@ -440,26 +441,11 @@ function savedNumber(value, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-/** 「深度思考」的说明跟着当前模型变：不支持这个参数时必须说出来 ——
- *  否则开关看着能点、点了也确实存了，但请求里根本没发，属于静默失效。 */
-function updateThinkingHint() {
-  const box = el.s.thinking;
-  const label = box && box.closest ? box.closest('.check') : null;
-  const hint = label ? label.querySelector('small') : null;
-  if (!hint) return;
-  const endpoint = currentEndpoint();
-  const model = endpoint && endpoint.model ? `（${endpoint.model}）` : '';
-  hint.textContent = supportsThinking(endpoint)
-    ? '思考也算在「回复上限」的额度里，长篇扮演里它常常比正文还长。'
-    : `当前模型${model}不收这个参数，开关存了也不会发。`;
-}
-
 function fillSettingsForm(settings) {
   el.s.temp.value = savedNumber(settings.temperature, 0.7);
   el.s.maxTokens.value = Math.floor(savedNumber(settings.maxTokens, 8192));
   if (el.s.topP) el.s.topP.value = savedNumber(settings.topP, 0.95);
-  if (el.s.thinking) el.s.thinking.checked = settings.thinking !== false;
-  updateThinkingHint();
+  // 深度思考的设置项 2026-10-28 撤了 —— 唯一入口是输入区模型旁边那颗（views/thinkingToggle.js）
   el.s.sendOnEnter.checked = settings.sendOnEnter !== false;
   el.s.showDate.checked = settings.showDate !== false;
   el.s.showUsage.checked = settings.showUsage !== false;
@@ -767,7 +753,8 @@ function readSettingsForm() {
       32000,
       true
     ),
-    thinking: el.s.thinking ? el.s.thinking.checked : saved.thinking !== false,
+    // 设置页已经没有这个开关了，保存时原样带回（别把它清成 true）
+    thinking: saved.thinking !== false,
     topP: numberFrom(
       el.s.topP,
       savedNumber(saved.topP, 0.95),

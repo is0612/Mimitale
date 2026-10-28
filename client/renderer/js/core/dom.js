@@ -24,6 +24,7 @@ export const el = {
   usageText: $('usage-text'),
   btnNew: $('btn-new'),
   btnSend: $('btn-send'),
+  btnThinking: $('btn-thinking'),
   btnClear: $('btn-clear'),
   btnCopyAll: $('btn-copy-all'),
   // 账号格：内容和状态由 views/account.js 铺
@@ -255,7 +256,6 @@ export const el = {
   s: {
     temp: $('s-temp'),
     maxTokens: $('s-maxtokens'),
-    thinking: $('s-thinking'),
     topP: $('s-topp'),
     sendOnEnter: $('s-sendonenter'),
     showDate: $('s-showdate'),

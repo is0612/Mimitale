@@ -64,6 +64,7 @@ import { streamPainter, initStreamFollow } from './views/stream.js';
 import { initChatImages } from './views/chatImages.js';
 import { initSuggestionsUi, pickOption } from './views/suggestionsUi.js';
 import { initQuickPhrases } from './views/quickPhrases.js';
+import { initThinkingToggle } from './views/thinkingToggle.js';
 import { showView, refreshLibraryPage, initViewSwitch } from './views/viewSwitch.js';
 // 侧栏左下角的账号格与账号弹窗：登录流程接好后在这里注入 openLogin
 import { initAccount, renderAccount } from './views/account.js';
@@ -550,6 +551,7 @@ async function init() {
   });
   // 快捷短语面板：只往输入框里插，不发送。
   initQuickPhrases();
+  initThinkingToggle();
   // 侧边栏的「角色卡 / 游戏卡 / 世界书」入口自己绑（切屏是 viewSwitch 自己的事）。
   initViewSwitch();
   // 游戏卡列表页（只搭了布局，占位按钮给个「还在搭」的提示）。

@@ -189,6 +189,9 @@ export function dialoguePresetSampling(convo) {
 export function effectiveSampling(convo) {
   const preset = dialoguePresetSampling(convo) || {};
   const out = { ...preset };
+  // 输入区那颗「深度思考」（2026-10-28）：只在**这一局显式切过**时才覆盖 ——
+  // 没切过就让 main 端用全局设置（settings.thinking），两边不要都写一份默认值。
+  if (convo && typeof convo.thinking === 'boolean') out.thinking = convo.thinking;
   return Object.keys(out).length ? out : null;
 }
 
