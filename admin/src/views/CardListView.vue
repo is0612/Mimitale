@@ -268,10 +268,9 @@ onMounted(load)
     <el-card shadow="never" class="panel">
       <el-table v-loading="loading" :data="rows" stripe>
         <el-table-column prop="id" label="ID" width="64" />
-        <el-table-column label="卡密" width="188">
+        <el-table-column label="卡密" width="176">
           <template #default="{ row }">
-            <span class="mono">{{ row.code }}</span>
-            <el-button link type="primary" class="copy" @click="copy(row.code)">复制</el-button>
+            <span class="code">{{ row.code }}</span>
           </template>
         </el-table-column>
         <el-table-column label="备注" width="110">
@@ -279,12 +278,14 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="状态" width="106">
           <template #default="{ row }">
-            <el-tag :type="CARD_STATUS_TAG[row.status as CardStatus]" size="small" disable-transitions>
-              {{ CARD_STATUS_LABEL[row.status as CardStatus] }}
-            </el-tag>
-            <el-tooltip v-if="isExpired(row)" content="已过有效期，但还没被使用" placement="top">
-              <span class="expired">过期</span>
-            </el-tooltip>
+            <span class="status-cell">
+              <el-tag :type="CARD_STATUS_TAG[row.status as CardStatus]" size="small" disable-transitions>
+                {{ CARD_STATUS_LABEL[row.status as CardStatus] }}
+              </el-tag>
+              <el-tooltip v-if="isExpired(row)" content="已过有效期，但还没被使用" placement="top">
+                <span class="expired">过期</span>
+              </el-tooltip>
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="使用者" min-width="186" show-overflow-tooltip>
@@ -305,10 +306,10 @@ onMounted(load)
         <el-table-column label="使用时间" width="146">
           <template #default="{ row }">{{ formatTime(row.usedAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="82" fixed="right">
+        <el-table-column label="操作" width="112" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" @click="copy(row.code)">复制</el-button>
             <el-button v-if="row.status === 'unused'" link type="danger" @click="doVoid(row)">作废</el-button>
-            <span v-else class="muted">—</span>
           </template>
         </el-table-column>
       </el-table>
@@ -404,26 +405,37 @@ onMounted(load)
   flex: 1;
 }
 
-.mono {
+/**
+ * 卡密码 —— 这一行的**主内容**，不是配角。
+ *
+ * ⚠️ 原来这里是 `.mono` 覆盖成 12px，还带着一句 `font-family: var(--font-mono)`：
+ *    那个变量当时根本不存在，整条 font-family 失效，码其实是用黑体渲染的。
+ *    结果就是「这页的字怎么这么小、还看不出是码」。
+ * ⚠️ 现在用正文字号（14px）+ 等宽字体，跟表格其它列一样大但不靠加粗抢戏 ——
+ *    次级信息（备注 / 状态 / 时间）本来就靠颜色和字重退后了。
+ */
+.code {
   font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-.copy {
-  margin-left: 7px;
-  font-size: 11px;
+  font-size: 14px;
+  /* 等宽码本身偏散，稍微收一点字距更好成词；别收太多，否则 M 和 W 会挤 */
+  letter-spacing: -0.01em;
+  color: var(--text-main);
 }
 
 .muted {
-  color: #b4b2a9;
+  /* 占位符也要能看清：原来的 #b4b2a9 在白色上只有 1.9:1，是「看不清」不是「低调」 */
+  color: var(--text-sub);
 }
 
 .expired {
   color: #a32d2d;
+  font-size: 12px;
 }
 
-.expired::before {
-  content: '';
+.status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .dlg-body {

@@ -4,6 +4,15 @@
   --line: #e6e8eb;
   --text-main: #2c2c2a;
   --text-sub: #6b6f76;
+  /**
+   * 等宽字体 —— 卡密、凭证码、邀请码、IP 这些「要一个字一个字对」的内容用它。
+   *
+   * ⚠️ 这个变量以前**根本不存在**，但四个页面（卡密 / 客户详情 / 客户列表 / 字典）
+   *    都写了 `font-family: var(--font-mono)`。CSS 变量取不到值时整条声明失效，
+   *    于是那些本该等宽的码一直是用正文黑体渲染的 —— 看着只是「有点怪」，
+   *    但对着抄码的人会一直分不清 l / I / 1。
+   */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 * {
@@ -32,6 +41,6 @@ a {
 }
 
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
 }
