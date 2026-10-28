@@ -29,6 +29,18 @@ export const MEMBER_NAME = '订阅会员'
 
 export type Wallet = 'free' | 'member'
 
+/**
+ * 送奖励天数时该进哪个钱包（注册赠送 / 邀请奖励用）。
+ *
+ * ⚠️ 会员期内送免费天数等于白送：权益取两个钱包里更晚的那个，
+ *    +7 天免费落在会员期里根本用不到，但界面照样显示「免费剩 7 天」——
+ *    用户看得见、吃不到。所以对方已经是会员时，直接往会员到期日后面加。
+ *    （2026-10-28：星宝拿自己的号邀请自己的号，看到「免费 7 天 + 会员 12-27」报的。）
+ */
+export function rewardWallet(membershipExpireAt: Date | null | undefined): Wallet {
+  return membershipExpireAt && membershipExpireAt.getTime() > Date.now() ? 'member' : 'free'
+}
+
 interface GrantInput {
   customerId: number
   days: number

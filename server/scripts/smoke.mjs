@@ -1002,6 +1002,34 @@ section('邀请码：自己发码 / 别人填码 / 归因')
       : `段数=${freeSegs.length}`
   )
 
+  /* ---------------- 会员邀请人：+7 天要加在会员上，不能加在免费上 ---------------- */
+  // 丙是会员（90 天）。他再邀一个人时，+7 天**免费**会整个落在会员期里 ——
+  // 权益取两个钱包里更晚的那个，界面显示「免费剩 7 天」但根本吃不到。
+  // 2026-10-28 星宝就是撞在这个上：注册时间 17:29、免费剩 7 天、会员到期 12-27。
+  const d = await registerOne('冒烟丁', cardUserMe.data?.user?.inviteCode ?? '')
+  check('会员的邀请码也能用来注册', d.done.code === 0, `code=${d.done.code} ${d.done.message ?? ''}`)
+
+  const cardUserMe2 = await api('GET', '/api/client/auth/me', { token: cardUser.done.data.token })
+  check(
+    '⭐ 会员邀到人 → 会员天数往后 +7（不是免费 +7）',
+    (cardUserMe2.data?.user?.membership?.memberDaysLeft ?? 0) >= 96,
+    `会员剩 ${cardUserMe2.data?.user?.membership?.memberDaysLeft} 天`
+  )
+  check(
+    '⭐ 不会凭空多出一段吃不到的免费天数',
+    cardUserMe2.data?.user?.membership?.freeDaysLeft === null,
+    String(cardUserMe2.data?.user?.membership?.freeDaysLeft)
+  )
+  const cardUserGrants2 = await db.query(
+    "SELECT source, days FROM membership_grants WHERE customer_id = $1 AND source = 'invite'",
+    [cardUserId]
+  )
+  check(
+    '这条奖励在流水里还是 invite（后台对账看得出是邀请来的）',
+    cardUserGrants2.rows.length === 1 && cardUserGrants2.rows[0].days === 7,
+    JSON.stringify(cardUserGrants2.rows)
+  )
+
   /* ---------------- 码不对要被挡住 ---------------- */
 
   const bad = await registerOne('冒烟丙', 'MIMI-ZZZZ-ZZZZ')
