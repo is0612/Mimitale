@@ -5687,6 +5687,89 @@ app.whenReady().then(async () => {
           if (desc) desc.scrollIntoView({ block: 'start' });
           await nap(300);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 「这一栏怎么写」浮窗（2026-10-28）：头栏那枚 ? 点开之后的样子。
+        // 标题栏（抓手 + 字段名 · 这一栏怎么写 + ×）、说明正文、以及它压在卡片上的关系 ——
+        // 「浮层遮挡有多大干扰」「344px 宽里 12px 字好不好读」这两件事只有肉眼能判。
+        charHint: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+
+          document.querySelector('#btn-chars')?.click();
+          await nap(400);
+          const card = $$('#char-page-grid .char-card')[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await nap(600);
+
+          document.querySelector('#char-form .char-hint-btn[data-hint="desc"]')?.click();
+          await nap(260);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 「高级设置」这一屏（2026-10-28）：三栏统一成稿纸卡之后，头栏 / 角标 / ?
+        // 和「角色卡设定」是不是真的一套长相，只有并排看才知道。
+        charAdvanced: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+
+          document.querySelector('#btn-chars')?.click();
+          await nap(400);
+          const card = $$('#char-page-grid .char-card')[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await nap(600);
+          document.querySelector('#char-section-tab-advanced')?.click();
+          await nap(320);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 「人物列表」这一屏：三颗按钮（识别世界书人物 / AI 生成 / ＋ 新建）放大到 34 高之后，
+        // 和下面的卡片网格、和它们的文字层级是否还站得住。
+        charRoles: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+
+          document.querySelector('#btn-chars')?.click();
+          await nap(400);
+          const card = $$('#char-page-grid .char-card')[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await nap(600);
+          document.querySelector('#char-section-tab-roles')?.click();
+          await nap(320);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 「高级设置」分区（2026-10-28）：三栏改成了和写作区一样的稿纸卡
+        // （头栏 图标+字段名+字数角标+? / 通体框 / 说明收进浮窗），
+        // 和「角色卡设定」切来切去时卡片长相、间距、字号得是同一套。
+        charAdvanced: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+
+          document.querySelector('#btn-chars')?.click();
+          await nap(400);
+          const card = $$('#char-page-grid .char-card')[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await nap(600);
+          document.querySelector('#char-section-tab-advanced')?.click();
+          await nap(400);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 「人物列表」分区：顶部那三颗动作按钮（识别世界书人物 / AI 生成 / ＋新建）
+        // 的尺寸和间距，以及下面卡片网格的空态。
+        charRoles: `
+          const $$ = (s) => Array.from(document.querySelectorAll(s));
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+
+          document.querySelector('#btn-chars')?.click();
+          await nap(400);
+          const card = $$('#char-page-grid .char-card')[0];
+          const btn = card && Array.from(card.querySelectorAll('button')).find(b => b.textContent.trim() === '编辑');
+          if (btn) btn.click();
+          await nap(600);
+          document.querySelector('#char-section-tab-roles')?.click();
+          await nap(400);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 长描述塞满文本框：框**不会**跟着长高，多出来的字在框里滚 ——
         // 这个「矮框 + 框内滚动」的观感只有截图能看出来。
         // ⚠️ 2026-10-16（V2 重组版）起，角色编辑页五个框的高度是 style.css 里

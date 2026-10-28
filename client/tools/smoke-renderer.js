@@ -1299,6 +1299,158 @@ await scenario('角色编辑器：五个写作框的高度', async () => {
 });
 
 // ---------------------------------------------------------------------------
+//  场景 5.55：角色编辑器 —— 「这一栏怎么写」浮窗
+//
+//  2026-10-28：五张卡底部的 <details class="char-fold">（五条一模一样的灰字、默认收起）
+//  换成头栏一枚 ? + 一个全局浮窗。这里守四件事：
+//    ① 卡底不再有折叠条，说明能原样进浮窗
+//    ② 三条关闭路径：再点同一颗 ? / 右上角 × / Esc（Esc 只关浮窗，不能顺手把编辑页退了）
+//    ③ 拖拽真的改变位置，松手后还被夹在窗口内
+//    ④ 点 ? 不会把焦点顺带送进 textarea（那颗按钮长在 <label for="c-…"> 里面）
+// ---------------------------------------------------------------------------
+await scenario('角色编辑器：这一栏怎么写浮窗', async () => {
+  click('#btn-chars');
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
+
+  const pop = byId('char-hint-pop');
+  const clip = (node) => (node ? node.textContent.replace(/\s+/g, ' ').trim().slice(0, 24) : '(没有)');
+
+  check('浮窗默认关着', !!pop && pop.hidden);
+  // 八颗：五栏写作（描述/场景/开场白/备选/示例）+ 高级设置三栏（2026-10-28 统一之后）
+  check('八颗 ? 都在', $$('#char-form .char-hint-btn').length === 8, String($$('#char-form .char-hint-btn').length));
+  check('卡底不再有折叠条', $$('#char-form .char-fold').length === 0, String($$('#char-form .char-fold').length));
+
+  const btn = $$('#char-form .char-hint-btn').find((b) => b.dataset.hint === 'desc');
+  check('找到描述那栏的 ?', !!btn);
+  click(btn);
+  await sleep(90);
+
+  check('点 ? 打开浮窗', !pop.hidden);
+  check('标题带上了字段名', clip(byId('char-hint-title')).includes('角色卡描述'), clip(byId('char-hint-title')));
+  check('说明正文进来了', clip(byId('char-hint-body')).length > 12, clip(byId('char-hint-body')));
+  check('? 的 aria-expanded 同步成 true', btn.getAttribute('aria-expanded') === 'true', btn.getAttribute('aria-expanded'));
+  check('点 ? 没把焦点送进 textarea', document.activeElement !== byId('c-desc'), String(document.activeElement && document.activeElement.id));
+
+  // --- 拖拽：按住标题栏往右下甩 60×40 ---
+  const before = pop.getBoundingClientRect();
+  const grip = byId('char-hint-grip');
+  const gx = grip.getBoundingClientRect().left + 16;
+  const gy = grip.getBoundingClientRect().top + 8;
+  const pointer = (type, x, y) => new PointerEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y, pointerId: 1 });
+  grip.dispatchEvent(pointer('pointerdown', gx, gy));
+  pop.dispatchEvent(pointer('pointermove', gx + 60, gy + 40));
+  pop.dispatchEvent(pointer('pointerup', gx + 60, gy + 40));
+  await sleep(60);
+  const after = pop.getBoundingClientRect();
+  check('拖拽改变了位置', Math.abs(after.left - before.left) > 20, `${Math.round(before.left)}→${Math.round(after.left)}`);
+  check('松手后整个浮窗还在窗口内', after.left >= 0 && after.top >= 0 && after.right <= window.innerWidth + 1 && after.bottom <= window.innerHeight + 1,
+    `${Math.round(after.left)},${Math.round(after.top)} ${Math.round(after.width)}×${Math.round(after.height)}`);
+
+  // --- 拖过之后换字段：位置**重置**到新那颗 ? 下面（2026-10-28 星宝：
+  //     「没关弹窗、点了另外的帮助，位置还停在老地方」—— 换帮助也要重新贴）---
+  const scene = $$('#char-form .char-hint-btn').find((b) => b.dataset.hint === 'scenario');
+  click(scene);
+  await sleep(90);
+  {
+    const btnBox = scene.getBoundingClientRect();
+    const popBox = pop.getBoundingClientRect();
+    check('换字段后浮窗贴到新那颗 ? 下面（右缘对齐）',
+      Math.abs(popBox.right - btnBox.right) < 2 && Math.abs(popBox.top - (btnBox.bottom + 8)) < 2,
+      `右缘 ${Math.round(popBox.right)} vs ${Math.round(btnBox.right)}，顶 ${Math.round(popBox.top)} vs ${Math.round(btnBox.bottom + 8)}`);
+  }
+  check('内容换成了场景那栏', clip(byId('char-hint-body')).includes('哪里'), clip(byId('char-hint-body')));
+
+  // --- 再点同一颗 ? = 关 ---
+  click(scene);
+  await sleep(80);
+  check('再点同一颗 ? 关掉', pop.hidden);
+  check('关掉后 aria-expanded 回到 false', scene.getAttribute('aria-expanded') === 'false', scene.getAttribute('aria-expanded'));
+
+  // --- 右上角 × 关 ---
+  click(btn);
+  await sleep(80);
+  check('重新打开（准备测 ×）', !pop.hidden);
+  // 关窗时拖到的位置要一起忘掉（2026-10-28 星宝要求）：重开必须回到贴着那颗 ? 的默认位，
+  // 而不是又飘回上一轮拖到的地方。
+  check('关掉再打开，位置回到贴着 ? 的默认位',
+    Math.abs(pop.getBoundingClientRect().left - before.left) < 2,
+    `${Math.round(pop.getBoundingClientRect().left)} vs 默认 ${Math.round(before.left)}`);
+  click(byId('btn-char-hint-close'));
+  await sleep(80);
+  check('右上角 × 能关', pop.hidden);
+
+  // --- Esc：只关浮窗，编辑页留着 ---
+  click(btn);
+  await sleep(80);
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(80);
+  check('Esc 关掉浮窗', pop.hidden);
+  check('Esc 没有顺手退出编辑页', shown('#view-char-editor'), '编辑页被关了');
+
+  // --- 收尾：别把半开的浮窗留给后面的场景 ---
+  click('#btn-close-chars');
+  await sleep(160);
+  if (shown('#confirm-modal')) click(byId('confirm-ok'));
+  await sleep(200);
+});
+
+// ---------------------------------------------------------------------------
+//  场景 5.55b：角色编辑器 —— 高级设置和写作区是同一套稿纸卡
+//
+//  2026-10-28：高级设置那三栏原来是自己一套长相（label 包着 textarea + 一行灰字），
+//  和写作区一眼两拨人。现在三栏都换成 .char-sheet（头栏 图标+字段名+字数+? / 通体框 /
+//  说明进浮窗）。这里钉住「和写作卡同一个口径」的几条：分隔线、左右内边距、圆角、间距、
+//  角标和 ? 都在，以及角标真的跟着输入走（回填路径不经过 input，得单独补）。
+// ---------------------------------------------------------------------------
+await scenario('角色编辑器：高级设置和写作区同一套稿纸卡', async () => {
+  click('#btn-chars');
+  await waitFor('切到角色卡页面', () => shown('#view-chars'));
+  click('#btn-new-char');
+  await waitFor('角色编辑器打开', () => shown('#view-char-editor'));
+  click('#char-section-tab-advanced');
+  await sleep(150);
+
+  const cards = $$('#char-form .char-advanced > .field');
+  check('高级设置三栏都在', cards.length === 3, String(cards.length));
+  check('三栏都是稿纸卡（.char-sheet）', cards.every((c) => c.classList.contains('char-sheet')));
+
+  if (cards.length === 3) {
+    const head = getComputedStyle(cards[0].querySelector('.field-head'));
+    check('头栏有分隔线（和写作卡同一条规则）',
+      head.borderBottomWidth === '1px', head.borderBottomWidth);
+    check('头栏左右内边距 = 16（写作卡同一值）',
+      head.paddingLeft === '16px' && head.paddingRight === '16px', `${head.paddingLeft}/${head.paddingRight}`);
+    const card = getComputedStyle(cards[0]);
+    check('卡片圆角 = 写作卡同一个 token',
+      card.borderTopLeftRadius === getComputedStyle($('.char-form .char-sheet')).borderTopLeftRadius,
+      `${card.borderTopLeftRadius} vs ${getComputedStyle($('.char-form .char-sheet')).borderTopLeftRadius}`);
+    check('三栏间距 = 写作区的 16px',
+      getComputedStyle($('#char-form .char-advanced')).rowGap === '16px',
+      getComputedStyle($('#char-form .char-advanced')).rowGap);
+    check('三栏都有字数角标', cards.every((c) => !!c.querySelector('.field-count')));
+    check('三栏都有写法浮窗按钮', cards.every((c) => !!c.querySelector('.char-hint-btn')));
+    check('三栏的说明都收进了 template（不在正文下面常显）',
+      cards.every((c) => !!c.querySelector('template.char-hint-src') && !c.querySelector('p.field-help')));
+  }
+
+  // 角标要真的动：回填不经过 input 事件，15:05 那批改动里专门补了一段
+  const text = '这句只在她沉默时生效';
+  setValue('#c-system', text);
+  await sleep(80);
+  check('系统提示词的字数角标跟着输入更新',
+    byId('c-system-count').textContent.includes(String(text.length)),
+    byId('c-system-count').textContent);
+
+  // 收起：别把焦点留在高级设置，后面的场景从「角色卡设定」开始
+  click('#btn-close-chars');
+  await sleep(160);
+  if (shown('#confirm-modal')) click(byId('confirm-ok'));
+  await sleep(200);
+});
+
+// ---------------------------------------------------------------------------
 //  场景 5.6：角色编辑器 —— 字数角标
 //
 //  框高按字段分别给定之后（描述 200、性格 96……），「写了多少」得一眼能看到

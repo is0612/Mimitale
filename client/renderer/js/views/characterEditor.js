@@ -81,12 +81,16 @@ function updateCharCount(textarea) {
   badge.textContent = `${n.toLocaleString()} 字`;
 }
 
+/** 高级设置那三栏。它们不 auto-grow，所以不在 longTextAreas() 里 —— 字数要单独照顾。
+    2026-10-28：三栏统一成稿纸卡之后也有角标了，这一份名单被角标和全文统计共用。 */
+const ADVANCED_TEXT_IDS = ['c-system', 'c-post', 'c-notes'];
+
 /** 页头右侧的「全文 N 字」：五个写作栏 + 高级设置三栏，和世界书页头同一种读法 */
 function updateCharTotalWords() {
   if (!el.charTotalWords) return;
   let total = 0;
   for (const [node] of longTextAreas()) total += String(node.value || '').length;
-  for (const id of ['c-system', 'c-post', 'c-notes']) {
+  for (const id of ADVANCED_TEXT_IDS) {
     const node = document.getElementById(id);
     if (node) total += String(node.value || '').length;
   }
@@ -96,6 +100,13 @@ function updateCharTotalWords() {
 /** 刷新全部五个框的角标 + 左栏徽章 + 右栏字段目录（fillCharForm 回填之后用） */
 function syncAllCharCounts() {
   for (const [node] of longTextAreas()) updateCharCount(node);
+  // 高级三栏的角标单独刷：回填（含「新建」清空那条路）不经过 input 事件，
+  // 不补这一步它们的角标会一直停在「0 字」。
+  for (const id of ADVANCED_TEXT_IDS) {
+    const host = document.getElementById(id);
+    const inner = host && (host.control || host.querySelector('textarea'));
+    if (inner) updateCharCount(inner);
+  }
   updateCharTotalWords();
   // 徽章与目录上的字数/已写圆点都从 DOM 现算，回填之后必须补一次
   refreshCharSectionCounts();

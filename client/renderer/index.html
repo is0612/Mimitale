@@ -306,6 +306,22 @@
           </div>
         </header>
 
+        <!-- 「这一栏怎么写」浮窗（2026-10-28）。
+             原来每张稿纸卡底部挂一条 <details class="char-fold">，五张卡五条一样的字样，
+             默认收起 = 纯占位。改成头栏一枚 ? 之后，说明统一收进这一个浮窗。
+               · 拖标题栏可以拖走，拖过之后位置会被记住（没拖过就一直贴着那颗 ?）
+               · 右上角 × 关；再点同一颗 ? 也关；Esc 也关（只关它，不退编辑页）
+             ⚠️ 全局只有一个，别按字段拆成五个 —— 内容由 views/fieldHint.js
+                从各卡里的 <template class="char-hint-src" data-hint="…"> 拷进来。 -->
+        <div id="char-hint-pop" class="char-hint-pop" role="dialog" aria-labelledby="char-hint-title" hidden>
+          <div id="char-hint-grip" class="char-hint-head">
+            <span class="char-hint-grip" aria-hidden="true"></span>
+            <span id="char-hint-title" class="char-hint-title">这一栏怎么写</span>
+            <button id="btn-char-hint-close" class="char-hint-close" type="button" title="关闭（Esc）" aria-label="关闭" data-icon="close"></button>
+          </div>
+          <div id="char-hint-body" class="char-hint-body"></div>
+        </div>
+
         <div class="char-main">
           <div id="char-empty" class="char-empty">
             <div class="char-empty-title">没有可编辑的角色</div>
@@ -347,33 +363,36 @@
                  文字里即可（描述里本就该交代清楚「十八岁」「魅魔混血」这类信息）。
                  单独字段反而会和描述重复，还要两处一起维护。 -->
 
-            <!-- 长文本字段共用一套结构（V2 重组版）：
-                 head = 字段名 + 字数角标，主体 = textarea，写法说明收进 <details> 折叠条。
+            <!-- 长文本字段共用一套结构（V2 重组版，2026-10-28 改）：
+                 head = 字段名 + 字数角标 + 一颗 ?，主体 = textarea；
+                 写法说明收进 <template class="char-hint-src">，由 views/fieldHint.js 搬进全局浮窗。
 
-                 ⚠️ label 只包住 head。for 关联还在，点「角色卡描述」四个字照样聚焦输入框；
-                    但**不能**把 details 包进 label —— 那样点「这一栏怎么写」会连带聚焦输入框。 -->
+                 ⚠️ label 只包住 head。for 关联还在，点「角色卡描述」四个字照样聚焦输入框。
+                    那颗 ? **就在 label 里面**（.field-head 是 .char-sheet-label 的子级），
+                    所以 fieldHint 的点击处理必须先 preventDefault，否则点它会把焦点
+                    顺带送进 textarea —— 冒烟里钉了这条。 -->
             <div class="field field-stack char-sheet">
               <label class="char-sheet-label" for="c-desc">
                 <span class="field-head">
                   <span class="field-label" data-icon="user">角色卡描述</span>
                   <span class="field-count" id="c-desc-count">0 字</span>
+                  <button type="button" class="char-hint-btn" data-hint="desc" aria-expanded="false" aria-controls="char-hint-pop" title="这一栏怎么写" aria-label="角色卡描述：这一栏怎么写">?</button>
                 </span>
               </label>
               <!-- ⚙ 多行框也是组件（2026-10-16）：宿主带 id，里层那颗原生 textarea
                    才是「看着是输入框」的那一层 —— 描边 / 内边距 / min-height 全在它上面，
                    样式里的选择器因此多一层（见 style.css 的「编辑角色 · 写作纸」）。 -->
               <m-textarea id="c-desc" rows="5" spellcheck="false" placeholder="这个角色是谁、长什么样、有什么经历……&#10;可以用 {{char}} 表示角色自己，{{user}} 表示你。"></m-textarea>
-              <details class="char-fold">
-                <summary>这一栏怎么写</summary>
-                <div class="char-fold-body">
+              <!-- 写法说明：正文一字未改，只是从卡底的折叠条搬进「这一栏怎么写」浮窗
+                   （views/fieldHint.js，全局一个、可拖拽、可关闭）。data-hint 是浮窗认领它的钥匙。 -->
+              <template class="char-hint-src" data-hint="desc">
                   <span class="field-help">
                     想一句话把角色立住，可以在最前面加一行 <code>((…))</code>，
                     里面按 <b>动机 → 障碍 → 代价 → 奖励</b> 写全。
                     例：<code>((她察觉你在撩她，因此讨厌你；但你要是真能动摇她，她会极度顺从。))</code><br />
                     障碍写成「玩家本人」的话，你一出现故事就结束了 —— 让障碍落在角色自己身上。
                   </span>
-                </div>
-              </details>
+              </template>
             </div>
 
 
@@ -382,17 +401,17 @@
                 <span class="field-head">
                   <span class="field-label" data-icon="map-pin">场景</span>
                   <span class="field-count" id="c-scenario-count">0 字</span>
+                  <button type="button" class="char-hint-btn" data-hint="scenario" aria-expanded="false" aria-controls="char-hint-pop" title="这一栏怎么写" aria-label="场景：这一栏怎么写">?</button>
                 </span>
               </label>
               <m-textarea id="c-scenario" rows="3" spellcheck="false" placeholder="你们正在哪里、干什么"></m-textarea>
-              <details class="char-fold">
-                <summary>这一栏怎么写</summary>
-                <div class="char-fold-body">
+              <!-- 写法说明：正文一字未改，只是从卡底的折叠条搬进「这一栏怎么写」浮窗
+                   （views/fieldHint.js，全局一个、可拖拽、可关闭）。data-hint 是浮窗认领它的钥匙。 -->
+              <template class="char-hint-src" data-hint="scenario">
                   <span class="field-help">
                     交代「你们正在哪里、干什么」即可，一两句话就够 —— 事件本身交给开场白写。
                   </span>
-                </div>
-              </details>
+              </template>
             </div>
 
             <div class="field field-stack char-sheet">
@@ -400,6 +419,7 @@
                 <span class="field-head">
                   <span class="field-label" data-icon="message-circle">开场白</span>
                   <span class="field-count" id="c-first-count">0 字</span>
+                  <button type="button" class="char-hint-btn" data-hint="first" aria-expanded="false" aria-controls="char-hint-pop" title="这一栏怎么写" aria-label="开场白：这一栏怎么写">?</button>
                 </span>
               </label>
               <!-- 开场白骨架：一键填进「定场 → 登场 → 留个话头」三段。
@@ -411,17 +431,16 @@
                         title="把开场白的骨架填进输入框（已有内容会先问一句）">套用开场白模板</m-button>
                 <span class="field-template-hint">定场 · 登场 · 留个话头</span>
               </div>
-              <details class="char-fold">
-                <summary>这一栏怎么写</summary>
-                <div class="char-fold-body">
+              <!-- 写法说明：正文一字未改，只是从卡底的折叠条搬进「这一栏怎么写」浮窗
+                   （views/fieldHint.js，全局一个、可拖拽、可关闭）。data-hint 是浮窗认领它的钥匙。 -->
+              <template class="char-hint-src" data-hint="first">
                   <span class="field-help">
                     骨架三段：<b>定场</b>（时间 / 地点 / {{user}} 正在做什么）→ <b>登场</b>（{{char}} 的动作或神态 + 一句说出口的话）
                     → <b>话头</b>（停在一个需要 {{user}} 回应的地方）。<br />
                     最后一段别写满 —— <b>给出去的话语权越明确，第一轮越好接</b>。
                     同一张卡可以多写几条不同状态的开场白（干活 / 闲暇 / 压力下 / 剧情后期）。
                   </span>
-                </div>
-              </details>
+              </template>
             </div>
 
             <!-- 备选开场白：同一张卡的多个入场剧本（导入卡常带，单卡最多见过 29 条）。
@@ -432,23 +451,21 @@
               <span class="field-head">
                 <span class="field-label" data-icon="layers">备选开场白</span>
                 <span class="field-count" id="c-alt-count"></span>
+                <button type="button" class="char-hint-btn" data-hint="alt" aria-expanded="false" aria-controls="char-hint-pop" title="这一栏怎么写" aria-label="备选开场白：这一栏怎么写">?</button>
               </span>
               <div id="c-alt-list" class="alt-greet-list"></div>
               <div class="field-template-bar">
                 <m-button id="btn-alt-add" variant="ghost" size="sm"
                         title="加一条备选开场白">＋ 添加一条</m-button>
               </div>
-              <!-- 说明收在卡的**最底部**，和另外两栏一个位置（2026-10-27）。
-                   原来它夹在标题和列表中间，三张卡连着看时这一条会跳出来。 -->
-              <details class="char-fold">
-                <summary>这一栏怎么写</summary>
-                <div class="char-fold-body">
+              <!-- 写法说明：正文一字未改，只是从卡底的折叠条搬进「这一栏怎么写」浮窗
+                   （views/fieldHint.js，全局一个、可拖拽、可关闭）。data-hint 是浮窗认领它的钥匙。 -->
+              <template class="char-hint-src" data-hint="alt">
                   <span class="field-help">
                     同上一条开场白，但可以写好几条（日常 / 忙碌 / 剧情后期……）。
                     <b>绑定角色时会弹出来让你挑一条</b>；一条都不加就只用上面那条。
                   </span>
-                </div>
-              </details>
+              </template>
             </div>
 
             <div class="field field-stack char-sheet">
@@ -456,18 +473,18 @@
                 <span class="field-head">
                   <span class="field-label" data-icon="messages-square">示例对话</span>
                   <span class="field-count" id="c-example-count">0 字</span>
+                  <button type="button" class="char-hint-btn" data-hint="example" aria-expanded="false" aria-controls="char-hint-pop" title="这一栏怎么写" aria-label="示例对话：这一栏怎么写">?</button>
                 </span>
               </label>
               <m-textarea id="c-example" rows="4" spellcheck="false" placeholder="{{user}}: 你好&#10;{{char}}: 你好呀～今天感觉怎么样？"></m-textarea>
-              <details class="char-fold">
-                <summary>这一栏怎么写</summary>
-                <div class="char-fold-body">
+              <!-- 写法说明：正文一字未改，只是从卡底的折叠条搬进「这一栏怎么写」浮窗
+                   （views/fieldHint.js，全局一个、可拖拽、可关闭）。data-hint 是浮窗认领它的钥匙。 -->
+              <template class="char-hint-src" data-hint="example">
                   <span class="field-help">
                     照这个格式写几组，能明显提升扮演时的语气准确度。<br />
                     每行以 <code>{{user}}:</code> 或 <code>{{char}}:</code> 开头，用 <code>&lt;START&gt;</code> 分隔不同组。
                   </span>
-                </div>
-              </details>
+              </template>
             </div>
             </div><!-- /char-text-section -->
 
@@ -488,22 +505,59 @@
               <p class="field-help" id="c-wb-hint"></p>
             </div>
 
+            <!-- 高级设置三栏（2026-10-28）：结构和「角色卡设定」那几张稿纸卡**完全一致** ——
+                 头栏（图标 + 字段名 + 字数角标 + ?）+ 正文；原来常显在正文下面那行说明搬进 ? 浮窗。
+                 以前这里是「label 包着 textarea + 一行灰字」，和写作区两套长相，
+                 从「角色卡设定」切到「高级设置」一眼就能看出是两拨人做的。 -->
             <div class="char-advanced">
-              <label class="field field-stack">
-                <span class="field-label">角色专属系统提示词</span>
+              <div class="field field-stack char-sheet">
+                <label class="char-sheet-label" for="c-system">
+                  <span class="field-head">
+                    <span class="field-label" data-icon="sliders">角色专属系统提示词</span>
+                    <span class="field-count" id="c-system-count">0 字</span>
+                    <button type="button" class="char-hint-btn" data-hint="system" aria-expanded="false" aria-controls="char-hint-pop" title="这一栏怎么写" aria-label="角色专属系统提示词：这一栏怎么写">?</button>
+                  </span>
+                </label>
                 <m-textarea id="c-system" rows="3" spellcheck="false" placeholder="留空则使用通用扮演规则"></m-textarea>
-                <span class="field-help">这张卡专属的开场设定，留空则只用通用扮演规则。</span>
-              </label>
+                <template class="char-hint-src" data-hint="system">
+                  <span class="field-help">
+                    这张卡专属的开场设定，留空则只用通用扮演规则。
+                  </span>
+                </template>
+              </div>
 
-              <label class="field field-stack">
-                <span class="field-label">对话后指令</span>
+              <div class="field field-stack char-sheet">
+                <label class="char-sheet-label" for="c-post">
+                  <span class="field-head">
+                    <span class="field-label" data-icon="params">对话后指令</span>
+                    <span class="field-count" id="c-post-count">0 字</span>
+                    <button type="button" class="char-hint-btn" data-hint="post" aria-expanded="false" aria-controls="char-hint-pop" title="这一栏怎么写" aria-label="对话后指令：这一栏怎么写">?</button>
+                  </span>
+                </label>
                 <m-textarea id="c-post" rows="2" spellcheck="false" placeholder="放在整段对话最后，用来强调格式或语气要求"></m-textarea>
-              </label>
+                <template class="char-hint-src" data-hint="post">
+                  <span class="field-help">
+                    这段文字放在整段对话的最后 —— 适合写<b>格式和语气</b>这类要求（"每次回答不超过三句"、"不要用比喻"），
+                    而不是写设定。
+                  </span>
+                </template>
+              </div>
 
-              <label class="field field-stack">
-                <span class="field-label">作者备注</span>
+              <div class="field field-stack char-sheet">
+                <label class="char-sheet-label" for="c-notes">
+                  <span class="field-head">
+                    <span class="field-label" data-icon="bookmark">作者备注</span>
+                    <span class="field-count" id="c-notes-count">0 字</span>
+                    <button type="button" class="char-hint-btn" data-hint="notes" aria-expanded="false" aria-controls="char-hint-pop" title="这一栏怎么写" aria-label="作者备注：这一栏怎么写">?</button>
+                  </span>
+                </label>
                 <m-textarea id="c-notes" rows="2" spellcheck="false" placeholder="只给你自己看，不会发给模型"></m-textarea>
-              </label>
+                <template class="char-hint-src" data-hint="notes">
+                  <span class="field-help">
+                    只给你自己看的备忘：写着给谁、参考了哪张卡、下次还想改哪里。<b>不会发给模型</b>，也不影响生成。
+                  </span>
+                </template>
+              </div>
             </div>
           </div>
         </div>

@@ -1,0 +1,121 @@
+/* ==========================================================================
+   Mimitale 编辑页改版稿 · 设计令牌
+   取值与 client/renderer/style.css **完全一致**（两套主题各一段，无 :root 颜色）。
+   白天 = [data-accent='amber']，夜间 = [data-theme='dark']（含琥珀覆盖段）。
+   ========================================================================== */
+
+:root {
+  --radius: 4px;
+  --radius-sm: 3px;
+  --ui-size: 1;
+  --fs-min: 12px;
+  --fs-xs: max(var(--fs-min), calc(12px * var(--ui-size)));
+  --fs-sm: max(var(--fs-min), calc(14px * var(--ui-size)));
+  --fs-md: max(var(--fs-min), calc(16px * var(--ui-size)));
+  --fs-lg: max(var(--fs-min), calc(18px * var(--ui-size)));
+  --fs-xl: max(var(--fs-min), calc(22px * var(--ui-size)));
+
+  --font-ui: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --font-story: "Source Han Serif SC", "Noto Serif SC", "SimSun", serif;
+}
+
+/* ------------------------------ 白天 · 琥珀 ------------------------------ */
+[data-accent='amber'] {
+  color-scheme: light;
+  --bg: #f4f5f7;
+  --bg-side: #edeff2;
+  --bg-elev: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #f7f8fa;
+  --border: #dde1e6;
+  --border-hover: #c8ced6;
+  --border-strong: #a8b0ba;
+  --border-soft: #e8eaee;
+  --text: #1b1e22;
+  --text-dim: #4a5158;
+  --text-faint: #5f6673;
+  --accent: #5d7451;
+  --accent-hover: #4a613f;
+  --accent-pressed: #3d5235;
+  --on-accent: #fff;
+  --accent-soft: #edf1e8;
+  --accent-soft-strong: #dce5d4;
+  --accent-wash: rgba(138, 99, 20, 0.06);
+  --accent-border: #a6b89a;
+  --accent-border-strong: rgba(138, 99, 20, 0.5);
+  --accent-border-soft: #c1ceb8;
+  --accent-border-faint: rgba(138, 99, 20, 0.25);
+  --danger: #d94a52;
+  --danger-bg: #fdf1f0;
+  --danger-hover: #b93a42;
+  --danger-text: #a0242c;
+  --danger-border: #f2d4d1;
+  --ok-text: #1a7d52;
+  --ok-border: #cbe9d9;
+  --overlay: rgba(27, 30, 34, 0.28);
+  --pre-bg: #f2f4f6;
+  --code-bg: rgba(138, 99, 20, 0.07);
+  --code-text: #5c4715;
+  --foot-bg: #f7f8fa;
+  --toggle-track: #dfe3e8;
+  --scrollbar: #d5dae0;
+  --scrollbar-hover: #bfc6ce;
+  --focus-ring: 0 0 0 3px rgba(138, 99, 20, 0.18);
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --shadow-sm: 0 1px 2px rgba(27, 30, 34, 0.05);
+  --shadow-lg: 0 14px 36px rgba(27, 30, 34, 0.16);
+  --art-edge: 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* ------------------------------ 夜间 · 琥珀 ------------------------------ */
+[data-accent='amber'][data-theme='dark'] {
+  --accent-wash: rgba(232, 184, 75, 0.07);
+  --focus-ring: 0 0 0 3px rgba(232, 184, 75, 0.28);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #171a18;
+  --bg-side: #151715;
+  --bg-elev: #242924;
+  --bg-card: #20251f;
+  --bg-input: #1c211d;
+  --border: #30362f;
+  --border-soft: #2a3029;
+  --border-hover: #505c48;
+  --border-strong: #525b4c;
+  --text: #deded8;
+  --text-dim: #abb0a4;
+  --text-faint: #919a89;
+
+  --accent: #a8b997;
+  --accent-hover: #c1ceaf;
+  --accent-pressed: #8c9e79;
+  --on-accent: #182015;
+  --accent-soft: #292f28;
+  --accent-soft-strong: #384239;
+  --accent-border: #52604e;
+  --accent-border-soft: #454d3c;
+  --accent-border-strong: #748367;
+  --accent-border-faint: #343d30;
+
+  --danger: #e06c75;
+  --danger-bg: #3a2226;
+  --danger-hover: #ef7d86;
+  --danger-text: #ffb4b0;
+  --danger-border: #5a3236;
+  --ok-text: #7fd6a8;
+  --ok-border: #2f5342;
+  --overlay: rgba(0, 0, 0, 0.62);
+  --pre-bg: #14161a;
+  --code-bg: rgba(255, 255, 255, 0.08);
+  --code-text: #d4d8dd;
+  --foot-bg: #151715;
+  --toggle-track: #34383e;
+  --scrollbar: #34383e;
+  --scrollbar-hover: #454a51;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237d848c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
+  --art-edge: 0 0 1px 1px rgba(255, 255, 255, 0.55);
+}

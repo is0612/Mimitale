@@ -9680,18 +9680,24 @@ m-button.btn-new > .mi-btn__control:hover {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
 }
 
-/* 「识别世界书人物」比旁边两颗长，这一颗用 accent 弱高亮区分「AI 生成 / ＋ 新建」两个建草稿的动作 */
+/* 「识别世界书人物」比旁边两颗长，这一颗用 accent 弱高亮区分「AI 生成 / ＋ 新建」两个建草稿的动作。
+   2026-10-28 两轮：先是 4px 内边距 + 12 号字（整颗 25px，比旁边的输入框矮一截）→ 定高 34 + 14 号字；
+   下午星宝又说「有点小」→ 38 + 左右 20。**这一排是操作区不是标签**，比正文区的按钮再高一档才站得住。 */
 #view-char-editor .char-book-roles-btn {
-  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 20px;
   font-family: inherit;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   background: var(--bg-card);
   border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
@@ -9833,7 +9839,151 @@ m-button.btn-new > .mi-btn__control:hover {
   background: transparent;
 }
 
+/* ------------------------------ 编辑角色 · 「这一栏怎么写」浮窗 ------------------------------ */
+/* 2026-10-28：原来五张卡底部各挂一条 <details class="char-fold">，默认收起 = 三条同频灰带、
+   零信息量，还把三张卡顶到视口外面。改成头栏一枚 ?（20×20 字符按钮），点开才出这一个浮窗。
+   ⚠️ 浮窗是 position: fixed 且挂在 #view-char-editor 里：视图隐藏时它跟着不渲染；
+      祖先链上没有 transform，fixed 不会退化成 absolute（加 transform 之前先想清楚）。
+   ⚠️ [hidden] 必须显式压回来：这条元素自己写了 display: flex，UA 的 [hidden]{display:none}
+      特异性更低，不补下面这一条就永远关不上。 */
+
+#view-char-editor .char-hint-btn {
+  /* 靠右：头栏右侧是操作区，字数额仍旧紧贴字段名（别把它也推走） */
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  /* 跟最小档走：20px 的圆里放到 14px 都还装得下，再大就别跟了 */
+  font-size: var(--fs-xs);
+  line-height: 1;
+  cursor: pointer;
+}
+
+#view-char-editor .char-hint-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+#view-char-editor .char-hint-btn[aria-expanded='true'] {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.char-hint-pop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 90; /* 弹窗是 100，浮窗要压在页面之上、弹窗之下 */
+  display: flex;
+  flex-direction: column;
+  width: 344px;
+  max-height: min(60vh, 420px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.char-hint-pop[hidden] {
+  display: none;
+}
+
+/* 拖拽把手就是整条标题栏 —— 一个 344px 宽的浮窗不需要单独画一条 12px 的拖动条 */
+.char-hint-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-input);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.char-hint-pop.is-dragging .char-hint-head {
+  cursor: grabbing;
+}
+
+.char-hint-grip {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 12px;
+  color: var(--text-faint);
+  background-image: radial-gradient(circle, currentColor 1px, transparent 1.2px);
+  background-size: 4px 4px;
+}
+
+.char-hint-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 标题和正文同档（14）：靠字重（600 vs 400）和颜色（text vs text-dim）分层次，
+     不再靠把标题缩小 —— 12 号中文在 344px 的浮窗里确实吃力（星宝 2026-10-28）。 */
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.char-hint-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.char-hint-close:hover {
+  background: var(--accent-wash);
+  color: var(--text);
+}
+
+.char-hint-close svg {
+  width: 13px;
+  height: 13px;
+}
+
+.char-hint-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px 13px;
+}
+
+/* 说明正文是从各卡里的 <template> 拷进来的原样结构（.field-help + code + b），
+   这里只补它自己的字号与行高 —— .field-help 本身没有基础规则（只有 .field > 那条）。 */
+.char-hint-body .field-help {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  line-height: 1.75;
+}
+
+.char-hint-body .field-help b {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* 写法说明：折叠条。默认收起是刻意的 —— 说明留给"想查的时候"。
+   ⚠️ 2026-10-28 起**角色卡编辑页不再用它**（那五条换成了头栏的 ? + 浮窗）；
+      这套规则现在只服务**人物副本编辑页**（index.html 里剩的那一处 .char-fold）。
    ⚠️ 底色从 --bg-input 改成透明（2026-10-27）：开场白那张卡底盘上同时有
    「模板条 + 折叠条」两层，两个灰底叠在白色正文下面 = 两道横纹，整块发灰；
    备选开场白那张卡更是灰-白-灰三层。改成只有一道上分隔线之后，卡内部
@@ -9907,9 +10057,26 @@ m-button.btn-new > .mi-btn__control:hover {
 }
 
 /* ------------------------------ 编辑角色 · 高级设置 ------------------------------ */
-/* 从「details 套分区」改成三张平铺卡：一次点开，不再折两层 */
+/* 从「details 套分区」改成三张平铺卡：一次点开，不再折两层。
+   2026-10-28：角色卡编辑页这三栏改成和「角色卡设定」**同一套稿纸卡**（.char-sheet 提供
+   外框 / 头栏 / 聚焦态），这里只剩间距和各自的高度；旧那套「label 包着 textarea +
+   一行常显说明」的卡片样式只留给人物副本编辑页（它还是老结构）。 */
 
-#view-char-editor .char-advanced,
+#view-char-editor .char-advanced {
+  display: grid;
+  /* 16 = .sheets 的卡片间距，两个分区切来切去时节奏一致 */
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+/* 三栏高度按典型长度给，和写作区一个口径（系统提示词最长、另外两栏短） */
+#view-char-editor #c-system > textarea { min-height: 112px; }
+#view-char-editor #c-post > textarea { min-height: 84px; }
+#view-char-editor #c-notes > textarea { min-height: 84px; }
+
 #view-book-char-editor .char-advanced {
   display: grid;
   gap: 14px;
@@ -9919,7 +10086,6 @@ m-button.btn-new > .mi-btn__control:hover {
   border: 0;
 }
 
-#view-char-editor .char-advanced > .field,
 #view-book-char-editor .char-advanced > .field {
   margin: 0;
   padding: 14px 16px;
@@ -9928,19 +10094,16 @@ m-button.btn-new > .mi-btn__control:hover {
   border-radius: var(--radius);
 }
 
-#view-char-editor .char-advanced > .field:focus-within,
 #view-book-char-editor .char-advanced > .field:focus-within {
   border-color: var(--accent-border);
 }
 
 /* ⚙ 2026-10-16 组件化：中间多一层宿主（`.field` 是 <label>，包着 <m-textarea>） */
-#view-char-editor .char-advanced > .field > m-textarea > textarea,
 #view-book-char-editor .char-advanced > .field > m-textarea > textarea {
   min-height: 84px;
   max-height: none;
 }
 
-#view-char-editor .char-advanced > .field > .field-label,
 #view-book-char-editor .char-advanced > .field > .field-label {
   padding-top: 0;
 }

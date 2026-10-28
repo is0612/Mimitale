@@ -94,6 +94,9 @@ import {
 } from './views/worldbook.js';
 import { initBookAi } from './views/charBookAi.js';
 import { initWorldbookPerson, openPersonScan } from './views/worldbookPerson.js';
+// 角色编辑页头栏那五颗 ? 的浮窗（2026-10-28）。全局只有一个实例，绑的是静态 DOM，
+// 所以初始化放在角色编辑器之前 —— 它不依赖任何渲染结果。
+import { initFieldHint } from './views/fieldHint.js';
 import {
   initCharacterEditor,
   openCharacterEditor,
@@ -589,6 +592,7 @@ async function init() {
     exportMany: exportCharactersByIds
   });
   // 角色编辑器自己绑弹窗里的按钮；它保存 / 删除之后要全量重绘，那是入口层的编排。
+  initFieldHint();
   initCharacterEditor({
     rerender: () => renderAll(),
     // 角色卡编辑页「人物列表」的「＋ 新建」：先由那边 focusWorldbook 切好书，这里落到本书角色草稿
