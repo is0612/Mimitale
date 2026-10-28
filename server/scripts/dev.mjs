@@ -45,11 +45,34 @@ if (!existsSync(resolve(ROOT, 'node_modules'))) {
 }
 
 step(1, '起数据库和本地收信服务器（docker）')
-try {
-  await run('docker', ['compose', 'up', '-d', 'db', 'mail'])
-} catch {
-  console.error('\nDocker 没起来。先打开 Docker Desktop，等它显示 Running 再试。\n')
-  process.exit(1)
+
+// ⚠️ 有的机器（这台就是）只装了独立的 docker-compose.exe：Docker CLI 认不到那份
+//    cli-plugins，`docker compose` 直接报 unknown command。先问谁在，再决定用哪条 ——
+//    别拿 up 的失败当探测，那会把「镜像拉不下来」也误判成「没有 compose」。
+async function pickCompose() {
+  for (const candidate of [{ cmd: 'docker', base: ['compose'] }, { cmd: 'docker-compose', base: [] }]) {
+    try {
+      await run(candidate.cmd, [...candidate.base, 'version'], { stdio: 'ignore' })
+      return candidate
+    } catch {
+      // 换下一个
+    }
+  }
+  return null
+}
+
+{
+  const compose = await pickCompose()
+  if (!compose) {
+    console.error('\n找不到 docker compose。先打开 Docker Desktop，等它显示 Running 再试。\n')
+    process.exit(1)
+  }
+  try {
+    await run(compose.cmd, [...compose.base, 'up', '-d', 'db', 'mail'])
+  } catch {
+    console.error('\n容器没起来。`docker compose logs db` 看看容器怎么了。\n')
+    process.exit(1)
+  }
 }
 
 /* ---------------- ② 等数据库接受连接 ---------------- */

@@ -15,15 +15,21 @@ export const FREE_DAILY_MESSAGES = 20
 export const FREE_DAILY_REFUNDS = 5
 
 /**
- * 服务器时区的自然日。
- * ⚠️ 别用 toISOString().slice(0,10)：那是 UTC，中国晚上 8 点后日期就和用户看到的不是一天，
- *    「明天 0 点恢复」会变成下午 4 点恢复。
+ * 「今天」是哪一天 —— 按**北京时间**算，不看服务器装在哪。
+ * ⚠️ 别用 toISOString().slice(0,10)：那是 UTC，晚上 8 点后就和用户看到的不是一天。
+ * ⚠️ 也别用 getFullYear/getMonth/getDate：那是进程本地时区，服务器（VPS）通常是 UTC，
+ *    北京时间 0:30 时它还认为「昨天」，额度要等到早上 8 点才恢复。
  */
+const DAY_FORMAT = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+})
+
 export function dayKey(now = new Date()): string {
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+  // en-CA 的日期格式正好是 YYYY-MM-DD
+  return DAY_FORMAT.format(now)
 }
 
 export interface MessageQuota {

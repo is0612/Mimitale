@@ -15,7 +15,7 @@ import { h, clear } from '../ui/build.js';
 import { controlOf } from '../ui/auto-grow.js';
 import { mTextarea, mButton } from '../components/index.js';
 import { persistConversations, beginConversationReplacement, endConversationReplacement } from '../data/persist.js';
-import { ensureConvoEndpoint, isBridgeProvider } from '../data/providers.js';
+import { ensureConvoEndpoint, isBridgeProvider, providers, providerById } from '../data/providers.js';
 import { isLoggedIn, consumeMessage, messageQuota, messageQuotaSnapshot, refundMessage } from '../data/account.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { openAccountModal } from './accountModal.js';
@@ -125,7 +125,7 @@ function refundQuietly() {
 async function askQuota(charge) {
   try {
     if (charge) return await consumeMessage();
-    // 不扣数的入口（重新生成 / 帮我想想）只看还有没有余额；快照说还有就不打扰服务端
+    // 不扣数的入口（帮我想想 / 换一批）只看还有没有余额；快照说还有就不打扰服务端
     const snapshot = messageQuotaSnapshot();
     if (snapshot && (snapshot.unlimited || snapshot.remaining > 0)) return { ...snapshot, allowed: true };
     const fresh = await messageQuota();
@@ -151,6 +151,34 @@ function showLoginDialog() {
     message: '账号用来记每天的免费额度，订阅和卡密也挂在账号上。',
     confirmText: '去登录'
   }).then((go) => { if (go) openAccountModal(); });
+}
+
+/**
+ * 本地就能判定的「发不出去」：没配服务商、没填 Key。
+ * ⚠️ 必须在扣额度**之前**跑。扣了再退会吃掉当天的退款次数（5 次），
+ *    连点几次就白扣一堆条数，而一次模型调用都没发生。
+ */
+function canSendLocally() {
+  const convo = activeConvo();
+  const endpoint = convo ? ensureConvoEndpoint(convo) : null;
+  const list = providers();
+  const provider = endpoint
+    ? endpoint.provider
+    : list.length
+      ? providerById((state.settings || {}).activeProviderId) || list[0]
+      : null;
+
+  if (!provider) {
+    showToast('还没有配置模型服务，请先在设置里添加', 'error');
+    openSettings();
+    return false;
+  }
+  if (!provider.apiKey && !isBridgeProvider(provider)) {
+    showToast(`请先填写「${provider.name}」的 API Key`, 'error');
+    openSettings();
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -196,7 +224,7 @@ let quotaHintBound = false;
 
 /**
  * 这条能不能发出去。
- * @param {{charge?: boolean}} options charge=true 扣一条（发送 / 继续）；不传按扣一条算
+ * @param {{charge?: boolean}} options charge=true 扣一条（发送 / 继续 / 重新生成）；不传按扣一条算
  * @returns {Promise<object|null>} 放行返回额度信息（调用方可能拿它判断要不要退），拦了返回 null
  */
 async function allowSend(options = {}) {
@@ -272,6 +300,9 @@ export async function sendMessage(text) {
     showLoginDialog();
     return false;
   }
+
+  // 本地就能判定的失败先拦住（没配服务商 / 没填 Key），别先扣额度再退
+  if (!canSendLocally()) return false;
 
   // 扣额度放在建会话之前：被挡住时不该在会话列表里留一条空的「新对话」
   const quota = await allowSend({ charge: true });
@@ -876,8 +907,9 @@ export async function regenerateFrom(index) {
   const convo = activeConvo();
   if (!convo || state.streaming) return;
 
-  // 重新生成不扣条数，但「今天已经用满」的人不能再白用模型
-  if (!(await allowSend({ charge: false }))) return;
+  // 重新生成也是一次完整的模型调用，跟发送一样扣一条
+  const quota = await allowSend({ charge: true });
+  if (!quota) return;
 
   // 第一次重新生成时，当前正文就是第一个候选
   const target = convo.messages[index];
@@ -890,6 +922,8 @@ export async function regenerateFrom(index) {
   while (cut >= 0 && convo.messages[cut].role !== 'user') cut -= 1;
 
   if (cut < 0) {
+    // 扣了却没开始生成，退回去
+    if (!quota.degraded) refundQuietly();
     showToast('找不到对应的提问，无法重新生成', 'error');
     return;
   }
@@ -912,7 +946,7 @@ export async function regenerateFrom(index) {
   rebuildConvoDerivedState(convo, { priorMessages: originalMessages });
   state.usage = null;
   // Do not persist the destructive cut until the replacement succeeds.
-  return requestCompletion(convo, { variants: existing, rollback });
+  return requestCompletion(convo, { variants: existing, rollback, charged: true });
 }
 
 /** 换候选（swipe）：改 content 就等于换了一条，历史/复制/导出都读 content */

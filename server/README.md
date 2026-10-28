@@ -26,6 +26,8 @@ npm install             # 只第一次
 npm run dev             # 之后每天都用这一条
 ```
 
+不想开终端也可以直接**双击 `Start-Server.cmd`** —— 它只做两件事：把没进 PATH 的 Node 和 Docker 目录补上，然后调 `npm run dev`。
+
 `npm run dev`（`scripts/dev.mjs`）会依次做四件事，**每一步都是幂等的**（跑一百次都一样）：
 
 1. 起 postgres + mailpit 容器（已经在跑就跳过）
@@ -41,7 +43,7 @@ npm run dev             # 之后每天都用这一条
 | `npm run db:down` | 停容器。数据在 docker volume 里，**不会丢** |
 | `npm run db:reset` | 清库重建 —— ⚠️ 会丢数据，只在本地开发用 |
 | `npm run db:studio` | 浏览器里直接看表 |
-| `node scripts/smoke.mjs` | 267 条断言打一遍真接口 |
+| `node scripts/smoke.mjs` | 285 条断言打一遍真接口 |
 
 验证：
 
