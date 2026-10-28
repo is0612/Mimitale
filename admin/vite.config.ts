@@ -13,6 +13,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // 启动完直接把浏览器打开（base 是 /admin/，vite 会拼成 http://localhost:5173/admin/）
+    open: true,
     // 关掉 mock（VITE_USE_MOCK=false）时，/api 才会真的打到后端。
     // 后端起来之后如果端口不是 8080，改这里的 target 就行。
     proxy: {
