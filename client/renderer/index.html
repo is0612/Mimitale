@@ -22,23 +22,28 @@
 
       <m-button id="btn-new" variant="primary" block class="btn-new" data-icon="plus" aria-label="创建新对话">新对话</m-button>
 
-      <div id="convo-cap" class="sidebar-label">最近会话</div>
+      <div id="convo-cap" class="sidebar-label">对话记录</div>
       <div id="convo-list" class="convo-list" role="list"></div>
 
-      <!-- 底部创作与设置入口。⚠️ 文字包在 .foot-label 里是**为了收起态**：
+      <!-- 底部入口：三个资料库 + 设置。⚠️ 文字包在 .foot-label 里是**为了收起态**：
            收成 56px 图标轨时只藏这层文字、图标留着（稿子屏 2 就是这样）。
-           文字直接裸在 button 里就没法单独隐藏，只能整颗 display:none。 -->
+           文字直接裸在 button 里就没法单独隐藏，只能整颗 display:none。
+           ⚠️ 2026-10-28：「创作空间」那行小标题删了（星宝要去掉这段文字），
+              别再给它加回去；设置从账号菜单里拿出来，固定排在预设下面 ——
+              它是**常显**入口，不再靠登录态才出现。 -->
       <div class="sidebar-foot">
-        <div class="sidebar-section-title">创作空间</div>
         <m-button id="btn-chars" variant="ghost" block data-icon="users" aria-label="打开角色卡"><span class="foot-label">角色卡</span><span id="foot-chars-count" class="foot-count"></span></m-button>
         <m-button id="btn-games" variant="ghost" block data-icon="dice" aria-label="打开游戏卡"><span class="foot-label">游戏卡</span><span id="foot-games-count" class="foot-count"></span></m-button>
         <m-button id="btn-presets" variant="ghost" block data-icon="sliders" aria-label="打开预设"><span class="foot-label">预设</span><span id="foot-presets-count" class="foot-count"></span></m-button>
+        <m-button id="btn-settings" variant="ghost" block data-icon="settings" aria-label="打开设置"><span class="foot-label">设置</span></m-button>
 
         <!-- 账号条：未登录是人形图标 + 文案，点一下开登录窗；
              已登录整行只有「头像 + 用户名」，点一下往上弹出账号菜单
-             （设置 / 意见反馈 / 退出登录）。
+             （个人中心 / 意见反馈 / 退出登录）。
              ⚠️ 这颗按钮的语义分两种，别写死成「打开登录」：已登录时开的是菜单。
-             ⚠️ 设置只走账号菜单 —— 未登录不给设置入口，别再加常显的齿轮。 -->
+             ⚠️ 2026-10-28 起「设置」不在这个菜单里了 —— 它是侧栏常显入口
+                （#btn-settings）。这里换成「个人中心」：账号资料 / 密码 / 凭证 / 会员
+                那一整屏（#view-profile），仍然只对登录用户有意义。 -->
         <div id="sidebar-account" class="sidebar-account">
           <button id="btn-account" class="account-btn" type="button" aria-label="账号（未登录）" aria-haspopup="menu" aria-expanded="false">
             <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
@@ -49,10 +54,9 @@
           </button>
 
           <div id="account-menu" class="menu-pop account-menu hidden" role="menu" aria-label="账号菜单">
-            <button id="btn-account-open-settings" class="menu-item" type="button" role="menuitem">
-              <span class="menu-item-icon" aria-hidden="true" data-icon="settings"></span>
-              <span class="menu-item-label">设置</span>
-              <span class="menu-kbd">Ctrl ,</span>
+            <button id="btn-account-open-profile" class="menu-item" type="button" role="menuitem">
+              <span class="menu-item-icon" aria-hidden="true" data-icon="user"></span>
+              <span class="menu-item-label">个人中心</span>
             </button>
             <button id="btn-account-feedback" class="menu-item" type="button" role="menuitem">
               <span class="menu-item-icon" aria-hidden="true" data-icon="message-circle"></span>
@@ -141,6 +145,11 @@
           </div>
         </div>
       </header>
+
+      <!-- 公告横条：只显示**未读**的，最多 2 条（再多就把聊天页挤没了）。
+           没有公告时整块 hidden，不占高度。内容由 views/announcements.js 铺。
+           ⚠️ 横条出现 ≠ 已读：点「知道了」或展开看全文才算，否则红点一显示就没了。 -->
+      <div id="notice-strip" class="notice-strip hidden" aria-live="polite"></div>
 
       <!-- 场景取自真实状态；角色头像入口位于右栏，状态卡悬浮在对话列内。 -->
       <div id="scene-context" class="scene-context" aria-label="当前故事场景"></div>
@@ -1002,13 +1011,237 @@
            故意放在两个视图外面，切换页面时提示不会跟着被藏起来。 -->
       <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
+      <!-- ================= 视图：个人中心（2026-10-28 从设置页拆出来） =================
+           设置 = 「这个应用怎么跑」（模型 / 参数 / 外观 / 桌宠 / 本地数据）；
+           个人中心 = 「我是谁」（头像、用户名、邮箱、密码、凭证、会员、邀请）。
+           两屏共用同一套骨架（settings-shell + settings-nav + settings-content），
+           只是内容不同 —— 星宝要的就是「拆开之后长得一样」。
+           ⚠️ 整屏的账号内容都挂在这一个 section 上，别再放回 #view-settings。
+           ⚠️ data-guest 由 views/userSettings.js 的 renderUserSection() 维护：
+              未登录时藏掉左栏导航、藏掉三组内容，只留一块「还没登录」。 -->
+      <!-- ⚠️ data-guest 初始为 1（冷启动是未登录）：真值由 renderUserSection 覆盖，
+           先写 0 会让人在登录态之外看到一堆空表单闪一下。 -->
+      <section id="view-profile" class="view hidden" aria-label="个人中心" data-guest="1">
+        <header class="page-head">
+          <div class="page-heading settings-heading">
+            <button id="btn-back-profile" class="page-back" type="button" title="返回上一屏（Esc）" aria-label="返回" data-icon="chevron-left"><span>返回</span></button>
+            <div class="settings-heading-text">
+              <h1 class="page-title">个人中心</h1>
+              <p class="page-sub">头像、用户名、密码与登录凭证 · 改哪一项都立刻生效，这一屏没有「保存」按钮</p>
+            </div>
+          </div>
+        </header>
+
+        <div class="settings-shell">
+          <nav class="settings-nav" aria-label="个人中心分组">
+            <button class="settings-nav-item active" type="button" data-target="sec-profile">
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="user"></span>
+              <span class="settings-nav-text">
+                <span class="settings-nav-title">资料</span>
+                <span class="settings-nav-desc">头像、用户名与邮箱</span>
+              </span>
+            </button>
+
+            <button class="settings-nav-item" type="button" data-target="sec-security">
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="lock"></span>
+              <span class="settings-nav-text">
+                <span class="settings-nav-title">账号安全</span>
+                <span class="settings-nav-desc">密码与登录凭证</span>
+              </span>
+            </button>
+
+            <button class="settings-nav-item" type="button" data-target="sec-member">
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="sparkles"></span>
+              <span class="settings-nav-text">
+                <span class="settings-nav-title">会员与邀请</span>
+                <span class="settings-nav-desc">免费天数与邀请码</span>
+              </span>
+            </button>
+
+            <!-- 通知：和「身份」无关，但星宝要的就是开机横条 + 这里一个入口。
+                 未读数那颗红点由 views/announcements.js 画（不要求登录）。 -->
+            <button class="settings-nav-item" type="button" data-target="sec-notice">
+              <span class="settings-nav-icon" aria-hidden="true" data-icon="bell"></span>
+              <span class="settings-nav-text">
+                <span class="settings-nav-title">通知<span id="notice-nav-badge" class="notice-badge hidden">0</span></span>
+                <span class="settings-nav-desc">更新与公告</span>
+              </span>
+            </button>
+          </nav>
+
+          <div class="settings-content page-body settings-body">
+            <!-- 未登录：三组内容整块换掉，只留一句说明 + 一颗按钮（不摆一堆半空的表单） -->
+            <div id="user-guest" class="user-guest">
+              <p class="user-guest-title">还没登录</p>
+              <p class="user-guest-desc">登录之后可以改资料、导出登录凭证；角色卡和世界书的云同步也在后面。</p>
+              <m-button id="btn-user-login" variant="primary" size="sm">登录 / 注册</m-button>
+            </div>
+
+            <section class="panel-section" id="sec-profile">
+              <div class="section-head">
+                <span class="section-icon" aria-hidden="true" data-icon="user"></span>
+                <span class="section-heading">
+                  <span class="section-title">资料</span>
+                  <span class="section-desc">点头像就能换；用户名改了立刻生效</span>
+                </span>
+              </div>
+
+              <div class="user-head">
+                <button id="btn-user-avatar" class="user-avatar" type="button" title="换头像" aria-label="换头像">
+                  <span id="user-avatar-img" class="user-avatar-img" data-icon="user"></span>
+                  <span class="user-avatar-edit">换</span>
+                </button>
+                <div class="user-head-copy">
+                  <p id="user-name-view" class="user-name">—</p>
+                  <p id="user-email-view" class="user-email">—</p>
+                  <p id="user-since" class="user-since"></p>
+                </div>
+              </div>
+
+              <div class="user-block">
+                <p class="user-block-title">用户名</p>
+                <div class="user-inline">
+                  <m-input id="user-name-input" maxlength="20" placeholder="2–20 个字" aria-label="用户名"></m-input>
+                  <m-button id="btn-user-save-name" variant="ghost" size="sm">保存</m-button>
+                </div>
+                <p id="user-name-error" class="account-error" role="alert"></p>
+              </div>
+
+              <div class="user-block">
+                <p class="user-block-title">邮箱</p>
+                <p class="field-help">改邮箱要收一封验证码：填新邮箱 → 填校验码 → 点「获取验证码」。</p>
+                <label class="field field-stack">
+                  <span class="field-label">新邮箱</span>
+                  <m-input id="user-email-input" type="email" placeholder="you@example.com" autocomplete="off" aria-label="新邮箱"></m-input>
+                </label>
+                <div class="field field-stack">
+                  <span class="field-label">校验码</span>
+                  <div class="account-captcha-row">
+                    <m-input id="user-email-captcha" maxlength="4" placeholder="图上的 4 位" autocomplete="off" spellcheck="false" aria-label="图形校验码"></m-input>
+                    <button id="btn-user-email-captcha" class="account-captcha" type="button" title="看不清？换一张" aria-label="换一张校验码">
+                      <img id="user-email-captcha-img" alt="" draggable="false" />
+                    </button>
+                  </div>
+                </div>
+                <div class="field field-stack">
+                  <span class="field-label">邮箱验证码</span>
+                  <div class="account-code-row">
+                    <m-input id="user-email-code" maxlength="6" inputmode="numeric" placeholder="6 位数字" autocomplete="one-time-code" aria-label="邮箱验证码"></m-input>
+                    <m-button id="btn-user-send-code" variant="ghost" size="sm">获取验证码</m-button>
+                  </div>
+                  <span id="user-email-hint" class="field-help account-hint"></span>
+                </div>
+                <div class="user-actions">
+                  <m-button id="btn-user-save-email" variant="ghost" size="sm">改邮箱</m-button>
+                </div>
+                <p id="user-email-error" class="account-error" role="alert"></p>
+              </div>
+            </section>
+
+            <section class="panel-section hidden" id="sec-security">
+              <div class="section-head">
+                <span class="section-icon" aria-hidden="true" data-icon="lock"></span>
+                <span class="section-heading">
+                  <span class="section-title">账号安全</span>
+                  <span class="section-desc">改密码；换电脑时用凭证图登回来</span>
+                </span>
+              </div>
+
+              <div class="user-block">
+                <p class="user-block-title">密码</p>
+                <label class="field field-stack">
+                  <span class="field-label">当前密码</span>
+                  <m-input id="user-pass-current" type="password" autocomplete="current-password" aria-label="当前密码"></m-input>
+                </label>
+                <div class="field-grid">
+                  <label class="field">
+                    <span class="field-label">新密码</span>
+                    <m-input id="user-pass-new" type="password" placeholder="至少 8 位" autocomplete="new-password" aria-label="新密码"></m-input>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">确认新密码</span>
+                    <m-input id="user-pass-confirm" type="password" autocomplete="new-password" aria-label="确认新密码"></m-input>
+                  </label>
+                </div>
+                <div class="user-actions">
+                  <m-button id="btn-user-save-pass" variant="ghost" size="sm">改密码</m-button>
+                </div>
+                <p id="user-pass-error" class="account-error" role="alert"></p>
+              </div>
+
+              <div class="user-block">
+                <p class="user-block-title">登录凭证</p>
+                <p class="field-help">换电脑或重装之后，凭这张图就能登回来（不用密码）—— 别把它发给别人。</p>
+                <div class="user-voucher-frame">
+                  <img id="user-voucher" alt="登录凭证预览" draggable="false" />
+                </div>
+                <div class="user-actions">
+                  <m-button id="btn-user-export-voucher" variant="ghost" size="sm">导出凭证图（PNG）</m-button>
+                  <m-button id="btn-user-copy-voucher" variant="ghost" size="sm">复制凭证码</m-button>
+                  <m-button id="btn-user-refresh-voucher" variant="ghost" size="sm">刷新凭证码</m-button>
+                </div>
+                <p class="field-help">刷新后旧码立刻作废，之前导出的凭证图也就不能用了。</p>
+                <p id="user-voucher-error" class="account-error" role="alert"></p>
+              </div>
+            </section>
+
+            <section class="panel-section hidden" id="sec-member">
+              <div class="section-head">
+                <span class="section-icon" aria-hidden="true" data-icon="sparkles"></span>
+                <span class="section-heading">
+                  <span class="section-title">会员与邀请</span>
+                  <span class="section-desc">都只读，天数由服务器记</span>
+                </span>
+              </div>
+
+              <div class="user-block" id="user-member-block">
+                <div class="user-member-head">
+                  <p class="user-block-title">会员 / 免费天数</p>
+                  <span id="user-member-badge" class="user-member-badge" data-active="0">—</span>
+                </div>
+                <div class="user-member-foot">
+                  <p id="user-member-line" class="user-member-line"></p>
+                  <m-button id="btn-user-refresh-member" variant="ghost" size="sm">刷新</m-button>
+                </div>
+                <p id="user-member-error" class="account-error" role="alert"></p>
+              </div>
+
+              <div class="user-block">
+                <p class="user-block-title">邀请好友</p>
+                <p class="field-help">把你的码发给朋友，他注册时填进「邀请码」就算你邀请的，你多 7 天免费。</p>
+                <div class="user-invite-row">
+                  <span id="user-invite-code" class="user-invite-code">—</span>
+                  <m-button id="btn-user-copy-invite" variant="ghost" size="sm">复制邀请链接</m-button>
+                </div>
+                <p id="user-invite-count" class="user-invite-count"></p>
+                <p id="user-invite-error" class="account-error" role="alert"></p>
+              </div>
+            </section>
+
+            <!-- 通知公告：和登录无关，未登录也看得到（「你被停机了」这种话，
+                 恰恰没法等到登录成功再告诉他）。列表由 views/announcements.js 画 -->
+            <section class="panel-section hidden" id="sec-notice">
+              <div class="section-head">
+                <span class="section-icon" aria-hidden="true" data-icon="bell"></span>
+                <span class="section-heading">
+                  <span class="section-title">通知</span>
+                  <span class="section-desc">Mimitale 的更新与公告 · 点开一条就算看过了</span>
+                </span>
+              </div>
+
+              <div id="notice-profile-list" class="notice-list"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
       <section id="view-settings" class="view hidden" aria-label="设置">
         <header class="page-head">
           <div class="page-heading settings-heading">
             <button id="btn-back-settings" class="page-back" type="button" title="返回上一屏（Esc）" aria-label="返回" data-icon="chevron-left"><span>返回</span></button>
             <div class="settings-heading-text">
               <h1 class="page-title">设置</h1>
-              <p class="page-sub">配置模型接口与对话行为 · 只保存在本机，改完记得点保存</p>
+              <p class="page-sub">配置模型接口与对话行为 · 只保存在本机，改完记得点保存（账号资料在左下角「个人中心」）</p>
             </div>
           </div>
           <div class="page-actions">
@@ -1019,16 +1252,7 @@
 
         <div class="settings-shell">
           <nav class="settings-nav" aria-label="设置分组">
-            <!-- 个人信息排第一（2026-10-23）：账号相关的事都收在这一栏，别再塞进「行为」里 -->
-            <button class="settings-nav-item active" type="button" data-target="sec-user">
-              <span class="settings-nav-icon" aria-hidden="true" data-icon="user"></span>
-              <span class="settings-nav-text">
-                <span class="settings-nav-title">个人信息</span>
-                <span class="settings-nav-desc">头像、用户名与密码</span>
-              </span>
-            </button>
-
-            <button class="settings-nav-item" type="button" data-target="sec-models">
+            <button class="settings-nav-item active" type="button" data-target="sec-models">
               <span class="settings-nav-icon" aria-hidden="true" data-icon="link"></span>
               <span class="settings-nav-text">
                 <span class="settings-nav-title">模型服务</span>
@@ -1090,138 +1314,6 @@
           </nav>
 
           <div class="settings-content page-body settings-body">
-        <!-- 个人信息（2026-10-23）：账号相关的都收在这一栏。
-             ⚠️ 这一栏**没有**「已开 N / M 项」那种统计 —— 它不是开关集合。
-             未登录时整块换成一句说明 + 登录按钮，不显示半空的表单。 -->
-        <section class="panel-section" id="sec-user">
-          <div class="section-head">
-            <span class="section-icon" aria-hidden="true" data-icon="user"></span>
-            <span class="section-heading">
-              <span class="section-title">个人信息</span>
-              <span class="section-desc">点头像就能换；用户名、邮箱和密码都在下面改</span>
-            </span>
-          </div>
-
-          <div id="user-guest" class="user-guest">
-            <p class="user-guest-title">还没登录</p>
-            <p class="user-guest-desc">登录之后可以改资料、导出登录凭证；角色卡和世界书的云同步也在后面。</p>
-            <m-button id="btn-user-login" variant="primary" size="sm">登录 / 注册</m-button>
-          </div>
-
-          <div id="user-body" class="user-body hidden">
-            <div class="user-head">
-              <button id="btn-user-avatar" class="user-avatar" type="button" title="换头像" aria-label="换头像">
-                <span id="user-avatar-img" class="user-avatar-img" data-icon="user"></span>
-                <span class="user-avatar-edit">换</span>
-              </button>
-              <div class="user-head-copy">
-                <p id="user-name-view" class="user-name">—</p>
-                <p id="user-email-view" class="user-email">—</p>
-                <p id="user-since" class="user-since"></p>
-              </div>
-            </div>
-
-            <div class="user-block" id="user-member-block">
-              <div class="user-member-head">
-                <p class="user-block-title">会员 / 免费天数</p>
-                <span id="user-member-badge" class="user-member-badge" data-active="0">—</span>
-              </div>
-              <div class="user-member-foot">
-                <p id="user-member-line" class="user-member-line"></p>
-                <m-button id="btn-user-refresh-member" variant="ghost" size="sm">刷新</m-button>
-              </div>
-              <p id="user-member-error" class="account-error" role="alert"></p>
-            </div>
-
-            <div class="user-block">
-              <p class="user-block-title">邀请好友</p>
-              <p class="field-help">把你的码发给朋友，他注册时填进「邀请码」就算你邀请的，你多 7 天免费。</p>
-              <div class="user-invite-row">
-                <span id="user-invite-code" class="user-invite-code">—</span>
-                <m-button id="btn-user-copy-invite" variant="ghost" size="sm">复制邀请链接</m-button>
-              </div>
-              <p id="user-invite-count" class="user-invite-count"></p>
-              <p id="user-invite-error" class="account-error" role="alert"></p>
-            </div>
-
-            <div class="user-block">
-              <p class="user-block-title">用户名</p>
-              <div class="user-inline">
-                <m-input id="user-name-input" maxlength="20" placeholder="2–20 个字" aria-label="用户名"></m-input>
-                <m-button id="btn-user-save-name" variant="ghost" size="sm">保存</m-button>
-              </div>
-              <p id="user-name-error" class="account-error" role="alert"></p>
-            </div>
-
-            <div class="user-block">
-              <p class="user-block-title">邮箱</p>
-              <p class="field-help">改邮箱要收一封验证码：填新邮箱 → 填校验码 → 点「获取验证码」。</p>
-              <label class="field field-stack">
-                <span class="field-label">新邮箱</span>
-                <m-input id="user-email-input" type="email" placeholder="you@example.com" autocomplete="off" aria-label="新邮箱"></m-input>
-              </label>
-              <div class="field field-stack">
-                <span class="field-label">校验码</span>
-                <div class="account-captcha-row">
-                  <m-input id="user-email-captcha" maxlength="4" placeholder="图上的 4 位" autocomplete="off" spellcheck="false" aria-label="图形校验码"></m-input>
-                  <button id="btn-user-email-captcha" class="account-captcha" type="button" title="看不清？换一张" aria-label="换一张校验码">
-                    <img id="user-email-captcha-img" alt="" draggable="false" />
-                  </button>
-                </div>
-              </div>
-              <div class="field field-stack">
-                <span class="field-label">邮箱验证码</span>
-                <div class="account-code-row">
-                  <m-input id="user-email-code" maxlength="6" inputmode="numeric" placeholder="6 位数字" autocomplete="one-time-code" aria-label="邮箱验证码"></m-input>
-                  <m-button id="btn-user-send-code" variant="ghost" size="sm">获取验证码</m-button>
-                </div>
-                <span id="user-email-hint" class="field-help account-hint"></span>
-              </div>
-              <div class="user-actions">
-                <m-button id="btn-user-save-email" variant="ghost" size="sm">改邮箱</m-button>
-              </div>
-              <p id="user-email-error" class="account-error" role="alert"></p>
-            </div>
-
-            <div class="user-block">
-              <p class="user-block-title">密码</p>
-              <label class="field field-stack">
-                <span class="field-label">当前密码</span>
-                <m-input id="user-pass-current" type="password" autocomplete="current-password" aria-label="当前密码"></m-input>
-              </label>
-              <div class="field-grid">
-                <label class="field">
-                  <span class="field-label">新密码</span>
-                  <m-input id="user-pass-new" type="password" placeholder="至少 8 位" autocomplete="new-password" aria-label="新密码"></m-input>
-                </label>
-                <label class="field">
-                  <span class="field-label">确认新密码</span>
-                  <m-input id="user-pass-confirm" type="password" autocomplete="new-password" aria-label="确认新密码"></m-input>
-                </label>
-              </div>
-              <div class="user-actions">
-                <m-button id="btn-user-save-pass" variant="ghost" size="sm">改密码</m-button>
-              </div>
-              <p id="user-pass-error" class="account-error" role="alert"></p>
-            </div>
-
-            <div class="user-block">
-              <p class="user-block-title">登录凭证</p>
-              <p class="field-help">换电脑或重装之后，凭这张图就能登回来（不用密码）—— 别把它发给别人。</p>
-              <div class="user-voucher-frame">
-                <img id="user-voucher" alt="登录凭证预览" draggable="false" />
-              </div>
-              <div class="user-actions">
-                <m-button id="btn-user-export-voucher" variant="ghost" size="sm">导出凭证图（PNG）</m-button>
-                <m-button id="btn-user-copy-voucher" variant="ghost" size="sm">复制凭证码</m-button>
-                <m-button id="btn-user-refresh-voucher" variant="ghost" size="sm">刷新凭证码</m-button>
-              </div>
-              <p class="field-help">刷新后旧码立刻作废，之前导出的凭证图也就不能用了。</p>
-              <p id="user-voucher-error" class="account-error" role="alert"></p>
-            </div>
-          </div>
-        </section>
-
         <section class="panel-section" id="sec-support">
           <div class="section-head"><span class="section-heading"><span class="section-title">本地数据</span><span class="section-desc">本机数据管理。</span></span></div>
           <div class="field field-stack"><span class="field-label">本地数据</span><p class="field-help">打开本机数据文件夹，查看或备份应用数据。</p><m-button id="btn-folder" variant="ghost" data-icon="folder" aria-label="打开数据文件夹">打开数据文件夹</m-button></div>
@@ -2056,10 +2148,36 @@
       </div>
 
       <footer class="modal-foot">
-        <span class="foot-hint">还没接服务器，这条暂时发不出去</span>
+        <span class="foot-hint">会附上版本号与系统信息（不用自己写）</span>
         <div class="foot-actions">
           <m-button id="btn-feedback-cancel" variant="ghost">关闭</m-button>
           <m-button id="btn-feedback-send" variant="primary">发送</m-button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ================= 通知公告（查看全部） ================= -->
+
+  <div id="notice-modal" class="modal hidden">
+    <div class="modal-card notice-card" role="dialog" aria-modal="true" aria-labelledby="notice-title">
+      <header class="modal-head">
+        <div class="modal-heading">
+          <h2 id="notice-title">通知公告</h2>
+          <p class="modal-sub">Mimitale 的更新、维护与需要你知道的事</p>
+        </div>
+        <button id="btn-close-notice" class="icon-btn" type="button" title="关闭（Esc）" aria-label="关闭通知公告" data-icon="close"></button>
+      </header>
+
+      <div class="modal-body">
+        <!-- 内容由 views/announcements.js 铺；点开一条就算看过了 -->
+        <div id="notice-modal-list" class="notice-list"></div>
+      </div>
+
+      <footer class="modal-foot">
+        <span class="foot-hint">点开一条就算看过了；没看过的会在启动时显示在聊天页顶部</span>
+        <div class="foot-actions">
+          <m-button id="btn-notice-modal-close" variant="ghost">关闭</m-button>
         </div>
       </footer>
     </div>

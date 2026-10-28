@@ -4,9 +4,8 @@
 //  views/account.js —— 侧栏左下角那一格「我是谁」
 //
 //  未登录：人形图标 + 「未登录 / 登录后同步角色卡」，点一下开登录弹窗。
-//          这时候没有设置入口（设置只给登录用户）。
 //  已登录：整行只剩「头像 + 用户名」，点一下往上弹出账号菜单：
-//          设置 / 意见反馈 / 退出登录。
+//          个人中心 / 意见反馈 / 退出登录。
 //
 //  ⚠️ 这一格自己**不发请求**：菜单三个动作由入口层注入，退出登录走 data/account.js。
 //  ⚠️ 别 import accountModal.js —— 它反过来要用这里的 renderAccount，互相 import 会成环。
@@ -19,13 +18,13 @@ import { el } from '../core/dom.js';
 import { showToast } from '../ui/toast.js';
 import { iconHtml } from '../ui/icons.js';
 import { loadAccount, logout } from '../data/account.js';
-// 设置页那一栏和这一格显示的是同一个人，退出之后要一起退回「还没登录」
+// 个人中心那一屏和这一格显示的是同一个人，退出之后要一起退回「还没登录」
 import { resetUserSection } from './userSettings.js';
 
 /** 入口层注入的动作 */
 const actions = {
   openLogin: null,
-  openSettings: null,
+  openProfile: null,
   openFeedback: null,
   afterLogout: null
 };
@@ -59,7 +58,7 @@ async function doLogout() {
     await logout();
     renderAccount(null);
     resetUserSection();
-    // 退出后设置页不该还开着（未登录没有设置）
+    // 退出后「个人中心」不该还开在屏幕上（未登录那一屏只剩一句「还没登录」）
     if (actions.afterLogout) actions.afterLogout();
     showToast('已退出登录', 'ok');
   } catch (err) {
@@ -73,7 +72,7 @@ async function doLogout() {
 
 export function initAccount(opts = {}) {
   if (typeof opts.openLogin === 'function') actions.openLogin = opts.openLogin;
-  if (typeof opts.openSettings === 'function') actions.openSettings = opts.openSettings;
+  if (typeof opts.openProfile === 'function') actions.openProfile = opts.openProfile;
   if (typeof opts.openFeedback === 'function') actions.openFeedback = opts.openFeedback;
   if (typeof opts.afterLogout === 'function') actions.afterLogout = opts.afterLogout;
   if (!el.btnAccount) return undefined;
@@ -92,9 +91,9 @@ export function initAccount(opts = {}) {
     showToast('登录界面没接上，先把位置占住', 'ok');
   });
 
-  el.btnAccountSettings?.addEventListener('click', () => {
+  el.btnAccountProfile?.addEventListener('click', () => {
     closeAccountMenu();
-    if (actions.openSettings) actions.openSettings();
+    if (actions.openProfile) actions.openProfile();
   });
   el.btnAccountFeedback?.addEventListener('click', () => {
     closeAccountMenu();

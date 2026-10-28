@@ -1,5 +1,7 @@
 // 设置页：左侧分组导航 + 右侧内容（服务商编辑 / 生成参数 / 生图 / 语义检索 / 桌宠 / 外观）。
 // 导出 openSettings / leaveSettings / expandSettingsSection；模型切换器与「保存后重绘消息」由入口层注入。
+// ⚠️ 2026-10-28：账号那一栏（头像 / 用户名 / 密码 / 凭证 / 会员）搬去了「个人中心」，
+//    见 views/userSettings.js。这里只剩「应用怎么跑」，别再往回收账号内容。
 
 import { api } from '../core/api.js';
 import { state } from '../core/state.js';
@@ -12,8 +14,6 @@ import { fillSelect } from '../ui/controls.js';
 import { openPetSection } from './petSettings.js';
 // 外观那一组（见 index.html 的 #sec-appearance），同样单向 import
 import { renderAppearanceForm } from './appearance.js';
-// 设置页第一栏「个人信息」的内容在 views/userSettings.js（账号资料 / 头像 / 密码 / 凭证）
-import { renderUserSection } from './userSettings.js';
 import { showToast } from '../ui/toast.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { providers, providerById, isBridgeProvider, currentEndpoint, supportsThinking } from '../data/providers.js';
@@ -47,6 +47,10 @@ let afterSettingsSave = () => {};
 export function initSettings(opts = {}) {
   if (typeof opts.refreshModelSwitch === 'function') refreshModelSwitch = opts.refreshModelSwitch;
   if (typeof opts.afterSettingsSave === 'function') afterSettingsSave = opts.afterSettingsSave;
+
+  // 侧栏那颗常显的「设置」入口（2026-10-28 从账号菜单里搬出来、排在预设下面）。
+  // ⚠️ 它会一直挂在侧栏上，所以必须在这里绑；点它 = 从当前这一屏进设置。
+  el.btnSettings?.addEventListener('click', () => openSettings());
 
   // 「返回」= 不保存直接走
   el.btnBackSettings.addEventListener('click', leaveSettings);
@@ -147,8 +151,9 @@ export function setEditingProvider(id) {
 // 分组导航：一个版块 = 一组，点左栏只显示那一组。当前选中不落盘（只是「刚才翻到哪了」），
 // 但同一次运行里离开再进来会回到原样（currentSectionId）。
 
-/** 这次运行里选中哪一组（存 section 的 id）。默认第一组「个人信息」（2026-10-23 起） */
-let currentSectionId = 'sec-user';
+/** 这次运行里选中哪一组（存 section 的 id）。默认第一组「模型服务」
+ *  （2026-10-28 起：账号那一栏搬去个人中心了，模型服务是这一屏最该先看的东西） */
+let currentSectionId = 'sec-models';
 
 /** 切到某一组：左栏高亮、右栏只显示对应卡片、内容滚回顶部。id 不认识就什么都不做。 */
 export function showSettingsSection(id) {
@@ -176,8 +181,6 @@ export function showSettingsSection(id) {
 
   // 切到「外观」时回填一次：它读的是内存里的设置，不填会留着上一次的颜色。
   if (id === 'sec-appearance') renderAppearanceForm();
-  // 个人信息这一栏读的是账号状态（可能在登录弹窗里刚变过），每次进来重铺一遍。
-  if (id === 'sec-user') renderUserSection();
 }
 
 /** 兼容名：外部一直按这个名字调用，语义是「切到那一组」 */
@@ -813,12 +816,13 @@ function readSettingsForm() {
 
 /**
  * 打开设置页。
- * @param {string} [section] 指定落到哪一组（比如从账号菜单进来要看「个人信息」）。
+ * @param {string} [section] 指定落到哪一组（比如桌宠右键菜单要直接看「桌宠」）。
  *   不传就回到这次运行里上次停留的那组。
  *   ⚠️ 只认字符串。调用方可能把它当 click 监听器绑（那样第一个参数是 PointerEvent），
  *      所以这里必须挡一下，否则会拿事件对象去拼 `querySelector('#[object PointerEvent]')`。
- * ⚠️ 本函数**不判断登录态**：设置只给登录用户，堵入口是调用方的事
- *    （现行入口只有账号菜单那一项 + Ctrl+, 快捷键，两处都挡了）。
+ * ⚠️ 2026-10-28 起设置是**公开的**：侧栏常显一颗「设置」，未登录也进得来。
+ *    设置里全是本机配置（模型地址 / Key / 参数 / 外观 / 桌宠 / 本地数据），
+ *    跟账号无关；账号相关的东西全在「个人中心」那一屏。
  */
 export function openSettings(section) {
   const wanted = typeof section === 'string' ? section : '';

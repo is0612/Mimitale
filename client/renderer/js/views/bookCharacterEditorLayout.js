@@ -195,3 +195,4 @@ export function showCharacterField(target, { focus = false } = {}) {
   if (focus) control.focus();
   return true;
 }
+

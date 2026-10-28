@@ -36,7 +36,6 @@ import {
   cutTrailingStatusBlock
 } from './data/panel.js';
 import { createConvo } from './data/conversations.js';
-import { isLoggedIn } from './data/account.js';
 
 import { onRefresh } from './views/refresh.js';
 import { initHeader } from './views/header.js';
@@ -74,8 +73,8 @@ import {
   closeAccountModal,
   isAccountModalOpen
 } from './views/accountModal.js';
-// 设置页第一栏「个人信息」：账号资料 / 头像 / 密码 / 凭证
-import { initUserSettings, renderUserSection } from './views/userSettings.js';
+// 个人中心那一屏（账号资料 / 头像 / 密码 / 凭证 / 会员），2026-10-28 从设置页拆出来
+import { initUserSettings, renderUserSection, openProfile, leaveProfile } from './views/userSettings.js';
 // 意见反馈弹窗：现在只是占位（没后端可发），点「发送」会诚实地说没发出去
 import {
   initFeedbackModal,
@@ -83,6 +82,8 @@ import {
   closeFeedbackModal,
   isFeedbackModalOpen
 } from './views/feedback.js';
+// 通知公告：聊天页顶部横条 + 查看全部弹窗 + 个人中心「通知」那一组，同一份数据
+import { initAnnouncements, refreshAnnouncements, isNoticeModalOpen, closeNoticeModal } from './views/announcements.js';
 import { initCharacterList } from './views/characterList.js';
 import {
   initWorldbook,
@@ -346,13 +347,12 @@ function bindEvents() {
     }
   });
 
-  // 全局快捷键 Ctrl+, = 打开设置（账号菜单里那颗「设置」右侧写的就是它，这里真认）。
+  // 全局快捷键 Ctrl+, = 打开设置（侧栏那颗「设置」入口的快捷键，这里真认）。
   // 没做成快捷键表：项目里只有这一条全局键，为它造一层调度不划算。
-  // 未登录时不响应 —— 设置只给登录用户，界面上也没有任何可见入口。
+  // 未登录也认 —— 2026-10-28 起设置是公开的（账号相关的东西在「个人中心」）。
   document.addEventListener('keydown', (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.key !== ',') return;
     event.preventDefault();
-    if (!isLoggedIn()) return;
     openSettings();
   });
 
@@ -367,6 +367,10 @@ function bindEvents() {
     }
     if (isFeedbackModalOpen()) {
       closeFeedbackModal();
+      return;
+    }
+    if (isNoticeModalOpen()) {
+      closeNoticeModal();
       return;
     }
     if (!el.requestsModal.classList.contains('hidden')) {
@@ -391,7 +395,11 @@ function bindEvents() {
       closePersonaDialog();
       return;
     }
-    // 设置是页面不是弹窗：Esc = 返回上一屏。
+    // 个人中心 / 设置都是页面不是弹窗：Esc = 返回上一屏。
+    if (!el.viewProfile.classList.contains('hidden')) {
+      leaveProfile();
+      return;
+    }
     if (!el.viewSettings.classList.contains('hidden')) {
       leaveSettings();
       return;
@@ -528,8 +536,8 @@ async function init() {
   // 加图按钮自己绑；配图成功后要重绘对话区、没配生图要弹设置 —— 都是入口层的动作。
   initChatImages({
     rerender: (opts) => renderAll(opts),
-    // 未登录没有设置可进：直接把人引到登录窗（生图本来也要登录后才有地方配）
-    openSettings: () => (isLoggedIn() ? openSettings() : openAccountModal())
+    // 2026-10-28 起设置未登录也能进（账号相关的东西在个人中心），不再往登录窗引
+    openSettings: () => openSettings()
   });
   // 剧情选项：选用选项 = 发一条消息（入口层编排）。「帮我想想」也走这条路。
   // setOptionsLoading 由选项块自己提供（它才知道那块 DOM 在哪），这里只是转手注入。
@@ -543,25 +551,30 @@ async function init() {
   initViewSwitch();
   // 游戏卡列表页（只搭了布局，占位按钮给个「还在搭」的提示）。
   initGameList();
-  // 账号：登录成功后弹窗自己关掉，侧栏那一格和设置页「个人信息」都要跟着变。
+  // 账号：登录成功后弹窗自己关掉，侧栏那一格和「个人中心」都要跟着变。
   initAccountModal({
     onSessionChange: (user) => {
       renderAccount(user);
       if (user) renderUserSection();
+      // 登录 / 登出之后「谁看过哪条公告」换了一套（匿名只记在本机），
+      // 未读数和横条都得重算 —— 不然刚登录的人会看到一份旧的红点
+      void refreshAnnouncements({ silent: true });
     }
   });
   initUserSettings({ openLogin: () => openAccountModal(), onUserChange: renderAccount });
   initFeedbackModal();
-  // 左下角那一格：未登录点开登录窗，已登录点开菜单（设置 / 意见反馈 / 退出登录）。
-  // ⚠️ 菜单里的「设置」直接落到「个人信息」那一组 —— 用户点自己的头像再看设置，
-  //    想看的是自己的资料，不是上次停在的模型配置。
+  // 通知公告：不要求登录（「你被停机了」这种公告，得发给登录不进去的人）
+  initAnnouncements();
+  // 左下角那一格：未登录点开登录窗，已登录点开菜单（个人中心 / 意见反馈 / 退出登录）。
+  // ⚠️ 菜单里的「个人中心」= 那一整屏账号内容（资料 / 账号安全 / 会员与邀请）。
+  //    「设置」不在这里 —— 它是侧栏常显的入口（#btn-settings）。
   initAccount({
     openLogin: () => openAccountModal(),
-    openSettings: () => openSettings('sec-user'),
+    openProfile: () => openProfile(),
     openFeedback: () => openFeedbackModal(),
-    // 退出登录后设置页不该还留在屏幕上（未登录没有设置）
+    // 退出登录后个人中心不该还留在屏幕上（未登录那一屏只剩一句「还没登录」）
     afterLogout: () => {
-      if (!el.viewSettings.classList.contains('hidden')) leaveSettings();
+      if (!el.viewProfile.classList.contains('hidden')) leaveProfile();
     }
   }).catch((err) => console.error('读取登录状态失败', err));
   // 角色卡那几颗按钮都跨分区，动作由入口层交给列表页。
@@ -641,8 +654,7 @@ async function init() {
   });
 
   api.onPetOpenSettings((payload) => {
-    // 设置只给登录用户：未登录时桌宠菜单里那几项没有可看的东西
-    if (!isLoggedIn()) return;
+    // 设置未登录也能进（2026-10-28 起公开），桌宠菜单不再看登录态
     openSettings();
     const focus = (payload && payload.focus) || '';
     // 「查看记忆」要直接滚到桌宠那块 —— 折叠着的卡片 scrollIntoView 滚不到位。

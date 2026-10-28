@@ -34,17 +34,21 @@ export const el = {
   // 账号菜单（登录后点头像弹出来的那一层）：容器、三项、以及开合状态挂在容器上
   sidebarAccount: $('sidebar-account'),
   accountMenu: $('account-menu'),
-  btnAccountSettings: $('btn-account-open-settings'),
+  btnAccountProfile: $('btn-account-open-profile'),
   btnAccountFeedback: $('btn-account-feedback'),
   btnAccountMenuLogout: $('btn-account-menu-logout'),
   btnFolder: $('btn-folder'),
   btnChars: $('btn-chars'),
   btnGames: $('btn-games'),
   btnPresets: $('btn-presets'),
+  // 侧栏常显的设置入口（2026-10-28 从账号菜单里搬出来的）
+  btnSettings: $('btn-settings'),
   // 数字由 views/viewSwitch.js 铺
   footCharsCount: $('foot-chars-count'),
   footGamesCount: $('foot-games-count'),
   footPresetsCount: $('foot-presets-count'),
+  // 个人中心（2026-10-28 从设置页拆出来的那一屏）：内容与页头「返回」归 views/userSettings.js
+  viewProfile: $('view-profile'),
   // 设置页：内容和显隐都由 views/settings.js 管
   viewSettings: $('view-settings'),
   btnBackSettings: $('btn-back-settings'),

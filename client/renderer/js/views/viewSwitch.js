@@ -12,7 +12,7 @@ import { renderGamePage } from './gameList.js';
 
 let currentView = 'chat';
 
-const VIEWS = ['chat', 'chars', 'charEditor', 'bookCharEditor', 'wbEditor', 'presets', 'games', 'settings'];
+const VIEWS = ['chat', 'chars', 'charEditor', 'bookCharEditor', 'wbEditor', 'presets', 'games', 'settings', 'profile'];
 
 const VIEW_PARTS = [
   { name: 'chat', view: 'viewChat', btn: null },
@@ -22,8 +22,10 @@ const VIEW_PARTS = [
   { name: 'wbEditor', view: 'viewWbEditor', btn: null },
   { name: 'presets', view: 'viewPresets', btn: 'btnPresets' },
   { name: 'games', view: 'viewGames', btn: 'btnGames' },
-  // 切换之前先由 views/settings.js 刷新；设置没有侧栏按钮（入口在账号菜单里）
-  { name: 'settings', view: 'viewSettings', btn: null }
+  // 设置与个人中心都是**页面**（不是弹窗），显示之前先由各自模块刷新内容。
+  // 侧栏只有「设置」有常显入口；个人中心从账号菜单进，所以没有 btn。
+  { name: 'settings', view: 'viewSettings', btn: 'btnSettings' },
+  { name: 'profile', view: 'viewProfile', btn: null }
 ];
 
 // 只读：别拿它去改视图

@@ -18,6 +18,7 @@
 // ============================================================================
 
 const { dataFile, writeJson, loadJsonWithFallback } = require('./store.js');
+const crypto = require('node:crypto');
 
 /**
  * 账号服务器地址。
@@ -110,15 +111,19 @@ function networkError() {
  *   - `code !== 0` 业务错误，message 是中英人话，直接抛给界面
  *   - HTTP 401 才是「登录失效」—— 这时自动用 refreshToken 换一次新 token 再重试，
  *     换不到才清登录态、让用户重新登
+ *
+ * `softAuth` = 「能带就带，不带也能用」：带上 token（服务端据此认出是谁），
+ * 但 401 时**不**清登录态、也不弹「重新登录」。发反馈 / 拉公告走这个 ——
+ * 公告本来就不要求登录，不该因为令牌过期把公告块整块打掉。
  */
 async function request(method, pathname, options = {}) {
-  const { body, auth = false, token = '', headers: extraHeaders = {} } = options;
+  const { body, auth = false, softAuth = false, token = '', headers: extraHeaders = {} } = options;
 
   const state = loadState();
   const headers = { ...extraHeaders };
   if (body !== undefined) headers['content-type'] = 'application/json';
 
-  const bearer = token || (auth ? state.token : '');
+  const bearer = token || (auth || softAuth ? state.token : '');
   if (bearer) headers.authorization = `Bearer ${bearer}`;
 
   const controller = new AbortController();
@@ -141,9 +146,10 @@ async function request(method, pathname, options = {}) {
   if (res.status === 401) {
     // 临时令牌（注册第二步）换 token 是没意义的，直接报
     if (auth && !token && state.refreshToken && (await tryRefresh(state.refreshToken))) {
-      return request(method, pathname, { body, auth, token: '', headers: extraHeaders });
+      return request(method, pathname, { body, auth, softAuth, token: '', headers: extraHeaders });
     }
-    clearSession();
+    // softAuth 不清登录态：令牌过期只该影响「认出我是谁」，不该把公告也打掉
+    if (!softAuth) clearSession();
     const err = new Error('登录已过期，重新登录一次');
     err.unauthorized = true;
     throw err;
@@ -360,6 +366,76 @@ async function changeEmail(payload) {
   return { user: data.user };
 }
 
+// ---------------------------------------------------------------------------
+//  消息：意见反馈 / 通知公告（2026-10-28）
+// ---------------------------------------------------------------------------
+
+/** 设备指纹文件 —— 只给发反馈的限频用，不参与任何身份识别 */
+function deviceFile() {
+  return dataFile('device.json');
+}
+
+let cachedDeviceId = '';
+
+/**
+ * 这台机器的随机指纹：第一次用到时生成一个 UUID 存下来，之后一直用它。
+ *
+ * ⚠️ 故意不掺 MAC / 主机名 / 用户名 —— 那类东西让人不安，换张网卡还会变。
+ *    它只回答「是不是同一个人又发了一条」，不回答「这个人是谁」。
+ * ⚠️ 没登录也能发反馈，服务端就靠它限频（60 秒一条、一天 10 条）。
+ */
+function deviceId() {
+  if (cachedDeviceId) return cachedDeviceId;
+  try {
+    const raw = loadJsonWithFallback(deviceFile());
+    if (raw && typeof raw.id === 'string' && raw.id) {
+      cachedDeviceId = raw.id;
+      return cachedDeviceId;
+    }
+  } catch (err) {
+    console.warn('[account] 读设备指纹失败，重新生成:', err.message);
+  }
+  cachedDeviceId = crypto.randomUUID();
+  // 落盘失败也无所谓：这一次照发，下次再生成一个（限频会松一点，不影响功能）
+  Promise.resolve(writeJson(deviceFile(), { id: cachedDeviceId })).catch(() => {});
+  return cachedDeviceId;
+}
+
+/**
+ * 发一条意见反馈 → { id, createdAt }
+ *
+ * ⚠️ **不登录也能发**：新用户「连登录都进不去」的时候，恰恰是最需要报错的时候。
+ *    登录了就顺带带上 token，服务端据此记下 customerId 和邮箱昵称。
+ * @param {object} payload { kind, content, contactEmail }
+ * @param {{appVersion?: string}} meta 版本号由 ipc.js 从 app.getVersion() 传进来
+ */
+async function submitFeedback(payload, meta = {}) {
+  const input = payload || {};
+  return request('POST', '/client/feedback', {
+    body: {
+      kind: input.kind || 'bug',
+      content: input.content || '',
+      contactEmail: input.contactEmail || '',
+      appVersion: meta.appVersion || '',
+      platform: process.platform,
+      deviceId: deviceId()
+    },
+    softAuth: true
+  });
+}
+
+/** 拉「此刻该显示」的公告 → { list, unread } */
+async function listAnnouncements() {
+  return request('GET', '/client/announcements', { softAuth: true });
+}
+
+/** 标一条已读 → { unread }。未登录时服务端回 unread: 0，客户端自己在本地记 */
+async function markAnnouncementRead(id) {
+  const num = Number(id);
+  if (!Number.isInteger(num) || num <= 0) throw new Error('公告 id 不对');
+  return request('POST', `/client/announcements/${num}/read`, { softAuth: true });
+}
+
 /**
  * 客户端使用会话上报。
  *
@@ -464,6 +540,9 @@ module.exports = {
   updateProfile,
   changePassword,
   changeEmail,
+  submitFeedback,
+  listAnnouncements,
+  markAnnouncementRead,
   // 给测试/排查用：当前账号服务器地址
   apiBase: API_BASE
 };

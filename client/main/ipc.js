@@ -3,7 +3,7 @@
 // main/ipc.js —— IPC 通道注册：界面通过这里调用主进程能力（实现分散在 store / providers / http / window）
 // ============================================================================
 
-const { ipcMain, shell, clipboard, dialog } = require('electron');
+const { ipcMain, shell, clipboard, dialog, app } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { spawn } = require('node:child_process');
@@ -959,8 +959,9 @@ function registerIpc() {
 
   /**
    * --- 账号（登录 / 注册 / 凭证）---
-   * ⚠️ 现在背后是 main/account.js 那个**假后端**（服务器还没买）。通道名和返回形状
-   *    按真后端定，将来只换实现，preload 与渲染层都不用动。
+   * 背后是真服务器（server/src/routes/client/auth.ts），main/account.js 只负责 HTTP
+   * 和本地登录态的落盘。通道名和返回形状从一开始就是按真后端定的，所以 10-27 接服务器
+   * 时 preload 与渲染层一个字没动。
    * 统一形状：成功 { ok: true, ... } / 失败 { ok: false, error: '中文原因' } ——
    * 渲染层直接把 error 拿去显示，不用自己翻译。
    */
@@ -986,6 +987,16 @@ function registerIpc() {
   ipcMain.handle('account:update-profile', accountCall((payload) => accountApi.updateProfile(payload)));
   ipcMain.handle('account:change-password', accountCall((payload) => accountApi.changePassword(payload)));
   ipcMain.handle('account:change-email', accountCall((payload) => accountApi.changeEmail(payload)));
+
+  /**
+   * --- 消息（意见反馈 / 通知公告）---
+   * ⚠️ 这三个通道**不要求登录**（服务端那边也没挂 clientGuard）：
+   *    连登录都进不去的人，恰恰最需要报错和看公告。
+   *    版本号在这里补上 —— account.js 是纯 HTTP 模块，不碰 electron。
+   */
+  ipcMain.handle('account:submit-feedback', accountCall((payload) => accountApi.submitFeedback(payload, { appVersion: app.getVersion() })));
+  ipcMain.handle('account:announcements', accountCall(() => accountApi.listAnnouncements()));
+  ipcMain.handle('account:announcement-read', accountCall((id) => accountApi.markAnnouncementRead(id)));
 
   /**
    * 生图：走 OpenAI 的 /images/generations，只支持「同步返回图片」的服务商（和聊天是两套配置）。

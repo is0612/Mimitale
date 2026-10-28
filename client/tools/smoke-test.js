@@ -38,6 +38,20 @@ const os = require('os');
 //   所以下面 probeStoreWriteFailure 自己指到临时目录那套照旧生效。）
 process.env.MIMITALE_DATA_DIR = path.join(os.tmpdir(), 'mimitale-smoke-data');
 
+// 每次跑都从「刚装好的设备」开始：把上一个 run 留下的数据目录整个删掉。
+//
+// ⚠️ 这个路径是**固定**的（不 mkdtemp），所以上一轮会留下两样东西：
+//    ① account.json 里的登录态 —— 下一次启动就是「已登录」，而账号场景要求
+//       从「未登录」开始，于是出现「未登录点开还是登录窗」超时；
+//    ② device.json 里的设备指纹 —— 服务端按 deviceId 给意见反馈限频
+//       （60 秒一条），连跑两次时第二次被拒成「刚刚已经发过一条了」。
+// 两条都不是代码回归，是脏状态。删干净之后冒烟才可重复跑。
+try {
+  fs.rmSync(process.env.MIMITALE_DATA_DIR, { recursive: true, force: true });
+} catch {
+  /* 目录不存在 / 被占用就算了，下面的用例各自也有兜底 */
+}
+
 // 账号的图形校验码：主进程只在测试模式下把答案一起回给界面（真后端绝不回）。
 // 没有它，注册 / 登录那几条链路（要填图上的 4 位）一步都走不过去。
 process.env.MIMITALE_ACCOUNT_TEST = '1';
@@ -1048,6 +1062,13 @@ function registerStubs() {
   ipcMain.handle('account:update-profile', accountCall((payload) => accountApi.updateProfile(payload)));
   ipcMain.handle('account:change-password', accountCall((payload) => accountApi.changePassword(payload)));
   ipcMain.handle('account:change-email', accountCall((payload) => accountApi.changeEmail(payload)));
+  // ⚠️ 这份是 main/ipc.js 的**桩副本**，不是自动同步的：
+  //    主进程加了通道，这里忘了加，冒烟里就会看到「No handler registered」+ 控制台警告。
+  //    2026-10-28 补上 refresh-voucher 和消息那三条。
+  ipcMain.handle('account:refresh-voucher', accountCall(() => accountApi.refreshVoucher()));
+  ipcMain.handle('account:submit-feedback', accountCall((payload) => accountApi.submitFeedback(payload, { appVersion: app.getVersion() })));
+  ipcMain.handle('account:announcements', accountCall(() => accountApi.listAnnouncements()));
+  ipcMain.handle('account:announcement-read', accountCall((id) => accountApi.markAnnouncementRead(id)));
 
   // --- 桌宠 ---
   //
@@ -4609,26 +4630,109 @@ app.whenReady().then(async () => {
         // 左栏导航 + 右栏限宽居中的整体排版（页头那颗「返回/保存」、卡片间距）
         // 只靠 DOM 断言看不出来。
         settings: `
-          document.querySelector('#btn-account-open-settings')?.click();
+          document.querySelector('#btn-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-models"]')?.click();
           await new Promise(r => setTimeout(r, 250));`,
-        // 个人信息页：会员块（「免费还剩 N 天」）、邀请块、凭证块三块挤在同一栏，
-        // 会员那行多两个字会不会把右边的刷新按钮挤下去，只有图看得出来。
+        // 个人中心页（2026-10-28 从设置页拆出来）：左栏三组 + 右栏内容，骨架跟设置页一样。
+        // 出图停在第 1 组「资料」—— 资料头（头像 / 用户名 / 邮箱）+ 用户名行 + 邮箱那一整段
+        // 是三组里最挤的一组，卡片间距、输入框宽度、校验码图的高度都在这一屏看得出来。
+        // ⚠️ 这一屏只对登录用户有内容（未登录只剩一句「还没登录」），所以出图前得先注册一个。
         userSettings: `
-          document.querySelector('#btn-account-open-settings')?.click();
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          const fill = (sel, v) => { const n = $(sel); if (n) n.value = v; };
+          const loggedIn = () => /@/.test(($('#account-sub') || {}).textContent || '');
+
+          if (!loggedIn()) {
+            $('#btn-account')?.click();
+            await nap(700);
+            $('#btn-goto-register')?.click();
+            await nap(800);
+            fill('#acc-reg-email', 'shot' + Date.now() + '@example.com');
+            fill('#acc-reg-captcha', $('#acc-reg-captcha')?.dataset.answer || '');
+            $('#btn-account-send-code')?.click();
+            await nap(1000);
+            const hint = $('#acc-reg-hint')?.textContent || '';
+            fill('#acc-reg-code', (hint.match(/(\\d{6})/) || [])[1] || '');
+            $('#btn-account-register-next')?.click();
+            await nap(800);
+            fill('#acc-setup-name', '星宝');
+            fill('#acc-setup-password', 'mimitale2026');
+            fill('#acc-setup-password2', 'mimitale2026');
+            $('#btn-account-finish')?.click();
+            await nap(1600);
+          }
+          $('#btn-account')?.click();
+          await nap(400);
+          $('#btn-account-open-profile')?.click();
+          await nap(900);
+          $('#view-profile .settings-nav-item[data-target="sec-profile"]')?.click();
+          await nap(400);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 公告横条（2026-10-28）：聊天页顶部最多两条未读。
+        // ⚠️ 横条在 **#view-chat 里**，所以出图前得先切进聊天页 —— 开一个新对话最省事
+        //    （角色库那屏看不到横条，这是对的，不是坏了）。
+        // ⚠️ 有公告才有横条 —— 出图前后台得先发两条，否则拍出来和普通聊天页一样；
+        //    服务端不通时也是这个结果（安静地不显示）。
+        notices: `
+          document.querySelector('#btn-new')?.click();
+          await new Promise(r => setTimeout(r, 900));
+          const t = document.querySelector('#toast');
+          if (t) { t.classList.add('hidden'); t.textContent = ''; }
+`,
+        // 点横条 →「查看全部」弹窗：级别标签、日期、正文换行都在这一屏看
+        noticesModal: `
+          document.querySelector('#btn-new')?.click();
+          await new Promise(r => setTimeout(r, 900));
+          const bar = document.querySelector('#notice-strip .notice-bar');
+          if (bar) bar.click();
           await new Promise(r => setTimeout(r, 700));
-          document.querySelector('.settings-nav-item[data-target="sec-user"]')?.click();
-          await new Promise(r => setTimeout(r, 400));`,
+          const t = document.querySelector('#toast');
+          if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
+        // 个人中心 →「通知」组（带未读数红点）。
+        // ⚠️ 这一屏未登录只剩「还没登录」，所以出图前照 userSettings 那套先注册一个。
+        noticeProfile: `
+          const $ = (s) => document.querySelector(s);
+          const nap = (ms) => new Promise(r => setTimeout(r, ms));
+          const fill = (sel, v) => { const n = $(sel); if (n) n.value = v; };
+          const loggedIn = () => /@/.test(($('#account-sub') || {}).textContent || '');
+
+          if (!loggedIn()) {
+            $('#btn-account')?.click();
+            await nap(700);
+            $('#btn-goto-register')?.click();
+            await nap(800);
+            fill('#acc-reg-email', 'shot' + Date.now() + '@example.com');
+            fill('#acc-reg-captcha', $('#acc-reg-captcha')?.dataset.answer || '');
+            $('#btn-account-send-code')?.click();
+            await nap(1000);
+            const hint = $('#acc-reg-hint')?.textContent || '';
+            fill('#acc-reg-code', (hint.match(/(\\d{6})/) || [])[1] || '');
+            $('#btn-account-register-next')?.click();
+            await nap(800);
+            fill('#acc-setup-name', '星宝');
+            fill('#acc-setup-password', 'mimitale2026');
+            fill('#acc-setup-password2', 'mimitale2026');
+            $('#btn-account-finish')?.click();
+            await nap(1600);
+          }
+          $('#btn-account')?.click();
+          await nap(400);
+          $('#btn-account-open-profile')?.click();
+          await nap(900);
+          $('#view-profile .settings-nav-item[data-target="sec-notice"]')?.click();
+          await nap(400);
+          const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 行为开关分组：主要验证「开关行卡片 + 开关靠右 + 头部统计」。
         settingsBehavior: `
-          document.querySelector('#btn-account-open-settings')?.click();
+          document.querySelector('#btn-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-behavior"]')?.click();
           await new Promise(r => setTimeout(r, 250));`,
         // 语义检索分组：验证开关行卡片的另一种长说明形态。
         settingsRag: `
-          document.querySelector('#btn-account-open-settings')?.click();
+          document.querySelector('#btn-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-rag"]')?.click();
           await new Promise(r => setTimeout(r, 250));`,
@@ -4639,7 +4743,7 @@ app.whenReady().then(async () => {
         // 组件之后，最容易悄悄变的就是**宽度**（外层多了一个宿主盒），而"窄了一截"
         // 在看图上不一定第一眼认出来，有数字就一眼可见。
         selectPop: `
-          document.querySelector('#btn-account-open-settings')?.click();
+          document.querySelector('#btn-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-appearance"]')?.click();
           await new Promise(r => setTimeout(r, 300));
@@ -4709,7 +4813,7 @@ app.whenReady().then(async () => {
         // 生图分组：三个下拉（服务商 / 模型 / 尺寸）。迁移成组件之后「宽度」最容易变，
         // 出图 + 像素对比是唯一靠谱的核法。
         settingsImage: `
-          document.querySelector('#btn-account-open-settings')?.click();
+          document.querySelector('#btn-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-image"]')?.click();
           await new Promise(r => setTimeout(r, 300));`,
@@ -4746,7 +4850,7 @@ app.whenReady().then(async () => {
         // 全是排版密集的地方，「挤成一行」「按钮换行」这类问题 DOM 断言看不出来，
         // 只能靠图。顺手点一次「生成一句」，让预览框里真的有内容（空框看不出高矮）。
         petSettings: `
-          document.querySelector('#btn-account-open-settings')?.click();
+          document.querySelector('#btn-settings')?.click();
           await new Promise(r => setTimeout(r, 900));
           // 2026-10-10 起设置分成「左导航 + 右内容」，桌宠是最后一组 ——
           // 不先切到它，右栏显示的还是「模型服务」（图就白截了）。
@@ -4765,7 +4869,7 @@ app.whenReady().then(async () => {
         // 主题配色 + 明暗 + 聊天区那几样都在这里，
         // 布局（色点会不会换行、分段按钮会不会被 grid 拉满）得靠图看。
         appearance: `
-          document.querySelector('#btn-account-open-settings')?.click();
+          document.querySelector('#btn-settings')?.click();
           await new Promise(r => setTimeout(r, 700));
           document.querySelector('.settings-nav-item[data-target="sec-appearance"]')?.click();
           await new Promise(r => setTimeout(r, 300));`,
@@ -5043,7 +5147,7 @@ app.whenReady().then(async () => {
           const nap = (ms) => new Promise(r => setTimeout(r, ms));
           // ⚠️ 别再找 #btn-gen-params —— 右栏那套「生成参数页签」已经下线了（点它是空操作，
           //    出图会悄悄退化成「原样截当前屏」）。现在唯一的入口是设置页左导航。
-          $('#btn-account-open-settings')?.click();
+          $('#btn-settings')?.click();
           await nap(400);
           $('[data-target="sec-params"]')?.click();
           await nap(350);
@@ -5067,7 +5171,7 @@ app.whenReady().then(async () => {
         // ⚠️ 这段是模板字符串：注释里不能有反引号，正则里的反斜杠要写两条。
         // ⚠️ 它会真的往冒烟数据目录写一个账号（邮箱带时间戳，不撞）——
         //    冒烟场景开头会先退出登录，所以不会影响断言。
-        // 账号弹窗 · 已登录之后：走菜单进「设置 → 个人信息」，顺便看凭证卡在设置页里的样子。
+        // 账号弹窗 · 已登录之后：走账号菜单进「个人中心」，顺便看凭证卡在那一屏里的样子。
         // ⚠️ 这段是模板字符串：注释里不能有反引号，正则里的反斜杠要写两条。
         // ⚠️ 它会真的往冒烟数据目录写一个账号（邮箱带时间戳，不撞）——
         //    冒烟场景开头会先退出登录，所以不会影响断言。
@@ -5100,10 +5204,10 @@ app.whenReady().then(async () => {
           fill('#acc-setup-password2', 'mimitale2026');
           $('#btn-account-finish')?.click();
           await nap(1400);
-          // 走菜单进设置页的个人信息
+          // 走账号菜单进「个人中心」
           $('#btn-account')?.click();
           await nap(400);
-          $('#btn-account-open-settings')?.click();
+          $('#btn-account-open-profile')?.click();
           await nap(1600);
           const t = $('#toast'); if (t) { t.classList.add('hidden'); t.textContent = ''; }`,
         // 左下角账号菜单本身（登录后点账号格弹出来的那层）

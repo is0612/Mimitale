@@ -1254,7 +1254,11 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   flex-basis: 16px;
 }
 
-/* 文字可收缩，但图标和按钮本身保持稳定，字号放大时不会撑破网格。 */
+/* 文字可收缩，但图标和按钮本身保持稳定，字号放大时不会撑破网格。
+   ⚠️ 文字**居中**（里层是原生 <button>，浏览器默认 text-align:center，这里顺着它）。
+   居中的基准是「label 盒子」，所以盒子的宽度必须四行一样 —— 数字一旦在流里
+   占宽度，「设置」这种右边没有 .foot-count 的行盒子就比别人宽一截，文字整体右移。
+   解法是把数字从流里拿出来（见下面 .foot-count 的 absolute），不是改成左对齐。 */
 .foot-label {
   flex: 1 1 auto;
   min-width: 0;
@@ -1262,15 +1266,25 @@ input[type="number"]:hover::-webkit-outer-spin-button {
   text-overflow: ellipsis;
 }
 
-/* 入口右边的数量（角色卡 / 世界书）。跟名字同一行、靠右、灰一档 ——
-   数字是拿来扫一眼的，不该跟入口名抢注意力。等宽数字，两位数以上不会左右跳。 */
+/* 入口右边的数量（角色卡 / 世界书）。跟名字同一行、贴右、灰一档 ——
+   数字是拿来扫一眼的，不该跟入口名抢注意力。等宽数字，两位数以上不会左右跳。
+   ⚠️ 必须 absolute 出流。文字是居中的，居中基准是 label 盒子；数字要是留在流里
+   占宽度，右边**没有**数字的那一行（「设置」）盒子就宽出一截（8px gap + 数字宽），
+   文字整体右移 —— 2026-10-28 星宝指着截图说的「设置右边没内容，就跟上面的预设
+   文字不对齐了」正是这个。出流之后四行 label 等宽、文字落在同一条中线上，
+   数字照样钉在右内边距上；数字变成几位都不影响文字位置。
+   锚点是 .mi-btn__control 的 position: relative（按钮皮肤里那条）。
+   ⚠️ 别为了「对齐」把 .foot-label 改成 text-align: left —— 星宝要的是居中。 */
 .foot-count {
-  flex: 0 0 auto;
-  margin-left: auto;
+  position: absolute;
+  top: 50%;
+  right: 8px; /* = .sidebar-foot m-button > .mi-btn__control 的右内边距 */
+  transform: translateY(-50%);
   color: var(--text-faint);
   font-size: var(--fs-xs);
   font-variant-numeric: tabular-nums;
   user-select: none;
+  pointer-events: none; /* 点在数字上也等于点在按钮上 */
 }
 
 .foot-count:empty {
@@ -3535,17 +3549,6 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--accent);
 }
 
-.sidebar-section-title {
-  padding: 0 8px 10px;
-  font-size: var(--fs-xs);
-  color: var(--text-faint);
-  letter-spacing: .08em;
-}
-
-.sidebar.collapsed .sidebar-section-title {
-  display: none;
-}
-
 .sidebar.collapsed .sidebar-foot {
   display: grid;
   grid-template-columns: 1fr;
@@ -3873,15 +3876,6 @@ m-button.btn-new > .mi-btn__control:hover {
 
 .menu-item-label {
   flex: 1 1 auto;
-}
-
-.menu-kbd {
-  flex: 0 0 auto;
-  margin-left: 12px;
-  color: var(--text-faint);
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
 }
 
 .story-eyebrow {
@@ -7702,10 +7696,31 @@ m-button.btn-new > .mi-btn__control:hover {
   color: var(--text-faint);
 }
 
-.user-body {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+/* ------------------------------ 个人中心（2026-10-28 从设置页拆出来） ------------------------------ */
+/* 骨架整副复用设置页（settings-shell / settings-nav / settings-content），
+   这一屏只多两条自己的规矩： */
+
+/* ① 未登录：左栏三组都没有东西可看，藏掉导航、让内容铺满整行，只剩一块「还没登录」。
+      data-guest 由 views/userSettings.js 的 renderUserSection() 维护。 */
+#view-profile[data-guest="1"] .settings-nav {
+  display: none;
+}
+
+#view-profile[data-guest="1"] .settings-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#view-profile[data-guest="1"] .settings-content > .panel-section {
+  display: none;
+}
+
+/* ② 紧跟在组标题下面的那一块不画分隔线、也不留顶部空隙 —— 它头顶就是 .section-head
+      那道通栏线，再画一条会变成双线（跟设置页 .field-group 的处理是同一个道理）。
+      「资料」那组紧跟标题的是资料头（.user-head），不匹配 —— 用户名那块保留分隔线，
+      正好把「我是谁」和「改名字」分开。 */
+#view-profile .settings-content > .panel-section > .section-head + .user-block {
+  padding-top: 0;
+  border-top: 0;
 }
 
 /* 资料头：头像 + 名字 + 邮箱；点整颗头像就换图 */
@@ -10837,4 +10852,221 @@ m-button.btn-new > .mi-btn__control:hover {
   #view-wb-editor .wb-ident {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ============================================================================
+   通知公告（2026-10-28）
+   ----------------------------------------------------------------------------
+   三处显示同一份数据：聊天页顶部横条（只放未读）、「查看全部」弹窗、
+   个人中心 →「通知」那一组。所以样式也共用一份 .notice-list / .notice-item。
+
+   级别只影响**左边那条竖线**（重要=红、维护=琥珀、普通=灰）——
+   不给整块上底色：公告是常驻信息，不是警告，大面积染色会让人以为出事了。
+   ============================================================================ */
+
+.notice-strip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 30px 0;
+}
+
+.notice-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 10px 8px 11px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  cursor: pointer;
+}
+
+.notice-bar:hover {
+  border-color: var(--border-hover);
+  border-left-color: var(--border-strong);
+}
+
+.notice-bar[data-level='important'] {
+  border-left-color: var(--danger);
+}
+
+.notice-bar[data-level='maintenance'] {
+  border-left-color: var(--accent);
+}
+
+.notice-bar-icon {
+  display: flex;
+  align-items: center;
+  padding-top: 2px;
+  color: var(--text-faint);
+}
+
+.notice-icon-svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.notice-bar[data-level='important'] .notice-bar-icon {
+  color: var(--danger);
+}
+
+.notice-bar-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.notice-bar-title {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.notice-bar-text {
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  line-height: 1.5;
+  /* 横条只给一行：全文去弹窗里看 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.notice-bar-done {
+  flex: none;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  line-height: 1.7;
+  cursor: pointer;
+}
+
+.notice-bar-done:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* ---- 列表（弹窗 / 个人中心共用） ---- */
+
+.notice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notice-item {
+  padding: 9px 12px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  cursor: pointer;
+}
+
+.notice-item:hover {
+  border-color: var(--border);
+}
+
+/* 看过的整块压暗一档 —— 不是隐藏，回头还想翻得到 */
+.notice-item.is-read {
+  opacity: 0.66;
+}
+
+.notice-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notice-level {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+
+.notice-item[data-level='important'] .notice-level {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.notice-item[data-level='maintenance'] .notice-level {
+  border-color: var(--accent-border-faint);
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.notice-item-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.notice-item-date {
+  flex: none;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+}
+
+.notice-unread-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+.notice-item-body {
+  margin-top: 6px;
+  font-size: var(--fs-xs);
+  color: var(--text-dim);
+  line-height: 1.8;
+  /* 正文里的换行是运营敲的，要留着 */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.notice-empty {
+  margin: 0;
+  padding: 14px 0;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.notice-card .modal-body {
+  max-height: 56vh;
+  overflow-y: auto;
+}
+
+/* 个人中心导航上那颗未读数 */
+.notice-badge {
+  display: inline-block;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  vertical-align: 1px;
 }

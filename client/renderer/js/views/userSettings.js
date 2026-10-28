@@ -1,15 +1,19 @@
 'use strict';
 
 // ============================================================================
-//  views/userSettings.js —— 设置页第一栏「个人信息」（2026-10-23）
+//  views/userSettings.js —— 「个人中心」这一屏（2026-10-28 从设置页拆出来）
 //
-//  头像（点了就换）/ 用户名 / 邮箱（走验证码）/ 密码 / 登录凭证。
-//  账号相关的界面从「账号弹窗的我的账号面板」整体搬到这儿 —— 左下角那颗按钮
-//  现在只负责弹菜单（设置 / 反馈 / 退出登录），不再挂「我的账号」。
+//  两件事都在这个文件里：
+//    ① 内容：头像（点了就换）/ 用户名 / 邮箱（走验证码）/ 密码 / 登录凭证 / 会员 / 邀请；
+//    ② 那一屏本身：打开 / 返回 / 左栏三组导航的切换（openProfile / leaveProfile /
+//       showProfileSection）。骨架与设置页**完全一样**（settings-shell），
+//       只是内容分了三组 —— 星宝 2026-10-28 要的「拆开后跟设置页面一样」。
 //
-//  ⚠️ 不 import settings.js：settings.js 单向 import 本模块（切到这一栏时刷新），
-//     反过来引用会成环。开登录弹窗、刷新侧栏那一格都由入口层注入。
+//  ⚠️ 不 import settings.js（那边单向 import 本模块）；也不 import accountModal，
+//     开登录弹窗、刷新侧栏那一格都由入口层注入。
 //  ⚠️ 凭证卡的画法在 ui/voucherCard.js；这里只管「取数据 → 塞进 img → 导出」。
+//  ⚠️ 三组内容的显隐靠 #view-profile 上的 data-guest 和 .hidden，别再包一层 #user-body
+//     （包了之后 `.settings-content > .panel-section` 那套样式就落不上了）。
 // ============================================================================
 
 import { api } from '../core/api.js';
@@ -19,6 +23,8 @@ import { pickAvatarDataUrl } from '../ui/avatarImage.js';
 import { drawVoucherCard } from '../ui/voucherCard.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { saveExport } from '../data/export.js';
+// 视图切换（单向：它只登记显隐/高亮，不认识本模块）
+import { showView, currentViewName } from './viewSwitch.js';
 import {
   accountUser,
   refreshAccount,
@@ -46,15 +52,21 @@ let resendLeft = 0;
 let voucherCache = null;
 let voucherCode = '';
 
+/** 进个人中心之前停在哪一屏：返回 / Esc 都回到它 */
+let returnView = 'chat';
+/** 这次运行里选中哪一组（存 section 的 id），默认第一组「资料」 */
+let currentSectionId = 'sec-profile';
+
 // ---------------------------------------------------------------------------
 //  节点与初始化
 // ---------------------------------------------------------------------------
 
 function cacheNodes() {
   const $ = (id) => document.getElementById(id);
-  nodes.section = $('sec-user');
+  // 整屏（data-guest 挂在它上面）与页头「返回」
+  nodes.view = $('view-profile');
+  nodes.btnBack = $('btn-back-profile');
   nodes.guest = $('user-guest');
-  nodes.body = $('user-body');
   nodes.btnGuestLogin = $('btn-user-login');
 
   nodes.avatar = $('btn-user-avatar');
@@ -104,6 +116,16 @@ export function initUserSettings(opts = {}) {
   cacheNodes();
   if (typeof opts.openLogin === 'function') openLogin = opts.openLogin;
   if (typeof opts.onUserChange === 'function') onUserChange = opts.onUserChange;
+
+  nodes.btnBack?.addEventListener('click', leaveProfile);
+
+  // 左栏三个分组：监听挂在**这一屏**上（不是 document），事件不会跑到别处去。
+  nodes.view?.addEventListener('click', (event) => {
+    const nav = event.target.closest ? event.target.closest('.settings-nav-item') : null;
+    if (!nav) return;
+    const target = nav.getAttribute('data-target');
+    if (target) showProfileSection(target);
+  });
 
   nodes.btnGuestLogin?.addEventListener('click', () => {
     if (openLogin) openLogin();
@@ -222,15 +244,16 @@ function startResend(seconds) {
 // ---------------------------------------------------------------------------
 
 /**
- * 刷新「个人信息」整栏。settings.js 在切到 sec-user 时调它（未登录也要调，
- * 因为用户可能在弹窗里刚登录完就切过来了）。
+ * 刷新整屏账号内容。入口层在登录 / 退出时调，openProfile 进屏前也调一次
+ * （未登录也要调：用户可能在弹窗里刚登录完就切过来了）。
  */
 export function renderUserSection() {
   const user = accountUser();
   const guest = !user;
 
+  // 未登录：CSS 按这个属性把左栏导航和三组内容整块藏掉，只留一块「还没登录」。
+  if (nodes.view) nodes.view.dataset.guest = guest ? '1' : '0';
   if (nodes.guest) nodes.guest.classList.toggle('hidden', !guest);
-  if (nodes.body) nodes.body.classList.toggle('hidden', guest);
 
   if (guest) {
     stopResend();
@@ -244,6 +267,67 @@ export function renderUserSection() {
   if (!user.membership || !user.inviteCode) void refreshMembership({ quiet: true });
   refreshCaptcha();
   renderVoucher(user);
+  // 刚登录完那一刻三组都还是 hidden（HTML 里只有第一组没有 hidden），补一次显隐
+  showProfileSection(currentSectionId);
+}
+
+// ---------------------------------------------------------------------------
+//  这一屏本身：打开 / 返回 / 左栏切组
+// ---------------------------------------------------------------------------
+
+/** 切到某一组：左栏高亮、右栏只显示对应那组、内容滚回顶部。id 不认识就什么都不做。 */
+export function showProfileSection(id) {
+  if (!id || !nodes.view) return;
+  const section = nodes.view.querySelector(`#${id}`);
+  if (!section) return;
+
+  currentSectionId = id;
+
+  for (const item of nodes.view.querySelectorAll('.settings-nav-item')) {
+    const on = item.getAttribute('data-target') === id;
+    item.classList.toggle('active', on);
+    // aria-current 没有「false」这个合法值：不选中就是移除属性
+    if (on) item.setAttribute('aria-current', 'true');
+    else item.removeAttribute('aria-current');
+  }
+
+  for (const box of nodes.view.querySelectorAll('.settings-content > .panel-section')) {
+    box.classList.toggle('hidden', box.id !== id);
+  }
+
+  const content = nodes.view.querySelector('.settings-content');
+  if (content) content.scrollTop = 0;
+}
+
+/**
+ * 打开个人中心。
+ * @param {string} [section] 指定落到哪一组。⚠️ 只认字符串：调用方可能把它当 click
+ *   监听器绑（那样第一个参数是 PointerEvent），写进 dataset 就是一个事件对象。
+ * ⚠️ 这一屏**只对登录用户有意义**：未登录时内容区会整块换成「还没登录」+ 登录按钮，
+ *    所以入口（账号菜单）只在登录后才出现，堵入口是调用方的事。
+ */
+export function openProfile(section) {
+  const wanted = typeof section === 'string' ? section : '';
+
+  // 已经在这一屏：不重灌内容（会把正在填的邮箱 / 密码冲掉），只切组
+  if (currentViewName() === 'profile') {
+    if (wanted) showProfileSection(wanted);
+    return;
+  }
+  if (wanted) currentSectionId = wanted;
+
+  // 记下来处：返回 / Esc 都回到它
+  returnView = currentViewName();
+
+  renderUserSection();
+  showView('profile');
+  // 焦点落在页头「返回」上（别聚焦输入框：type=password 一获得焦点就整段选中）
+  if (nodes.btnBack) nodes.btnBack.focus();
+}
+
+/** 离开个人中心，回到进来之前那一屏 */
+export function leaveProfile() {
+  showView(returnView === 'profile' ? 'chat' : returnView);
 }
 
 /** 资料头 + 各表单的初值 */

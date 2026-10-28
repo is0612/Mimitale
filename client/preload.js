@@ -148,6 +148,13 @@ contextBridge.exposeInMainWorld('mimitale', {
   accountChangePassword: (payload) => ipcRenderer.invoke('account:change-password', payload),
   accountChangeEmail: (payload) => ipcRenderer.invoke('account:change-email', payload),
 
+  // --- 消息（意见反馈 / 通知公告）---
+  // ⚠️ 这三个**不需要登录**：发反馈是「连登录都进不去」时的唯一出口，
+  //    公告也要能发给登录不进去的人（比如「你被停机了」）。
+  accountSubmitFeedback: (payload) => ipcRenderer.invoke('account:submit-feedback', payload),
+  accountAnnouncements: () => ipcRenderer.invoke('account:announcements'),
+  accountAnnouncementRead: (id) => ipcRenderer.invoke('account:announcement-read', id),
+
   // --- 杂项 ---
   copyText: (text) => ipcRenderer.invoke('util:copy', text),
   saveFile: (payload) => ipcRenderer.invoke('util:saveFile', payload),

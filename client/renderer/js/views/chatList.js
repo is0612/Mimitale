@@ -34,7 +34,9 @@ export function renderConvoList() {
 
   const list = Array.isArray(state.conversations) ? state.conversations : [];
 
-  if (el.convoCap) el.convoCap.textContent = `故事记录 · ${list.length}`;
+  // 「对话记录」这个叫法 2026-10-28 定的（原来写「故事记录」）——
+  // 纯聊天的会话也算在内，再说「故事」就名不副实了。
+  if (el.convoCap) el.convoCap.textContent = `对话记录 · ${list.length}`;
 
   if (!list.length) {
     const empty = h('div', {

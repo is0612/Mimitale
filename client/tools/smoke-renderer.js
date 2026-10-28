@@ -408,19 +408,22 @@ function panelDefByName(defs, name) {
 }
 
 // ---------------------------------------------------------------------------
-//  进设置页的**唯一**入口。
-//  设置只给登录用户：未登录时界面上没有那颗齿轮，唯一可达的是账号菜单里的「设置」
-//  —— 菜单收着（hidden），click() 照样能触发，和以前点隐藏齿轮同一个手法：
-//  这里测的是设置页本身，不是入口权限。
-//  ⚠️ 菜单那一项落到「个人信息」组，而绝大多场景按第 1 组（模型服务）写断言，
-//     所以进来后统一点回模型组。
+//  进设置页的**唯一**入口：侧栏那颗常显的「设置」（2026-10-28 起它是公开入口，
+//  未登录也能进 —— 账号相关的东西搬去了「个人中心」）。
+//  ⚠️ 进来后统一点回模型组：这次运行里「上次停在哪组」是记着的。
 // ---------------------------------------------------------------------------
 async function openSettingsPage() {
-  click('#btn-account-open-settings');
+  click('#btn-settings');
   await waitFor('切到设置页', () => shown('#view-settings'));
   click('.settings-nav-item[data-target="sec-models"]');
   await waitFor('停在模型服务组', () => shown('#sec-models'));
 }
+
+// ---------------------------------------------------------------------------
+//  进「个人中心」的路径只有一个：左下角账号格 → 菜单里的「个人中心」。
+//  ⚠️ 它的入口仍然只对登录用户可见（未登录点账号格开的是登录窗），所以要用它
+//     的地方都得先确保已登录 —— 现在只有账号那个场景会走（见下面内联的那几步）。
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 //  外观：2026-10-12 深夜从**顶栏弹窗**（#appearance-modal）搬进了
@@ -812,7 +815,7 @@ await scenario('设置页', async () => {
 //  要守住四件事：
 //   ① 点左栏能切组（一次只显示一组，别的组是真看不见）；
 //   ② 换组**不能让表单失效** —— 没显示的那一组里的值照样读得到、存得住；
-//   ③ 关掉再打开，落在「个人信息」组（入口是账号菜单那一项，不记上次翻到哪）；
+//   ③ 关掉再打开，记得刚才停在哪一组（currentSectionId 是「本次运行内」的，不落盘）；
 //   ④ 分组名 old 接口 expandSettingsSection(id) 仍能指定切到某一组。
 // ---------------------------------------------------------------------------
 await scenario('设置：左导航切组', async () => {
@@ -864,14 +867,14 @@ await scenario('设置：左导航切组', async () => {
   const saved = ((await window.mimitale.getSettings()).settings || {});
   check('没显示的那一组里的值照样落盘', Number(saved.maxTokens) === 2048, String(saved.maxTokens));
 
-  // 关掉再打开：入口只有账号菜单那一项，它固定落到「个人信息」组
-  // （这一屏记「上次翻到哪组」的老约定随齿轮一起没了）
-  click('#btn-account-open-settings');
+  // 关掉再打开：设置记着「这次运行里上次停在哪组」（2026-10-28 起账号那一栏
+  // 搬去了个人中心，这一屏不再有「进来必须先看个人信息」的固定落点）。
+  click('#btn-settings');
   await waitFor('设置页再开', () => shown('#view-settings'));
   check(
-    '重开落在个人信息组（账号菜单固定落这里）',
-    visible(byId('sec-user')) && !visible(byId('sec-params')),
-    `user=${visible(byId('sec-user'))} params=${visible(byId('sec-params'))}`
+    '重开停在刚切过的组（生成参数），不是闪回第 1 组',
+    visible(byId('sec-params')) && !visible(byId('sec-models')),
+    `params=${visible(byId('sec-params'))} models=${visible(byId('sec-models'))}`
   );
 
   const supportNav = $('#view-settings .settings-nav .settings-nav-item[data-target="sec-support"]');
@@ -891,7 +894,8 @@ await scenario('设置：左导航切组', async () => {
 //  场景 3.6：设置是**页面**，不是弹窗（2026-10-09 从弹窗搬过来）
 //
 //  从弹窗变成一屏之后，多出来三件必须守住的事：
-//   ① 进设置时侧栏那几颗入口要灭掉 —— 页面才有「我现在在哪一屏」这件事；
+//   ① 进设置时侧栏入口跟着换高亮 —— 页面才有「我现在在哪一屏」这件事
+//      （2026-10-28 起设置自己有侧栏入口了，点亮的是它，角色卡那颗要灭）；
 //   ② 保存 / 返回 / Esc 都回到**进来之前那一屏**（弹窗时代是「关掉弹窗」，语义没变）；
 //   ③ 进来之前不一定是聊天 —— 从角色卡进来就得回角色卡，别写死。
 // ---------------------------------------------------------------------------
@@ -905,8 +909,8 @@ await scenario('设置：是页面，来去都记得从哪来', async () => {
   await waitFor('切到设置页', () => shown('#view-settings'));
   check('设置页是真的把别的视图藏起来（不是盖一层浮层）', !shown('#view-chat') && !shown('#view-chars'));
   check(
-    '设置没有侧栏按钮要点亮（角色卡那颗灭着）',
-    !byId('btn-settings') && !byId('btn-chars').classList.contains('active')
+    '设置页点亮侧栏那颗「设置」（角色卡那颗灭着）',
+    byId('btn-settings')?.classList.contains('active') && !byId('btn-chars').classList.contains('active')
   );
 
   // --- 「返回」原路回角色卡 ---
@@ -4089,9 +4093,10 @@ await scenario('侧栏：入口网格与收起', async () => {
   check('侧栏宽度 224', Math.round(sidebar.getBoundingClientRect().width) === 224, String(Math.round(sidebar.getBoundingClientRect().width)));
 
   const foot = $$('.sidebar-foot m-button');
-  // 这一组三颗创作入口（角色卡 / 游戏卡 / 预设）—— 设置不在侧栏（入口在登录后的账号菜单里），
-  // 世界书也没有独立入口了（挂在角色的「自带世界书」上）。
-  check('侧栏保留三个创作入口', foot.length === 3, String(foot.length));
+  // 这一组四颗：角色卡 / 游戏卡 / 预设 + **设置**（2026-10-28 从账号菜单搬出来，
+  // 固定排在预设下面）。世界书没有独立入口（挂在角色的「自带世界书」上）。
+  check('侧栏保留三个资料库入口 + 设置', foot.length === 4, String(foot.length));
+  check('设置排在预设下面', foot[3]?.id === 'btn-settings', foot.map((b) => b.id).join(','));
   check('数据按钮位于设置页', !!byId('btn-folder')?.closest('#view-settings'));
   check(
     '每颗都带图标',
@@ -4104,17 +4109,17 @@ await scenario('侧栏：入口网格与收起', async () => {
     byId('btn-folder') ? byId('btn-folder').textContent.trim() : '(没有)'
   );
 
-  // --- 底部最后一行 = 账号格（设置只在登录后的账号菜单里，这里没有齿轮）---
+  // --- 底部最后一行 = 账号格（它上面那行是「设置」，设置不再藏在账号菜单里）---
   {
     const acct = document.querySelector('.sidebar-account');
     const acctBtn = byId('btn-account');
     check(
-      '底部有账号条，而且没有常显的设置齿轮',
-      !!acct && !!acctBtn && !byId('btn-settings'),
-      byId('btn-settings') ? '齿轮还在' : ''
+      '底部有账号条，设置是侧栏常显入口',
+      !!acct && !!acctBtn && !!byId('btn-settings'),
+      byId('btn-settings') ? '' : '设置不在侧栏'
     );
     check(
-      '账号条排在创作入口下面（最底那一行）',
+      '账号条排在设置入口下面（最底那一行）',
       !!acct &&
         foot.length > 0 &&
         acct.getBoundingClientRect().top >= foot[foot.length - 1].getBoundingClientRect().bottom - 1
@@ -4235,6 +4240,34 @@ await scenario('侧栏：入口网格与收起', async () => {
         })
         .join(' ')
     );
+
+    // ⚠️ 四行的文字是**居中**的，居中基准是 .foot-label 这个盒子 —— 所以四个盒子
+    //    必须等宽，否则文字整体左右跑。2026-10-28 星宝指着截图说「设置右边没内容，
+    //    就跟上面的预设文字不对齐了」：根因是数字（.foot-count）当时在流里占宽度，
+    //    「设置」右边没有这颗数字，label 就宽出 8px gap + 数字宽，文字右移 7px 左右。
+    //    修法是把数字 absolute 出流（不是把文字改左对齐）。这条量盒子，不量字形 ——
+    //    只要四个盒子同宽同左，居中文字自然落在同一条中线上。
+    check(
+      '底部入口的文字居中基准一致（有没有数字都不改变 label 宽度）',
+      (() => {
+        const boxes = foot.map((b) => b.querySelector('.foot-label')?.getBoundingClientRect());
+        if (boxes.some((r) => !r)) return false;
+        const minW = Math.min(...boxes.map((r) => r.width));
+        const maxW = Math.max(...boxes.map((r) => r.width));
+        const minL = Math.min(...boxes.map((r) => r.left));
+        const maxL = Math.max(...boxes.map((r) => r.left));
+        return maxW - minW <= 0.5 && maxL - minL <= 0.5;
+      })(),
+      foot
+        .map((b) => {
+          const l = b.querySelector('.foot-label');
+          const c = b.querySelector('.foot-count');
+          const r = l.getBoundingClientRect();
+          return `${l.textContent}:${r.left.toFixed(1)}+${r.width.toFixed(1)}` +
+            `/count=${c ? getComputedStyle(c).position : '无'}`;
+        })
+        .join(' ')
+    );
   }
 
   // 收起 / 展开：收成 **60px 图标轨**、点同一颗回来
@@ -4245,11 +4278,11 @@ await scenario('侧栏：入口网格与收起', async () => {
     await sleep(150);
     check('收起后加上 collapsed', sidebar.classList.contains('collapsed'), sidebar.className);
     check('收起后为66px图标栏', Math.round(sidebar.getBoundingClientRect().width) === 66, String(Math.round(sidebar.getBoundingClientRect().width)));
-    check('收起后故事记录仍可见', getComputedStyle(byId('convo-list')).display !== 'none' && byId('convo-list').getBoundingClientRect().height > 0);
+    check('收起后对话记录仍可见', getComputedStyle(byId('convo-list')).display !== 'none' && byId('convo-list').getBoundingClientRect().height > 0);
     check('收起后保留加号新建', getComputedStyle(byId('btn-new')).display !== 'none' && byId('btn-new').getBoundingClientRect().height >= 34);
     check('顶栏没有重复展开按钮', !byId('btn-sidebar-reopen') && !byId('btn-cast-reopen'));
     check('故事头像仍可交互', $$('#convo-list .convo-item').every(item => item.getBoundingClientRect().height > 0));
-    check('底部创作入口仍在故事记录下方', $('.sidebar-foot').getBoundingClientRect().top >= byId('convo-list').getBoundingClientRect().bottom - 1);
+    check('底部入口仍在对话记录下方', $('.sidebar-foot').getBoundingClientRect().top >= byId('convo-list').getBoundingClientRect().bottom - 1);
 
     // --- 稿子屏 2 的图标轨：品牌方块 + 6 颗图标 + 最底下当前会话头像 ---
     // 这一节是 2026-10-12 晚补的：之前收起态是 `> *:not(.sidebar-toggle){display:none}`，
@@ -4267,8 +4300,8 @@ await scenario('侧栏：入口网格与收起', async () => {
       railMark ? String(Math.round(railMark.getBoundingClientRect().width)) : '（没有）'
     );
     check(
-      '收起后 3 颗创作入口图标都还在，只是文字藏了',
-      foot.length === 3 &&
+      '收起后 4 颗底部入口的图标都还在，只是文字藏了',
+      foot.length === 4 &&
         foot.every((b) => getComputedStyle(b).display !== 'none' && !!b.querySelector('svg')) &&
         foot.every((b) => {
           const label = b.querySelector('.foot-label');
@@ -4348,14 +4381,14 @@ await scenario('侧栏：入口网格与收起', async () => {
 //     一个盖住界面的弹窗、一个变了的侧栏都会把它们带歪。
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-//  场景：账号全流程 —— 注册 → 左下角菜单 → 设置页个人信息 → 凭证登录
+//  场景：账号全流程 —— 注册 → 左下角菜单 → 个人中心 → 凭证登录
 //
 //  ⚠️ 图形码是**图**，自动测试读不到；主进程只在 MIMITALE_ACCOUNT_TEST=1 时把答案
 //     一起回给界面，渲染层挂在输入框的 dataset.answer 上（界面上不显示）。
 //  ⚠️ 邮箱带时间戳：冒烟的数据目录是复用的，写死一个值第二次跑就会「已注册」。
 //  ⚠️ 场景结束必须**退出登录并关掉弹窗** —— 后面还有布局和截图断言。
 // ---------------------------------------------------------------------------
-await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证登录', async () => {
+await scenario('账号：注册 → 左下角菜单 → 个人中心 → 凭证登录', async () => {
   const answerOf = (sel) => {
     const node = $(sel);
     return node ? String(node.dataset.answer || '') : '';
@@ -4383,7 +4416,8 @@ await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证�
     click('#btn-account-menu-logout');
     await waitFor('清掉上一次的登录态', () => !loggedIn());
   }
-  check('未登录时没有设置入口（齿轮早就不在了）', !byId('btn-settings'));
+  // 2026-10-28 起设置是公开入口：未登录也能进（账号相关的东西在「个人中心」）
+  check('未登录时侧栏照样有设置入口', !!byId('btn-settings'));
   check('未登录时点账号格开的是登录窗', true);
 
   click('#btn-account');
@@ -4409,12 +4443,19 @@ await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证�
   fill('#acc-reg-email', email);
 
   // 先故意填错：验「图形码没过，就不给邮箱发验证码」
+  // ⚠️ 记住这张图的答案再去撞错 —— 图形码是一次性的，撞错之后服务端那张就作废了，
+  //    下面必须等到**答案真的变了**才能提交「正确」的那次。只判「非空」会立刻通过，
+  //    于是又拿着作废的答案去提交，服务端报「校验码不对」，界面提示永远等不到。
+  const staleAnswer = answerOf('#acc-reg-captcha');
   fill('#acc-reg-captcha', 'ZZZZ');
   click('#btn-account-send-code');
   await waitFor('错误提示出现', () => errText('#acc-reg-error').length > 0);
   check('图形码不对时明确拒绝', /校验码/.test(errText('#acc-reg-error')), errText('#acc-reg-error'));
   check('被拒之后提示里没有验证码', !/\d{6}/.test($('#acc-reg-hint')?.textContent || ''));
-  await waitFor('换了一张新图', () => !!answerOf('#acc-reg-captcha'));
+  await waitFor('换了一张新图', () => {
+    const now = answerOf('#acc-reg-captcha');
+    return !!now && now !== staleAnswer;
+  });
 
   // 这次填对
   fill('#acc-reg-captcha', answerOf('#acc-reg-captcha'));
@@ -4454,49 +4495,109 @@ await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证�
   check('侧栏那一格跟着变成用户名', $('#account-name')?.textContent.trim() === '烟雾测试员',
     $('#account-name')?.textContent);
   check('侧栏头像用的是刚选那张', ($('#account-avatar img')?.src || '').startsWith('data:image/jpeg'));
-  check('登录后设置只在账号菜单里，侧栏没有齿轮', !byId('btn-settings'));
+  // 2026-10-28：设置搬到侧栏常显（登录与否都在），账号菜单里换成「个人中心」
+  check('设置是侧栏常显入口（登录后仍在）', !!byId('btn-settings'));
   check('登录后副标题（邮箱）不再占一行', getComputedStyle($('#account-sub')).display === 'none');
 
   // --- 左下角菜单 ---
   click('#btn-account');
   await waitFor('账号菜单弹出', () => shown('#account-menu'));
   check(
-    '菜单正好三项：设置 / 意见反馈 / 退出登录',
+    '菜单正好三项：个人中心 / 意见反馈 / 退出登录',
     $$('#account-menu .menu-item').length === 3,
     String($$('#account-menu .menu-item').length)
   );
-  check('菜单里有「设置」并写着快捷键', /Ctrl/.test($('#btn-account-open-settings')?.textContent || ''),
-    $('#btn-account-open-settings')?.textContent?.trim());
+  check(
+    '菜单第一项是「个人中心」（不再是设置）',
+    $('#btn-account-open-profile')?.textContent.trim() === '个人中心' &&
+      !byId('btn-account-open-settings'),
+    $('#btn-account-open-profile')?.textContent?.trim()
+  );
   check('菜单往上弹（贴在账号格上方）', (() => {
     const menu = $('#account-menu')?.getBoundingClientRect();
     const btn = $('#btn-account')?.getBoundingClientRect();
     return !!menu && !!btn && menu.bottom <= btn.top + 1;
   })());
 
-  // 意见反馈：现在只是占位，点发送要诚实地说没发出去
+  // 意见反馈：2026-10-28 接上真服务器（POST /api/client/feedback）。
+  // ⚠️ 这一条**需要后端在跑**（和上面注册登录一样），后端不在时会看到
+  //    「没发出去」的提示 —— 那不是回归，是环境问题。
   click('#btn-account-feedback');
   await waitFor('意见反馈弹窗打开', () => shown('#feedback-modal'));
   check('反馈窗收起了账号菜单', !shown('#account-menu'));
   fill('#feedback-text', '冒烟用的一条反馈');
   click('#btn-feedback-send');
-  await waitFor('点发送有回应', () => /还没接上/.test($('#toast')?.textContent || ''));
-  check('没后端时不假装发送成功', /还没接上/.test($('#toast')?.textContent || ''), $('#toast')?.textContent);
-  check('内容没被清掉（用户写的东西留着）', ($('#feedback-text')?.value || '').length > 0);
-  click('#btn-close-feedback');
-  await waitFor('反馈窗关掉', () => !shown('#feedback-modal'));
+  const toastText = () => $('#toast')?.textContent || '';
+  await waitFor('点发送有回应', () => /收到了|没发出去/.test(toastText()));
+  check('发送有明确回应（成或不成都说清楚）', /收到了/.test(toastText()), toastText());
+  check('发成功就关窗', !shown('#feedback-modal'));
+  check('发成功才清空输入框', ($('#feedback-text')?.value || '').trim() === '');
 
-  // --- 设置 → 个人信息 ---
+  // --- 个人中心：资料 / 账号安全 / 会员与邀请 三组 ---
   click('#btn-account');
   await waitFor('菜单再打开', () => shown('#account-menu'));
-  click('#btn-account-open-settings');
-  await waitFor('切到设置页', () => shown('#view-settings'));
-  await waitFor('个人信息那一栏可见', () => shown('#sec-user'));
-  check('个人信息是第一栏（默认就选中它）',
-    $('#sec-user')?.classList.contains('hidden') === false &&
-      document.querySelector('.settings-nav-item.active')?.getAttribute('data-target') === 'sec-user');
+  click('#btn-account-open-profile');
+  await waitFor('切到个人中心', () => shown('#view-profile'));
+  await waitFor('「资料」那组可见', () => shown('#sec-profile'));
+  const profileNav = () =>
+    $('#view-profile .settings-nav-item.active')?.getAttribute('data-target') || '';
+  check('个人中心默认落在「资料」组', profileNav() === 'sec-profile', profileNav());
+  check(
+    '个人中心四组导航：资料 / 账号安全 / 会员与邀请 / 通知',
+    $$('#view-profile .settings-nav-item').map((i) => i.getAttribute('data-target')).join(',') ===
+      'sec-profile,sec-security,sec-member,sec-notice',
+    $$('#view-profile .settings-nav-item').map((i) => i.getAttribute('data-target')).join(',')
+  );
+  // 通知公告（2026-10-28）：第四组，和登录无关 —— 内容由 views/announcements.js 铺
+  click('[data-target="sec-notice"]');
+  await waitFor('切到「通知」组', () => shown('#sec-notice'));
+  const noticeListText = ($('#notice-profile-list')?.textContent || '').trim();
+  check('「通知」组有内容（列表或空状态都给一句）', noticeListText.length > 0, noticeListText.slice(0, 40));
+  check('聊天页有公告横条容器', !!byId('notice-strip'));
+  check('公告弹窗默认关着', !shown('#notice-modal'));
+
+  // 「展开看过才算已读」—— 未登录时服务端记不了，本地也必须留一份。
+  // ⚠️ 库里没公告时这一段跳过（不是失败）：冒烟不能依赖后台发过公告。
+  const firstNotice = $('#notice-profile-list .notice-item');
+  if (firstNotice) {
+    const noticeId = firstNotice.getAttribute('data-id');
+    firstNotice.click();
+    await waitFor('点开一条公告就算看过', () => {
+      try {
+        const local = JSON.parse(localStorage.getItem('mimitale_notice_read') || '[]');
+        return local.map(String).includes(String(noticeId));
+      } catch {
+        return false;
+      }
+    });
+    check(
+      '看过的那条带上 is-read 标记',
+      !!document
+        .querySelector(`#notice-profile-list .notice-item[data-id="${noticeId}"]`)
+        ?.classList.contains('is-read')
+    );
+  } else {
+    check('这次库里没有生效中的公告（跳过已读链路）', true);
+  }
+
+  click('[data-target="sec-profile"]');
+  await waitFor('切回「资料」组', () => shown('#sec-profile'));
+
+  // 这一屏跟设置页长得一样：左导航 + 右内容，但**没有**页头「保存」——
+  // 每改一项立刻生效，摆一颗保存按钮等于问用户「你到底存不存」。
+  check(
+    '个人中心没有页头「保存」按钮',
+    !document.querySelector('#view-profile #btn-save-profile') &&
+      !$('#view-profile .page-actions')
+  );
   check('账号菜单点完自己收起', !shown('#account-menu'));
   check('资料头显示的是用户名', $('#user-name-view')?.textContent.trim() === '烟雾测试员',
     $('#user-name-view')?.textContent);
+
+  // 会员文案在「会员与邀请」那组
+  click('#view-profile .settings-nav-item[data-target="sec-member"]');
+  await waitFor('「会员与邀请」那组可见', () => shown('#sec-member'));
+  check('切组之后「资料」收起来', !shown('#sec-profile'));
 
   // 注册送的是「免费天数」，不是会员 —— 文案必须这么说，否则用户以为自己买过会员。
   // 徽章里放不下「还剩 N 天」，那是下面那行的活儿。
@@ -4505,6 +4606,10 @@ await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证�
   check('徽章写「免费中」（不是会员等级）',
     $('#user-member-badge')?.textContent.trim() === '免费中',
     $('#user-member-badge')?.textContent);
+
+  // 凭证卡在「账号安全」那组
+  click('#view-profile .settings-nav-item[data-target="sec-security"]');
+  await waitFor('「账号安全」那组可见', () => shown('#sec-security'));
 
   await waitFor('凭证图生成', () => ($('#user-voucher')?.src || '').startsWith('data:image/png'), 6000);
   const voucher = await pngSize($('#user-voucher').src);
@@ -4540,6 +4645,10 @@ await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证�
     '非 PNG 应当读不出'
   );
 
+  // 改用户名 / 改邮箱在「资料」那组（改密码在「账号安全」，下面切过去）
+  click('#view-profile .settings-nav-item[data-target="sec-profile"]');
+  await waitFor('回到「资料」组', () => shown('#sec-profile'));
+
   // 改用户名：侧栏那一格要跟着变；改完再改回去
   fill('#user-name-input', '改名试一下');
   click('#btn-user-save-name');
@@ -4549,7 +4658,9 @@ await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证�
   click('#btn-user-save-name');
   await waitFor('名字改回来', () => $('#account-name')?.textContent.trim() === '烟雾测试员');
 
-  // 改密码：当前密码错 → 拒绝；对了 → 成功（再改回原密码）
+  // 改密码在「账号安全」那组：当前密码错 → 拒绝；对了 → 成功（再改回原密码）
+  click('#view-profile .settings-nav-item[data-target="sec-security"]');
+  await waitFor('切到「账号安全」组', () => shown('#sec-security'));
   fill('#user-pass-current', '错误的密码');
   fill('#user-pass-new', 'abcdefgh');
   fill('#user-pass-confirm', 'abcdefgh');
@@ -4568,7 +4679,9 @@ await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证�
   click('#btn-user-save-pass');
   await sleep(400);
 
-  // 改邮箱：新邮箱 + 图形码 + 验证码
+  // 改邮箱：新邮箱 + 图形码 + 验证码（回「资料」那组）
+  click('#view-profile .settings-nav-item[data-target="sec-profile"]');
+  await waitFor('回「资料」组改邮箱', () => shown('#sec-profile'));
   await waitFor('邮箱块的校验码出来', () => !!answerOf('#user-email-captcha'));
   const newEmail = `smoke${Date.now()}b@example.com`;
   fill('#user-email-input', newEmail);
@@ -4590,9 +4703,15 @@ await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证�
   click('#btn-account-menu-logout');
   await waitFor('退出后侧栏回到未登录', () => $('#account-name')?.textContent.trim() === '未登录');
   check('退出登录走的是菜单那一项', $('#account-name')?.textContent.trim() === '未登录');
+  // 退出时人还站在个人中心：那一屏未登录只剩一句「还没登录」，所以要把人送走
+  check('退出登录后自动离开个人中心', !shown('#view-profile'));
 
   click('#btn-account');
-  await waitFor('未登录点开还是登录窗', () => shown('#account-modal'));
+  try {
+    await waitFor('未登录点开还是登录窗', () => shown('#account-modal'));
+  } catch (e) {
+    throw new Error(`${e.message} | name=${JSON.stringify($('#account-name')?.textContent)} | menu=${shown('#account-menu')} | modal=${shown('#account-modal')} | view=${document.querySelector('.view:not(.hidden)')?.id}`);
+  }
   click('#btn-goto-voucher');
   await waitFor('切到凭证面板', () => shown('#account-pane-voucher'));
 
@@ -4611,7 +4730,11 @@ await scenario('账号：注册 → 左下角菜单 → 个人信息 → 凭证�
   await waitFor('退出后可再进凭证面板', () => $('#account-name')?.textContent.trim() === '未登录');
 
   click('#btn-account');
-  await waitFor('未登录点开还是登录窗', () => shown('#account-modal'));
+  try {
+    await waitFor('未登录点开还是登录窗', () => shown('#account-modal'));
+  } catch (e) {
+    throw new Error(`${e.message} | name=${JSON.stringify($('#account-name')?.textContent)} | menu=${shown('#account-menu')} | modal=${shown('#account-modal')} | view=${document.querySelector('.view:not(.hidden)')?.id}`);
+  }
   click('#btn-goto-voucher');
   await waitFor('切到凭证面板', () => shown('#account-pane-voucher'));
   fill('#acc-voucher-code', codeOnCard.toLowerCase());

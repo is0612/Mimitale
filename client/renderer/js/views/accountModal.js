@@ -10,7 +10,7 @@
 //    voucher  抄 24 位凭证码登录
 //
 //  ⚠️ 「已登录」不再是这块弹窗的一屏：登录成功后弹窗直接关掉，侧栏那一格变成
-//     头像 + 用户名；资料 / 密码 / 凭证都在**设置 → 个人信息**（views/userSettings.js）。
+//     头像 + 用户名；资料 / 密码 / 凭证都在**个人中心**（views/userSettings.js）。
 //
 //  ⚠️ 这里只画界面、收输入，请求都在 data/account.js（它再走 preload → 主进程假后端）。
 //  ⚠️ 不 import views/account.js —— 侧栏那一格的刷新由入口层注入 onSessionChange，
@@ -267,7 +267,7 @@ async function pickAvatar() {
 
 function afterLogin(user, message) {
   onSessionChange(user);
-  // 2026-10-23：不再跳「我的账号」面板 —— 关掉弹窗，账号相关的都在设置 → 个人信息
+  // 2026-10-23：不再跳「我的账号」面板 —— 关掉弹窗，账号相关的都在个人中心
   closeAccountModal();
   resetForms();
   if (message) showToast(message, 'ok');
@@ -470,7 +470,7 @@ async function submitVoucherLogin() {
  */
 export function openAccountModal(which) {
   if (accountUser()) {
-    showToast('已经登录了，改资料去「设置 → 个人信息」', 'ok');
+    showToast('已经登录了，改资料去「个人中心」', 'ok');
     return;
   }
   if (which === 'register') {
