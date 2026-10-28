@@ -1000,6 +1000,14 @@ function registerIpc() {
   ipcMain.handle('account:announcement-read', accountCall((id) => accountApi.markAnnouncementRead(id)));
 
   /**
+   * --- 免费额度（没有会员 / 免费天数时每天 20 条）---
+   * 计数在服务端，客户端只问「还能不能发」。三个都要登录。
+   */
+  ipcMain.handle('account:consume-message', accountCall(() => accountApi.consumeMessage()));
+  ipcMain.handle('account:message-quota', accountCall(() => accountApi.messageQuota()));
+  ipcMain.handle('account:refund-message', accountCall(() => accountApi.refundMessage()));
+
+  /**
    * 生图：走 OpenAI 的 /images/generations，只支持「同步返回图片」的服务商（和聊天是两套配置）。
    */
   ipcMain.handle('images:generate', async (_event, payload) => {

@@ -326,7 +326,10 @@ export function openProfile(section) {
 
   // 已经在这一屏：不重灌内容（会把正在填的邮箱 / 密码冲掉），只切组
   if (currentViewName() === 'profile') {
-    if (wanted) showProfileSection(wanted);
+    if (wanted) {
+      showProfileSection(wanted);
+      focusSectionEntry(wanted);
+    }
     return;
   }
   if (wanted) currentSectionId = wanted;
@@ -336,8 +339,20 @@ export function openProfile(section) {
 
   renderUserSection();
   showView('profile');
-  // 焦点落在页头「返回」上（别聚焦输入框：type=password 一获得焦点就整段选中）
-  if (nodes.btnBack) nodes.btnBack.focus();
+  if (!focusSectionEntry(wanted) && nodes.btnBack) {
+    // 焦点落在页头「返回」上（别聚焦输入框：type=password 一获得焦点就整段选中）
+    nodes.btnBack.focus();
+  }
+}
+
+/**
+ * 落到某一组时焦点给谁。
+ * 「会员与邀请」是被人从「额度用完了」引过来的，直接给卡密框；其余不给（返回按钮兜底）。
+ */
+function focusSectionEntry(section) {
+  if (section !== 'sec-member' || !nodes.redeemCode) return false;
+  nodes.redeemCode.focus({ preventScroll: true });
+  return true;
 }
 
 /** 离开个人中心，回到进来之前那一屏 */

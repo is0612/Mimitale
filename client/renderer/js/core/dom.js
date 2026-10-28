@@ -22,6 +22,7 @@ export const el = {
   input: $('input'),
   hintText: $('hint-text'),
   usageText: $('usage-text'),
+  quotaLine: $('quota-line'),
   btnNew: $('btn-new'),
   btnSend: $('btn-send'),
   btnThinking: $('btn-thinking'),

@@ -1399,8 +1399,10 @@ await scenario('角色编辑器：高级设置和写作区同一套稿纸卡', a
 
   if (cards.length === 3) {
     const head = getComputedStyle(cards[0].querySelector('.field-head'));
+    // ⚠️ 别写死 '1px'：dpr 1.25 的机器上 1px 描边会被算成 0.8px（这台机器一直如此）
     check('头栏有分隔线（和写作卡同一条规则）',
-      head.borderBottomWidth === '1px', head.borderBottomWidth);
+      head.borderBottomStyle === 'solid' && parseFloat(head.borderBottomWidth) > 0,
+      `${head.borderBottomStyle} ${head.borderBottomWidth}`);
     check('头栏左右内边距 = 16（写作卡同一值）',
       head.paddingLeft === '16px' && head.paddingRight === '16px', `${head.paddingLeft}/${head.paddingRight}`);
     const card = getComputedStyle(cards[0]);
@@ -2870,10 +2872,23 @@ await scenario('输入框：快捷短语面板', async () => {
 
   const rows = $$('#quick-menu .quick-item');
   check('面板里铺出了快捷短语行', rows.length >= 10, String(rows.length));
+  check('第一行是「旁白」', /旁白/.test(rows[0].textContent), rows[0].textContent);
+  // 名字和插入内容一样时不再重复一遍（原来「继续（继续）」那种）
   check(
-    '第一行是「旁白」，右侧预览就是插进输入框的原文（连括号）',
-    /旁白/.test(rows[0].textContent) && /（旁白：）/.test(rows[0].textContent),
+    '「旁白」那行不重复显示一遍相同的插入文本',
+    !rows[0].querySelector('.quick-hint'),
     rows[0].textContent
+  );
+  const pushHintRow = rows.find((r) => r.querySelector('.quick-name').textContent === '推进剧情');
+  check(
+    '插入内容和名字不同的行照样带预览（推进剧情）',
+    !!pushHintRow && /（推进剧情到下一个场景）/.test(pushHintRow.textContent),
+    pushHintRow ? pushHintRow.textContent : '（没找到 推进剧情 那一行）'
+  );
+  check(
+    '面板里有分组标题',
+    $$('#quick-menu .quick-group').length >= 2,
+    String($$('#quick-menu .quick-group').length)
   );
   // 符号行没有预览（插进去的就是符号本身，没什么可预告的）
   const heartRow = rows.find((r) => r.querySelector('.quick-name').textContent === '♡');
@@ -4953,6 +4968,20 @@ await scenario('账号：注册 → 左下角菜单 → 个人中心 → 凭证�
   click('#btn-account-menu-logout');
   await waitFor('收尾退出', () => $('#account-name')?.textContent.trim() === '未登录');
   await waitFor('账号弹窗是关着的', () => !shown('#account-modal'));
+
+  // ⚠️ 退出验完还得用凭证码登回来：后面的世界书 / 预设 / RAG / 剧情选项场景都要真发消息，
+  //    而「未登录不许发」是产品规则（输入框会被锁）。
+  await openLoginModal('登回来');
+  click('#btn-goto-voucher');
+  await waitFor('切到凭证面板（登回来）', () => shown('#account-pane-voucher'));
+  fill('#acc-voucher-code', codeOnCard);
+  click('#btn-account-voucher-login');
+  await waitFor('凭证码登回来', () => !shown('#account-modal'));
+  check(
+    '收尾用凭证码登回来（后面场景才发得出消息）',
+    $('#account-name')?.textContent.trim() === '烟雾测试员',
+    $('#account-name')?.textContent
+  );
 });
 
 await scenario('编辑弹窗的放大按钮', async () => {

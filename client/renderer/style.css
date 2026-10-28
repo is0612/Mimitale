@@ -3099,6 +3099,11 @@ body.pad-dragging {
   min-height: 62px;
 }
 
+/* 未登录：输入框只读（属性打在宿主上，规约落到里层那颗原生框） */
+.composer-box #input[data-locked] > textarea {
+  cursor: not-allowed;
+}
+
 .composer-box m-button.btn-send {
   flex: 0 0 auto;
 }
@@ -3168,6 +3173,15 @@ body.pad-dragging {
   }
 }
 
+/* 分组标题（前缀 / 整句 / 符号）：不是可点行，别吃 .menu-item 的 hover 底色。
+   左边距和行内文字对齐（menu-pop 6 + menu-item 12）。 */
+.quick-group {
+  padding: 6px 12px 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
+}
+
 .quick-item {
   justify-content: flex-start;
   gap: 16px;
@@ -3179,9 +3193,7 @@ body.pad-dragging {
 }
 
 /* 括注（渲染时就带着一对全角括号，见 views/quickPhrases.js）：比名字淡一档，
-   别抢「这一行叫什么」。
-   ⚠️ 名字和括注相同时**照样显示**（看图上的「继续（继续）」）——
-   括注是「点了插进什么」的预览，不是解释。 */
+   别抢「这一行叫什么」。只在 insert 比名字多说了点什么时才渲染。 */
 .quick-hint {
   flex: 0 1 auto;
   min-width: 0;
@@ -3276,10 +3288,38 @@ m-button.btn-send > .mi-btn__control {
   margin: 0;
   padding: 2px;
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  /* 靠右排：额度那条自己用 margin-right:auto 抢走左边的空白，
+     其余（本次用量、键盘提示）自然贴在右端 */
+  justify-content: flex-end;
+  gap: 12px;
   font-size: var(--fs-xs);
   color: var(--text-faint);
   margin-top: 10px;
+}
+
+/* 中间那条「本次用量」没内容时别占一格（gap 会多留一段空白） */
+.composer-hint #usage-text:empty {
+  display: none;
+}
+
+/* 免费额度（没会员时才出现）：贴左，把用量和键盘提示挤到右边 */
+.quota-line {
+  margin-right: auto;
+  color: var(--text-faint);
+}
+
+.quota-line[data-state='low'] {
+  color: var(--accent);
+}
+
+.quota-line[data-state='out'] {
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.quota-line[data-state='out']:hover {
+  text-decoration: underline;
 }
 
 /* 滑块：吃满剩余宽度（轨道样式复用文件里那条通用 input[type=range] 规则） */

@@ -153,5 +153,47 @@ export async function changeEmail(payload) {
 export async function redeemCard(code) {
   const result = unwrap(await api.accountRedeem({ code }), '兑换失败');
   cachedUser = result.user || null;
+  // 刚加了天数，之前「已用满」的快照立刻作废，否则兑换完还得等下一次刷新才能发
+  quotaSnapshot = null;
   return { user: cachedUser, grant: result.grant || null };
+}
+
+// ---------------------------------------------------------------------------
+//  免费额度（没有会员 / 免费天数时每天 N 条）
+//
+//  ⚠️ 计数在服务端，这里只缓存「最近一次问到的结果」，给界面做提前拦截用。
+//     真正决定放不放行的是每次发送前那一次 consume —— 别用这个缓存当权威。
+// ---------------------------------------------------------------------------
+
+/** 最近一次拿到的额度快照；null = 还没问过 */
+let quotaSnapshot = null;
+
+/** 登录态变了（登录 / 登出 / 兑换）就清掉，下次用到时重新问 */
+export function resetMessageQuota() {
+  quotaSnapshot = null;
+}
+
+export function messageQuotaSnapshot() {
+  return quotaSnapshot;
+}
+
+/** 扣一条 → { allowed, unlimited, limit, used, remaining, day } */
+export async function consumeMessage() {
+  const result = unwrap(await api.accountConsumeMessage(), '额度查询失败');
+  quotaSnapshot = result;
+  return result;
+}
+
+/** 只查不扣 */
+export async function messageQuota() {
+  const result = unwrap(await api.accountMessageQuota(), '额度查询失败');
+  quotaSnapshot = result;
+  return result;
+}
+
+/** 退一条（模型调用完全没产出时） */
+export async function refundMessage() {
+  const result = unwrap(await api.accountRefundMessage(), '退额度失败');
+  quotaSnapshot = result;
+  return result;
 }

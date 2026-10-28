@@ -16,7 +16,10 @@ import { controlOf } from '../ui/auto-grow.js';
 import { mTextarea, mButton } from '../components/index.js';
 import { persistConversations, beginConversationReplacement, endConversationReplacement } from '../data/persist.js';
 import { ensureConvoEndpoint, isBridgeProvider } from '../data/providers.js';
-import { isLoggedIn } from '../data/account.js';
+import { isLoggedIn, consumeMessage, messageQuota, messageQuotaSnapshot, refundMessage } from '../data/account.js';
+import { confirmDialog } from '../ui/confirm.js';
+import { openAccountModal } from './accountModal.js';
+import { openProfile } from './userSettings.js';
 import { buildApiMessages, characterContextForConvo, effectiveSampling } from '../data/messages.js';
 import { matchWorldbookSections } from '../data/cast.js';
 import { recallSection } from '../data/rag.js';
@@ -99,6 +102,159 @@ export function autoGrowInput() {
   box.style.height = `${Math.min(box.scrollHeight, CONFIG.MAX_INPUT_HEIGHT)}px`;
 }
 
+// ---------------------------------------------------------------------------
+//  使用权限：有会员 / 免费天数的人不限量，没有的话每天 20 条
+//
+//  ⚠️ 数字由服务端定（lib/quota.ts），这里只问「还能不能发」，不自己算 ——
+//     本地算的话改系统时间、改本地数据就能绕。
+// ---------------------------------------------------------------------------
+
+const INPUT_PLACEHOLDER = '写下你的回应，让故事继续……';
+
+let lockedHintBound = false;
+
+/** 模型一个字都没吐出来时把额度退回去；错了就算了，别打扰用户 */
+function refundQuietly() {
+  refundMessage().catch((err) => console.warn('[quota] 退额度失败:', (err && err.message) || err));
+}
+
+/**
+ * 问服务端还能不能发。
+ * ⚠️ 拉不到就放行：账号服务器是自建的，不能因为它抖一下就让所有人发不出消息。
+ */
+async function askQuota(charge) {
+  try {
+    if (charge) return await consumeMessage();
+    // 不扣数的入口（重新生成 / 帮我想想）只看还有没有余额；快照说还有就不打扰服务端
+    const snapshot = messageQuotaSnapshot();
+    if (snapshot && (snapshot.unlimited || snapshot.remaining > 0)) return { ...snapshot, allowed: true };
+    const fresh = await messageQuota();
+    return { ...fresh, allowed: !!fresh.unlimited || fresh.remaining > 0 };
+  } catch (err) {
+    console.warn('[quota] 额度接口不可用，本次放行:', (err && err.message) || err);
+    return { allowed: true, degraded: true };
+  }
+}
+
+function showQuotaDialog(info) {
+  const limit = info && info.limit ? info.limit : 20;
+  void confirmDialog({
+    title: '今天的免费额度用完了',
+    message: `免费用户每天 ${limit} 条，明天 0 点恢复。开通订阅或输入卡密可以立刻继续。`,
+    confirmText: '去输卡密'
+  }).then((go) => { if (go) openProfile('sec-member'); });
+}
+
+function showLoginDialog() {
+  void confirmDialog({
+    title: '登录后才能发消息',
+    message: '账号用来记每天的免费额度，订阅和卡密也挂在账号上。',
+    confirmText: '去登录'
+  }).then((go) => { if (go) openAccountModal(); });
+}
+
+/**
+ * 输入框下面那行「今天还剩 N 条」。
+ * ⚠️ 有权益（会员 / 免费天数）时整行隐藏：那时候数字没意义，显示出来只会让人
+ *    以为自己被限流了。
+ */
+function renderQuotaLine(info) {
+  const line = el.quotaLine;
+  if (!line) return;
+  if (!info || info.unlimited || !isLoggedIn()) {
+    line.classList.add('hidden');
+    line.textContent = '';
+    line.removeAttribute('data-state');
+    return;
+  }
+  const left = Number.isFinite(info.remaining) ? info.remaining : 0;
+  const limit = info.limit || 20;
+  line.classList.remove('hidden');
+  if (left > 0) {
+    line.dataset.state = left <= 3 ? 'low' : 'normal';
+    line.textContent = `今天还剩 ${left} 条免费消息（每天 ${limit} 条）`;
+  } else {
+    line.dataset.state = 'out';
+    line.textContent = `今天的 ${limit} 条免费消息用完了，明天 0 点恢复 · 输入卡密可以立刻继续`;
+  }
+}
+
+/** 拉一次最新额度并画出来；拉不到就保持原样（别把「服务器抖了」显示成「用完了」） */
+async function refreshQuotaLine() {
+  if (!isLoggedIn()) {
+    renderQuotaLine(null);
+    return;
+  }
+  try {
+    renderQuotaLine(await messageQuota());
+  } catch (err) {
+    console.warn('[quota] 读取剩余条数失败:', (err && err.message) || err);
+  }
+}
+
+let quotaHintBound = false;
+
+/**
+ * 这条能不能发出去。
+ * @param {{charge?: boolean}} options charge=true 扣一条（发送 / 继续）；不传按扣一条算
+ * @returns {Promise<object|null>} 放行返回额度信息（调用方可能拿它判断要不要退），拦了返回 null
+ */
+async function allowSend(options = {}) {
+  if (!isLoggedIn()) {
+    showLoginDialog();
+    return null;
+  }
+  const info = await askQuota(options.charge !== false);
+  if (info.allowed) {
+    // 扣完立刻把「还剩几条」刷新掉，别等下一次启动
+    if (!info.degraded) renderQuotaLine(info);
+    return info;
+  }
+  showQuotaDialog(info);
+  return null;
+}
+
+/**
+ * 不扣数的生成入口（帮我想想 / 换一批）用这颗：只确认今天还有余额。
+ * 由入口层注入给 views/suggestionsUi.js —— 那边不 import 这里，免得两个视图互相依赖。
+ */
+export function optionsAllowed() {
+  return allowSend({ charge: false });
+}
+
+/**
+ * 未登录时把输入框锁上。
+ * ⚠️ 用 readOnly 不用 disabled：disabled 收不到点击，用户点了没反应就以为卡死了；
+ *    readOnly 照样能聚焦能点，我们才有机会把登录窗递过去。
+ */
+export function applyComposerAccess() {
+  const locked = !isLoggedIn();
+  el.input.readOnly = locked;
+  el.input.placeholder = locked ? '登录后才能发消息……' : INPUT_PLACEHOLDER;
+  if (el.input.toggleAttribute) el.input.toggleAttribute('data-locked', locked);
+
+  // 额度那行跟着登录态走：未登录直接收起，已登录去问一次服务端
+  if (locked) renderQuotaLine(null);
+  else void refreshQuotaLine();
+
+  if (!quotaHintBound && el.quotaLine) {
+    quotaHintBound = true;
+    // 用完了点这一行 = 想继续用，直接送到兑换框
+    el.quotaLine.addEventListener('click', () => {
+      if (el.quotaLine.dataset.state === 'out') openProfile('sec-member');
+    });
+  }
+
+  if (!lockedHintBound) {
+    lockedHintBound = true;
+    el.input.addEventListener('pointerdown', () => {
+      if (!el.input.readOnly) return;
+      applyComposerAccess();
+      showLoginDialog();
+    });
+  }
+}
+
 /**
  * 发一条消息；真发出返回 true，任何早退路径返回 false，调用方必须先看返回值再清空输入框。
  */
@@ -111,12 +267,24 @@ export async function sendMessage(text) {
     return false;
   }
 
+  // 未登录先拦住：后面那几条「登录后才能配置模型服务」对游客来说太绕了
+  if (!isLoggedIn()) {
+    showLoginDialog();
+    return false;
+  }
+
+  // 扣额度放在建会话之前：被挡住时不该在会话列表里留一条空的「新对话」
+  const quota = await allowSend({ charge: true });
+  if (!quota) return false;
+
   let convo = activeConvo();
   if (!convo) convo = createConvo(true);
 
   // 用当前会话绑定的服务商 + 模型；没绑过就用全局默认
   const endpoint = ensureConvoEndpoint(convo);
   if (!endpoint) {
+    // 扣了但发不了 = 这条没生成，把额度退回去（fail-open 时没扣，退了反而白送）
+    if (!quota.degraded) refundQuietly();
     // 未登录进不了设置，别把人往一个不可达的地方引
     if (!isLoggedIn()) {
       showToast('登录后才能配置模型服务', 'error');
@@ -127,6 +295,7 @@ export async function sendMessage(text) {
     return false;
   }
   if (!endpoint.provider.apiKey && !isBridgeProvider(endpoint.provider)) {
+    if (!quota.degraded) refundQuietly();
     if (!isLoggedIn()) {
       showToast('登录后才能配置模型服务', 'error');
       return false;
@@ -150,7 +319,7 @@ export async function sendMessage(text) {
   renderAll({ forceScroll: true });
   persistConversations();
 
-  await requestCompletion(convo);
+  await requestCompletion(convo, { charged: true });
   return true;
 }
 
@@ -366,6 +535,9 @@ export async function continueLastMessage() {
     return;
   }
 
+  if (!(await allowSend({ charge: true }))) return;
+  const contentBefore = String(last.content || '');
+
   invalidateConvoDerivedRequests(convo);
   setStreaming(true);
   try {
@@ -381,6 +553,8 @@ export async function continueLastMessage() {
     // 续写也可能整轮不提状态表（这条路径绕开了 requestCompletion 的补问），要补一次
     await ensurePanelWritten(convo, endpoint, worldbook, ragSection, last);
   } catch (err) {
+    // 一个字都没续上 = 这次等于没生成，把刚扣的那条退回去
+    if (String(last.content || '') === contentBefore) refundQuietly();
     showToast((err && err.message) || '继续失败', 'error');
   } finally {
     streamPainter.stop();
@@ -640,6 +814,9 @@ async function requestCompletion(convo, options) {
     const message = (err && err.message) || '未知错误';
     const stopped = /已停止生成/.test(message);
 
+    // 扣过额度又一个字没吐出来（Key 填错 / 断网 / 厂商 4xx）：退回这一条
+    if (options && options.charged && !(assistant && String(assistant.content || '').trim())) refundQuietly();
+
     // Regeneration is transactional: failure or cancellation restores the original history.
     if (options && options.rollback) {
       options.rollback();
@@ -695,9 +872,12 @@ async function requestCompletion(convo, options) {
 }
 
 /** 重新生成：删掉这条之后的内容再问一次；老回复作为候选留着，可用「‹ 2/3 ›」翻回 */
-export function regenerateFrom(index) {
+export async function regenerateFrom(index) {
   const convo = activeConvo();
   if (!convo || state.streaming) return;
+
+  // 重新生成不扣条数，但「今天已经用满」的人不能再白用模型
+  if (!(await allowSend({ charge: false }))) return;
 
   // 第一次重新生成时，当前正文就是第一个候选
   const target = convo.messages[index];

@@ -453,6 +453,28 @@ async function markAnnouncementRead(id) {
 }
 
 /**
+ * 免费额度：没有会员 / 免费天数的人每天能发几条。
+ *
+ * 计数全在服务端 —— 客户端这边只是问一句「还能不能发」，不自己算。
+ * 三条都必须带 token：服务端只认 token 里的人是谁。
+ */
+
+/** 扣一条（发送 / 继续 之前调）→ { allowed, unlimited, limit, used, remaining, day } */
+async function consumeMessage() {
+  return request('POST', '/client/usage/message', { auth: true });
+}
+
+/** 只查剩余，不扣 → 同上，但没有 allowed */
+async function messageQuota() {
+  return request('GET', '/client/usage/message', { auth: true });
+}
+
+/** 退一条（模型调用完全没产出时）→ { refunded, ... } */
+async function refundMessage() {
+  return request('POST', '/client/usage/message/refund', { auth: true });
+}
+
+/**
  * 客户端使用会话上报。
  *
  * 一次「打开软件到关闭」对应服务端 client_sessions 里的一行：
@@ -560,6 +582,9 @@ module.exports = {
   submitFeedback,
   listAnnouncements,
   markAnnouncementRead,
+  consumeMessage,
+  messageQuota,
+  refundMessage,
   // 给测试/排查用：当前账号服务器地址
   apiBase: API_BASE
 };

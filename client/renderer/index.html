@@ -201,8 +201,11 @@
           </div>
         </div>
         <div class="composer-hint">
-          <span id="hint-text">Enter 发送 · Shift + Enter 换行</span>
+          <!-- 免费额度（2026-10-28）：和键盘提示同一行、贴在左边。
+               没会员、免费天数也过期了才出现，有权益时整条不占位；剩 0 条时可点，跳兑换。 -->
+          <span id="quota-line" class="quota-line hidden" role="status" aria-live="polite"></span>
           <span id="usage-text"></span>
+          <span id="hint-text">Enter 发送 · Shift + Enter 换行</span>
         </div>
 
         <button id="pad-handle-left" class="pad-handle" data-side="left" type="button"

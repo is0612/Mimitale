@@ -1,7 +1,7 @@
 'use strict';
 
 // 输入框左边的「快捷短语」面板：点一行把整条指令插进光标处，焦点还给输入框。
-// ⚠️ 是「插进去」不是「直接发出去」：前四条是前缀；「点一下就发」由剧情选项（views/suggestionsUi.js）负责。
+// ⚠️ 是「插进去」不是「直接发出去」：带冒号的那几条只是前缀；「点一下就发」由剧情选项（views/suggestionsUi.js）负责。
 
 import { el } from '../core/dom.js';
 import { iconHtml } from '../ui/icons.js';
@@ -9,27 +9,50 @@ import { h, clear } from '../ui/build.js';
 
 /**
  * name 面板行显示的名字；insert 真正插进输入框的文字；preview:false = 该行不显示预览。
+ * group 决定分组标题（prefix = 插完接着写，sentence = 插了就能发，symbol = 符号）。
  * ⚠️ insert 整条带**全角括号**原样进输入框：不能在渲染面板时才补括号（那样发出去的没有括号）。
- * ⚠️ 前四条是前缀（末尾冒号是给用户接着写内容用的），别顺手改成整句。
+ * ⚠️ 前五条是前缀（末尾冒号是给用户接着写内容用的），别顺手改成整句。
  */
 export const QUICK_PHRASES = [
   // —— 前缀类：插完光标停在右括号**里面**，接着写内容 ——
-  { name: '旁白', insert: '（旁白：）' },
-  { name: 'OOC', insert: '（OOC：）' },
-  { name: '内心', insert: '（内心：）' },
-  { name: '摄像机视角', insert: '（摄像机视角：）' },
+  { name: '旁白', insert: '（旁白：）', group: 'prefix' },
+  { name: 'OOC', insert: '（OOC：）', group: 'prefix' },
+  { name: '内心', insert: '（内心：）', group: 'prefix' },
+  { name: '摄像机视角', insert: '（摄像机视角：）', group: 'prefix' },
+  // 带破折号 = 留给用户补「过了多久」，所以它也是前缀
+  { name: '时间流逝', insert: '（时间流逝——）', group: 'prefix' },
   // —— 整句指令：插进来直接发就行 ——
-  { name: '描写画面', insert: '（描写当前画面）' },
-  { name: '详细描写', insert: '（详细描写）' },
-  { name: '继续', insert: '（继续）' },
-  { name: '推进剧情', insert: '（推进剧情到下一个场景）' },
-  { name: '时间流逝', insert: '（时间流逝——）' },
-  { name: '加快节奏', insert: '（加快节奏）' },
+  { name: '描写画面', insert: '（描写当前画面）', group: 'sentence' },
+  { name: '详细描写', insert: '（把这一段展开写细）', group: 'sentence' },
+  { name: '继续', insert: '（继续）', group: 'sentence' },
+  { name: '推进剧情', insert: '（推进剧情到下一个场景）', group: 'sentence' },
+  { name: '加快节奏', insert: '（加快节奏）', group: 'sentence' },
   // —— 符号：没有可预览的指令，不显示预览那一栏 ——
-  { name: '♡', insert: '♡', preview: false },
-  { name: '♡……', insert: '♡……', preview: false },
-  { name: '♪', insert: '♪', preview: false }
+  { name: '♡', insert: '♡', preview: false, group: 'symbol' },
+  { name: '♡……', insert: '♡……', preview: false, group: 'symbol' },
+  { name: '♪', insert: '♪', preview: false, group: 'symbol' }
 ];
+
+/** 分组标题。缺 group 的行不画标题，直接接在上一组后面。 */
+const GROUP_TITLE = {
+  prefix: '前缀 · 插完接着写',
+  sentence: '整句 · 插了就能发',
+  symbol: '符号'
+};
+
+/**
+ * 右侧那栏只在「insert 比名字多说了点什么」时才有意义，否则就是把左边重复一遍。
+ * 末尾的冒号 / 破折号算语气，不算信息（「旁白（旁白：）」这类就是纯重复）。
+ */
+function hintOf(phrase) {
+  if (phrase.preview === false) return '';
+  const inner = String(phrase.insert)
+    .replace(/^（/, '')
+    .replace(/）$/, '')
+    .replace(/[：—]+$/, '')
+    .trim();
+  return inner === String(phrase.name).trim() ? '' : phrase.insert;
+}
 
 /**
  * 纯函数（不碰 DOM，可在裸 Node 里测）：把 insert 插进 [start, end) 区间，返回新值和光标位。
@@ -55,7 +78,7 @@ export function applyInsert(value, start, end, insert) {
 let isOpen = false;
 let initialized = false;
 
-/** 面板里的行。占位文字（将来若加分组标题）是 div，天然被排除在外 */
+/** 面板里的行。分组标题是 div，天然被排除在外 */
 function rows() {
   return el.quickMenu ? Array.from(el.quickMenu.querySelectorAll('.quick-item')) : [];
 }
@@ -86,7 +109,16 @@ function insertPhrase(text) {
 
 function renderRows() {
   clear(el.quickMenu);
+  let group = '';
   for (const phrase of QUICK_PHRASES) {
+    // 分组标题只是装饰：rows() 按 .quick-item 取行，这些 div 天然被排除
+    if (phrase.group && phrase.group !== group) {
+      group = phrase.group;
+      if (GROUP_TITLE[group]) {
+        el.quickMenu.appendChild(h('div', { class: 'quick-group', role: 'presentation', text: GROUP_TITLE[group] }));
+      }
+    }
+    const hint = hintOf(phrase);
     el.quickMenu.appendChild(
       h(
         'button',
@@ -102,8 +134,8 @@ function renderRows() {
           }
         },
         h('span', { class: 'quick-name', text: phrase.name }),
-        // 右侧预览 = 插入内容的原文（同一个字符串，不另存一份 —— 两处各写一遍迟早对不上）。
-        phrase.preview === false ? null : h('span', { class: 'quick-hint', text: phrase.insert })
+        // 右侧只在有增量信息时显示（和名字相同的就不重复第二遍）
+        hint ? h('span', { class: 'quick-hint', text: hint }) : null
       )
     );
   }

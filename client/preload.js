@@ -157,6 +157,11 @@ contextBridge.exposeInMainWorld('mimitale', {
   accountAnnouncements: () => ipcRenderer.invoke('account:announcements'),
   accountAnnouncementRead: (id) => ipcRenderer.invoke('account:announcement-read', id),
 
+  // 免费额度：没有会员 / 免费天数时每天 20 条。计数在服务端，这里只负责问
+  accountConsumeMessage: () => ipcRenderer.invoke('account:consume-message'),
+  accountMessageQuota: () => ipcRenderer.invoke('account:message-quota'),
+  accountRefundMessage: () => ipcRenderer.invoke('account:refund-message'),
+
   // --- 杂项 ---
   copyText: (text) => ipcRenderer.invoke('util:copy', text),
   saveFile: (payload) => ipcRenderer.invoke('util:saveFile', payload),

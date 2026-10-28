@@ -137,6 +137,10 @@ export async function requestMoreOptions(convo, { trigger = null, tag = 'options
     // ⚠️ 必须在第一个 await 之前 —— 否则要等一拍才闪出来。
     actions.setOptionsLoading(true);
 
+    // 帮我想想 / 换一批 不扣条数，但「今天已经用满」的人不能再白用模型。
+    // ⚠️ 必须排在骨架屏之后：这个 await 会把骨架屏推迟一拍，冒烟和肉眼都能看出来。
+    if (actions.guard && !(await actions.guard())) return 'busy';
+
     // 复用 buildApiMessages（带人设 / 世界书 / 面板），否则模型只看到一截裸对话
     const worldbook = await matchWorldbookSections(convo);
     if (!isCurrent()) return false;

@@ -1050,14 +1050,38 @@ function registerStubs() {
       return { ok: false, error: (err && err.message) || '账号操作失败' };
     }
   };
-  ipcMain.handle('account:session', accountCall(() => accountApi.getSession()));
+
+  // ⚠️ 登录门（未登录锁输入框）会把所有发消息场景挡死，而临时数据目录里没有登录态。
+  //    这里先给一个假会话；只要冒烟里点过「退出登录」就不再兜底，
+  //    后面依赖「未登录」布局的场景照旧成立（侧栏 / 账号那两场都会先退出）。
+  let sessionStubbed = true;
+  const SMOKE_USER = {
+    id: 'smoke-user',
+    email: 'smoke@example.com',
+    nickname: '冒烟',
+    inviteCode: 'SMOKE001',
+    referralCode: 'SMOKE001',
+    freeExpireAt: null,
+    membershipExpireAt: null
+  };
+  ipcMain.handle('account:session', accountCall(() => (sessionStubbed ? { user: SMOKE_USER } : accountApi.getSession())));
+
+  // 额度三条：假会话没有真 token，打到服务端只会 401 再被 fail-open 兜住 —— 不如直接给「有权益」。
+  const quotaStub = { unlimited: true, limit: 20, used: 0, remaining: 0, day: '2026-01-01' };
+  ipcMain.handle('account:message-quota', accountCall(() => quotaStub));
+  ipcMain.handle('account:consume-message', accountCall(() => ({ ...quotaStub, allowed: true })));
+  ipcMain.handle('account:refund-message', accountCall(() => ({ ...quotaStub, refunded: true })));
   ipcMain.handle('account:captcha', accountCall(() => accountApi.createCaptcha()));
   ipcMain.handle('account:send-code', accountCall((payload) => accountApi.sendEmailCode(payload)));
   ipcMain.handle('account:register', accountCall((payload) => accountApi.register(payload)));
   ipcMain.handle('account:complete-profile', accountCall((payload) => accountApi.completeProfile(payload)));
   ipcMain.handle('account:login', accountCall((payload) => accountApi.login(payload)));
   ipcMain.handle('account:voucher-login', accountCall((payload) => accountApi.loginWithVoucher(payload)));
-  ipcMain.handle('account:logout', accountCall(() => accountApi.logout()));
+  ipcMain.handle('account:logout', accountCall(() => {
+    // 点过退出就不再兜底：之后的场景要的就是真实的「未登录」
+    sessionStubbed = false;
+    return accountApi.logout();
+  }));
   ipcMain.handle('account:voucher', accountCall(() => accountApi.getVoucher()));
   ipcMain.handle('account:update-profile', accountCall((payload) => accountApi.updateProfile(payload)));
   ipcMain.handle('account:change-password', accountCall((payload) => accountApi.changePassword(payload)));
