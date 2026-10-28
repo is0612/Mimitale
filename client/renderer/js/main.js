@@ -68,7 +68,7 @@ import { initQuickPhrases } from './views/quickPhrases.js';
 import { initThinkingToggle } from './views/thinkingToggle.js';
 import { showView, refreshLibraryPage, initViewSwitch } from './views/viewSwitch.js';
 // 侧栏左下角的账号格与账号弹窗：登录流程接好后在这里注入 openLogin
-import { initAccount, renderAccount } from './views/account.js';
+import { initAccount, renderAccount, noticeExpiry } from './views/account.js';
 import {
   initAccountModal,
   openAccountModal,
@@ -569,6 +569,7 @@ async function init() {
       // 换人了，上一个账号的「今天还剩几条」必须作废
       resetMessageQuota();
       applyComposerAccess();
+      noticeExpiry(user);
       // 登录 / 登出之后「谁看过哪条公告」换了一套（匿名只记在本机），
       // 未读数和横条都得重算 —— 不然刚登录的人会看到一份旧的红点
       void refreshAnnouncements({ silent: true });
@@ -580,6 +581,7 @@ async function init() {
       renderAccount(user);
       // 兑换卡密 / 改资料都会回到这里：会员变了，输入框的锁和额度快照都要跟着变
       applyComposerAccess();
+      noticeExpiry(user);
     }
   });
   initFeedbackModal();
@@ -597,8 +599,11 @@ async function init() {
       if (!el.viewProfile.classList.contains('hidden')) leaveProfile();
     }
   })
-    // 登录态一确定就把输入框的锁画对（未登录只读）
-    .then(() => applyComposerAccess())
+    // 登录态一确定就把输入框的锁画对（未登录只读），顺带看一眼试用/会员是不是快到期
+    .then((user) => {
+      applyComposerAccess();
+      noticeExpiry(user);
+    })
     .catch((err) => console.error('读取登录状态失败', err));
   // 角色卡那几颗按钮都跨分区，动作由入口层交给列表页。
   initCharacterList({

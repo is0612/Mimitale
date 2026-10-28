@@ -38,8 +38,13 @@ import {
   redeemCard
 } from '../data/account.js';
 
-const nodes = {};
+/**
+ * 卡密从哪买 —— 填微信号 / QQ / 淘宝链接都行，留空就说「联系作者购买」。
+ * ⚠️ 只改这一处，别去改 index.html 里的那句（那边是占位）。
+ */
+const BUY_CONTACT = '';
 
+const nodes = {};
 /** 入口层注入：未登录时那颗「登录 / 注册」按钮开哪儿 */
 let openLogin = null;
 /** 入口层注入：资料变了之后刷新侧栏那一格 */
@@ -89,6 +94,8 @@ function cacheNodes() {
   nodes.btnRedeem = $('btn-user-redeem');
   nodes.redeemMsg = $('user-redeem-msg');
   nodes.redeemError = $('user-redeem-error');
+  nodes.buyHint = $('user-buy-hint');
+  if (nodes.buyHint) nodes.buyHint.textContent = BUY_CONTACT ? `加 ${BUY_CONTACT} 购买` : '联系作者购买';
 
   nodes.inviteCode = $('user-invite-code');
   nodes.inviteCount = $('user-invite-count');

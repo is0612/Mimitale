@@ -435,8 +435,9 @@ function messageNode(message, index, character, labels, ctx) {
     const regen = document.createElement('button');
     regen.className = 'mini-btn';
     regen.textContent = isError ? '重试' : '重新生成';
-    regen.title = isError ? '重新发送上一条消息' : '重新生成这条回复';
-    regen.setAttribute('aria-label', isError ? '重新发送上一条消息' : '重新生成这条回复');
+    // ⚠️ 重新生成也扣一条额度（和发送 / 继续一样），悬停要说出来，不然用户只会觉得「怎么又少一条」
+    regen.title = isError ? '重新发送上一条消息（算一条额度）' : '重新生成这条回复（算一条额度）';
+    regen.setAttribute('aria-label', regen.title);
     regen.addEventListener('click', () => regenerateFrom(index));
     direct.push(regen);
 

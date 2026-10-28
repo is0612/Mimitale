@@ -132,8 +132,14 @@ export function initAccount(opts = {}) {
   // 开局先画成未登录，再去主进程问一次真实登录态（失败当未登录，不拦启动）
   renderAccount(null);
   return loadAccount()
-    .then((user) => renderAccount(user))
-    .catch(() => renderAccount(null));
+    .then((user) => {
+      renderAccount(user);
+      return user;
+    })
+    .catch(() => {
+      renderAccount(null);
+      return null;
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -179,5 +185,48 @@ export function renderAccount(user) {
     } else {
       el.accountAvatar.innerHTML = iconHtml('user', 'account-icon');
     }
+  }
+}
+
+/** 存「哪个到期日已经提醒过」 */
+const EXPIRY_NOTICE_KEY = 'mimitale.expiry-notice';
+/** 提前几天提醒 */
+const EXPIRY_NOTICE_DAYS = 3;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 试用 / 会员快到期时提醒一次。
+ * ⚠️ 记的是**哪个到期日**提醒过，不是「提醒过没有」：续期后 until 变了，还会再提醒一次。
+ * ⚠️ 一点权益都没有（until 为空）就别提醒了 —— 他已经在按每天 20 条跑，说了也是废话。
+ */
+export function noticeExpiry(user) {
+  const m = user && user.membership;
+  if (!m || !m.until) return;
+
+  const days = Math.ceil((new Date(m.until).getTime() - Date.now()) / DAY_MS);
+  if (days > EXPIRY_NOTICE_DAYS) return;
+
+  let noticed = '';
+  try {
+    noticed = localStorage.getItem(EXPIRY_NOTICE_KEY) || '';
+  } catch {
+    // 隐私模式下 localStorage 会抛，提醒照发，只是记不住
+  }
+  if (noticed === m.until) return;
+
+  const isMember = m.memberDaysLeft !== null && m.memberDaysLeft !== undefined;
+  const who = isMember ? '会员' : '免费试用';
+  showToast(
+    days > 0
+      ? `${who}还剩 ${days} 天 · 到期后每天 20 条，兑换卡密可以继续`
+      : `${who}已到期 · 现在起每天 20 条，兑换卡密可以继续`,
+    days > 0 ? undefined : 'error',
+    { durationMs: 7000 }
+  );
+
+  try {
+    localStorage.setItem(EXPIRY_NOTICE_KEY, m.until);
+  } catch {
+    // 同上
   }
 }

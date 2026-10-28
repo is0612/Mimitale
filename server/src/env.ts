@@ -43,7 +43,7 @@ export const env = {
    * 只在没有真实邮件通道时有意义 —— 本地开发时省得开 mailpit。
    * 生产必须为 false（docker-compose 里已经这么设了）。
    */
-  devEchoCode: process.env.DEV_ECHO_CODE !== 'false',
+  devEchoCode: process.env.DEV_ECHO_CODE === 'true',
 
   /**
    * 信任反向代理转发来的 X-Forwarded-For。
