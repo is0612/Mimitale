@@ -76,7 +76,6 @@ const levelOptions = computed(() => dict.optionsOf('membership_level'))
 
 /** 字典 card_note —— 备注分类的快捷选项 */
 const noteOptions = computed(() => dict.optionsOf('card_note'))
-
 const genHint = computed(() => {
   const n = Number(genForm.count)
   if (!Number.isFinite(n) || n < 1) return '至少 1 张'
@@ -93,7 +92,10 @@ function openGenerate(): void {
   genForm.days = 30
   genForm.level = levelOptions.value[0]?.value ?? 'basic'
   genForm.expireDays = 0
-  genForm.note = noteOptions.value[0]?.value ?? ''
+  // ⚠️ 这里必须取 label 而不是 value：卡密的 note 列存的是**显示名**（「种子用户」），
+  //    下拉的选项 value 也是 label。原来取的是 o.value（'seed'），和选项对不上，
+  //    el-select 就把原始值原样显示出来 —— 弹窗里那个「seed」就是这么来的。
+  genForm.note = noteOptions.value[0]?.label ?? ''
   genVisible.value = true
 }
 

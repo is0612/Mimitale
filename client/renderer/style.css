@@ -3107,7 +3107,6 @@ body.pad-dragging {
 /* ---------------------- 输入框：快捷短语面板 ---------------------- */
 .btn-quick {
   flex: 0 0 auto;
-  align-self: flex-end;
   width: 32px;
   height: 32px;
   display: inline-flex;
@@ -3949,8 +3948,10 @@ m-button.btn-new > .mi-btn__control:hover {
   text-overflow: ellipsis;
 }
 
-.composer-box .btn-quick {
-  order: 1;
+/* ⚠️ 这里**不能**写 order（原来写的是 order: 1）：2026-10-28 这颗按钮从
+   .composer-box 的直接子级搬进了 .tools-left，后代选择器照样命中，
+   于是它在左组里排到了「故事，由你续写」**后面**（图上就是文字在前、✦ 在后）。 */
+.compose-tools .btn-quick {
   width: 30px;
   height: 30px;
 }
