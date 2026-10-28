@@ -70,6 +70,19 @@ const db = new pg.Client({ connectionString: process.env.DATABASE_URL })
 await db.connect()
 
 /**
+ * 开跑之前先把**上一次**留下的烟雾残骸清掉。
+ *
+ * ⚠️ 上一次如果中途崩了（服务端被重启、断言抛错、Ctrl+C），收尾那段不会跑到，
+ *    库里就会留着几个 `smoke...@example.com` 的假账号，把「今日注册」撑大，
+ *    而看列表的人根本不知道那是谁 —— 自己清一次，比每次都要人肉排查强。
+ * ⚠️ 只删 `smoke%` 这一类：那是本脚本专用的邮箱前缀，绝不会碰到真人。
+ */
+await db.query(`DELETE FROM login_logs WHERE customer_id IN (SELECT id FROM customers WHERE email LIKE 'smoke%@example.com')`)
+await db.query(`DELETE FROM membership_grants WHERE customer_id IN (SELECT id FROM customers WHERE email LIKE 'smoke%@example.com')`)
+await db.query(`DELETE FROM customers WHERE email LIKE 'smoke%@example.com'`)
+await db.query(`DELETE FROM login_codes WHERE email LIKE 'smoke%@example.com'`)
+
+/**
  * 解析数据库里的时间。
  *
  * ⚠️ 这张库的时间列是 `timestamp(3)`（**没有**时区标记），Prisma 往里写的是 UTC 值。
