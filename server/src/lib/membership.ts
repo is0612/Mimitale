@@ -1,6 +1,6 @@
 import { prisma } from '../prisma.js'
 import { DAY_MS } from './time.js'
-import type { Customer, Prisma } from '../generated/prisma/client.js'
+import type { Customer, Prisma } from '../generated/prisma/client'
 
 /**
  * 加天数的唯一入口。

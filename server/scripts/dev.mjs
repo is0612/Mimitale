@@ -86,10 +86,15 @@ step(2, '等 Postgres 就绪')
   console.log('  连上了')
 }
 
-/* ---------------- ③ 迁移 ---------------- */
+/* ---------------- ③ 迁移 + 重新生成客户端 ---------------- */
 
-step(3, '同步库结构')
+step(3, '同步库结构并重新生成客户端')
 await run(process.execPath, [PRISMA, 'migrate', 'deploy'])
+
+// ⚠️ 这一步不能省：schema 加了模型/字段而 client 没重新生成时，
+//    代码里 `prisma.新模型` 会是 undefined，报的是
+//    「Cannot read properties of undefined (reading 'groupBy')」这种看不懂的错。
+await run(process.execPath, [PRISMA, 'generate'])
 
 /* ---------------- ④ 播种 + 启动 ---------------- */
 

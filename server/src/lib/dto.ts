@@ -13,7 +13,7 @@ import type {
   OperationLog,
   DictType,
   DictItem
-} from '../generated/prisma/client.js'
+} from '../generated/prisma/client'
 
 /**
  * 数据库行 → 接口数据。

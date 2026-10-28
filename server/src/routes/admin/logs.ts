@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import type { Prisma } from '../../generated/prisma/client.js'
+import type { Prisma } from '../../generated/prisma/client'
 import { prisma } from '../../prisma.js'
 import { ok } from '../../lib/reply.js'
 import { toLog } from '../../lib/dto.js'

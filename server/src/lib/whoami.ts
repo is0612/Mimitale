@@ -1,5 +1,5 @@
 import type { FastifyRequest } from 'fastify'
-import type { Admin } from '../generated/prisma/client.js'
+import type { Admin } from '../generated/prisma/client'
 import { prisma } from '../prisma.js'
 
 /**

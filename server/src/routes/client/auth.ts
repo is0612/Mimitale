@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import type { ClientUser } from '@contract'
-import type { Customer } from '../../generated/prisma/client.js'
+import type { Customer } from '../../generated/prisma/client'
 import { prisma } from '../../prisma.js'
 import { env } from '../../env.js'
 import { ApiCode } from '../../lib/codes.js'
