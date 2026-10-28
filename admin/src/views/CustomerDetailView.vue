@@ -36,7 +36,8 @@ import {
   formatTime,
   freeDaysLeft,
   freeState,
-  membershipState
+  membershipState,
+  MEMBER_NAME
 } from '@/config/labels'
 import type { TagType } from '@/config/labels'
 import type { ClientSession, CustomerDetail, GrantSource } from '@/types'
@@ -73,7 +74,7 @@ function memberLabel(c: CustomerDetail): string {
   const s = membershipState(c)
   if (s === 'none') return '非会员'
   if (s === 'expired') return '已过期'
-  return dict.labelOf('membership_level', c.membershipLevel)
+  return MEMBER_NAME
 }
 
 function memberTag(c: CustomerDetail): TagType {
@@ -208,7 +209,7 @@ onMounted(load)
             </span>
             <span v-else class="muted">—</span>
           </el-descriptions-item>
-          <el-descriptions-item label="会员等级">
+          <el-descriptions-item label="会员">
             <el-tag :type="memberTag(detail)" size="small" disable-transitions>{{ memberLabel(detail) }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="免费天数">
@@ -566,7 +567,7 @@ onMounted(load)
   color: #b4b2a9;
 }
 
-/* 会员等级后面那颗「试用 / 后台开通」 */
+/* 会员后面那颗「试用 / 后台开通」 */
 /* 免费天数快用完（≤7 天）—— 这是最该推付费的时刻，得显眼一点 */
 .warn {
   color: #b8791a;

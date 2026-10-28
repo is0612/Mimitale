@@ -8,7 +8,7 @@ import { pushLog, type LogEntry } from '../../lib/log.js'
 import { toCard, toCustomer, toLog } from '../../lib/dto.js'
 import { currentAdmin } from '../../lib/whoami.js'
 import { dayOf } from '../../lib/time.js'
-import { grantDaysIn } from '../../lib/membership.js'
+import { grantDaysIn, MEMBER_NAME } from '../../lib/membership.js'
 import { hashPassword } from '../../lib/password.js'
 import {
   TRIAL_DAYS,
@@ -204,7 +204,7 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
 
     /* ---------------- 发会员 ---------------- */
     /** 会员天数不在 data 里改 —— 它要锁行 + 写流水，只能在事务里走 grantDaysIn */
-    let grant: { level: string; label: string; days: number } | null = null
+    let grant: { level: string; days: number } | null = null
     if (body.membershipLevel !== undefined) {
       const level = String(body.membershipLevel).trim()
       const label = await dictLabel('membership_level', level)
@@ -219,7 +219,7 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
         return fail(ApiCode.INVALID_PARAM, '顺延天数要是正整数')
       }
 
-      grant = { level, label, days }
+      grant = { level, days }
     }
 
     // 一个字段都没变 —— 回原样，不写库也不写日志
@@ -246,7 +246,9 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
           {
             ...base,
             action: 'customer.membership',
-            detail: `发会员：${grant.label} +${grant.days} 天（${
+            // 只说天数，不说等级名 —— 产品上只有一档（MEMBER_NAME），
+            // 而日志是留着以后对账的，写「初级会员」将来会被当成真有分档
+            detail: `发会员：${MEMBER_NAME} +${grant.days} 天（${
               target.membershipLevel === 'none' ? '新开通' : '续费'
             }，到期 ${dayOf(result.grant.expiresAt)}）`,
             adminId: admin.id,

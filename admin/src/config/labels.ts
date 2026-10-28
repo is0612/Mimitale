@@ -124,11 +124,19 @@ export const CUSTOMER_STATUS_TAG: Record<CustomerStatus, TagType> = {
 }
 
 /**
+ * 会员在界面上的名字。只有一档，所以是常量、不查字典（2026-10-28）。
+ * 和服务端 `lib/clientUser.ts` 的 MEMBER_NAME 是同一个词 —— 改要两边一起改，
+ * 否则会出现「后台说订阅会员、客户端说初级会员」。
+ */
+export const MEMBER_NAME = '订阅会员'
+
+/**
  * 会员生效状态：none 非会员 / active 生效中 / expired 已过期。
  * 只由「等级 + 到期时间 vs 现在」推导 —— 后端不需要在表里另存一个"过期"字段。
  *
- * 等级的**显示名**走字典 membership_level（basic / medium / premium…），
- * 只有 `'none'` 这个「非会员」哨兵是代码语义、不进字典。
+ * 显示名走上面的 MEMBER_NAME，不再查 membership_level 字典：
+ * 产品上只有一档，字典里那几档（初级/中级/高级）是早期留下的，
+ * 谁在字典页改个字客户端就跟着变，是不可控因素。
  */
 export function membershipState(c: {
   membershipLevel: MembershipLevel

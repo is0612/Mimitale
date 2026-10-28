@@ -19,6 +19,14 @@ import type { Customer, Prisma } from '../generated/prisma/client'
 /** trial 注册赠送 / invite 邀请奖励 / admin 后台发 / card 卡密兑换 */
 export type GrantSource = 'trial' | 'invite' | 'admin' | 'card'
 
+/**
+ * 会员在界面上的名字。只有一档，所以是常量、不查 `membership_level` 字典
+ * （星宝 2026-10-28：「会员等级好像用不上，直接订阅会员就好了」）。
+ * 字典里那几档（初级/中级/高级）是早期留下的，谁改字典谁就改了客户端文案 —— 不可控。
+ * 库里 `membership_level` 那列保留、恒 basic，将来真分档时再拿它算。
+ */
+export const MEMBER_NAME = '订阅会员'
+
 export type Wallet = 'free' | 'member'
 
 interface GrantInput {

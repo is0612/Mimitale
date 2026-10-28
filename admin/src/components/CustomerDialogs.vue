@@ -8,14 +8,14 @@
  * 用法：父组件放 `<CustomerDialogs ref="dialogs" @done="load" />`，
  *      然后在按钮里调 `dialogs.value?.openMembership(row)`。
  *
- * 封禁原因和会员等级都来自**字典**，所以运营在字典页加一条，
- * 这里的下拉立刻多一个选项。
+ * 封禁原因来自**字典**，所以运营在字典页加一条，这里的下拉立刻多一个选项。
+ * （会员等级以前也走字典，2026-10-28 只剩一档之后改成常量 MEMBER_NAME 了。）
  */
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createCustomer, deleteCustomer, updateCustomer } from '@/api/customer'
 import { useDictStore } from '@/stores/dict'
-import { formatTime, membershipState } from '@/config/labels'
+import { formatTime, membershipState, MEMBER_NAME } from '@/config/labels'
 import type { Customer } from '@/types'
 
 const emit = defineEmits<{ done: [] }>()
@@ -99,7 +99,7 @@ const memberSummary = computed(() => {
   const s = membershipState(t)
   if (s === 'none') return '当前：非会员，开通后从今天起算'
   if (s === 'expired') return `当前：已过期（${formatTime(t.membershipExpireAt)}），续费从今天起算`
-  return `当前：${dict.labelOf('membership_level', t.membershipLevel)}，${formatTime(
+  return `当前：${MEMBER_NAME}，${formatTime(
     t.membershipExpireAt
   )} 到期（续费从到期日顺延）`
 })

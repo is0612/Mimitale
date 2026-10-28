@@ -794,6 +794,13 @@ section('客户端：图形码 → 发码 → 注册两步')
   const redeemed = await api('POST', '/api/client/redeem', { token: clientToken, body: { code: sloppy } })
   check('小写不带横杠也能兑', redeemed.code === 0, `code=${redeemed.code} ${redeemed.message ?? ''}`)
   check('回的是新会员状态', redeemed.data?.user?.membership?.level === 'basic', String(redeemed.data?.user?.membership?.level))
+  // 会员只有一档、显示名是常量 MEMBER_NAME（2026-10-28 起不再查 membership_level 字典）——
+  // 谁在字典页把「初级会员」改成别的，客户端文案不该跟着变，这条会拦住。
+  check(
+    '会员名是「订阅会员」，不是字典里的「初级会员」',
+    redeemed.data?.user?.membership?.name === '订阅会员',
+    String(redeemed.data?.user?.membership?.name)
+  )
   check(
     '⭐ 会员剩 120 天（卡的 90 天 + 注册还剩的 30 天免费并进来了，不是被盖掉）',
     Math.abs((redeemed.data?.user?.membership?.memberDaysLeft ?? 0) - 120) <= 1,

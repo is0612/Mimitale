@@ -16,7 +16,8 @@ import {
   formatTime,
   freeDaysLeft,
   freeState,
-  membershipState
+  membershipState,
+  MEMBER_NAME
 } from '@/config/labels'
 import type { Customer, CustomerStatus } from '@/types'
 import type { TagType } from '@/config/labels'
@@ -70,7 +71,7 @@ function openDetail(row: Customer): void {
  * 注册用户等级是 none，但他有 30 天免费天数，显示「非会员」会让人以为他一点权益都没有。
  */
 function memberLabel(row: Customer): string {
-  if (membershipState(row) === 'active') return dict.labelOf('membership_level', row.membershipLevel)
+  if (membershipState(row) === 'active') return MEMBER_NAME
   const free = freeDaysLeft(row)
   if (free !== null) return `免费 ${free} 天`
   if (membershipState(row) === 'expired' || freeState(row) === 'expired') return '已用完'
