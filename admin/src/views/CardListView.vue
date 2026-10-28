@@ -6,12 +6,13 @@
  *   ① 看：谁发的、谁用的、过期没
  *   ② 发：批量生成（一次最多 100 张，别手点 1000 次）
  *   ③ 收：把没用的作废掉
+ *   ④ 导：把当前筛选下的卡密导成 TXT（一行一个码），直接喂发卡平台或手动发货
  *
  * 备注分类走字典 card_note —— 运营想加一个「双十一活动」不用改代码。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { Download, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { createCards, fetchCards, voidCard } from '@/api/card'
 import { useDictStore } from '@/stores/dict'
 import { CARD_STATUS_LABEL, CARD_STATUS_TAG, formatTime } from '@/config/labels'
@@ -113,6 +114,88 @@ async function submitGenerate(): Promise<void> {
   }
 }
 
+/* ---------------- 导出 ---------------- */
+
+/** 一次最多导多少张。真要几万张时应该先按备注/状态收窄，而不是把浏览器拉爆 */
+const EXPORT_MAX = 5000
+
+const exporting = ref(false)
+
+/** 文件名里的时间戳：20261028-1519 */
+function stamp(): string {
+  const d = new Date()
+  const p = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`
+}
+
+/**
+ * 把**当前筛选条件下的卡密**导成一个 TXT，一行一个码 —— 直接能喂给发卡平台的批量导入，
+ * 也能拿去手动发货。
+ *
+ * ⚠️ 导的是「全部页」不是「这一页」：导出本来就是为了把码整批交出去，只导 10 条等于没做。
+ * ⚠️ 走列表接口循环拉（pageSize 上限 100），所以有 EXPORT_MAX 兜底。
+ * ⚠️ 状态筛选是「全部」时**只导未使用且没过期**的：已用 / 作废的码发给买家会撞号，
+ *    过期的码买家填了会被服务端拒 —— 这两种混进去只会变成售后。
+ *    真的要导已用/作废的对账，把状态筛选选成那个状态再点导出。
+ * ⚠️ 不加 BOM。码是纯 ASCII，加了 BOM 反而会让第一张码变成 `\ufeffMIMI-...`，
+ *    发卡平台读进去就是一张废卡。换行用 \r\n —— 记事本和老导入工具都认。
+ */
+async function exportCodes(): Promise<void> {
+  if (exporting.value) return
+  exporting.value = true
+  try {
+    const picked: InviteCard[] = []
+    for (let page = 1; page <= Math.ceil(EXPORT_MAX / 100); page += 1) {
+      const res = await fetchCards({ ...query, page, pageSize: 100 })
+      picked.push(...res.list)
+      if (res.list.length === 0 || picked.length >= res.total) break
+    }
+
+    const clipped = picked.slice(0, EXPORT_MAX)
+    // 选「全部」→ 只留还能卖的；选了具体状态 → 就按他选的来
+    const onlyUsable = query.status === ''
+    const kept = onlyUsable
+      ? clipped.filter((c) => c.status === 'unused' && !isExpired(c))
+      : clipped
+    const expired = onlyUsable ? clipped.filter((c) => c.status === 'unused' && isExpired(c)).length : 0
+
+    if (kept.length === 0) {
+      ElMessage.warning(
+        expired > 0
+          ? `没有可用的卡密（有 ${expired} 张已过期，先在列表里作废掉）`
+          : '当前筛选下没有卡密'
+      )
+      return
+    }
+
+    const text = kept.map(c => c.code).join('\r\n') + '\r\n'
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `卡密-${kept.length}张-${stamp()}.txt`
+    document.body.append(a)
+    a.click()
+    a.remove()
+    // 立刻 revoke 有的浏览器会拿不到内容，等一下再收
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+
+    const skipped: string[] = []
+    if (clipped.length > kept.length) {
+      const usedOrVoid = clipped.filter((c) => c.status !== 'unused').length
+      if (usedOrVoid > 0) skipped.push(`${usedOrVoid} 张已用/作废`)
+      if (expired > 0) skipped.push(`${expired} 张已过期`)
+    }
+    ElMessage.success(
+      `导出 ${kept.length} 张` + (skipped.length > 0 ? `（跳过 ${skipped.join('、')}）` : '')
+    )
+  } catch {
+    // 错误提示已在 request 层统一处理
+  } finally {
+    exporting.value = false
+  }
+}
+
 /* ---------------- 复制 ---------------- */
 
 async function copy(text: string, tip = '已复制'): Promise<void> {
@@ -177,6 +260,7 @@ onMounted(load)
         <el-button @click="reset">重置</el-button>
         <div class="spacer" />
         <el-button :icon="Refresh" @click="load">刷新</el-button>
+        <el-button :icon="Download" :loading="exporting" @click="exportCodes">导出</el-button>
         <el-button type="primary" :icon="Plus" @click="openGenerate">生成卡密</el-button>
       </div>
     </el-card>
