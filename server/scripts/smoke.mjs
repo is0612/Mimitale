@@ -1030,6 +1030,20 @@ section('邀请码：自己发码 / 别人填码 / 归因')
     JSON.stringify(cardUserGrants2.rows)
   )
 
+  /* ---------------- 不变量：两个钱包永不重叠 ---------------- */
+  // 免费段要么不存在、要么整段排在会员之后。一旦重叠，那段免费天数就整段落在
+  // 会员期内（权益取更晚的那个）—— 界面看得见、用户吃不到。
+  const overlap = await db.query(
+    `SELECT id FROM customers
+      WHERE free_expire_at IS NOT NULL AND membership_expire_at IS NOT NULL
+        AND free_expire_at <= membership_expire_at`
+  )
+  check(
+    '⭐ 全库没有「免费段落在会员期内」的行（送的天数一定用得上）',
+    overlap.rows.length === 0,
+    JSON.stringify(overlap.rows)
+  )
+
   /* ---------------- 码不对要被挡住 ---------------- */
 
   const bad = await registerOne('冒烟丙', 'MIMI-ZZZZ-ZZZZ')

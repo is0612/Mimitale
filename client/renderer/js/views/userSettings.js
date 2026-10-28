@@ -386,6 +386,9 @@ function membershipCopy(m) {
   } else if (member !== null) {
     badge = m.name || '会员';
     line = member <= 1 ? '会员今天到期' : `会员剩 ${member} 天 · ${formatDay(m.memberExpireAt)} 到期`;
+    // 两个钱包永不重叠（服务端保证：免费段要么没有、要么整段排在会员之后），
+    // 所以这里剩下的免费天数是**会员结束之后**接着用的，不写出来等于白给。
+    if (free !== null && free > 0) line += `，之后还有 ${free} 天免费`;
   } else if (free !== null) {
     badge = '免费中';
     line = free <= 1 ? '免费天数今天用完' : `免费还剩 ${free} 天 · ${formatDay(m.freeExpireAt)} 到期`;

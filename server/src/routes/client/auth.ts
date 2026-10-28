@@ -15,7 +15,7 @@ import { sendLoginCode } from '../../lib/mail.js'
 import { currentCustomerId } from '../../lib/whoami.js'
 import { DAY_MS } from '../../lib/time.js'
 import { dictLabel } from '../../lib/dict.js'
-import { entitlementOf, grantDaysIn, rewardWallet } from '../../lib/membership.js'
+import { entitlementOf, grantDaysIn } from '../../lib/membership.js'
 import { openSession, touchSession, closeSession } from '../../lib/session.js'
 import {
   TRIAL_DAYS,
@@ -418,17 +418,13 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
       // ⚠️ 别用它的返回值 —— 那返回的是**邀请人**那一行，拿它当注册结果会把
       //    新注册的人替换成邀请人（token 也会发给邀请人）。只发天数，结果丢掉。
       if (invite.kind === 'customer') {
-        // 邀请人已经是会员时，奖励加进**会员**而不是免费：+7 天免费会整个落在
-        // 会员期里（权益取更晚的那个），看得见吃不到。见 lib/membership 的 rewardWallet。
-        const inviter = await tx.customer.findUnique({
-          where: { id: invite.inviterId },
-          select: { membershipExpireAt: true }
-        })
+        // wallet 写 'free'，但**邀请人已经是会员时会由 grantDaysIn 改判成会员钱包**：
+        // +7 天免费落在会员期里等于白送（权益取更晚的那个）。见 lib/membership.ts。
         await grantDaysIn(tx, {
           customerId: invite.inviterId,
           days: INVITE_BONUS_DAYS,
           source: 'invite',
-          wallet: rewardWallet(inviter?.membershipExpireAt),
+          wallet: 'free',
           refId: registered.id,
           note: `邀请了 ${registered.nickname} +${INVITE_BONUS_DAYS} 天`
         })

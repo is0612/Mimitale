@@ -78,7 +78,19 @@ export async function grantDaysIn(
   if (!locked) throw new Error(`客户 ${input.customerId} 不存在`)
 
   const now = Date.now()
-  const current = input.wallet === 'free' ? locked.free_expire_at : locked.membership_expire_at
+
+  /**
+   * 送免费天数（注册赠送 / 邀请奖励）时，对方**已经是会员**就直接记进会员钱包。
+   *
+   * ⚠️ 为什么：权益取两个钱包里更晚的那个，所以落在会员期内的免费天数一点用都没有 ——
+   *    界面显示「免费剩 7 天」，实际到期日还是会员那天（星宝 2026-10-28 撞的就是这个）。
+   * ⚠️ 放在这里而不是各个调用点：这是发天数的**唯一入口**，所有来源（含以后新增的）
+   *    都自动适用，不会再冒出「某个新渠道送了个吃不到的免费段」。
+   * ⚠️ 由此得到一条不变量：**两个钱包永不重叠** —— 免费段要么不存在、要么整段排在
+   *    会员之后。于是「权益到哪天」= 会员段 + 免费段，**送多少天就真多多少天**。
+   */
+  const wallet: Wallet = input.wallet === 'free' ? rewardWallet(locked.membership_expire_at) : input.wallet
+  const current = wallet === 'free' ? locked.free_expire_at : locked.membership_expire_at
 
   /**
    * 发会员时把**还剩的免费天数并进来**，而不是让它被会员盖住。
@@ -90,7 +102,7 @@ export async function grantDaysIn(
    * ⚠️ 只在 wallet = member 时做。加免费天数（注册赠送 / 邀请奖励）不能反向吸收会员。
    */
   const freeLeftMs =
-    input.wallet === 'member' && locked.free_expire_at
+    wallet === 'member' && locked.free_expire_at
       ? Math.max(0, locked.free_expire_at.getTime() - now)
       : 0
 
@@ -102,12 +114,12 @@ export async function grantDaysIn(
   const expiresAt = new Date(startsAt.getTime() + input.days * DAY_MS)
 
   const data: Prisma.CustomerUpdateInput =
-    input.wallet === 'free' ? { freeExpireAt: expiresAt } : { membershipExpireAt: expiresAt }
+    wallet === 'free' ? { freeExpireAt: expiresAt } : { membershipExpireAt: expiresAt }
   // ⚠️ 给会员时等级一定要有值：`clientMembership` 判断「是不是会员」看的是
   //    `level !== 'none' && 会员天数还在`。不传 level 就留成 none 的话，
   //    钱包里明明有 90 天，界面会显示成「非会员」。
   //    2026-10-28 起产品上只有一档，所以默认写 basic。
-  if (input.wallet === 'member') data.membershipLevel = input.level || 'basic'
+  if (wallet === 'member') data.membershipLevel = input.level || 'basic'
   if (freeLeftMs > 0) data.freeExpireAt = null
 
   await tx.membershipGrant.create({
