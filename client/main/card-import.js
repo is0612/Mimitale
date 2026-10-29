@@ -148,14 +148,19 @@ function characterFromCard(card, avatar, source, fallbackName, makeWorldbookId, 
 
   // 空串要原样保留（= 这张卡明确不要形象，normalizeCharacter 的三态约定）；
   // 不是空串也不是 data:image/ 的垃圾值直接不认，别把老卡变成「无形象」。
-  const extAvatar = typeof ext.avatar === 'string' && ext.avatar.startsWith('data:image/') ? ext.avatar : '';
+  const extAvatarOk = typeof ext.avatar === 'string' && (ext.avatar === '' || ext.avatar.startsWith('data:image/'));
+  const extAvatar = extAvatarOk && ext.avatar.startsWith('data:image/') ? ext.avatar : '';
   const extPortraitOk =
     typeof ext.portrait === 'string' && (ext.portrait === '' || ext.portrait.startsWith('data:image/'));
 
   const character = normalizeCharacter(
     {
       name: d.name || d.char_name || fallbackName,
-      avatar: avatar || extAvatar,
+      // PNG 像素是供外部软件识别的预览图；扩展若明确带 avatar（包括空串）就按元数据还原，
+      // 只有旧卡或外部 PNG 缺少有效的私有 avatar 时，才用整张像素图作为头像 fallback。
+      avatar: source === 'png'
+        ? (extAvatarOk ? extAvatar : avatar)
+        : (avatar || extAvatar),
       ...(extPortraitOk ? { portrait: ext.portrait } : {}),
       // 兼容 TavernAI 的 char_* / world_scenario 字段名
       description: d.description || d.char_persona,

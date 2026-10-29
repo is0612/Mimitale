@@ -115,6 +115,8 @@ function syncAllCharCounts() {
 // 编辑器的状态
 
 let editingCharacterId = null; // 角色卡里当前正在编辑的角色
+// 已有角色独立编辑副本；表单暂存只写这里，只有保存成功才提交到正式对象。
+let editingCharacterDraft = null;
 // 作用域：'library' 角色卡；'worldbook' 当前世界书里的副本（不动角色卡）
 let charEditorScope = 'library';
 // 正在编辑的角色头像（dataURL，正方形），用在消息气泡和状态卡上
@@ -129,7 +131,8 @@ let charAltGreetings = [];
 // 与主进程 main/characters.js 的 MAX_ALTERNATE_GREETINGS 对齐，否则 UI 能加、保存时被悄悄砍掉
 const MAX_ALT_GREETINGS = 50;
 // 「新建角色」的草稿：先只活在编辑器里，不进列表、不写磁盘
-let charDraft = null; // { character, scope, bookId }
+let charDraft = null; // { character, scope, bookId, createdWorldbookId? }
+const pendingWorldbookCleanup = new Set();
 // 🔴 一张卡只允许一本自带世界书（主进程 normalize 也只留一本，两边一起卡住才不会「界面能绑、重启变一本」）
 const MAX_CHAR_WORLDBOOKS = 1;
 // 属性草稿，保存角色时才写回
@@ -148,7 +151,31 @@ function editorCharacterById(id) {
   if (!id) return null;
   // 新建的草稿还没进任何列表，但编辑表单照样得能读写它
   if (charDraft && charDraft.character.id === id) return charDraft.character;
+  if (editingCharacterDraft && editingCharacterDraft.id === id) return editingCharacterDraft;
   return editorCharacterList().find((c) => c.id === id) || null;
+}
+
+function cloneCharacter(character) {
+  if (typeof structuredClone === 'function') return structuredClone(character);
+  return JSON.parse(JSON.stringify(character));
+}
+
+function formalCharacterById(id, scope = charEditorScope) {
+  if (!id) return null;
+  if (scope === 'worldbook') {
+    const bookId = charDraft && charDraft.character.id === id ? charDraft.bookId : currentWorldbook()?.id;
+    const book = worldbookById(bookId);
+    return worldbookCharacters(book).find((c) => c.id === id) || null;
+  }
+  return characters().find((c) => c.id === id) || null;
+}
+
+function syncDraftWorldbookIds(character, ids, updatedAt) {
+  if (!character || character === editingCharacterDraft || character === (charDraft && charDraft.character)) return;
+  if (editingCharacterDraft && editingCharacterDraft.id === character.id) {
+    editingCharacterDraft.worldbookIds = [...ids];
+    editingCharacterDraft.updatedAt = updatedAt;
+  }
 }
 
 /** 编辑器里现在放着的是一个还没保存的新角色吗？ */
@@ -161,10 +188,13 @@ function isCharDraft() {
 /** 进来之前停在哪一屏，离开时回到它 */
 let editorReturnView = 'chars';
 
-function openCharsModal() {
+async function openCharsModal() {
   // 谁打开它谁先设好 editingCharacterId / charEditorScope；
-  // 若编辑器已指向别的角色，说明「新建」草稿被放弃了，顺手清掉。
-  if (charDraft && editingCharacterId !== charDraft.character.id) discardCharDraft();
+  // 先等前一张草稿清理完成，避免清理旧书时竞态删除新草稿的书。
+  if (charDraft && editingCharacterId !== charDraft.character.id) {
+    if (!(await discardCharDraft())) return false;
+  }
+  if (editingCharacterDraft && editingCharacterDraft.id !== editingCharacterId) editingCharacterDraft = null;
 
   // 长文本框的接线在 fillCharForm() 里（新建和编辑两条路都经过那儿）
 
@@ -185,12 +215,17 @@ function openCharsModal() {
   showView('charEditor');
 
   if (current) {
-    fillCharForm(current);
+    const formal = isCharDraft() ? null : formalCharacterById(editingCharacterId);
+    if (formal && (!editingCharacterDraft || editingCharacterDraft.id !== formal.id)) {
+      editingCharacterDraft = cloneCharacter(formal);
+    }
+    fillCharForm(isCharDraft() ? current : editingCharacterDraft || current);
   } else {
     showCharForm(false);
   }
 
   updateCharEditorScopeUi();
+  return true;
 }
 
 /** 弹窗标题跟着作用域变，免得改半天不知道改的是哪一份 */
@@ -249,7 +284,20 @@ export async function leaveCharacterEditor({ force = false } = {}) {
 
   // 「AI 补充」还在等模型的话，走了就作废 —— 否则回来时表单会被上一张卡的内容糊上
   resetCharAiFill();
-  discardCharDraft();
+  for (const bookId of pendingWorldbookCleanup) {
+    if (!(await cleanupDraftWorldbook(bookId))) {
+      showToast('新建世界书未能清理，请重试返回', 'error');
+      return;
+    }
+    pendingWorldbookCleanup.delete(bookId);
+  }
+  if (!(await discardCharDraft())) {
+    showToast('新建角色关联的世界书未能清理，仍留在编辑器中；请重试或保存角色', 'error');
+    return;
+  }
+  editingCharacterDraft = null;
+  editingCharacterId = null;
+  showCharForm(false);
   // 回到来处；来处是聊天就回聊天（那种情况只可能从别处被程序调起来）
   showView(editorReturnView === 'charEditor' ? 'chars' : editorReturnView);
 }
@@ -593,20 +641,40 @@ async function createWorldbookForCharacter() {
   const book = await createWorldbook();
   if (!book) return;
 
+  // 角色草稿尚未落库：记住这本已经先落盘的书，放弃草稿时要一并清理。
+  if (isCharDraft()) charDraft.createdWorldbookId = book.id;
   const hadIds = Array.isArray(character.worldbookIds);
   const beforeUpdatedAt = character.updatedAt;
+  const formalCharacter = formalCharacterById(editingCharacterId);
+  const formalBeforeUpdatedAt = formalCharacter?.updatedAt;
 
   character.worldbookIds = [book.id];
   character.updatedAt = now();
+  if (formalCharacter && formalCharacter !== character) {
+    formalCharacter.worldbookIds = [...character.worldbookIds];
+    formalCharacter.updatedAt = character.updatedAt;
+    syncDraftWorldbookIds(formalCharacter, formalCharacter.worldbookIds, formalCharacter.updatedAt);
+  }
   renderCharWorldbookBox(character);
 
   // 还没保存过的新卡：内存里挂着就行，保存角色时跟着一起落盘
   if (!isCharDraft() && !(await persistLibrary())) {
     if (hadIds) character.worldbookIds = beforeIds;
     else delete character.worldbookIds;
+    if (formalCharacter && formalCharacter !== character) {
+      if (hadIds) formalCharacter.worldbookIds = beforeIds;
+      else delete formalCharacter.worldbookIds;
+      formalCharacter.updatedAt = formalBeforeUpdatedAt;
+    }
     character.updatedAt = beforeUpdatedAt;
+    // 新书已先落盘；绑定失败后删除这本无主书，不能把它遗留在没有入口的书库里。
+    if (!(await cleanupDraftWorldbook(book.id))) {
+      pendingWorldbookCleanup.add(book.id);
+      showToast('世界书未能绑定且清理失败，离开编辑器时会再次清理', 'error');
+    } else {
+      showToast('世界书没挂上这张卡，回去再新建一次', 'error');
+    }
     renderCharWorldbookBox(character);
-    showToast('世界书没挂上这张卡，回去再新建一次', 'error');
     return;
   }
 
@@ -627,19 +695,30 @@ async function deleteWorldbookFromCharacter(bookId) {
   if (!character) return;
 
   const draftCard = isCharDraft();
+  const formalCharacter = draftCard ? null : formalCharacterById(editingCharacterId);
   const beforeIds = Array.isArray(character.worldbookIds) ? [...character.worldbookIds] : [];
+  const formalBeforeIds = formalCharacter && Array.isArray(formalCharacter.worldbookIds)
+    ? [...formalCharacter.worldbookIds]
+    : [];
+  const formalBeforeUpdatedAt = formalCharacter && formalCharacter.updatedAt;
 
-  // 草稿卡还没进 state.characters —— deleteWorldbookById 摘不到它的 id，这里先摘。
-  // 删书失败要放回去，否则界面上书还在、卡却已经"没有书"。
-  if (draftCard) character.worldbookIds = beforeIds.filter((id) => id !== bookId);
+  // 仅编辑副本先摘绑定；正式记录由 deleteWorldbookById 在确认后统一解绑与持久化。
+  character.worldbookIds = beforeIds.filter((id) => id !== bookId);
 
   const deleted = await deleteWorldbookById(bookId);
 
   if (!deleted) {
-    if (draftCard) character.worldbookIds = beforeIds;
+    character.worldbookIds = beforeIds;
+    if (formalCharacter && formalCharacter !== character) {
+      formalCharacter.worldbookIds = formalBeforeIds;
+      formalCharacter.updatedAt = formalBeforeUpdatedAt;
+    }
     return;
   }
 
+  if (formalCharacter && formalCharacter !== character) {
+    syncDraftWorldbookIds(formalCharacter, character.worldbookIds, formalCharacter.updatedAt);
+  }
   renderCharWorldbookBox(character);
 }
 
@@ -647,8 +726,19 @@ async function deleteWorldbookFromCharacter(bookId) {
 
 /** 把表单内容写回内存里的角色对象（切走或保存前调用） */
 function stashCharForm() {
-  const character = editorCharacterById(editingCharacterId);
+  // 编辑器离开后旧 DOM 仍可能留在页面里；不能让导入 / 关窗 / 切屏把放弃的内容写回正式对象。
+  if (currentViewName() !== 'charEditor' || !editingCharacterId) return;
+  let character = editorCharacterById(editingCharacterId);
   if (!character || el.charForm.classList.contains('hidden')) return;
+
+  // 既有角色只能暂存到隔离副本；新建角色本身就是尚未入库的草稿。
+  if (!isCharDraft()) {
+    const formal = formalCharacterById(editingCharacterId);
+    if (formal && character === formal) {
+      editingCharacterDraft = cloneCharacter(formal);
+      character = editingCharacterDraft;
+    }
+  }
 
   character.name = el.c.name.value.trim() || '未命名角色';
   character.tags = el.c.tags.value
@@ -716,10 +806,14 @@ function newCharacter() {
 
 // 新建角色：只做草稿塞进编辑器；保存前不进列表、不写磁盘，关掉就当没建过。
 // preset 是 AI 生成的字段，填进来后与手填草稿没有区别，一样要点「保存角色」。
-function startCharDraft(preset) {
-  // 先把上一个角色的改动收进内存，再丢掉没保存完的草稿（否则留下永不创建的幽灵角色）
+async function startCharDraft(preset) {
+  // 先把当前表单写进隔离副本；新角色草稿清理未完成时不启动另一张。
   stashCharForm();
-  discardCharDraft();
+  if (charDraft && !(await discardCharDraft())) {
+    showToast('关联世界书未能清理，暂不能开始新建角色', 'error');
+    return false;
+  }
+  editingCharacterDraft = null;
 
   const scope = charEditorScope;
   const book = scope === 'worldbook' ? currentWorldbook() : null;
@@ -763,89 +857,161 @@ function startCharDraft(preset) {
   showCharacterField('c-desc');
   el.c.name.focus();
   el.c.name.select();
+  return true;
 }
 
 /** 把新建的草稿真正写进角色卡/世界书；只有点「保存角色」会走到这里 */
 function commitCharDraft() {
-  if (!charDraft) return true;
+  if (!charDraft) return null;
 
   const { character, scope, bookId } = charDraft;
+  const beforeCharacters = scope === 'worldbook' ? null : characters();
+  let book = null;
+  let beforeBookCharacters = null;
+  let beforeBookUpdatedAt;
 
   if (scope === 'worldbook') {
-    const book = worldbookById(bookId);
+    book = worldbookById(bookId);
     // 书在编辑期间被删掉了，这个草稿就没有落脚的地方
     if (!book) return false;
-    book.characters = worldbookCharacters(book);
-    book.characters.push(character);
+    beforeBookCharacters = worldbookCharacters(book);
+    beforeBookUpdatedAt = book.updatedAt;
+    book.characters = [...beforeBookCharacters, character];
     book.updatedAt = now();
   } else {
     state.characters = [...characters(), character];
   }
 
-  charDraft = null;
-  return true;
+  return { character, scope, book, beforeCharacters, beforeBookCharacters, beforeBookUpdatedAt };
+}
+
+function rollbackCharDraftCommit(committed) {
+  if (!committed) return;
+  if (committed.scope === 'worldbook') {
+    if (committed.book) {
+      committed.book.characters = committed.beforeBookCharacters;
+      committed.book.updatedAt = committed.beforeBookUpdatedAt;
+    }
+  } else {
+    state.characters = committed.beforeCharacters;
+  }
 }
 
 /** 丢掉没保存的草稿：它从来没进过任何列表，忘掉就行 */
+async function cleanupDraftWorldbook(bookId) {
+  if (!bookId) return true;
+  const book = worldbookById(bookId);
+  if (!book) return true;
+  const referencedByCharacter = characters().some((c) => Array.isArray(c.worldbookIds) && c.worldbookIds.includes(bookId));
+  const referencedByCopy = worldbooks().some((w) => worldbookCharacters(w).some((c) => Array.isArray(c.worldbookIds) && c.worldbookIds.includes(bookId)));
+  const referencedByConvo = (state.conversations || []).some((convo) =>
+    (Array.isArray(convo.worldbookIds) && convo.worldbookIds.includes(bookId)) ||
+    (convo.player && Array.isArray(convo.player.worldbookIds) && convo.player.worldbookIds.includes(bookId))
+  );
+  // 共享/会话引用不能因当前草稿的放弃被误删。
+  if (referencedByCharacter || referencedByCopy || referencedByConvo) return false;
+
+  const beforeBooks = worldbooks();
+  state.worldbooks = beforeBooks.filter((item) => item.id !== bookId);
+  if (await persistLibrary()) return true;
+  state.worldbooks = beforeBooks;
+  return false;
+}
+
 function discardCharDraft() {
-  if (!charDraft) return;
-  if (editingCharacterId === charDraft.character.id) editingCharacterId = null;
-  charDraft = null;
+  if (!charDraft) return true;
+  const draft = charDraft;
+  const bookId = draft.createdWorldbookId;
+  // 无关联书的角色草稿可同步丢弃，保持 AI 生成等现有同步调用契约。
+  if (!bookId) {
+    charDraft = null;
+    if (editingCharacterId === draft.character.id) editingCharacterId = null;
+    return true;
+  }
+  // 有已落盘关联书时返回 Promise；调用方必须等待清理结果后再切换/销毁草稿。
+  return cleanupDraftWorldbook(bookId).then((ok) => {
+    if (!ok) return false;
+    if (charDraft === draft) charDraft = null;
+    if (editingCharacterId === draft.character.id) editingCharacterId = null;
+    return true;
+  });
+}
+
+function replaceObject(target, source) {
+  for (const key of Object.keys(target)) delete target[key];
+  Object.assign(target, cloneCharacter(source));
 }
 
 async function saveCharacter() {
   if (!editingCharacterId) return;
 
+  const creating = isCharDraft();
+  const scope = creating ? charDraft.scope : charEditorScope;
   const character = editorCharacterById(editingCharacterId);
-  if (!character) return;
+  const formal = creating ? null : formalCharacterById(editingCharacterId, scope);
+  if (!character || (!creating && !formal)) return;
 
-  // 必须先校验再落内存：stashCharForm 会把空名字写成「未命名角色」
   if (!el.c.name.value.trim()) {
     showToast('给角色起个名字吧', 'error');
     el.c.name.focus();
     return;
   }
 
-  // 「新建」还是「改已有」要在落盘前记下来：草稿一提交 charDraft 就清空
-  const creating = isCharDraft();
-  const scope = creating ? charDraft.scope : charEditorScope;
-
   stashCharForm();
 
-  // 新建的角色到这一刻才真正被创建（进角色卡 / 进这本书）
-  if (creating && !commitCharDraft()) {
-    showToast('这本书已经不在了，角色没能创建', 'error');
-    return;
-  }
-
-  // 新建是终点（直接离开）；改已有的留在本页，多半还要接着改
   if (creating) {
+    const draft = charDraft;
+    const committed = commitCharDraft();
+    if (!committed) {
+      showToast('这本书已经不在了，角色没能创建', 'error');
+      return;
+    }
     renderCharacterPage();
     actions.rerender();
-    // 改的是书里的副本，角色卡编辑页的人物列表也要跟着刷新
-    if (scope === 'worldbook') rerenderBookCharHosts(currentWorldbook());
-    // 写盘失败别报「已创建」：persistCharacters 已弹过提示，页面留着可直接重试
-    if (!(await persistCharacters())) return;
+    if (scope === 'worldbook') rerenderBookCharHosts(committed.book);
+    if (!(await persistCharacters())) {
+      // 持久化失败时撤回正式列表，但保留原始草稿、草稿表单和关联书供重试。
+      rollbackCharDraftCommit(committed);
+      charDraft = draft;
+      renderCharacterPage();
+      setCharSaveState('dirty');
+      return;
+    }
+    charDraft = null;
+    editingCharacterDraft = null;
     setCharSaveState('saved');
     showToast(`角色「${character.name}」已创建`, 'ok');
     await leaveCharacterEditor({ force: true });
     return;
   }
 
-  // 名字可能被规整过，重新填一遍保证界面和数据一致
+  const before = cloneCharacter(formal);
+  // 绑定/解绑世界书是独立的即时持久化操作；保留正式对象上这部分最新值，
+  // 不让编辑副本里的旧绑定在保存文本时把它覆盖回来。
+  const immediateWorldbookIds = Array.isArray(formal.worldbookIds) ? [...formal.worldbookIds] : [];
+  const committing = cloneCharacter(character);
+  committing.worldbookIds = immediateWorldbookIds;
+  replaceObject(formal, committing);
   renderCharacterPage();
-  fillCharForm(character);
-  updateCharEditorScopeUi();
   actions.rerender();
-
-  // 改的是书里的副本，角色卡编辑页的人物列表也要跟着刷新
   if (scope === 'worldbook') rerenderBookCharHosts(currentWorldbook());
 
-  // 失败提示由 persistCharacters 弹；成功才报「已保存」，否则后一条会盖掉前一条
   if (await persistCharacters()) {
+    editingCharacterDraft = cloneCharacter(formal);
+    fillCharForm(editingCharacterDraft);
+    updateCharEditorScopeUi();
     setCharSaveState('saved');
-    showToast(`角色「${character.name}」已保存`, 'ok');
+    showToast(`角色「${formal.name}」已保存`, 'ok');
+    return;
   }
+
+  replaceObject(formal, before);
+  // 保持用户输入在隔离副本和表单里，正式对象退回持久化前快照。
+  editingCharacterDraft = character;
+  renderCharacterPage();
+  actions.rerender();
+  if (scope === 'worldbook') rerenderBookCharHosts(currentWorldbook());
+  setCharSaveState('dirty');
 }
 
 // 删除角色（'library' 从角色卡删 / 'worldbook' 只移除本书副本），两个入口共用。
@@ -1063,17 +1229,28 @@ export async function deleteCharactersByIds(ids) {
 /** 打开编辑器，编辑指定角色（scope 省略 = 角色卡） */
 export function openCharacterEditor(id, scope = 'library') {
   const nextScope = scope === 'worldbook' ? 'worldbook' : 'library';
-  const different = charEditorScope !== nextScope || editingCharacterId !== (id || null);
+  const nextId = id || null;
+  const previous = { id: editingCharacterId, scope: charEditorScope, draft: editingCharacterDraft };
+  const different = charEditorScope !== nextScope || editingCharacterId !== nextId;
   charEditorScope = nextScope;
-  editingCharacterId = id || null;
-  openCharsModal();
-  if (different) showCharacterField('c-desc');
+  editingCharacterId = nextId;
+  if (different) editingCharacterDraft = null;
+  return openCharsModal().then((opened) => {
+    if (!opened) {
+      editingCharacterId = previous.id;
+      charEditorScope = previous.scope;
+      editingCharacterDraft = previous.draft;
+      return false;
+    }
+    if (different) showCharacterField('c-desc');
+    return true;
+  });
 }
 
 /** 在当前世界书作用域下起草一个新角色（世界书编辑器里的「新建本书角色」） */
 export function startCharacterDraftInBook() {
   charEditorScope = 'worldbook';
-  startCharDraft();
+  return startCharDraft();
 }
 
 /**
@@ -1087,8 +1264,8 @@ export function startCharacterDraftFromAi(fields, scope, bookId) {
     if (!focusWorldbook(bookId)) return false;
   }
 
-  startCharDraft(fields);
-  return !!charDraft;
+  const result = startCharDraft(fields);
+  return result && typeof result.then === 'function' ? result.then(() => !!charDraft) : !!charDraft;
 }
 
 /** 离开世界书作用域（世界书编辑器关掉时收尾） */

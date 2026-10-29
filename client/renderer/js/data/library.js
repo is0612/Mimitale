@@ -181,7 +181,8 @@ function worldbookCharacterPayload(character) {
   if (Array.isArray(c.attributes) && c.attributes.length) out.attributes = c.attributes;
   if (Array.isArray(c['expressions']) && c['expressions'].length) out['expressions'] = c['expressions'];
   if (typeof c.avatar === 'string' && c.avatar) out.avatar = c.avatar;
-  if (typeof c.portrait === 'string' && c.portrait) out.portrait = c.portrait;
+  // portrait 三态必须保留：缺键=老卡允许回落头像，空串=用户明确清除，dataURL=指定立绘。
+  if (typeof c.portrait === 'string') out.portrait = c.portrait;
   if (c.showInPanel === true) out.showInPanel = true;
   return out;
 }

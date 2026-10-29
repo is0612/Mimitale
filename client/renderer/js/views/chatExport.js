@@ -26,7 +26,7 @@ function base64Utf8(text) {
   return btoa(binary);
 }
 
-/** 角色卡（酒馆 v2 规范）：自家字段放 extensions.mimitale。⚠️ 导出是 smoke-test 验「备选开场白 / 作者 / 版本」能被写回的唯一入口；withImages：JSON 必须带图（否则导回来全丢），PNG 不带。 */
+/** 角色卡（酒馆 v2 规范）：自家字段放 extensions.mimitale。JSON 和 PNG 元数据都带完整图片；PNG 像素层另作为预览图。 */
 export function characterCardPayload(character, options = {}) {
   const withImages = options.withImages === true;
   // 只带第一本：v2 规范里 character_book 是单本（酒馆同样只导出主世界书）
@@ -63,10 +63,8 @@ export function characterCardPayload(character, options = {}) {
                 )
               }
             : {}),
-          // 只有 JSON 导出才带图（见函数头：PNG 导出时图就是文件本身）
-          ...(withImages && typeof character.avatar === 'string' && character.avatar
-            ? { avatar: character.avatar }
-            : {}),
+          // PNG 像素只是一张预览图；扩展位保留原图，供 Mimitale 无损往返。
+          ...(withImages && typeof character.avatar === 'string' ? { avatar: character.avatar } : {}),
           ...(withImages && typeof character.portrait === 'string' ? { portrait: character.portrait } : {})
         }
       }
@@ -124,7 +122,7 @@ function conversationMarkdown(convo) {
   return lines.join('\n');
 }
 
-/** 角色头像 → PNG 数据（没有头像就画一张带首字母的占位图） */
+/** 角色头像 / 立绘 → PNG 数据（没有图片才画一张带首字母的占位图） */
 function avatarPngDataUrl(character) {
   return new Promise((resolve) => {
     const size = 512;
@@ -148,7 +146,8 @@ function avatarPngDataUrl(character) {
       resolve(canvas.toDataURL('image/png'));
     };
 
-    if (!character.avatar) {
+    const source = character.avatar || character.portrait;
+    if (!source) {
       placeholder();
       return;
     }
@@ -166,7 +165,7 @@ function avatarPngDataUrl(character) {
       }
     };
     img.onerror = placeholder;
-    img.src = character.avatar;
+    img.src = source;
   });
 }
 
@@ -177,9 +176,9 @@ export async function exportCharacterCard(character) {
   if (!character) return;
 
   const name = safeFileName(character.name);
-  // 两份 JSON：带图那份给 .json（导回来才不丢头像），不带图那份塞 PNG 的 tEXt 块
+  // JSON 文件和 PNG 的 tEXt 元数据共用完整数据；PNG 像素层另作头像/立绘预览。
   const json = JSON.stringify(characterCardPayload(character, { withImages: true }), null, 2);
-  const pngJson = JSON.stringify(characterCardPayload(character), null, 2);
+  const pngJson = json;
   const png = await avatarPngDataUrl(character);
   // 空 base64 别当 PNG 存出去；直接切成导出 JSON，别让用户再点一次同一个按钮
   if (!png) {

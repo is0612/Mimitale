@@ -21,6 +21,7 @@
     "test:summary": "electron --no-sandbox tools/test-summary-coverage.js",
     "test:pet": "node tools/test-pet-window.js && node tools/test-pet-store.js",
     "test:png": "node tools/test-png.js",
+    "test:character-card": "node --test tools/test-character-editor.js tools/test-card-image-roundtrip.js",
     "test:ui": "node --test tools/test-ui-controls.js tools/test-ui-components.js",
     "test:records": "node --test tools/test-record-store.js",
     "test:records:ipc": "electron --no-sandbox tools/test-record-ipc.js",

@@ -366,12 +366,13 @@ async function attachBookToCard(charName, bookName) {
  * 造一张**已保存**的角色卡，并把夹具里那本书挂给它，返回角色名。
  * 卡上那颗「对话」是唯一的开局入口（角色卡开局就是 GM 局，卡的书跟着一起进）。
  */
-async function createCharBoundTo(bookName, charName) {
+async function createCharBoundTo(bookName, charName, description = '') {
   click('#btn-chars');
   await waitFor('切到角色卡', () => shown('#view-chars'));
   click('#btn-new-char');
   await waitFor('打开角色编辑器', () => shown('#view-char-editor'));
   setValue('#c-name', charName);
+  setValue('#c-desc', description);
 
   click('#btn-save-char');
   await waitFor('角色保存完成', () => byId('char-save-state').dataset.state === 'saved');
@@ -1677,7 +1678,8 @@ await scenario('属性：从本书角色种到状态面板', async () => {
   // 先造一张绑了「冒烟测试世界」的角色卡当宿主：人物列表要从这张卡进。
   // 卡名就叫「属性测试角色」—— 下游「导出」「进入世界」场景把它当一张已保存、
   // 绑了书的普通角色卡用（那些场景不测属性，这张卡本身不带属性也没关系）。
-  await createCharBoundTo('冒烟测试世界', '属性测试角色');
+  // 玩家选卡测试读取卡本身的描述，不能依赖后续被放弃的表单意外写回。
+  await createCharBoundTo('冒烟测试世界', '属性测试角色', '属性测试角色的设定文本');
 
   // 进这张卡的人物列表，点「＋ 新建」打开本书角色编辑器
   const hostCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('属性测试角色'));
@@ -5090,7 +5092,8 @@ await scenario('导出', async () => {
 
   // 制造一处没保存的改动：用左栏那颗「返回」离开时要先拦一下，别把改动静默丢掉
   // （顺便验这颗新按钮走的是和页头「返回」同一个动作，不是自己另写一套）
-  setValue('#c-desc', `${byId('c-desc').value}（未保存）`);
+  const savedDescription = byId('c-desc').value;
+  setValue('#c-desc', `${savedDescription}（未保存）`);
   click('#btn-back-char');
   await waitFor('左栏「返回」遇到未保存改动会拦一下', () => shown('#confirm-modal'));
   check(
@@ -5100,6 +5103,12 @@ await scenario('导出', async () => {
   );
   click('#confirm-ok');
   await waitFor('确认放弃后回到角色卡', () => shown('#view-chars'));
+  const editorMod = await import(new URL('js/views/characterEditor.js', document.baseURI).href);
+  const stateMod = await import(new URL('js/core/state.js', document.baseURI).href);
+  // 导入入口会再调 stash；旧 DOM 里的已放弃内容必须不能因此复活。
+  editorMod.stashCharacterForm();
+  check('放弃后再次暂存不污染正式角色',
+    stateMod.state.characters.find((c) => c.name === '属性测试角色')?.description === savedDescription);
 
   // --- 角色卡卡片上的「导出」：不用为了拿走一张卡先进详情页 ---
   const listCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes('属性测试角色')) ||
@@ -6818,6 +6827,11 @@ await scenario('角色：自带的世界书只能新建', async () => {
   if (saved && Array.isArray(saved.worldbookIds) && saved.worldbookIds.length) {
     const booksBefore = await savedWorldbooks();
     const doomed = booksBefore.find((b) => b.id === saved.worldbookIds[0]);
+    const savedCard = $$('#char-page-grid .char-card').find((c) => c.textContent.includes(NAME));
+    click(buttonByText(savedCard, '编辑'));
+    await waitFor('重新打开已保存角色', () => shown('#view-char-editor'));
+    click('#char-section-tab-worldbook');
+    await waitFor('显示角色的世界书', () => !byId('char-section-worldbook').hidden);
 
     click($$('#c-wb-list .cwb-row')[0].querySelector('.cwb-row-del'));
     await waitFor('✕ 弹出「删除世界书」确认框', () => shown('#confirm-modal')
@@ -6842,6 +6856,27 @@ await scenario('角色：自带的世界书只能新建', async () => {
       !!after && Array.isArray(after.worldbookIds) && after.worldbookIds.length === 0,
       JSON.stringify(after && after.worldbookIds));
   }
+
+  // 新卡还没保存时建出的世界书已有磁盘记录；放弃角色必须连这本书一起清理。
+  const booksBeforeDraft = (await savedWorldbooks()).map((book) => book.id);
+  click('#btn-chars');
+  click('#btn-new-char');
+  await waitFor('打开待放弃的新角色', () => shown('#view-char-editor'));
+  setValue('#c-name', '放弃时清理自带书');
+  click('#char-section-tab-worldbook');
+  click('#c-wb-new-btn');
+  await waitFor('新角色的书已打开', () => shown('#view-wb-editor'));
+  const draftBook = (await savedWorldbooks()).find((book) => !booksBeforeDraft.includes(book.id));
+  check('新角色的书先落盘', !!draftBook);
+  click('#btn-close-worldbooks');
+  await waitFor('回到待放弃角色', () => shown('#view-char-editor'));
+  click('#btn-close-chars');
+  await waitFor('确认放弃带书的新角色', () => shown('#confirm-modal'));
+  click('#confirm-ok');
+  await waitFor('放弃角色后回到列表', () => shown('#view-chars'));
+  const persistMod = await import(new URL('js/data/persist.js', document.baseURI).href);
+  await persistMod.persistLibrary();
+  check('放弃新角色后自带书没有残留', !!draftBook && !(await savedWorldbooks()).some((book) => book.id === draftBook.id));
 });
 
 // ---------------------------------------------------------------------------
