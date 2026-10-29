@@ -83,6 +83,7 @@ async function submitUnban(row: Customer): Promise<void> {
 const memberVisible = ref(false)
 const memberTarget = ref<Customer | null>(null)
 const memberDays = ref(30)
+const grantingMembership = ref(false)
 
 /** 快捷时长 —— 按月续费是 30 天，其余给常用档位省得手打 */
 const MEMBER_PRESETS = [
@@ -117,6 +118,7 @@ function openMembership(row: Customer): void {
 }
 
 async function submitMembership(): Promise<void> {
+  if (grantingMembership.value) return
   const target = memberTarget.value
   if (!target) return
   const n = Number(memberDays.value)
@@ -124,6 +126,7 @@ async function submitMembership(): Promise<void> {
     ElMessage.warning('天数要填正整数')
     return
   }
+  grantingMembership.value = true
   try {
     await updateCustomer(target.id, { membershipLevel: 'basic', membershipDays: n })
     ElMessage.success(
@@ -133,6 +136,8 @@ async function submitMembership(): Promise<void> {
     emit('done')
   } catch {
     // 错误提示已在 request 层统一处理
+  } finally {
+    grantingMembership.value = false
   }
 }
 
@@ -315,7 +320,7 @@ defineExpose({ openBan, submitUnban, openMembership, openCreate, openDelete })
     </div>
     <template #footer>
       <el-button @click="memberVisible = false">取消</el-button>
-      <el-button type="primary" @click="submitMembership">发会员</el-button>
+      <el-button type="primary" :loading="grantingMembership" @click="submitMembership">发会员</el-button>
     </template>
   </el-dialog>
 

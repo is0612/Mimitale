@@ -730,7 +730,7 @@ function handleGetCustomer({ params, headers }: MockCtx): MockOutcome {
   const referrer = c.referredById ? customers.find((x) => x.id === c.referredById) : null
   const detail: CustomerDetail = {
     ...c,
-    usedCard: cards.find((card) => card.usedByCustomerId === c.id) ?? null,
+    usedCard: cards.find((card) => card.usedByCustomerId === c.id && card.code === c.inviteCode) ?? null,
     logs: logs.filter((l) => l.targetType === 'customer' && l.targetId === c.id),
     invitedCount: customers.filter((x) => x.referredById === c.id).length,
     referredBy: referrer ? { id: referrer.id, nickname: referrer.nickname, email: referrer.email } : null,
@@ -783,25 +783,22 @@ function handleUpdateCustomer({ params, body, headers }: MockCtx): MockOutcome {
     }
   }
 
-  // 发会员：把等级设为传进来的字典值，从「当前到期时间（若还在有效期）或现在」顺延 N 天。
-  // 没收费功能，会员全靠这里手动发 —— 客户到期来找你，你就给他续。
-  // 等级直接取字典 membership_level 的 value，运营加一档这里自动支持，不用改代码。
+  // 与真实接口一致：订阅会员只有 basic 一档，不依赖可编辑的展示字典。
   if (req.membershipLevel) {
     const level = String(req.membershipLevel)
-    const levelLabel = dictLabel('membership_level', level)
-    // dictLabel 查不到就原样返回，所以「label === 原值」= 字典里没这档（含误传 'none'）
-    if (level === 'none' || levelLabel === level) {
-      return fail(ApiCode.INVALID_PARAM, '这个会员等级不存在')
+    const levelLabel = '订阅会员'
+    if (level !== 'basic') {
+      return fail(ApiCode.INVALID_PARAM, '目前只支持订阅会员')
     }
-    const days = Math.floor(Number(req.membershipDays ?? 30))
-    if (!Number.isFinite(days) || days <= 0) {
+    const days = Number(req.membershipDays ?? 30)
+    if (!Number.isSafeInteger(days) || days <= 0) {
       return fail(ApiCode.INVALID_PARAM, '顺延天数要是正整数')
     }
 
     const now = Date.now()
-    const base = target.membershipExpireAt
-      ? Math.max(now, Date.parse(target.membershipExpireAt) || now)
-      : now
+    const freeUntil = target.freeExpireAt ? Date.parse(target.freeExpireAt) || 0 : 0
+    const base = Math.max(now, target.membershipExpireAt ? Date.parse(target.membershipExpireAt) || 0 : 0, freeUntil)
+    if (freeUntil > now) target.freeExpireAt = null
     const next = base + days * DAY
     const wasNone = target.membershipLevel === 'none'
     target.membershipLevel = level

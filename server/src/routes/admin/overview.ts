@@ -104,7 +104,7 @@ export const adminOverviewRoutes: FastifyPluginAsync = async (app) => {
         SELECT to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM-DD') AS day,
                COUNT(*)::int AS count
         FROM customers
-        WHERE created_at >= ${trendSince}
+        WHERE profile_ready = true AND created_at >= ${trendSince}
         GROUP BY 1
       `
     ])

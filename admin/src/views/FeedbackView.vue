@@ -38,17 +38,27 @@ const query = reactive({
   status: '' as FeedbackStatus | ''
 })
 
+let loadSequence = 0
 async function load(): Promise<void> {
+  const sequence = ++loadSequence
   loading.value = true
   try {
     const res = await fetchFeedbacks({ ...query })
+    if (sequence !== loadSequence) return
+    // 标记已读/处理后，当前筛选的最后一页可能变空，退到仍存在的页再查。
+    const lastPage = Math.max(1, Math.ceil(res.total / query.pageSize))
+    if (query.page > lastPage) {
+      query.page = lastPage
+      await load()
+      return
+    }
     rows.value = res.list
     total.value = res.total
     counts.value = res.counts
   } catch {
     // 错误提示已在 request 层统一处理
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 
@@ -92,24 +102,31 @@ function openDetail(row: Feedback): void {
  * 打开详情就算「看过了」：待处理 → 已查看。
  * 不这么做的话，列表里永远一堆「待处理」，其实你早看完了只是没点按钮。
  */
+const markingSeen = new Map<number, Promise<void>>()
+let detailSequence = 0
 async function markSeen(row: Feedback): Promise<void> {
-  if (row.status !== 'pending') {
-    openDetail(row)
-    return
+  const selection = ++detailSequence
+  let pending = markingSeen.get(row.id)
+  if (!pending && row.status === 'pending') {
+    // 使先前查询失效；否则它可能把已标记的旧行重新放回筛选列表。
+    loadSequence += 1
+    pending = (async () => {
+      const updated = await updateFeedback(row.id, { status: 'read' })
+      Object.assign(row, updated)
+      // 列表和计数以服务端为准；pending 筛选下已读行要移出，分页也需重算。
+      await load()
+    })()
+    markingSeen.set(row.id, pending)
+    pending.then(() => markingSeen.delete(row.id), () => markingSeen.delete(row.id))
   }
   try {
-    const updated = await updateFeedback(row.id, { status: 'read' })
-    row.status = updated.status
-    row.handledBy = updated.handledBy
-    row.handledAt = updated.handledAt
-    // 计数跟着变，不用整页重拉
-    counts.value.pending = Math.max(0, counts.value.pending - 1)
-    counts.value.read += 1
-    openDetail(row)
+    if (pending) await pending
   } catch {
     // 标记失败也照样让人看详情 —— 不能因为一次写库失败就打不开
-    openDetail(row)
+    await load()
   }
+  // 快速点击不同反馈时，较慢的旧请求不能抢回后点的详情。
+  if (selection === detailSequence) openDetail(row)
 }
 
 async function save(): Promise<void> {
@@ -128,7 +145,7 @@ async function save(): Promise<void> {
     Object.assign(row, updated)
     detailVisible.value = false
     ElMessage.success('已保存')
-    load()
+    await load()
   } catch {
     // 错误提示已在 request 层统一处理
   } finally {

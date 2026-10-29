@@ -3,6 +3,7 @@ import type { InviteCard, Prisma } from '../../generated/prisma/client'
 import { prisma } from '../../prisma.js'
 import { ApiCode } from '../../lib/codes.js'
 import { fail, ok } from '../../lib/reply.js'
+import { biz } from '../../lib/bizError.js'
 import { pushLog } from '../../lib/log.js'
 import { toCard } from '../../lib/dto.js'
 import { currentAdmin } from '../../lib/whoami.js'
@@ -159,7 +160,11 @@ export const adminCardRoutes: FastifyPluginAsync = async (app) => {
     const admin = await currentAdmin(request)
 
     const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.inviteCard.update({ where: { id }, data: { status: 'void' } })
+      // 读列表之后可能已被客户兑换。事务内条件更新在等待行锁后重验状态，
+      // 不能把已发放权益的 used 记录覆盖成 void。
+      const changed = await tx.inviteCard.updateMany({ where: { id, status: 'unused' }, data: { status: 'void' } })
+      if (changed.count !== 1) throw biz('卡密状态已改变，可能已被使用或作废，请刷新后重试')
+      const row = await tx.inviteCard.findUniqueOrThrow({ where: { id } })
       await pushLog(
         {
           adminId: admin.id,

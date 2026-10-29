@@ -11,7 +11,7 @@
  * ③④ 的数据都不是这一页自己攒的 —— 后端在登录 / 封禁 / 发会员时**顺手写进表**，
  * 所以哪怕是从列表页操作的，这里也看得到。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -53,18 +53,31 @@ const notFound = ref(false)
 
 const customerId = computed(() => Number(route.params.id))
 
+let loadSequence = 0
 async function load(): Promise<void> {
+  const sequence = ++loadSequence
   loading.value = true
   notFound.value = false
   try {
-    detail.value = await fetchCustomerDetail(customerId.value)
+    const result = await fetchCustomerDetail(customerId.value)
+    if (sequence === loadSequence) detail.value = result
   } catch {
-    notFound.value = true
-    detail.value = null
+    if (sequence === loadSequence) {
+      notFound.value = true
+      detail.value = null
+    }
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
+
+const grantSummary = computed(() => {
+  const totals = new Map<string, number>()
+  for (const grant of detail.value?.grants ?? []) {
+    totals.set(grant.source, (totals.get(grant.source) ?? 0) + grant.days)
+  }
+  return Array.from(totals, ([source, days]) => `${grantLabel(source)} ${days} 天`).join(' · ')
+})
 
 function goBack(): void {
   router.push({ name: 'customers' })
@@ -135,7 +148,8 @@ function sessionDuration(s: ClientSession): string {
   return m ? `${h} 小时 ${m} 分` : `${h} 小时`
 }
 
-onMounted(load)
+watch(customerId, () => { detail.value = null; void load() }, { immediate: true })
+onBeforeUnmount(() => { ++loadSequence })
 </script>
 
 <template>
@@ -262,7 +276,7 @@ onMounted(load)
             {{ formatTime(detail.usedCard.usedAt) }}
           </el-descriptions-item>
         </el-descriptions>
-        <el-empty v-else :image-size="60" description="这个客户是直接邮箱注册的，没用卡密" />
+        <el-empty v-else :image-size="60" description="未使用注册卡密，或原卡密记录已删除" />
       </el-card>
 
       <el-card shadow="never" class="panel">
@@ -270,9 +284,7 @@ onMounted(load)
           <div class="card-head">
             <span>天数流水</span>
             <span class="sub">
-              共 {{ detail.grants.length }} 条 ·
-              免费 {{ detail.grants.filter((g) => g.source !== 'admin').reduce((s, g) => s + g.days, 0) }} 天 ·
-              会员 {{ detail.grants.filter((g) => g.source === 'admin').reduce((s, g) => s + g.days, 0) }} 天
+              最近 {{ detail.grants.length }} 条<span v-if="grantSummary"> · {{ grantSummary }}</span>
             </span>
           </div>
         </template>

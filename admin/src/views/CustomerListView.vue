@@ -37,16 +37,20 @@ const query = reactive({
   status: '' as CustomerStatus | ''
 })
 
+// 搜索、筛选和翻页可以并发；只有最后一次请求能改列表与加载状态。
+let loadSequence = 0
 async function load(): Promise<void> {
+  const sequence = ++loadSequence
   loading.value = true
   try {
     const res = await fetchCustomers({ ...query })
+    if (sequence !== loadSequence) return
     rows.value = res.list
     total.value = res.total
   } catch {
     // 错误提示已在 request 层统一处理
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 

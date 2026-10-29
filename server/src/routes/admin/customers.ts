@@ -81,7 +81,9 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
     if (!customer) return fail(ApiCode.NOT_FOUND, '客户不存在')
 
     const [card, logs, invitedCount, referrer, loginLogs, grants, sessions] = await Promise.all([
-      prisma.inviteCard.findFirst({ where: { usedByCustomerId: id } }),
+      customer.inviteCode
+        ? prisma.inviteCard.findFirst({ where: { usedByCustomerId: id, code: customer.inviteCode } })
+        : null,
       prisma.operationLog.findMany({
         where: { targetType: 'customer', targetId: id },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -167,65 +169,65 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
     const admin = await currentAdmin(request)
     const body = (request.body ?? {}) as Record<string, unknown>
 
-    const data: Prisma.CustomerUpdateInput = {}
-    /** 待写的日志：adminId / adminName / ip 在事务里补齐，其余这里定好 */
-    const logs: Array<Omit<LogEntry, 'adminId' | 'adminName' | 'ip'>> = []
-
-    const base = {
-      targetType: 'customer',
-      targetId: target.id,
-      targetName: target.nickname
-    }
-
-    /* ---------------- 封禁 / 解封 ---------------- */
-    const nextStatus = textOf(body.status)
-    if (nextStatus === 'active' || nextStatus === 'banned') {
-      if (nextStatus !== target.status) {
-        if (nextStatus === 'banned') {
-          const reason = textOf(body.banReason)
-          data.status = 'banned'
-          data.banReason = reason || null
-          logs.push({
-            ...base,
-            action: 'customer.ban',
-            detail: reason ? `封禁（${await dictLabel('ban_reason', reason)}）` : '封禁'
-          })
-        } else {
-          data.status = 'active'
-          data.banReason = null
-          logs.push({
-            ...base,
-            action: 'customer.unban',
-            detail: target.banReason ? `解封（原因为 ${await dictLabel('ban_reason', target.banReason)}）` : '解封'
-          })
-        }
-      }
-    }
-
-    /* ---------------- 发会员 ---------------- */
-    /** 会员天数不在 data 里改 —— 它要锁行 + 写流水，只能在事务里走 grantDaysIn */
     let grant: { level: string; days: number } | null = null
     if (body.membershipLevel !== undefined) {
       const level = String(body.membershipLevel).trim()
-      const label = await dictLabel('membership_level', level)
-
-      // 字典里查不到 → 原值原样返回，据此判断这档不存在（含误传 'none'）
-      if (!level || level === 'none' || label === level) {
-        return fail(ApiCode.INVALID_PARAM, '这个会员等级不存在')
-      }
-
-      const days = Math.floor(Number(body.membershipDays ?? 30))
-      if (!Number.isFinite(days) || days <= 0) {
+      // 产品只有一档；历史等级字典可编辑，不应决定是否允许开通。
+      if (level !== 'basic') return fail(ApiCode.INVALID_PARAM, '只支持订阅会员')
+      const days = Number(body.membershipDays ?? 30)
+      if (!Number.isSafeInteger(days) || days <= 0) {
         return fail(ApiCode.INVALID_PARAM, '顺延天数要是正整数')
       }
-
       grant = { level, days }
     }
 
-    // 一个字段都没变 —— 回原样，不写库也不写日志
-    if (logs.length === 0 && !grant) return ok(toCustomer(target))
-
     const updated = await prisma.$transaction(async (tx) => {
+      // 在计算状态差异前锁行；并发相同操作只记一次日志，后来的解封按最新状态执行。
+      const locked = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM customers WHERE id = ${id} FOR UPDATE
+      `
+      if (!locked.length) return null
+      const target = await tx.customer.findUnique({ where: { id } })
+      if (!target) return null
+
+      const data: Prisma.CustomerUpdateInput = {}
+      /** 待写的日志：adminId / adminName / ip 在事务里补齐，其余这里定好 */
+      const logs: Array<Omit<LogEntry, 'adminId' | 'adminName' | 'ip'>> = []
+
+      const base = {
+        targetType: 'customer',
+        targetId: target.id,
+        targetName: target.nickname
+      }
+
+      /* ---------------- 封禁 / 解封 ---------------- */
+      const nextStatus = textOf(body.status)
+      if (nextStatus === 'active' || nextStatus === 'banned') {
+        if (nextStatus !== target.status) {
+          if (nextStatus === 'banned') {
+            const reason = textOf(body.banReason)
+            data.status = 'banned'
+            data.banReason = reason || null
+            logs.push({
+              ...base,
+              action: 'customer.ban',
+              detail: reason ? `封禁（${await dictLabel('ban_reason', reason)}）` : '封禁'
+            })
+          } else {
+            data.status = 'active'
+            data.banReason = null
+            logs.push({
+              ...base,
+              action: 'customer.unban',
+              detail: target.banReason ? `解封（原因为 ${await dictLabel('ban_reason', target.banReason)}）` : '解封'
+            })
+          }
+        }
+      }
+
+      // 一个字段都没变 —— 回原样，不写库也不写日志
+      if (logs.length === 0 && !grant) return target
+
       // 只发会员时 data 是空的，别白跑一次 update
       let row = Object.keys(data).length > 0 ? await tx.customer.update({ where: { id }, data }) : target
 
@@ -265,7 +267,7 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
       return row
     })
 
-    return ok(toCustomer(updated))
+    return updated ? ok(toCustomer(updated)) : fail(ApiCode.NOT_FOUND, '客户不存在')
   })
 
   /**
@@ -382,6 +384,7 @@ export const adminCustomerRoutes: FastifyPluginAsync = async (app) => {
       await tx.announcementRead.deleteMany({ where: { customerId: id } })
       await tx.loginLog.deleteMany({ where: { customerId: id } })
       await tx.clientSession.deleteMany({ where: { customerId: id } })
+      await tx.clientMessageUsage.deleteMany({ where: { customerId: id } })
       await tx.membershipGrant.deleteMany({ where: { customerId: id } })
 
       // ③ 别人的数据里提到他的地方：断开引用，别顺手改别人的

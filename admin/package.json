@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
+    "test:admin": "node --test scripts/test-customer-management.mjs scripts/test-feedback.mjs scripts/test-admin-auth.mjs scripts/test-admin-lists.mjs",
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {

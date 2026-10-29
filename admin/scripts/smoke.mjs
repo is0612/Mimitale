@@ -404,11 +404,11 @@ try {
     check('发完就是真会员（等级不是 none）', grant.data.data?.membershipLevel === 'basic', String(grant.data.data?.membershipLevel))
     check('到期时间在未来', Date.parse(grant.data.data?.membershipExpireAt) > Date.now(), String(grant.data.data?.membershipExpireAt))
 
-    // 发中级 / 高级会员 —— 等级是字典值，接口不该只认 basic
+    // 新发放统一为订阅会员；历史等级仍可展示，但不再依赖展示字典发放。
     const grantMedium = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'medium', membershipDays: 90 }, headers: auth(token) })
-    check('发中级会员生效', grantMedium.data.data?.membershipLevel === 'medium', JSON.stringify(grantMedium.data).slice(0, 120))
+    check('新发放不接受旧 medium 等级', grantMedium.data.code === 1001, JSON.stringify(grantMedium.data).slice(0, 120))
     const grantPremium = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'premium', membershipDays: 365 }, headers: auth(token) })
-    check('发高级会员生效', grantPremium.data.data?.membershipLevel === 'premium', JSON.stringify(grantPremium.data).slice(0, 120))
+    check('新发放不接受旧 premium 等级', grantPremium.data.code === 1001, JSON.stringify(grantPremium.data).slice(0, 120))
 
     // 续费：给一个仍在有效期的会员再发 30 天，应从原到期日顺延
     const activeMember = list.find((c) => c.membershipLevel !== 'none' && Date.parse(c.membershipExpireAt) > Date.now())
@@ -442,6 +442,12 @@ try {
 
     const badDays = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'basic', membershipDays: 0 }, headers: auth(token) })
     check('天数非正 → 1001', badDays.data.code === 1001, JSON.stringify(badDays.data))
+
+    const currentDicts = await call({ url: '/admin/dicts', method: 'get', headers: auth(token) })
+    const basicItem = currentDicts.data.data.find((d) => d.type.code === 'membership_level')?.items.find((i) => i.value === 'basic')
+    await call({ url: `/admin/dicts/items/${basicItem.id}`, method: 'delete', headers: auth(token) })
+    const withoutDict = await call({ url: `/admin/customers/${none.id}`, method: 'patch', body: { membershipLevel: 'basic', membershipDays: 1 }, headers: auth(token) })
+    check('移除历史等级字典后仍能发订阅会员', withoutDict.data.code === 0 && withoutDict.data.data.membershipLevel === 'basic', JSON.stringify(withoutDict.data).slice(0, 120))
   }
 
   console.log('\n[refresh / logout]')

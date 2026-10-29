@@ -13,6 +13,7 @@
     "start": "node --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test:account": "node --test scripts/test-account.mjs",
+    "test:admin": "node --test scripts/test-admin-cards.mjs scripts/test-admin-auth.mjs scripts/test-admin-overview.mjs",
     "smoke": "node scripts/smoke.mjs",
     "db:up": "docker compose up -d db mail",
     "db:down": "docker compose down",
