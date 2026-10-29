@@ -1,6 +1,20 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { env } from '../env.js'
 import { ApiCode } from './codes.js'
+import { prisma } from '../prisma.js'
+
+export function isUsableCustomer<T extends { status: string; profileReady: boolean }>(customer: T | null): customer is T {
+  return !!customer && customer.status === 'active' && customer.profileReady
+}
+
+/** 在守卫与额度入口共同检查，防止删号/封禁发生在验签之后。 */
+export async function requireUsableCustomer(customerId: number) {
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } })
+  if (!isUsableCustomer(customer)) {
+    throw Object.assign(new Error('账号已不可用，请重新登录'), { statusCode: 401 })
+  }
+  return customer!
+}
 
 export interface TokenPayload {
   /** 账号 id（admin.id 或 customer.id，看 kind） */
@@ -86,15 +100,28 @@ async function verify(request: FastifyRequest, reply: FastifyReply, kind: TokenP
 
 /** 管理接口守卫。注册在带认证的子 scope 上当 preHandler */
 export async function adminGuard(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  await verify(request, reply, 'admin')
+  if (!(await verify(request, reply, 'admin'))) return
+  if (!Number.isSafeInteger(request.user.sub) || request.user.sub <= 0) {
+    reject(reply, ApiCode.UNAUTHORIZED, '登录凭证无效')
+    return
+  }
+  const admin = await prisma.admin.findUnique({ where: { id: request.user.sub }, select: { id: true } })
+  if (!admin) reject(reply, ApiCode.UNAUTHORIZED, '管理员账号已不存在，请重新登录')
 }
 
 /** 客户接口守卫 */
 export async function clientGuard(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  await verify(request, reply, 'client')
+  if (!(await verify(request, reply, 'client'))) return
+  if (!Number.isSafeInteger(request.user.sub) || request.user.sub <= 0) {
+    reject(reply, ApiCode.UNAUTHORIZED, '登录凭证无效')
+    return
+  }
+  const customer = await prisma.customer.findUnique({ where: { id: request.user.sub } })
+  if (!isUsableCustomer(customer)) reject(reply, ApiCode.UNAUTHORIZED, '账号已不可用，请重新登录')
 }
 
-/** 从 refreshToken 里解出身份；解不出或类型不对就返回 null */export function readRefreshToken(
+/** 从 refreshToken 里解出身份；解不出或类型不对就返回 null */
+export function readRefreshToken(
   app: FastifyInstance,
   raw: unknown,
   kind: TokenPayload['kind']
@@ -118,7 +145,7 @@ export async function clientGuard(request: FastifyRequest, reply: FastifyReply):
  * ⚠️ 过期 token 也当没登录处理，不报 401 —— 否则客户端启动时拉公告会因为
  *    「登录态过期」整块失败，而公告本来就不该要求登录。
  */
-export function optionalCustomerId(request: FastifyRequest): number | null {
+export async function optionalCustomerId(request: FastifyRequest): Promise<number | null> {
   const header = request.headers.authorization
   const raw = typeof header === 'string' && header.startsWith('Bearer ') ? header.slice(7).trim() : ''
   if (!raw) return null
@@ -127,7 +154,9 @@ export function optionalCustomerId(request: FastifyRequest): number | null {
     const payload = request.server.jwt.verify<TokenPayload>(raw)
     // refreshToken / 注册中的临时令牌都不算登录态
     if (payload.kind !== 'client' || payload.ref || payload.pending) return null
-    return typeof payload.sub === 'number' ? payload.sub : null
+    if (!Number.isSafeInteger(payload.sub) || payload.sub <= 0) return null
+    const customer = await prisma.customer.findUnique({ where: { id: payload.sub } })
+    return isUsableCustomer(customer) ? payload.sub : null
   } catch {
     return null
   }

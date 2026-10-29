@@ -13,7 +13,9 @@ import { prisma } from '../prisma.js'
 const FLUSH_INTERVAL_MS = 30_000
 
 /** sessionId → 最近一次心跳的时间戳。只在内存里，进程重启就丢 —— 丢就丢，下次心跳会再写 */
-const pendingTouches = new Map<number, number>()
+const pendingTouches = new Map<string, { customerId: number; sessionId: number; seenAt: number }>()
+/** 两次客户端心跳加上写入窗口；窗口内视为其他设备仍在线，不替它关会话。 */
+const STALE_SESSION_MS = 11 * 60_000
 
 /** 上一次真写库的时间。用来掐「最多 30 秒写一次」 */
 let lastFlushAt = 0
@@ -31,16 +33,16 @@ function scheduleFlush(): void {
 
 async function flushTouches(): Promise<void> {
   if (pendingTouches.size === 0) return
-  const entries = Array.from(pendingTouches.entries())
+  const entries = Array.from(pendingTouches.values())
   pendingTouches.clear()
   lastFlushAt = Date.now()
 
   // 一次事务把攒下来的心跳全写掉，避免逐条 UPDATE 打满连接
   try {
     await prisma.$transaction(
-      entries.map(([sessionId, seenAt]) =>
+      entries.map(({ customerId, sessionId, seenAt }) =>
         prisma.clientSession.updateMany({
-          where: { id: sessionId, endedAt: null },
+          where: { id: sessionId, customerId, endedAt: null },
           data: { lastSeenAt: new Date(seenAt) }
         })
       )
@@ -62,17 +64,16 @@ export async function openSession(request: FastifyRequest, customerId: number): 
   const ip = request.ip || ''
   const ua = String(request.headers['user-agent'] ?? '').slice(0, 200)
 
-  // 结清上次没关干净的（可能是上次强杀/断电，没走到 exit）
-  await prisma.clientSession.updateMany({
-    where: { customerId, endedAt: null },
-    data: {
-      // last_seen_at 可能为 null（开了但一次心跳都没赶上），退化成 started_at
-      endedAt: now,
-      endReason: 'unknown',
-      ip,
-      userAgent: ua
-    }
-  })
+  // 先写入内存中的心跳，避免把还在线的另一台设备误判成离线。
+  await flushTouches()
+  const staleBefore = new Date(now.getTime() - STALE_SESSION_MS)
+  // 单条条件更新与心跳并发时由数据库重新检查条件；保留旧设备的 IP/UA。
+  await prisma.$executeRaw`
+    UPDATE client_sessions
+       SET ended_at = COALESCE(last_seen_at, started_at), end_reason = 'unknown'
+     WHERE customer_id = ${customerId} AND ended_at IS NULL
+       AND COALESCE(last_seen_at, started_at) < ${staleBefore}
+  `
 
   const created = await prisma.clientSession.create({
     data: { customerId, appVersion, ip, userAgent: ua, startedAt: now }
@@ -85,7 +86,7 @@ export async function openSession(request: FastifyRequest, customerId: number): 
  * 上千在线用户时也不会把写放大到「一天每人 288 次 UPDATE」。
  */
 export function touchSession(request: FastifyRequest, customerId: number, sessionId: number): void {
-  pendingTouches.set(sessionId, Date.now())
+  pendingTouches.set(`${customerId}:${sessionId}`, { customerId, sessionId, seenAt: Date.now() })
   // 间隔内第二次心跳直接并进上次那批；到点才真写
   if (Date.now() - lastFlushAt >= FLUSH_INTERVAL_MS) {
     lastFlushAt = Date.now()

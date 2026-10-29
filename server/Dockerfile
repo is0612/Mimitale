@@ -14,10 +14,11 @@ COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 
 COPY prisma ./prisma
-RUN npx prisma generate
-
-COPY tsconfig.json ./
+COPY prisma.config.ts tsconfig.json ./
 COPY src ./src
+# 必须在源码复制之后生成：本机可能残留旧的 src/generated。
+# generate 不连接数据库；只为配置解析提供占位 URL，运行时使用部署环境值。
+RUN DATABASE_URL=postgresql://unused:unused@127.0.0.1:1/unused npx prisma generate
 
 ENV NODE_ENV=production
 EXPOSE 8080

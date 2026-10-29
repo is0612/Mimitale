@@ -77,10 +77,19 @@ function saveState(state) {
   return writeJson(accountFile(), state);
 }
 
+// 每次补丁都在前一次写完后重新读取，避免并发更新用旧快照覆盖新令牌。
+let stateWriteQueue = Promise.resolve();
 function patchState(patch) {
-  const state = Object.assign(loadState(), patch);
-  saveState(state);
-  return state;
+  const result = stateWriteQueue.then(async () => {
+    const current = loadState();
+    const changes = typeof patch === 'function' ? patch(current) : patch;
+    if (!changes) return current;
+    const state = Object.assign(current, changes);
+    await saveState(state);
+    return state;
+  });
+  stateWriteQueue = result.then(() => undefined, () => undefined);
+  return result;
 }
 
 function clearSession() {
@@ -116,50 +125,60 @@ function networkError() {
  * 但 401 时**不**清登录态、也不弹「重新登录」。发反馈 / 拉公告走这个 ——
  * 公告本来就不要求登录，不该因为令牌过期把公告块整块打掉。
  */
+async function fetchAccount(pathname, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE}${pathname}`, { ...options, signal: controller.signal });
+    // 超时覆盖响应体读取，不能只等到响应头就取消。
+    let payload = null;
+    try { payload = await res.json(); } catch (err) {
+      if (controller.signal.aborted) throw err;
+    }
+    return { res, payload };
+  } catch {
+    throw networkError();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function unauthorizedError() {
+  const err = new Error('登录已过期，重新登录一次');
+  err.unauthorized = true;
+  return err;
+}
+
 async function request(method, pathname, options = {}) {
   const { body, auth = false, softAuth = false, token = '', headers: extraHeaders = {} } = options;
 
   const state = loadState();
+  if (auth && !token && !state.token) throw unauthorizedError();
   const headers = { ...extraHeaders };
   if (body !== undefined) headers['content-type'] = 'application/json';
 
   const bearer = token || (auth || softAuth ? state.token : '');
   if (bearer) headers.authorization = `Bearer ${bearer}`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-
-  let res;
-  try {
-    res = await fetch(`${API_BASE}${pathname}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: controller.signal
-    });
-  } catch (err) {
-    throw networkError();
-  } finally {
-    clearTimeout(timer);
-  }
+  const { res, payload } = await fetchAccount(pathname, {
+    method, headers, body: body === undefined ? undefined : JSON.stringify(body)
+  });
 
   if (res.status === 401) {
-    // 临时令牌（注册第二步）换 token 是没意义的，直接报
-    if (auth && !token && state.refreshToken && (await tryRefresh(state.refreshToken))) {
-      return request(method, pathname, { body, auth, softAuth, token: '', headers: extraHeaders });
+    // 一次请求最多刷新重试一次；网络故障直接向上传递，保留本地会话。
+    if (auth && !token && !options.retried && state.refreshToken) {
+      const refreshed = await tryRefresh(state.refreshToken);
+      if (refreshed) return request(method, pathname, { ...options, retried: true });
     }
-    // softAuth 不清登录态：令牌过期只该影响「认出我是谁」，不该把公告也打掉
-    if (!softAuth) clearSession();
-    const err = new Error('登录已过期，重新登录一次');
-    err.unauthorized = true;
-    throw err;
+    // 注册临时令牌失效不能清掉另一个已登录账号。
+    if (!softAuth && auth && !token) {
+      await patchState((current) => current.token === bearer ? { token: '', refreshToken: '', user: null } : null);
+    }
+    throw unauthorizedError();
   }
-
-  let payload = null;
-  try {
-    payload = await res.json();
-  } catch {
-    payload = null;
+  if (res.status >= 500) {
+    // 服务端明确报错不能伪装成断网后绕过权限。
+    throw new Error(payload?.message || `账号服务暂时出错（HTTP ${res.status}）`);
   }
 
   if (!payload || typeof payload !== 'object') {
@@ -173,26 +192,34 @@ async function request(method, pathname, options = {}) {
   return payload.data;
 }
 
-/** 用 refreshToken 换新 token；成功返回 true */
-async function tryRefresh(refreshToken) {
-  try {
-    const res = await fetch(`${API_BASE}/client/auth/refresh`, {
+// 同一张刷新令牌只发一次刷新请求，避免启动上报和会话读取互相覆盖。
+const refreshRequests = new Map();
+function tryRefresh(refreshToken) {
+  if (refreshRequests.has(refreshToken)) return refreshRequests.get(refreshToken);
+  const task = (async () => {
+    const { res, payload } = await fetchAccount('/client/auth/refresh', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ refreshToken })
     });
-    const payload = await res.json();
-    if (payload.code !== 0 || !payload.data || !payload.data.token) return false;
-    patchState({ token: payload.data.token });
-    return true;
-  } catch {
-    return false;
-  }
+    if (res.status === 401) return false;
+    if (!res.ok || !payload || payload.code !== 0 || !payload.data?.token) {
+      throw new Error(payload?.message || '登录令牌刷新失败，请稍后重试');
+    }
+    const state = await patchState((current) => current.refreshToken === refreshToken
+      ? { token: payload.data.token }
+      : null);
+    // 登出或切换账号期间返回的旧刷新响应不能恢复旧登录态。
+    return state.refreshToken === refreshToken && state.token === payload.data.token;
+  })();
+  refreshRequests.set(refreshToken, task);
+  task.then(() => refreshRequests.delete(refreshToken), () => refreshRequests.delete(refreshToken));
+  return task;
 }
 
 /** 登录成功后统一落盘 */
-function persistSession(data) {
-  patchState({
+async function persistSession(data) {
+  await patchState({
     token: data.token || '',
     refreshToken: data.refreshToken || '',
     user: data.user || null,
@@ -220,8 +247,9 @@ async function getSession() {
   try {
     const data = await request('GET', '/client/auth/me', { auth: true });
     // 顺手刷新本地快照 —— 头像/昵称可能在别的机器上改过
-    patchState({ user: data.user });
-    return { user: data.user };
+    const latest = await patchState((current) => current.refreshToken === state.refreshToken
+      ? { user: data.user } : null);
+    return { user: latest.token ? latest.user : null };
   } catch (err) {
     if (err.unauthorized) return { user: null };
     console.warn('[account] 拉取会话失败，沿用本地快照:', err.message);
@@ -254,7 +282,7 @@ async function register(payload) {
   });
 
   // 第二步要用这张临时令牌，但**别给界面** —— 界面不需要，也就不会顺手塞进日志
-  patchState({ pendingToken: data.pendingToken || '', pendingEmail: data.email || '' });
+  await patchState({ pendingToken: data.pendingToken || '', pendingEmail: data.email || '' });
 
   return { accountId: data.accountId, email: data.email, needsProfile: data.needsProfile !== false };
 }
@@ -314,7 +342,8 @@ async function logout() {
       console.warn('[account] 通知服务器登出失败（本地照样清）:', err.message);
     }
   }
-  clearSession();
+  await clearSession();
+  currentSessionId = 0;
   return { user: null };
 }
 
@@ -341,7 +370,7 @@ async function updateProfile(payload) {
   if (input.avatar != null) body.avatar = input.avatar;
 
   const data = await request('PATCH', '/client/auth/profile', { body, auth: true });
-  patchState({ user: data.user });
+  await patchState({ user: data.user });
   return { user: data.user };
 }
 
@@ -362,7 +391,7 @@ async function changeEmail(payload) {
     body: { email: input.email, code: input.code },
     auth: true
   });
-  patchState({ user: data.user });
+  await patchState({ user: data.user });
   return { user: data.user };
 }
 
@@ -434,10 +463,12 @@ async function submitFeedback(payload, meta = {}) {
  */
 async function redeemCard(payload) {
   const input = payload || {};
-  return request('POST', '/client/redeem', {
+  const data = await request('POST', '/client/redeem', {
     body: { code: input.code || '' },
     auth: true
   });
+  await patchState({ user: data.user });
+  return data;
 }
 
 /** 拉「此刻该显示」的公告 → { list, unread } */

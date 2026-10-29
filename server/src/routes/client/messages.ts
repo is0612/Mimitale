@@ -61,7 +61,7 @@ export const clientMessageRoutes: FastifyPluginAsync = async (app) => {
     const appVersion = textOf(body.appVersion).slice(0, 32)
     const platform = textOf(body.platform).slice(0, 32)
     const deviceId = textOf(body.deviceId).slice(0, 64)
-    const customerId = optionalCustomerId(request)
+    const customerId = await optionalCustomerId(request)
 
     // 限频按「设备指纹」走，没带就退回 IP —— 未登录的人只有这两个抓手。
     // ⚠️ 查库而不是记内存：后端一重启内存就清空，限频等于没有。
@@ -114,7 +114,7 @@ export const clientMessageRoutes: FastifyPluginAsync = async (app) => {
 
   /** 15. GET /announcements —— 拉此刻该显示的公告 */
   app.get('/announcements', async (request) => {
-    const customerId = optionalCustomerId(request)
+    const customerId = await optionalCustomerId(request)
 
     const rows = await prisma.announcement.findMany({
       where: liveWindow(),
@@ -153,7 +153,7 @@ export const clientMessageRoutes: FastifyPluginAsync = async (app) => {
     const id = Number((request.params as { id: string }).id)
     if (!Number.isInteger(id)) return fail(ApiCode.INVALID_PARAM, '公告 id 不对')
 
-    const customerId = optionalCustomerId(request)
+    const customerId = await optionalCustomerId(request)
     // 未登录：没地方记。回 unread: 0 让客户端自己在本地记一份，不算错误
     if (!customerId) return ok({ unread: 0 })
 

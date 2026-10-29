@@ -7,7 +7,7 @@ import { ApiCode } from '../../lib/codes.js'
 import { fail, ok } from '../../lib/reply.js'
 import { biz } from '../../lib/bizError.js'
 import { hashPassword, verifyPassword } from '../../lib/password.js'
-import { issueTokens, issuePendingToken, readRefreshToken } from '../../lib/auth.js'
+import { issueTokens, issuePendingToken, readRefreshToken, isUsableCustomer } from '../../lib/auth.js'
 import { createCaptcha, verifyCaptcha } from '../../lib/captcha.js'
 import { makeVoucher, normalizeVoucher } from '../../lib/voucher.js'
 import { newInviteCode } from '../../lib/cardCode.js'
@@ -374,8 +374,10 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
         if (used.count === 0) throw biz('这张卡刚被别人用掉了，换一张')
       }
 
-      const registered = await tx.customer.update({
-        where: { id: customer.id },
+      // 条件更新在事务内抢占「完成注册」资格。并发请求等待行锁后会重新检查
+      // profileReady；只有胜者可以改密码/凭证并发放试用、邀请奖励。
+      const completed = await tx.customer.updateMany({
+        where: { id: customer.id, profileReady: false, status: 'active' },
         data: {
           nickname: username,
           avatar: avatar || null,
@@ -389,6 +391,9 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
           ...(invite.kind === 'customer' ? { referredById: invite.inviterId } : {})
         }
       })
+
+      if (completed.count !== 1) throw biz('这个账号已经设置过了，或已不可用')
+      const registered = await tx.customer.findUniqueOrThrow({ where: { id: customer.id } })
 
       // 注册送的 30 天是**免费天数**，不是会员（等级留在 none）。
       // 只有走完第二步的号才算「真的注册了」，后台的「今日注册」也跟着只算这些人
@@ -492,10 +497,9 @@ export const clientAuthPublicRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const customer = await prisma.customer.findUnique({ where: { id: who.sub } })
-    if (!customer) {
-      return reply.code(401).send({ code: ApiCode.TOKEN_EXPIRED, message: '账号已不存在', data: null })
+    if (!isUsableCustomer(customer)) {
+      return reply.code(401).send({ code: ApiCode.UNAUTHORIZED, message: '账号已不可用，请重新登录', data: null })
     }
-    assertNotBanned(customer)
 
     const { token, expiresIn } = issueTokens(app, 'client', customer.id)
     return ok({ token, expiresIn })

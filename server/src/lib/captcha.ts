@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from 'node:crypto'
+import { deflateSync } from 'node:zlib'
 import { biz } from './bizError.js'
 
 /**
@@ -11,8 +12,8 @@ import { biz } from './bizError.js'
  * 存数据库只会多一张要清理的表。代价是服务重启后正在注册的人要重新换一张，
  * 提示语里已经说了「点图片换一张」，不算坑。
  *
- * 画法和 `client/main/account.js` 里那版一致 —— 同一个应用里两种校验码长得不一样
- * 会显得很随意。
+ * 服务端直接画 PNG 像素，只依赖 Node 内置 zlib。不能把带答案文本的 SVG 发出去，
+ * 否则关闭测试 answer 字段也能从图片源码无损提取答案。
  */
 
 /** 去掉 0/O/1/I/L 这些抄错就说不清的 */
@@ -37,52 +38,72 @@ function randomAnswer(length = 4): string {
   return out
 }
 
-function captchaSvg(answer: string): string {
-  const width = 112
-  const height = 40
-  const parts: string[] = []
+// 固定小字库只用于服务端绘制像素；响应里不包含字形编码或答案元数据。
+const FONT: Record<string, string> = {
+  A:'01110/10001/10001/11111/10001/10001/10001', B:'11110/10001/10001/11110/10001/10001/11110',
+  C:'01111/10000/10000/10000/10000/10000/01111', D:'11110/10001/10001/10001/10001/10001/11110',
+  E:'11111/10000/10000/11110/10000/10000/11111', F:'11111/10000/10000/11110/10000/10000/10000',
+  G:'01111/10000/10000/10111/10001/10001/01110', H:'10001/10001/10001/11111/10001/10001/10001',
+  J:'00111/00010/00010/00010/10010/10010/01100', K:'10001/10010/10100/11000/10100/10010/10001',
+  M:'10001/11011/10101/10101/10001/10001/10001', N:'10001/11001/10101/10011/10001/10001/10001',
+  P:'11110/10001/10001/11110/10000/10000/10000', Q:'01110/10001/10001/10001/10101/10010/01101',
+  R:'11110/10001/10001/11110/10100/10010/10001', S:'01111/10000/10000/01110/00001/00001/11110',
+  T:'11111/00100/00100/00100/00100/00100/00100', U:'10001/10001/10001/10001/10001/10001/01110',
+  V:'10001/10001/10001/10001/10001/01010/00100', W:'10001/10001/10001/10101/10101/10101/01010',
+  X:'10001/10001/01010/00100/01010/10001/10001', Y:'10001/10001/01010/00100/00100/00100/00100',
+  Z:'11111/00001/00010/00100/01000/10000/11111', 2:'01110/10001/00001/00010/00100/01000/11111',
+  3:'11110/00001/00001/01110/00001/00001/11110', 4:'00010/00110/01010/10010/11111/00010/00010',
+  5:'11111/10000/10000/11110/00001/00001/11110', 6:'01110/10000/10000/11110/10001/10001/01110',
+  7:'11111/00001/00010/00100/01000/01000/01000', 8:'01110/10001/10001/01110/10001/10001/01110',
+  9:'01110/10001/10001/01111/00001/00001/01110'
+}
 
-  parts.push(`<rect width="${width}" height="${height}" rx="4" fill="#1d2126"/>`)
-
-  // 噪点比噪线耐看，也不会把字符压糊
-  for (let i = 0; i < 26; i += 1) {
-    const x = randomInt(2, width - 2)
-    const y = randomInt(2, height - 2)
-    parts.push(`<circle cx="${x}" cy="${y}" r="0.8" fill="#3b4249"/>`)
+function pngChunk(kind: string, data: Buffer): Buffer {
+  const type = Buffer.from(kind)
+  let crc = 0xffffffff
+  for (const byte of Buffer.concat([type, data])) {
+    crc ^= byte
+    for (let i = 0; i < 8; i += 1) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0)
   }
+  const size = Buffer.alloc(4)
+  size.writeUInt32BE(data.length)
+  const checksum = Buffer.alloc(4)
+  checksum.writeUInt32BE((crc ^ 0xffffffff) >>> 0)
+  return Buffer.concat([size, type, data, checksum])
+}
 
-  for (let i = 0; i < 2; i += 1) {
-    const y1 = randomInt(6, height - 6)
-    const y2 = randomInt(6, height - 6)
-    const cy1 = randomInt(0, height)
-    const cy2 = randomInt(0, height)
-    parts.push(
-      `<path d="M0 ${y1} C ${width * 0.3} ${cy1}, ${width * 0.7} ${cy2}, ${width} ${y2}" ` +
-        'fill="none" stroke="#4a535c" stroke-width="1.2"/>'
-    )
+function captchaPng(answer: string): string {
+  const width = 112, height = 40
+  // 每行 filter=0，RGB 像素；不写 tEXt/iTXt 等任何可逆答案元数据。
+  const pixels = Buffer.alloc((width * 3 + 1) * height)
+  const paint = (x: number, y: number, rgb: number[]) => {
+    if (x < 0 || x >= width || y < 0 || y >= height) return
+    const at = y * (width * 3 + 1) + 1 + x * 3
+    pixels[at] = rgb[0]!
+    pixels[at + 1] = rgb[1]!
+    pixels[at + 2] = rgb[2]!
   }
-
-  const step = width / (answer.length + 1)
+  for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) paint(x, y, [29,33,38])
+  for (let i = 0; i < 150; i += 1) paint(randomInt(width), randomInt(height), [70,80,88])
   for (let i = 0; i < answer.length; i += 1) {
-    const x = Math.round(step * (i + 1))
-    const y = Math.round(height / 2 + randomInt(-3, 4))
-    const rotate = randomInt(-22, 23)
-    const size = randomInt(20, 25)
-    const color = ['#e8e4d8', '#cbb88f', '#a9c2b0'][randomInt(0, 3)]
-    parts.push(
-      `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" ` +
-        `font-family="Consolas, monospace" font-size="${size}" font-weight="700" ` +
-        `fill="${color}" transform="rotate(${rotate} ${x} ${y})">${answer[i]}</text>`
-    )
+    const rows = FONT[answer[i]!]!.split('/')
+    const left = 9 + i * 26 + randomInt(-2, 3), top = 8 + randomInt(-3, 4)
+    const shear = randomInt(-2, 3) / 7
+    const color = [[232,228,216],[203,184,143],[169,194,176]][randomInt(3)]!
+    for (let y = 0; y < 21; y += 1) for (let x = 0; x < 15; x += 1) {
+      if (rows[Math.floor(y / 3)]![Math.floor(x / 3)] === '1') paint(left + x + Math.round(y * shear), top + y, color)
+    }
   }
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(width, 0); header.writeUInt32BE(height, 4)
+  header[8] = 8; header[9] = 2
+  const png = Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), pngChunk('IHDR', header), pngChunk('IDAT', deflateSync(pixels)), pngChunk('IEND', Buffer.alloc(0))])
+  return 'data:image/png;base64,' + png.toString('base64')
 }
 
 export interface CaptchaResult {
   id: string
-  /** data:image/svg+xml;... 直接塞进 <img src> */
+  /** PNG data URL，直接塞进 <img src> */
   image: string
   /** 有效期（秒） */
   expiresIn: number
@@ -110,7 +131,7 @@ export function createCaptcha(options: { reveal?: boolean } = {}): CaptchaResult
   const answer = randomAnswer()
   store.set(id, { answer, expiresAt: now + TTL_MS })
 
-  const result: CaptchaResult = { id, image: captchaSvg(answer), expiresIn: Math.round(TTL_MS / 1000) }
+  const result: CaptchaResult = { id, image: captchaPng(answer), expiresIn: Math.round(TTL_MS / 1000) }
   if (options.reveal) result.answer = answer
   return result
 }

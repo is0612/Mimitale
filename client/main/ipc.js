@@ -970,7 +970,12 @@ function registerIpc() {
       const result = await fn(payload);
       return { ok: true, ...(result || {}) };
     } catch (err) {
-      return { ok: false, error: (err && err.message) || '账号操作失败' };
+      return {
+        ok: false,
+        error: (err && err.message) || '账号操作失败',
+        network: err?.network === true,
+        unauthorized: err?.unauthorized === true
+      };
     }
   };
 

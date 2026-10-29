@@ -16,9 +16,24 @@ let cachedUser = null;
 /** 有没有问过主进程（首屏拉一次就够） */
 let loaded = false;
 
+let invalidatedHandler = null;
+
+/** 入口层同步侧栏、个人中心和输入框；数据层只通知，不碰 DOM。 */
+export function onAccountInvalidated(handler) {
+  invalidatedHandler = typeof handler === 'function' ? handler : null;
+}
+
 function unwrap(result, fallback) {
   if (result && result.ok) return result;
-  throw new Error((result && result.error) || fallback);
+  const err = new Error((result && result.error) || fallback);
+  err.network = result?.network === true;
+  err.unauthorized = result?.unauthorized === true;
+  if (err.unauthorized) {
+    cachedUser = null;
+    quotaSnapshot = null;
+    if (invalidatedHandler) invalidatedHandler();
+  }
+  throw err;
 }
 
 /**
@@ -108,6 +123,7 @@ export async function loginWithVoucher(payload) {
 export async function logout() {
   unwrap(await api.accountLogout(), '退出登录失败');
   cachedUser = null;
+  quotaSnapshot = null;
 }
 
 /** 取登录凭证（画卡片要的字段）→ { code, username, email, avatar, createdAt } */

@@ -16,7 +16,7 @@ import { controlOf } from '../ui/auto-grow.js';
 import { mTextarea, mButton } from '../components/index.js';
 import { persistConversations, beginConversationReplacement, endConversationReplacement } from '../data/persist.js';
 import { ensureConvoEndpoint, isBridgeProvider, providers, providerById } from '../data/providers.js';
-import { isLoggedIn, consumeMessage, messageQuota, messageQuotaSnapshot, refundMessage } from '../data/account.js';
+import { isLoggedIn, consumeMessage, messageQuota, refundMessage } from '../data/account.js';
 import { confirmDialog } from '../ui/confirm.js';
 import { openAccountModal } from './accountModal.js';
 import { openProfile } from './userSettings.js';
@@ -120,19 +120,27 @@ function refundQuietly() {
 
 /**
  * 问服务端还能不能发。
- * ⚠️ 拉不到就放行：账号服务器是自建的，不能因为它抖一下就让所有人发不出消息。
+ * ⚠️ 只有明确的网络故障可降级；鉴权拒绝和服务端业务错误必须拦截。
  */
 async function askQuota(charge) {
   try {
     if (charge) return await consumeMessage();
-    // 不扣数的入口（帮我想想 / 换一批）只看还有没有余额；快照说还有就不打扰服务端
-    const snapshot = messageQuotaSnapshot();
-    if (snapshot && (snapshot.unlimited || snapshot.remaining > 0)) return { ...snapshot, allowed: true };
+    // 不扣数的入口也重新查询：旧快照可能已经跨天、会员到期或后台调整。
     const fresh = await messageQuota();
     return { ...fresh, allowed: !!fresh.unlimited || fresh.remaining > 0 };
   } catch (err) {
-    console.warn('[quota] 额度接口不可用，本次放行:', (err && err.message) || err);
-    return { allowed: true, degraded: true };
+    if (err && err.unauthorized) {
+      applyComposerAccess();
+      renderQuotaLine(null);
+      showLoginDialog();
+      return { allowed: false, unauthorized: true };
+    }
+    if (err && err.network === true) {
+      console.warn('[quota] 额度网络不可用，本次放行:', err.message);
+      return { allowed: true, degraded: true };
+    }
+    showToast((err && err.message) || '额度查询失败，请稍后重试', 'error');
+    return { allowed: false, failed: true };
   }
 }
 
@@ -238,7 +246,7 @@ async function allowSend(options = {}) {
     if (!info.degraded) renderQuotaLine(info);
     return info;
   }
-  showQuotaDialog(info);
+  if (!info.unauthorized && !info.failed) showQuotaDialog(info);
   return null;
 }
 
@@ -350,7 +358,7 @@ export async function sendMessage(text) {
   renderAll({ forceScroll: true });
   persistConversations();
 
-  await requestCompletion(convo, { charged: true });
+  await requestCompletion(convo, { charged: !quota.degraded });
   return true;
 }
 
@@ -566,7 +574,9 @@ export async function continueLastMessage() {
     return;
   }
 
-  if (!(await allowSend({ charge: true }))) return;
+  if (!canSendLocally()) return;
+  const quota = await allowSend({ charge: true });
+  if (!quota) return;
   const contentBefore = String(last.content || '');
 
   invalidateConvoDerivedRequests(convo);
@@ -584,10 +594,10 @@ export async function continueLastMessage() {
     // 续写也可能整轮不提状态表（这条路径绕开了 requestCompletion 的补问），要补一次
     await ensurePanelWritten(convo, endpoint, worldbook, ragSection, last);
   } catch (err) {
-    // 一个字都没续上 = 这次等于没生成，把刚扣的那条退回去
-    if (String(last.content || '') === contentBefore) refundQuietly();
     showToast((err && err.message) || '继续失败', 'error');
   } finally {
+    // 没有实际扣款的网络降级不退款；正常扣款且未产出时退款一次。
+    if (!quota.degraded && String(last.content || '') === contentBefore) refundQuietly();
     streamPainter.stop();
     setStreaming(false);
     state.requestId = null;
@@ -644,8 +654,16 @@ async function autoContinueTruncated(convo, index, endpoint, worldbook, ragSecti
  * 调一次模型，把回复流式写进界面；options.variants 有值即「重新生成」，新回复作为新候选接在后面。
  */
 async function requestCompletion(convo, options) {
+  // 扣款可能完成后才遇到竞态早退；单次调用最多退款一次。
+  let charged = !!(options && options.charged);
+  const refundUnused = () => {
+    if (!charged) return;
+    charged = false;
+    refundQuietly();
+  };
   // 已经在生成中就别再进来 —— 先判这个，避免 ensureConvoEndpoint 顺手改会话
   if (state.streaming) {
+    refundUnused();
     if (options && options.rollback) {
       options.rollback();
       endConversationReplacement(convo);
@@ -654,7 +672,8 @@ async function requestCompletion(convo, options) {
   }
 
   const endpoint = ensureConvoEndpoint(convo);
-  if (!endpoint) {
+  if (!endpoint || (!endpoint.provider.apiKey && !isBridgeProvider(endpoint.provider))) {
+    refundUnused();
     if (options && options.rollback) {
       options.rollback();
       endConversationReplacement(convo);
@@ -846,7 +865,8 @@ async function requestCompletion(convo, options) {
     const stopped = /已停止生成/.test(message);
 
     // 扣过额度又一个字没吐出来（Key 填错 / 断网 / 厂商 4xx）：退回这一条
-    if (options && options.charged && !(assistant && String(assistant.content || '').trim())) refundQuietly();
+    if (!(assistant && String(assistant.content || '').trim())) refundUnused();
+    else charged = false; // 已有产出；后续回滚会清 assistant，不能误判成未生成。
 
     // Regeneration is transactional: failure or cancellation restores the original history.
     if (options && options.rollback) {
@@ -874,6 +894,7 @@ async function requestCompletion(convo, options) {
       convo.messages.push({ role: 'error', content: message, at: now(), retryable: true });
     }
   } finally {
+    if (!completed && !(assistant && String(assistant.content || '').trim())) refundUnused();
     if (!completed && options && options.rollback) options.rollback();
     if (options && options.rollback) endConversationReplacement(convo);
     if (waitingTimer) clearInterval(waitingTimer);
@@ -907,6 +928,8 @@ export async function regenerateFrom(index) {
   const convo = activeConvo();
   if (!convo || state.streaming) return;
 
+  // 本地就能发现的服务商 / Key 配置错误不能消耗额度。
+  if (!canSendLocally()) return;
   // 重新生成也是一次完整的模型调用，跟发送一样扣一条
   const quota = await allowSend({ charge: true });
   if (!quota) return;
@@ -946,7 +969,7 @@ export async function regenerateFrom(index) {
   rebuildConvoDerivedState(convo, { priorMessages: originalMessages });
   state.usage = null;
   // Do not persist the destructive cut until the replacement succeeds.
-  return requestCompletion(convo, { variants: existing, rollback, charged: true });
+  return requestCompletion(convo, { variants: existing, rollback, charged: !quota.degraded });
 }
 
 /** 换候选（swipe）：改 content 就等于换了一条，历史/复制/导出都读 content */

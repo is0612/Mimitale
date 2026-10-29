@@ -1,5 +1,6 @@
 import { prisma } from '../prisma.js'
 import { entitlementOf } from './membership.js'
+import { requireUsableCustomer } from './auth.js'
 
 /**
  * 免费额度：没有权益的人每天能发几条。
@@ -43,12 +44,7 @@ export interface MessageQuota {
 }
 
 async function entitled(customerId: number): Promise<boolean> {
-  const c = await prisma.customer.findUnique({
-    where: { id: customerId },
-    select: { freeExpireAt: true, membershipExpireAt: true }
-  })
-  // 查不到人也别拦：这只会发生在账号刚被删、token 还没过期的那几分钟
-  if (!c) return true
+  const c = await requireUsableCustomer(customerId)
   return entitlementOf(c).active
 }
 

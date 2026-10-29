@@ -20,7 +20,7 @@ import { initSelects } from './ui/select.js';
 import { defineComponents } from './components/index.js';
 
 import { markCharactersLoaded, markWorldbooksLoaded, markPresetsLoaded, conversationsSavePayload, flushLibrariesNow } from './data/persist.js';
-import { resetMessageQuota } from './data/account.js';
+import { resetMessageQuota, onAccountInvalidated } from './data/account.js';
 import { refreshPetCache, speakNow } from './data/petContext.js';
 import { initPetSettings, openPetSection } from './views/petSettings.js';
 import { currentEndpoint, isBridgeProvider } from './data/providers.js';
@@ -76,7 +76,7 @@ import {
   isAccountModalOpen
 } from './views/accountModal.js';
 // 个人中心那一屏（账号资料 / 头像 / 密码 / 凭证 / 会员），2026-10-28 从设置页拆出来
-import { initUserSettings, renderUserSection, openProfile, leaveProfile } from './views/userSettings.js';
+import { initUserSettings, renderUserSection, resetUserSection, openProfile, leaveProfile } from './views/userSettings.js';
 // 意见反馈弹窗：现在只是占位（没后端可发），点「发送」会诚实地说没发出去
 import {
   initFeedbackModal,
@@ -562,6 +562,12 @@ async function init() {
   // 游戏卡列表页（只搭了布局，占位按钮给个「还在搭」的提示）。
   initGameList();
   // 账号：登录成功后弹窗自己关掉，侧栏那一格和「个人中心」都要跟着变。
+  onAccountInvalidated(() => {
+    renderAccount(null);
+    resetUserSection();
+    applyComposerAccess();
+    if (!el.viewProfile.classList.contains('hidden')) leaveProfile();
+  });
   initAccountModal({
     onSessionChange: (user) => {
       renderAccount(user);
@@ -596,7 +602,10 @@ async function init() {
     openFeedback: () => openFeedbackModal(),
     // 退出登录后个人中心不该还留在屏幕上（未登录那一屏只剩一句「还没登录」）
     afterLogout: () => {
+      resetMessageQuota();
+      applyComposerAccess();
       if (!el.viewProfile.classList.contains('hidden')) leaveProfile();
+      void refreshAnnouncements({ silent: true });
     }
   })
     // 登录态一确定就把输入框的锁画对（未登录只读），顺带看一眼试用/会员是不是快到期
